@@ -971,6 +971,34 @@ export async function clearAllSessions(): Promise<number | null> {
   }
 }
 
+export type BulkDeleteSessionsResult = {
+  deleted: number;
+  deleted_ids: string[];
+};
+
+export async function deleteSessionsBulk(
+  sessionIds: string[],
+): Promise<BulkDeleteSessionsResult | null> {
+  try {
+    const response = await apiFetch('/api/sessions/bulk', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_ids: sessionIds }),
+    });
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<Partial<BulkDeleteSessionsResult>>(response);
+    if (!Array.isArray(data?.deleted_ids) || typeof data?.deleted !== 'number') {
+      return null;
+    }
+    return {
+      deleted: data.deleted,
+      deleted_ids: data.deleted_ids,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function renameSession(sessionId: string, title: string): Promise<boolean> {
   try {
     const response = await apiFetch(`/api/session/${encodeURIComponent(sessionId)}`, {

@@ -97,6 +97,7 @@ function renderSidebar(overrides?: {
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
+  onBulkDeleteSessions?: (sessionIds: string[]) => number | null | Promise<number | null>;
   onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (sessionId: string, title: string) => boolean | Promise<boolean>;
   onToggleSessionPin?: (sessionId: string, pinned: boolean) => boolean | Promise<boolean>;
@@ -104,6 +105,7 @@ function renderSidebar(overrides?: {
 }) {
   const onSessionSelect = overrides?.onSessionSelect ?? vi.fn();
   const onDeleteSession = overrides?.onDeleteSession ?? vi.fn();
+  const onBulkDeleteSessions = overrides?.onBulkDeleteSessions ?? vi.fn(() => 2);
   const onClearSessions = overrides?.onClearSessions;
   const onRenameSession = overrides?.onRenameSession ?? vi.fn(() => true);
   const onToggleSessionPin = overrides?.onToggleSessionPin ?? vi.fn(() => true);
@@ -123,6 +125,7 @@ function renderSidebar(overrides?: {
       activeSessionId={overrides?.activeSessionId ?? null}
       onSessionSelect={onSessionSelect}
       onDeleteSession={onDeleteSession}
+      onBulkDeleteSessions={onBulkDeleteSessions}
       onClearSessions={onClearSessions}
       onRenameSession={onRenameSession}
       onToggleSessionPin={onToggleSessionPin}
@@ -132,6 +135,7 @@ function renderSidebar(overrides?: {
   return {
     onSessionSelect,
     onDeleteSession,
+    onBulkDeleteSessions,
     onClearSessions,
     onRenameSession,
     onToggleSessionPin,
@@ -152,6 +156,7 @@ function renderSidebar(overrides?: {
           activeSessionId={overrides?.activeSessionId ?? null}
           onSessionSelect={onSessionSelect}
           onDeleteSession={onDeleteSession}
+          onBulkDeleteSessions={onBulkDeleteSessions}
           onClearSessions={onClearSessions}
           onRenameSession={onRenameSession}
           onToggleSessionPin={onToggleSessionPin}
@@ -330,6 +335,73 @@ describe('Sidebar recent chats', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Delete session' })[0]);
     expect(onDeleteSession).toHaveBeenCalledWith('chat-1');
     expect(onSessionSelect).not.toHaveBeenCalled();
+  });
+
+  it('selects chats and deletes only the selected subset after confirmation', async () => {
+    const { onBulkDeleteSessions } = renderSidebar();
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    expect(checkboxes).toHaveLength(2);
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+
+    expect(screen.getByText('2 chats selected')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Delete 2 selected chats' }),
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Delete selected chats' });
+    expect(dialog).toHaveTextContent(/Delete 2 selected chats/);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete selected' }));
+
+    await waitFor(() =>
+      expect(onBulkDeleteSessions).toHaveBeenCalledWith(['chat-1', 'chat-2']),
+    );
+  });
+
+  it('selects all visible chats and clears the selection without deleting', () => {
+    renderSidebar();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select all visible chats' }));
+    expect(screen.getByText('2 chats selected')).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox', { name: /Select chat:/ })).toHaveLength(2);
+    expect(
+      screen.getAllByRole('checkbox', { name: /Select chat:/ }).every((box) =>
+        (box as HTMLInputElement).checked,
+      ),
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear chat selection' }));
+    expect(screen.queryByText('2 chats selected')).toBeNull();
+  });
+
+  it('cancels a selected-chat delete without touching the callback', () => {
+    const { onBulkDeleteSessions } = renderSidebar();
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Delete 1 selected chats' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onBulkDeleteSessions).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('dialog', { name: 'Delete selected chats' }),
+    ).toBeNull();
+  });
+
+  it('surfaces a failure when bulk deleting selected chats fails', async () => {
+    renderSidebar({ onBulkDeleteSessions: vi.fn().mockResolvedValue(null) });
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Delete 1 selected chats' }),
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Delete selected chats' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete selected' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /could not delete selected chats/i,
+      ),
+    );
   });
 
   it('pins a chat without opening it', () => {

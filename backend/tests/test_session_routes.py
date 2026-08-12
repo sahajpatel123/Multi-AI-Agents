@@ -612,6 +612,121 @@ async def test_delete_all_zero_when_nothing_owned(app_client, make_user):
     assert res.json()["deleted"] == 0
 
 
+@pytest.mark.asyncio
+async def test_delete_selected_only_removes_requested_owned_sessions(
+    app_client, make_user
+):
+    """Bulk delete must remove exactly the requested owned sessions and
+    leave unselected and foreign sessions alone."""
+    alice = make_user(email="sess-bulk-sel-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-bulk-sel-b@test.com", tier=UserTier.PRO)
+    _seed_in_memory(alice.id, session_id="a-1")
+    _seed_in_memory(alice.id, session_id="a-2")
+    _seed_in_memory(alice.id, session_id="a-keep")
+    _seed_in_memory(bob.id, session_id="b-1")
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(alice),
+        json={"session_ids": ["a-1", "a-2", "b-1", "missing"]},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "deleted",
+        "deleted": 2,
+        "deleted_ids": ["a-1", "a-2"],
+    }
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    sids = {s["session_id"] for s in listing.json()["sessions"]}
+    assert sids == {"a-keep"}
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(bob))
+    sids = {s["session_id"] for s in listing.json()["sessions"]}
+    assert sids == {"b-1"}
+
+
+@pytest.mark.asyncio
+async def test_delete_selected_deduplicates_and_accepts_empty_result(
+    app_client, make_user
+):
+    user = make_user(email="sess-bulk-sel-dedup@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(user),
+        json={"session_ids": ["mine", "mine", "ghost"]},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "deleted",
+        "deleted": 1,
+        "deleted_ids": ["mine"],
+    }
+
+    # Only missing/foreign ids are a successful no-op, never an error.
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(user),
+        json={"session_ids": ["ghost"]},
+    )
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 0
+    assert res.json()["deleted_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_delete_selected_rejects_empty_or_overlong_id_lists(app_client, make_user):
+    user = make_user(email="sess-bulk-sel-bounds@test.com", tier=UserTier.PRO)
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(user),
+        json={"session_ids": []},
+    )
+    assert res.status_code == 422
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(user),
+        json={"session_ids": [f"x{i}" for i in range(101)]},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_delete_selected_clears_persona_integrity_history(
+    app_client, make_user
+):
+    """Selected bulk delete must drop drift history for removed sessions
+    while preserving history for sessions that were not selected."""
+    user = make_user(email="sess-bulk-sel-drift@test.com", tier=UserTier.PRO)
+    from arena.core import persona_integrity
+
+    _seed_in_memory(user.id, session_id="remove-me")
+    _seed_in_memory(user.id, session_id="keep-me")
+    persona_integrity.record_response("agent_1", "v", "remove-me")
+    persona_integrity.record_response("agent_1", "v", "keep-me")
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(user),
+        json={"session_ids": ["remove-me"]},
+    )
+    assert res.status_code == 200
+    assert res.json()["deleted_ids"] == ["remove-me"]
+
+    assert "remove-me" not in persona_integrity._session_history
+    assert "keep-me" in persona_integrity._session_history
+
+
 # ─── Auth ───────────────────────────────────────────────────────────────────
 
 
@@ -624,6 +739,7 @@ async def test_session_endpoints_require_auth(app_client):
         ("PATCH", "/api/session/x/pin"),
         ("DELETE", "/api/session/x"),
         ("DELETE", "/api/sessions"),
+        ("DELETE", "/api/sessions/bulk"),
     ]:
         res = await app_client.request(method, path)
         assert res.status_code == 401, f"{method} {path} returned {res.status_code}"

@@ -39,6 +39,17 @@ class PinSessionRequest(BaseModel):
     pinned: bool
 
 
+class BulkDeleteSessionsRequest(BaseModel):
+    """Body for deleting a user-selected subset of live sessions."""
+
+    session_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Sessions to delete, capped so one bad UI loop cannot erase a huge store.",
+    )
+
+
 # In-memory sessions are stored as raw dicts in MemoryManager._store.
 # Each entry has a `session_data` (SessionData) and we need to project
 # a small summary for the list endpoint so the response stays tiny.
@@ -378,3 +389,44 @@ async def delete_all_sessions(
             clear_session_history(sid)
             deleted += 1
     return {"status": "deleted", "deleted": deleted}
+
+
+@router.delete("/sessions/bulk")
+async def delete_selected_sessions(
+    body: BulkDeleteSessionsRequest,
+    user: UserResponse = Depends(get_current_user_required),
+) -> dict:
+    """Delete a caller-selected subset of live in-memory sessions.
+
+    Unlike clear-all, this endpoint touches only the ids supplied in the
+    request. Foreign and missing ids are skipped (the 404-oracle rule is
+    preserved by not revealing them), and the response lists exactly which
+    ids were removed so the UI can reconcile stale rows without guessing.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="session_bulk_delete",
+        limit=20,
+        window_seconds=3600,
+        message="Too many bulk session deletes. Limit is 20 per hour.",
+    )
+    memory = get_memory_manager()
+    store = getattr(memory, "short_term", None)
+    store = getattr(store, "_store", {}) if store is not None else {}
+
+    deleted_ids: list[str] = []
+    for sid in dict.fromkeys(body.session_ids):
+        state = store.get(sid)
+        if state is None or not _is_owner(state, user.id):
+            continue
+        memory.clear_session(sid)
+        # Mirror the single-session cleanup: drop persona_integrity drift
+        # history alongside the in-memory session state.
+        clear_session_history(sid)
+        deleted_ids.append(sid)
+
+    return {
+        "status": "deleted",
+        "deleted": len(deleted_ids),
+        "deleted_ids": deleted_ids,
+    }

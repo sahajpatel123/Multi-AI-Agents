@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sidebar resumable chat bulk delete: select individual chats or all visible,
+  then remove them with one confirmed request
 - Sidebar resumable chat filter for pinned-only views (search and exports
   respect the filter)
 

@@ -24,6 +24,7 @@ import {
   getSession,
   listSessions,
   deleteSession,
+  deleteSessionsBulk,
   clearAllSessions,
   renameSession,
   duplicateSession,
@@ -1115,6 +1116,29 @@ function App() {
     [handleNewChat, sessionData?.session_id],
   );
 
+  const handleBulkDeleteSessions = useCallback(
+    async (sessionIds: string[]) => {
+      if (sessionIds.length === 0) return 0;
+      const result = await deleteSessionsBulk(sessionIds);
+      if (!result) return null;
+      const removed = new Set(result.deleted_ids);
+      setRecentSessions((prev) =>
+        prev.filter((session) => !removed.has(session.session_id)),
+      );
+      if (sessionData?.session_id && removed.has(sessionData.session_id)) {
+        await handleNewChat({ silent: true });
+        setSessionData(null);
+        safeLocalStorage.removeItem('arena_session_id');
+      }
+      void track('recent_chats_bulk_deleted', undefined, undefined, {
+        deleted: result.deleted,
+        requested: sessionIds.length,
+      });
+      return result.deleted;
+    },
+    [handleNewChat, sessionData?.session_id],
+  );
+
   const handleClearSessions = useCallback(async () => {
     const cleared = await clearAllSessions();
     if (cleared === null) return null;
@@ -1905,6 +1929,7 @@ function App() {
           onDeleteSession={(sessionId) => {
             void handleDeleteSession(sessionId);
           }}
+          onBulkDeleteSessions={handleBulkDeleteSessions}
           onClearSessions={handleClearSessions}
           onRenameSession={handleRenameSession}
           onToggleSessionPin={handleToggleSessionPin}

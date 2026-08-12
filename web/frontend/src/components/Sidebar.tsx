@@ -163,6 +163,9 @@ interface SidebarProps {
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => Promise<void> | void;
+  onBulkDeleteSessions?: (
+    sessionIds: string[],
+  ) => Promise<number | null> | number | null | void;
   onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (
     sessionId: string,
@@ -206,6 +209,7 @@ export function Sidebar({
   activeSessionId = null,
   onSessionSelect,
   onDeleteSession,
+  onBulkDeleteSessions,
   onClearSessions,
   onRenameSession,
   onToggleSessionPin,
@@ -266,6 +270,13 @@ export function Sidebar({
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
   const [confirmClearSessions, setConfirmClearSessions] = useState(false);
   const [clearSessionsStatus, setClearSessionsStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed'
+  >('idle');
+  const [selectedChatIds, setSelectedChatIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [confirmBulkDeleteChats, setConfirmBulkDeleteChats] = useState(false);
+  const [bulkDeleteChatsStatus, setBulkDeleteChatsStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed'
   >('idle');
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
@@ -339,6 +350,11 @@ export function Sidebar({
       : showAllChats
         ? sortedChats
         : sortedChats.slice(0, 5);
+  const selectedVisibleCount = visibleChats.filter((session) =>
+    selectedChatIds.has(session.session_id),
+  ).length;
+  const allVisibleChatsSelected =
+    visibleChats.length > 0 && selectedVisibleCount === visibleChats.length;
 
   const filteredTurns = useMemo(() => {
     const byCategory = reversedTurns.filter(
@@ -628,6 +644,27 @@ export function Sidebar({
   useEffect(() => {
     if (recentSessions.length === 0) setConfirmClearSessions(false);
   }, [recentSessions.length]);
+
+  useEffect(() => {
+    if (recentSessions.length === 0) {
+      setConfirmBulkDeleteChats(false);
+    }
+    setSelectedChatIds((prev) => {
+      const liveIds = new Set(recentSessions.map((session) => session.session_id));
+      const next = new Set([...prev].filter((id) => liveIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [recentSessions]);
+
+  useEffect(() => {
+    if (bulkDeleteChatsStatus === 'idle' || bulkDeleteChatsStatus === 'busy') return;
+    const hold = motionDuration(bulkDeleteChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(
+      () => setBulkDeleteChatsStatus('idle'),
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [bulkDeleteChatsStatus]);
 
   // Keep the stored filter in sync with reality: drop the pinned-only view
   // when the last pinned chat is unpinned and normalize any stale value.
@@ -1028,6 +1065,8 @@ export function Sidebar({
     setOpenMenuTurnId(null);
     setConfirmDeleteTurnId(null);
     setEditingTurnId(null);
+    setSelectedChatIds(new Set());
+    setConfirmBulkDeleteChats(false);
     sessionRenameCancelledRef.current = true;
     sessionRenameEditingIdRef.current = null;
     setEditingSessionId(null);
@@ -1133,9 +1172,63 @@ export function Sidebar({
     }
   };
 
+  const toggleChatSelected = (sessionId: string) => {
+    setConfirmBulkDeleteChats(false);
+    setSelectedChatIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        next.add(sessionId);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllVisibleChats = () => {
+    setConfirmBulkDeleteChats(false);
+    setSelectedChatIds((prev) => {
+      const next = new Set(prev);
+      for (const session of visibleChats) {
+        if (allVisibleChatsSelected) {
+          next.delete(session.session_id);
+        } else {
+          next.add(session.session_id);
+        }
+      }
+      return next;
+    });
+  };
+
+  const clearChatSelection = () => {
+    setConfirmBulkDeleteChats(false);
+    setSelectedChatIds(new Set());
+  };
+
+  const handleBulkDeleteChats = async () => {
+    if (!onBulkDeleteSessions || bulkDeleteChatsStatus === 'busy') return;
+    const ids = [...selectedChatIds];
+    if (ids.length === 0) return;
+    setConfirmBulkDeleteChats(false);
+    setBulkDeleteChatsStatus('busy');
+    try {
+      const deleted = await onBulkDeleteSessions(ids);
+      if (deleted === null) {
+        setBulkDeleteChatsStatus('failed');
+        return;
+      }
+      setBulkDeleteChatsStatus('done');
+      setSelectedChatIds(new Set());
+    } catch {
+      setBulkDeleteChatsStatus('failed');
+    }
+  };
+
   const handleClearSessions = async () => {
     if (!onClearSessions || clearSessionsStatus === 'busy') return;
     setClearSessionsStatus('busy');
+    setSelectedChatIds(new Set());
+    setConfirmBulkDeleteChats(false);
     try {
       const cleared = await onClearSessions();
       setClearSessionsStatus(cleared === null ? 'failed' : 'done');
@@ -1273,6 +1366,36 @@ export function Sidebar({
                       ? `${filteredChats.length} / ${recentSessions.length}`
                       : recentSessions.length}
                   </span>
+                  {onBulkDeleteSessions && visibleChats.length > 0 ? (
+                    <button
+                      type="button"
+                      aria-label={
+                        allVisibleChatsSelected
+                          ? 'Clear chat selection'
+                          : 'Select all visible chats'
+                      }
+                      title={
+                        allVisibleChatsSelected
+                          ? 'Clear chat selection'
+                          : 'Select all visible chats'
+                      }
+                      onClick={toggleAllVisibleChats}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 5,
+                        cursor: 'pointer',
+                        color: allVisibleChatsSelected ? '#5A8C6A' : '#A0A39A',
+                        padding: '3px 6px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {allVisibleChatsSelected ? 'Clear' : 'Select all'}
+                    </button>
+                  ) : null}
                   {onClearSessions && recentSessions.length > 0 ? (
                     <button
                       type="button"
@@ -1577,6 +1700,147 @@ export function Sidebar({
                   </button>
                 </div>
               ) : null}
+              {selectedChatIds.size > 0 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    marginBottom: 8,
+                    padding: '6px 8px',
+                    background: '#F5F0EA',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: '#4A3728',
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {selectedChatIds.size}{' '}
+                    {selectedChatIds.size === 1 ? 'chat' : 'chats'} selected
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      aria-label="Cancel chat selection"
+                      onClick={clearChatSelection}
+                      disabled={bulkDeleteChatsStatus === 'busy'}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 10,
+                        borderRadius: 6,
+                        color: '#A0A39A',
+                        background: '#F0EBE3',
+                        cursor:
+                          bulkDeleteChatsStatus === 'busy' ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${selectedChatIds.size} selected chats`}
+                      onClick={() => setConfirmBulkDeleteChats(true)}
+                      disabled={bulkDeleteChatsStatus === 'busy'}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 10,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background: '#C0392B',
+                        cursor:
+                          bulkDeleteChatsStatus === 'busy' ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {bulkDeleteChatsStatus === 'busy' ? 'Deleting…' : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {confirmBulkDeleteChats ? (
+                <div
+                  role="dialog"
+                  aria-label="Delete selected chats"
+                  style={{
+                    marginBottom: 8,
+                    padding: '8px 10px',
+                    background: '#FFF7F5',
+                    border: '0.5px solid #E3B7A7',
+                    borderRadius: 8,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: '0 0 8px',
+                      fontSize: 12,
+                      color: '#1A1714',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Delete {selectedChatIds.size}{' '}
+                    {selectedChatIds.size === 1 ? 'selected chat' : 'selected chats'}?
+                    This cannot be undone.
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmBulkDeleteChats(false)}
+                      disabled={bulkDeleteChatsStatus === 'busy'}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 11,
+                        borderRadius: 6,
+                        color: '#A0A39A',
+                        background: '#F0EBE3',
+                        cursor:
+                          bulkDeleteChatsStatus === 'busy' ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleBulkDeleteChats()}
+                      disabled={bulkDeleteChatsStatus === 'busy'}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 11,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background: '#C0392B',
+                        cursor:
+                          bulkDeleteChatsStatus === 'busy' ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {bulkDeleteChatsStatus === 'busy'
+                        ? 'Deleting…'
+                        : 'Delete selected'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {bulkDeleteChatsStatus === 'failed' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Could not delete selected chats. Please try again.
+                </p>
+              ) : null}
               {confirmClearSessions ? (
                 <div
                   role="dialog"
@@ -1698,19 +1962,23 @@ export function Sidebar({
                     ? 'Arena chats copied to clipboard'
                     : copyChatsStatus === 'failed'
                       ? 'Could not copy Arena chats'
-                      : downloadChatsStatus === 'done'
-                        ? 'Arena chats downloaded'
-                        : downloadChatsStatus === 'failed'
-                          ? 'Could not download Arena chats'
-                          : downloadJsonChatsStatus === 'done'
-                            ? 'Arena chats JSON downloaded'
-                            : downloadJsonChatsStatus === 'failed'
-                              ? 'Could not download Arena chats JSON'
-                              : downloadCsvChatsStatus === 'done'
-                                ? 'Arena chats CSV downloaded'
-                                : downloadCsvChatsStatus === 'failed'
-                                  ? 'Could not download Arena chats CSV'
-                                  : ''}
+                      : bulkDeleteChatsStatus === 'done'
+                        ? 'Selected chats deleted'
+                        : bulkDeleteChatsStatus === 'failed'
+                          ? 'Could not delete selected chats'
+                          : downloadChatsStatus === 'done'
+                            ? 'Arena chats downloaded'
+                            : downloadChatsStatus === 'failed'
+                              ? 'Could not download Arena chats'
+                              : downloadJsonChatsStatus === 'done'
+                                ? 'Arena chats JSON downloaded'
+                                : downloadJsonChatsStatus === 'failed'
+                                  ? 'Could not download Arena chats JSON'
+                                  : downloadCsvChatsStatus === 'done'
+                                    ? 'Arena chats CSV downloaded'
+                                    : downloadCsvChatsStatus === 'failed'
+                                      ? 'Could not download Arena chats CSV'
+                                      : ''}
                 </div>
               ) : null}
               {isChatSearchActive && filteredChats.length === 0 ? (
@@ -1812,53 +2080,75 @@ export function Sidebar({
                       );
                     }
                     return (
-                      <SessionCard
+                      <div
                         key={session.session_id}
-                        prompt={displayTitle}
-                        promptNode={
-                          isChatSearchActive ? (
-                            <HighlightQuery text={displayTitle} query={chatSearchQuery} />
-                          ) : undefined
-                        }
-                        matchTopic={topicOnlyMatch}
-                        winnerAgentId=""
-                        timestamp={session.last_active || ''}
-                        isActive={session.session_id === activeSessionId}
-                        onClick={() => onSessionSelect?.(session.session_id)}
-                        onRename={
-                          onRenameSession
-                            ? () => startSessionRename(session)
-                            : undefined
-                        }
-                        onDelete={
-                          onDeleteSession
-                            ? () => {
-                                void onDeleteSession(session.session_id);
-                              }
-                            : undefined
-                        }
-                        onPin={
-                          onToggleSessionPin
-                            ? () => {
-                                void handleToggleSessionPin(
-                                  session.session_id,
-                                  !(session.pinned === true),
-                                );
-                              }
-                            : undefined
-                        }
-                        onDuplicate={
-                          onDuplicateSession && session.turn_count > 0
-                            ? () => {
-                                void handleDuplicateSession(session.session_id);
-                              }
-                            : undefined
-                        }
-                        pinned={session.pinned === true}
-                        busy={sessionPinBusyId !== null}
-                        duplicateBusy={sessionDuplicateBusyId === session.session_id}
-                        messageCount={session.turn_count}
-                      />
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        {onBulkDeleteSessions ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`Select chat: ${displayTitle}`}
+                            checked={selectedChatIds.has(session.session_id)}
+                            disabled={bulkDeleteChatsStatus === 'busy'}
+                            onChange={() => toggleChatSelected(session.session_id)}
+                            style={{ flexShrink: 0, cursor: 'pointer' }}
+                          />
+                        ) : null}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <SessionCard
+                            prompt={displayTitle}
+                            promptNode={
+                              isChatSearchActive ? (
+                                <HighlightQuery text={displayTitle} query={chatSearchQuery} />
+                              ) : undefined
+                            }
+                            matchTopic={topicOnlyMatch}
+                            winnerAgentId=""
+                            timestamp={session.last_active || ''}
+                            isActive={session.session_id === activeSessionId}
+                            onClick={() => onSessionSelect?.(session.session_id)}
+                            onRename={
+                              onRenameSession
+                                ? () => startSessionRename(session)
+                                : undefined
+                            }
+                            onDelete={
+                              onDeleteSession
+                                ? () => {
+                                    void onDeleteSession(session.session_id);
+                                  }
+                                : undefined
+                            }
+                            onPin={
+                              onToggleSessionPin
+                                ? () => {
+                                    void handleToggleSessionPin(
+                                      session.session_id,
+                                      !(session.pinned === true),
+                                    );
+                                  }
+                                : undefined
+                            }
+                            onDuplicate={
+                              onDuplicateSession && session.turn_count > 0
+                                ? () => {
+                                    void handleDuplicateSession(session.session_id);
+                                  }
+                                : undefined
+                            }
+                            pinned={session.pinned === true}
+                            busy={sessionPinBusyId !== null}
+                            duplicateBusy={
+                              sessionDuplicateBusyId === session.session_id
+                            }
+                            messageCount={session.turn_count}
+                          />
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

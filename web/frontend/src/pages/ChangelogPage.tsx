@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Sidebar Chats: bulk-delete selected resumable chats with select-all and inline confirmation',
       '[NEW] Sidebar Chats: resume or delete any live conversation from the sidebar',
       '[NEW] Agent full research report: download as JSON (machine-readable parity with /result)',
       '[NEW] Agent history: download the current filtered view as CSV or JSON',
