@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Sidebar "Clear chat selection" now empties the whole selection even when a
+  search or pin filter hides some selected chats, instead of stranding hidden
+  picks staged under a previous filter
 - Chat archive import now survives archives with missing/null timestamps,
   honors a take flagged `is_winner` when the winner id is absent, and stays
   available even when the sidebar has no current chats (with active search

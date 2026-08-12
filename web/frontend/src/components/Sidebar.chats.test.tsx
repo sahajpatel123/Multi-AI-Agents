@@ -582,6 +582,36 @@ describe('Sidebar recent chats', () => {
     expect(downloadMarkdownFile).toHaveBeenCalled();
   });
 
+  it('clears hidden selections when Clear is pressed under a narrower filter', () => {
+    const manySessions: SessionSummary[] = Array.from({ length: 7 }, (_, i) => ({
+      session_id: `chat-${i + 1}`,
+      topics: [],
+      primary_topic: null,
+      last_prompt: `Prompt ${i + 1}`,
+      turn_count: 1,
+      last_active: `2026-08-01T0${i}:00:00Z`,
+    }));
+    renderSidebar({ sessions: manySessions });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select all 7 chats' }));
+    expect(screen.getByText('7 chats selected')).toBeInTheDocument();
+
+    // Narrow the view to one of the already-selected chats; the header still
+    // says "Clear" because every visible chat is selected, and it must clear
+    // the six hidden picks too rather than leaving them staged.
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
+      target: { value: 'Prompt 7' },
+    });
+    expect(screen.getByText('7 chats selected')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear chat selection' }));
+    expect(screen.queryByText(/chats selected/)).toBeNull();
+    expect(
+      (screen.getAllByRole('checkbox', { name: /Select chat:/ })[0] as HTMLInputElement)
+        .checked,
+    ).toBe(false);
+  });
+
   it('shift-clicks a chat to select the whole visible range since the anchor', () => {
     renderSidebar({
       sessions: [

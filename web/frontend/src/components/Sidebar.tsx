@@ -1754,6 +1754,13 @@ export function Sidebar({
 
   const toggleAllFilteredChats = () => {
     if (bulkChatsBusy) return;
+    // Once every chat in the current filter is staged, "Clear" must empty the
+    // whole selection - including chats selected under a previous filter that
+    // are no longer visible - instead of silently stranding hidden picks.
+    if (allFilteredChatsSelected) {
+      clearChatSelection();
+      return;
+    }
     chatSelectionAnchorRef.current = null;
     setConfirmBulkDeleteChats(false);
     setBulkPinChatsStatus('idle');
@@ -1763,11 +1770,7 @@ export function Sidebar({
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
       for (const session of filteredChats) {
-        if (allFilteredChatsSelected) {
-          next.delete(session.session_id);
-        } else {
-          next.add(session.session_id);
-        }
+        next.add(session.session_id);
       }
       return next;
     });
