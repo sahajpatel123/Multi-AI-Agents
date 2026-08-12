@@ -8,6 +8,11 @@ import {
 describe('keyboardShortcuts', () => {
   it('lists primary shortcuts per surface', () => {
     expect(shortcutsForSurface('arena').some((s) => s.keys === '/')).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys.includes('↑') && s.action.toLowerCase().includes('recent prompts'),
+      ),
+    ).toBe(true);
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
     expect(
       shortcutsForSurface('agent').some(

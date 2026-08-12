@@ -18,6 +18,7 @@ export type ShortcutSurface =
 const ARENA: ShortcutHint[] = [
   { keys: '/', action: 'Focus the Arena prompt' },
   { keys: 'Enter', action: 'Send your question' },
+  { keys: '↑ / ↓', action: 'Cycle recent prompts in the compose box' },
   { keys: 'Esc', action: 'Close a focused mind' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];

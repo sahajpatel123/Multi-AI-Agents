@@ -213,4 +213,104 @@ describe('PromptInput', () => {
       expect(textarea.value).toBe('sharpened');
     });
   });
+
+  it('ArrowUp fills the most recent prompt when the box is empty', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+  });
+
+  it('ArrowUp again walks to older prompts', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('older');
+  });
+
+  it('ArrowDown restores the draft after stepping into history', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'my draft' } });
+    textarea.setSelectionRange(0, 0);
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    expect(textarea.value).toBe('my draft');
+  });
+
+  it('ArrowUp recalls history even when the caret is mid-text', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'mid text' } });
+    textarea.setSelectionRange(3, 3);
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+  });
+
+  it('ArrowUp with a modifier key does not trigger history', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp', metaKey: true });
+    expect(textarea.value).toBe('');
+  });
+
+  it('ArrowDown without history is a no-op', () => {
+    render(<PromptInput onSubmit={() => {}} isLoading={false} />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    expect(textarea.value).toBe('');
+  });
+
+  it('editing after a history step starts a fresh walk from the new draft', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+
+    fireEvent.change(textarea, { target: { value: 'edited newest' } });
+    textarea.setSelectionRange(0, 0);
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    expect(textarea.value).toBe('edited newest');
+  });
 });

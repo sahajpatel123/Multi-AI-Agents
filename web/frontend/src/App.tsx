@@ -144,6 +144,7 @@ function App() {
   const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
   const [followUpSuggestionsSource, setFollowUpSuggestionsSource] = useState<'llm' | 'fallback'>('llm');
   const [recentPrompts, setRecentPrompts] = useState<RecentPrompt[]>(() => loadRecentPrompts());
+  const promptHistory = useMemo(() => recentPrompts.map((p) => p.text), [recentPrompts]);
   const quotaExhausted = messagesRemaining <= 0;
   const personaIds = panel.map((persona) => persona.id);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -3049,6 +3050,7 @@ function App() {
             <PromptInput
               onSubmit={handlePromptSubmit}
               isLoading={focusedAgentId ? isFocusedChatStreaming : (isLoading || isStreaming)}
+              history={promptHistory}
               placeholder={
                 focusedAgentId && focusedAgentConfig
                   ? `Message ${focusedAgentConfig.name} directly...`

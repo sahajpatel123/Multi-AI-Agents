@@ -19,6 +19,13 @@ import {
   loadPromptDraft,
   savePromptDraft,
 } from '../lib/promptDraft';
+import {
+  createPromptHistoryState,
+  NO_HISTORY_ENTRY,
+  shouldCapturePromptHistoryKey,
+  stepPromptHistory,
+  type PromptHistoryState,
+} from '../lib/promptHistory';
 
 const CYCLING_PLACEHOLDERS = [
   'Ask something and watch four minds respond...',
@@ -63,6 +70,11 @@ interface PromptInputProps {
   polishEnabled?: boolean;
   /** Fired after a polish attempt completes (refined or not). */
   onPolished?: (prompt: string, note?: string) => void;
+  /**
+   * Most-recent-first prompt texts to replay with ArrowUp/ArrowDown in the
+   * compose box. When omitted, history cycling is disabled.
+   */
+  history?: readonly string[];
 }
 
 export function PromptInput({
@@ -82,6 +94,7 @@ export function PromptInput({
   clearDraftSignal,
   polishEnabled = false,
   onPolished,
+  history,
 }: PromptInputProps) {
   const [prompt, setPrompt] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -90,9 +103,20 @@ export function PromptInput({
   const [isPolishing, setIsPolishing] = useState(false);
   const [polishMessage, setPolishMessage] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const historyStateRef = useRef<PromptHistoryState | null>(null);
+  if (historyStateRef.current === null) {
+    historyStateRef.current = createPromptHistoryState();
+  }
   const budgetId = useId();
 
   const activePlaceholder = placeholder ?? CYCLING_PLACEHOLDERS[placeholderIndex];
+  const historyKey = (history ?? []).join('\u0000');
+
+  // A changed history (e.g. a freshly submitted prompt) invalidates any
+  // in-progress history walk so the next ArrowUp starts from the new list.
+  useEffect(() => {
+    historyStateRef.current = createPromptHistoryState();
+  }, [historyKey]);
 
   // Cycle placeholder text — skip timed fades when the user prefers reduced motion.
   useEffect(() => {
@@ -208,6 +232,24 @@ export function PromptInput({
     }
   };
 
+  const handleHistoryKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!shouldCapturePromptHistoryKey(e.nativeEvent)) return;
+    const direction = e.key === 'ArrowUp' ? 'up' : 'down';
+    const el = e.currentTarget;
+    const currentState = historyStateRef.current ?? createPromptHistoryState();
+    if (direction === 'down' && currentState.index === NO_HISTORY_ENTRY) return;
+
+    const result = stepPromptHistory(direction, currentState, prompt, history ?? []);
+    if (!result.changed) return;
+    e.preventDefault();
+    setPrompt(result.value);
+    historyStateRef.current = result.state;
+    requestAnimationFrame(() => {
+      el.setSelectionRange(el.value.length, el.value.length);
+      autoResize(el);
+    });
+  };
+
   const hasContent = Boolean(prompt.trim());
   const canSubmit = hasContent && !isLoading && !submitBlocked;
   const canPolish = hasContent && !isLoading && !isPolishing && !submitBlocked;
@@ -304,6 +346,8 @@ export function PromptInput({
               maxLength={ARENA_PROMPT_MAX_CHARS}
               onChange={(e) => {
                 setPrompt(clampToMax(e.target.value, ARENA_PROMPT_MAX_CHARS));
+                // Any manual edit leaves the history walk and starts a new draft.
+                historyStateRef.current = createPromptHistoryState();
                 autoResize(e.target);
               }}
               placeholder={
@@ -323,12 +367,13 @@ export function PromptInput({
               title={
                 submitBlocked
                   ? submitBlockedTitle
-                  : 'Press / anywhere to focus · Enter to send'
+                  : 'Press / anywhere to focus · Enter to send · ↑/↓ recent prompts'
               }
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               disabled={isLoading}
               onKeyDown={(e) => {
+                handleHistoryKeyDown(e);
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleSubmit(e);
