@@ -358,6 +358,63 @@ describe('Sidebar recent chats', () => {
     );
   });
 
+  it('announces a successful bulk delete to screen readers', async () => {
+    const { onBulkDeleteSessions } = renderSidebar();
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Delete 2 selected chats' }),
+    );
+    fireEvent.click(
+      within(
+        screen.getByRole('dialog', { name: 'Delete selected chats' }),
+      ).getByRole('button', { name: 'Delete selected' }),
+    );
+
+    await waitFor(() => expect(onBulkDeleteSessions).toHaveBeenCalled());
+    await waitFor(() => {
+      const statuses = screen.getAllByRole('status');
+      expect(
+        statuses.some((status) =>
+          status.textContent?.includes('Selected chats deleted'),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('keeps non-deleted chats selected and reports a partial bulk delete', async () => {
+    const { rerender } = renderSidebar({
+      onBulkDeleteSessions: vi.fn().mockResolvedValue(1),
+    });
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Delete 2 selected chats' }),
+    );
+    fireEvent.click(
+      within(
+        screen.getByRole('dialog', { name: 'Delete selected chats' }),
+      ).getByRole('button', { name: 'Delete selected' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /some selected chats could not be deleted/i,
+      ),
+    );
+    expect(screen.getByText('2 chats selected')).toBeInTheDocument();
+
+    // The parent removes exactly the ids the server reported deleted; the
+    // remaining chat should stay selected so the user can retry it.
+    rerender([sessions[1] as SessionSummary]);
+    await waitFor(() => expect(screen.getByText('1 chat selected')).toBeInTheDocument());
+    expect(
+      screen.getByRole('checkbox', { name: /Select chat: Untitled chat/ }),
+    ).toBeChecked();
+  });
+
   it('selects all visible chats and clears the selection without deleting', () => {
     renderSidebar();
 

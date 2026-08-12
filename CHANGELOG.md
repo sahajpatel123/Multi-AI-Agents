@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Sidebar bulk chat delete reports partial deletions honestly and announces
+  completion to screen readers
 - Sidebar pinned-only chat filter safely falls back to all chats when the last
   pinned chat is unpinned, and stale filter values are normalized
 - Resumable chat list export (Markdown, JSON, or CSV) from the sidebar with

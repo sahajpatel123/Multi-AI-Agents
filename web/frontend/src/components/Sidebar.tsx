@@ -277,7 +277,7 @@ export function Sidebar({
   );
   const [confirmBulkDeleteChats, setConfirmBulkDeleteChats] = useState(false);
   const [bulkDeleteChatsStatus, setBulkDeleteChatsStatus] = useState<
-    'idle' | 'busy' | 'done' | 'failed'
+    'idle' | 'busy' | 'done' | 'failed' | 'partial'
   >('idle');
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -658,7 +658,11 @@ export function Sidebar({
 
   useEffect(() => {
     if (bulkDeleteChatsStatus === 'idle' || bulkDeleteChatsStatus === 'busy') return;
-    const hold = motionDuration(bulkDeleteChatsStatus === 'failed' ? 2800 : 2000);
+    const hold = motionDuration(
+      bulkDeleteChatsStatus === 'failed' || bulkDeleteChatsStatus === 'partial'
+        ? 2800
+        : 2000,
+    );
     const t = window.setTimeout(
       () => setBulkDeleteChatsStatus('idle'),
       hold > 0 ? hold : 0,
@@ -1215,6 +1219,10 @@ export function Sidebar({
       const deleted = await onBulkDeleteSessions(ids);
       if (deleted === null) {
         setBulkDeleteChatsStatus('failed');
+        return;
+      }
+      if (typeof deleted === 'number' && deleted < ids.length) {
+        setBulkDeleteChatsStatus('partial');
         return;
       }
       setBulkDeleteChatsStatus('done');
@@ -1840,6 +1848,19 @@ export function Sidebar({
                 >
                   Could not delete selected chats. Please try again.
                 </p>
+              ) : bulkDeleteChatsStatus === 'partial' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Some selected chats could not be deleted and are still
+                  selected.
+                </p>
               ) : null}
               {confirmClearSessions ? (
                 <div
@@ -1939,7 +1960,9 @@ export function Sidebar({
                   Couldn't duplicate this chat. Please try again.
                 </p>
               ) : null}
-              {copyChatsStatus !== 'idle' ||
+              {(bulkDeleteChatsStatus !== 'idle' &&
+                bulkDeleteChatsStatus !== 'busy') ||
+              copyChatsStatus !== 'idle' ||
               downloadChatsStatus !== 'idle' ||
               downloadJsonChatsStatus !== 'idle' ||
               downloadCsvChatsStatus !== 'idle' ? (
@@ -1962,7 +1985,9 @@ export function Sidebar({
                     ? 'Arena chats copied to clipboard'
                     : copyChatsStatus === 'failed'
                       ? 'Could not copy Arena chats'
-                      : bulkDeleteChatsStatus === 'done'
+                      : bulkDeleteChatsStatus === 'partial'
+                        ? 'Some selected chats could not be deleted'
+                        : bulkDeleteChatsStatus === 'done'
                         ? 'Selected chats deleted'
                         : bulkDeleteChatsStatus === 'failed'
                           ? 'Could not delete selected chats'
