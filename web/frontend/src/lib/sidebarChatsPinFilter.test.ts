@@ -3,6 +3,8 @@ import {
   SIDEBAR_CHATS_PIN_ALL,
   SIDEBAR_CHATS_PIN_ONLY,
   filterChatsByPin,
+  isSidebarChatsPinFilter,
+  normalizeSidebarChatsPinFilter,
   sidebarChatsPinFilterLabel,
 } from './sidebarChatsPinFilter';
 
@@ -50,5 +52,27 @@ describe('filterChatsByPin', () => {
   it('labels filters', () => {
     expect(sidebarChatsPinFilterLabel(SIDEBAR_CHATS_PIN_ALL)).toBe('All chats');
     expect(sidebarChatsPinFilterLabel(SIDEBAR_CHATS_PIN_ONLY)).toBe('Pinned only');
+  });
+
+  it('recognizes and normalizes filter values', () => {
+    expect(isSidebarChatsPinFilter(SIDEBAR_CHATS_PIN_ALL)).toBe(true);
+    expect(isSidebarChatsPinFilter(SIDEBAR_CHATS_PIN_ONLY)).toBe(true);
+    expect(isSidebarChatsPinFilter('pinned-all')).toBe(false);
+    expect(normalizeSidebarChatsPinFilter(SIDEBAR_CHATS_PIN_ONLY)).toBe(
+      SIDEBAR_CHATS_PIN_ONLY,
+    );
+    expect(normalizeSidebarChatsPinFilter('pinned-all')).toBe(
+      SIDEBAR_CHATS_PIN_ALL,
+    );
+    expect(normalizeSidebarChatsPinFilter('pinned-all', SIDEBAR_CHATS_PIN_ONLY)).toBe(
+      SIDEBAR_CHATS_PIN_ONLY,
+    );
+  });
+
+  it('treats an unknown filter as the all-chats view', () => {
+    expect(
+      filterChatsByPin(sample, 'pinned-all' as never).map((s) => s.session_id),
+    ).toEqual(['chat-1', 'chat-2', 'chat-3', 'chat-4']);
+    expect(sidebarChatsPinFilterLabel('pinned-all' as never)).toBe('All chats');
   });
 });

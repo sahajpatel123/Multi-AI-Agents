@@ -108,7 +108,7 @@ function renderSidebar(overrides?: {
   const onRenameSession = overrides?.onRenameSession ?? vi.fn(() => true);
   const onToggleSessionPin = overrides?.onToggleSessionPin ?? vi.fn(() => true);
   const onDuplicateSession = overrides?.onDuplicateSession ?? vi.fn(() => true);
-  render(
+  const view = render(
     <Sidebar
       turns={overrides?.turns ?? []}
       activeTurnId={null}
@@ -136,6 +136,28 @@ function renderSidebar(overrides?: {
     onRenameSession,
     onToggleSessionPin,
     onDuplicateSession,
+    rerender: (nextSessions: SessionSummary[]) =>
+      view.rerender(
+        <Sidebar
+          turns={overrides?.turns ?? []}
+          activeTurnId={null}
+          onTurnClick={vi.fn()}
+          onNewChat={vi.fn()}
+          isOpen
+          onClose={vi.fn()}
+          onLeaderboardClick={vi.fn()}
+          savedItems={[savedItem]}
+          onSavedItemClick={vi.fn()}
+          recentSessions={nextSessions}
+          activeSessionId={overrides?.activeSessionId ?? null}
+          onSessionSelect={onSessionSelect}
+          onDeleteSession={onDeleteSession}
+          onClearSessions={onClearSessions}
+          onRenameSession={onRenameSession}
+          onToggleSessionPin={onToggleSessionPin}
+          onDuplicateSession={onDuplicateSession}
+        />,
+      ),
   };
 }
 
@@ -547,6 +569,60 @@ describe('Sidebar recent chats', () => {
       screen.getByRole('button', { name: /Open session: Marketing launch/ }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Q3 planning review/)).toBeNull();
+  });
+
+  it('shows every pinned chat without the show-all toggle', () => {
+    const pinnedSessions = Array.from({ length: 6 }, (_, index) => ({
+      ...(sessions[0] as SessionSummary),
+      session_id: `pinned-${index}`,
+      pinned: true,
+      last_prompt: `Pinned chat ${index}`,
+    }));
+    renderSidebar({ sessions: pinnedSessions });
+
+    const filter = screen.getByRole('combobox', { name: 'Filter chats' });
+    fireEvent.change(filter, { target: { value: 'pinned' } });
+
+    expect(screen.getAllByRole('button', { name: /Open session/ })).toHaveLength(
+      6,
+    );
+    expect(
+      screen.queryByRole('button', { name: /Show all|Show fewer/ }),
+    ).toBeNull();
+    expect(screen.getByText('6 / 6')).toBeInTheDocument();
+  });
+
+  it('falls back to all chats when the last pinned chat is unpinned', () => {
+    const { rerender } = renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          pinned: true,
+          last_prompt: 'Only pinned chat',
+        },
+      ],
+    });
+
+    const filter = screen.getByRole('combobox', { name: 'Filter chats' });
+    fireEvent.change(filter, { target: { value: 'pinned' } });
+    expect(screen.getAllByRole('button', { name: /Open session/ })).toHaveLength(
+      1,
+    );
+
+    rerender([
+      {
+        ...(sessions[0] as SessionSummary),
+        pinned: false,
+        last_prompt: 'Only pinned chat',
+      },
+    ]);
+
+    expect(
+      screen.queryByRole('combobox', { name: 'Filter chats' }),
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /Open session: Only pinned chat/ }),
+    ).toBeInTheDocument();
   });
 
   it('renames a chat inline through the callback', async () => {

@@ -17,6 +17,19 @@ export type SidebarChatsPinFilterable = {
   pinned?: boolean;
 };
 
+export function isSidebarChatsPinFilter(
+  value: unknown,
+): value is SidebarChatsPinFilter {
+  return value === SIDEBAR_CHATS_PIN_ALL || value === SIDEBAR_CHATS_PIN_ONLY;
+}
+
+export function normalizeSidebarChatsPinFilter(
+  value: unknown,
+  fallback: SidebarChatsPinFilter = SIDEBAR_CHATS_PIN_ALL,
+): SidebarChatsPinFilter {
+  return isSidebarChatsPinFilter(value) ? value : fallback;
+}
+
 /**
  * Filter sidebar resumable chats by pin state. The `all` filter returns the
  * list unchanged; `pinned` keeps only chats explicitly pinned to the top.
@@ -27,7 +40,7 @@ export function filterChatsByPin<T extends SidebarChatsPinFilterable>(
   filter: SidebarChatsPinFilter,
 ): T[] {
   const list = Array.isArray(items) ? [...items] : [];
-  if (filter === SIDEBAR_CHATS_PIN_ONLY) {
+  if (normalizeSidebarChatsPinFilter(filter) === SIDEBAR_CHATS_PIN_ONLY) {
     return list.filter((item) => item.pinned === true);
   }
   return list;
@@ -35,7 +48,8 @@ export function filterChatsByPin<T extends SidebarChatsPinFilterable>(
 
 export function sidebarChatsPinFilterLabel(filter: SidebarChatsPinFilter): string {
   return (
-    SIDEBAR_CHATS_PIN_FILTER_OPTIONS.find((option) => option.value === filter)?.label ||
-    'All chats'
+    SIDEBAR_CHATS_PIN_FILTER_OPTIONS.find(
+      (option) => option.value === normalizeSidebarChatsPinFilter(filter),
+    )?.label || 'All chats'
   );
 }

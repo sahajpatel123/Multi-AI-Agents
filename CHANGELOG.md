@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Sidebar resumable chat filter for pinned-only views (search and exports
   respect the filter)
+
+### Fixed
+- Sidebar pinned-only chat filter safely falls back to all chats when the last
+  pinned chat is unpinned, and stale filter values are normalized
 - Resumable chat list export (Markdown, JSON, or CSV) from the sidebar with
   spreadsheet-formula-safe CSV cells
 - Sidebar resumable chat sorting by newest, oldest, title, or most turns

@@ -85,6 +85,7 @@ import {
   SIDEBAR_CHATS_PIN_FILTER_OPTIONS,
   SIDEBAR_CHATS_PIN_ONLY,
   filterChatsByPin,
+  normalizeSidebarChatsPinFilter,
   sidebarChatsPinFilterLabel,
   type SidebarChatsPinFilter,
 } from '../lib/sidebarChatsPinFilter';
@@ -309,9 +310,16 @@ export function Sidebar({
     [turns, deletedTurnIds],
   );
 
+  const chatPinFilterUseful = useMemo(
+    () => recentSessions.some((session) => session.pinned === true),
+    [recentSessions],
+  );
+  const activeChatsPinFilter = chatPinFilterUseful
+    ? normalizeSidebarChatsPinFilter(chatsPinFilter)
+    : SIDEBAR_CHATS_PIN_ALL;
   const filteredByPinChats = useMemo(
-    () => filterChatsByPin(recentSessions, chatsPinFilter),
-    [recentSessions, chatsPinFilter],
+    () => filterChatsByPin(recentSessions, activeChatsPinFilter),
+    [recentSessions, activeChatsPinFilter],
   );
   const sortedChats = useMemo(
     () => sortSidebarChats(filteredByPinChats, chatsSort),
@@ -323,7 +331,7 @@ export function Sidebar({
   );
   const isChatSearchActive = chatSearchQuery.trim().length > 0;
   const isChatFilterActive =
-    isChatSearchActive || chatsPinFilter !== SIDEBAR_CHATS_PIN_ALL;
+    isChatSearchActive || activeChatsPinFilter !== SIDEBAR_CHATS_PIN_ALL;
   const visibleChats = isChatSearchActive
     ? filteredChats
     : isChatFilterActive
@@ -331,10 +339,6 @@ export function Sidebar({
       : showAllChats
         ? sortedChats
         : sortedChats.slice(0, 5);
-  const chatPinFilterUseful = useMemo(
-    () => recentSessions.some((session) => session.pinned === true),
-    [recentSessions],
-  );
 
   const filteredTurns = useMemo(() => {
     const byCategory = reversedTurns.filter(
@@ -625,11 +629,15 @@ export function Sidebar({
     if (recentSessions.length === 0) setConfirmClearSessions(false);
   }, [recentSessions.length]);
 
-  // Drop the pinned-only view when the last pinned chat is unpinned so the
-  // sidebar never strands the user on an empty view with no way to reach it.
+  // Keep the stored filter in sync with reality: drop the pinned-only view
+  // when the last pinned chat is unpinned and normalize any stale value.
+  // Rendering uses `activeChatsPinFilter`, so this effect is only cleanup.
   useEffect(() => {
-    if (chatsPinFilter === SIDEBAR_CHATS_PIN_ONLY && !chatPinFilterUseful) {
-      setChatsPinFilter(SIDEBAR_CHATS_PIN_ALL);
+    const next = chatPinFilterUseful
+      ? normalizeSidebarChatsPinFilter(chatsPinFilter)
+      : SIDEBAR_CHATS_PIN_ALL;
+    if (next !== chatsPinFilter) {
+      setChatsPinFilter(next);
     }
   }, [chatsPinFilter, chatPinFilterUseful]);
 
@@ -879,8 +887,10 @@ export function Sidebar({
   const buildChatsFilterNote = () => {
     const q = chatSearchQuery.trim();
     const bits: string[] = [];
-    if (chatsPinFilter === SIDEBAR_CHATS_PIN_ONLY) {
-      bits.push(sidebarChatsPinFilterLabel(chatsPinFilter).toLowerCase());
+    if (activeChatsPinFilter === SIDEBAR_CHATS_PIN_ONLY) {
+      bits.push(
+        sidebarChatsPinFilterLabel(activeChatsPinFilter).toLowerCase(),
+      );
     }
     if (q) bits.push(`search “${q}”`);
     if (chatsSort !== 'newest') bits.push(`sort: ${sidebarChatsSortLabel(chatsSort)}`);
@@ -1388,10 +1398,12 @@ export function Sidebar({
               </select>
               {chatPinFilterUseful ? (
                 <select
-                  value={chatsPinFilter}
-                  onChange={(e) =>
-                    setChatsPinFilter(e.target.value as SidebarChatsPinFilter)
-                  }
+                  value={activeChatsPinFilter}
+                  onChange={(e) => {
+                    setChatsPinFilter(
+                      normalizeSidebarChatsPinFilter(e.target.value),
+                    );
+                  }}
                   aria-label="Filter chats"
                   title="Filter chats"
                   style={{

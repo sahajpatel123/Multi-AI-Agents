@@ -216,6 +216,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Sidebar Chats: chats with missing activity or title stay at the end in every sort order',
       '[NEW] Sidebar Chats: duplicate any chat as a fresh, independent fork',
       '[NEW] Sidebar Chats: filter to pinned-only chats with one click',
+      '[IMPROVED] Sidebar Chats: pinned-only view recovers automatically when the last pinned chat is unpinned',
     ],
   },
   {
