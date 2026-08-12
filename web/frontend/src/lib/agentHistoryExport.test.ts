@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatAgentHistoryCsv,
   formatAgentHistoryExport,
   formatAgentHistoryItemCopy,
+  formatAgentHistoryJson,
 } from './agentHistoryExport';
 
 describe('formatAgentHistoryExport', () => {
@@ -71,5 +73,125 @@ describe('formatAgentHistoryItemCopy', () => {
 
   it('returns empty when question and title blank', () => {
     expect(formatAgentHistoryItemCopy({ question: '  ', title: '' })).toBe('');
+  });
+});
+
+describe('formatAgentHistoryCsv', () => {
+  it('exports rows with escaped commas, quotes, and topic joins', () => {
+    const csv = formatAgentHistoryCsv({
+      items: [
+        {
+          title: 'Rates, 2026',
+          question: 'Will rates cut? "maybe"',
+          score: 84,
+          confidence: 0.72,
+          createdAt: '2026-07-01T12:00:00.000Z',
+          topics: ['macro', 'fed'],
+          taskId: 'task_abc',
+          isLive: true,
+          userFeedback: 'positive',
+          orchestrationId: 'orch_1',
+          watchlistItemId: 'watch_1',
+        },
+      ],
+    });
+
+    expect(csv).toContain(
+      'task_id,title,question,score,confidence,user_feedback,created_at,is_live,topics,orchestration_id,watchlist_item_id',
+    );
+    expect(csv).toContain('"Rates, 2026"');
+    expect(csv).toContain('"Will rates cut? ""maybe"""');
+    expect(csv).toContain('task_abc,');
+    expect(csv).toContain(',84,0.72,positive,');
+    expect(csv).toContain(',true,macro; fed,orch_1,watch_1');
+  });
+
+  it('neutralizes spreadsheet formula injection and handles empty views', () => {
+    const csv = formatAgentHistoryCsv({
+      items: [
+        {
+          title: '=HYPERLINK("http://evil")',
+          question: '+SUM(A1:A2)',
+          taskId: '-task',
+        },
+      ],
+    });
+
+    expect(csv).toContain("'=HYPERLINK");
+    expect(csv).toContain("'+SUM");
+    expect(csv).toContain("'-task");
+
+    const empty = formatAgentHistoryCsv({ items: [] });
+    expect(empty).toContain('task_id,title,question');
+    expect(empty.endsWith('\r\n')).toBe(true);
+  });
+});
+
+describe('formatAgentHistoryJson', () => {
+  it('exports a stable machine-readable payload', () => {
+    const json = formatAgentHistoryJson({
+      items: [
+        {
+          title: 'Rate path scan',
+          question: 'Will rates cut this quarter?',
+          score: 84,
+          confidence: 0.72,
+          createdAt: '2026-07-01T12:00:00.000Z',
+          topics: ['macro'],
+          taskId: 'task_abc',
+          isLive: true,
+          userFeedback: 'positive',
+          orchestrationId: 'orch_1',
+          watchlistItemId: 'watch_1',
+        },
+      ],
+      totalCount: 3,
+      filterNote: 'search: “rates”',
+      exportedAt: '2026-07-01T12:00:00.000Z',
+    });
+
+    const parsed = JSON.parse(json) as {
+      exported_at: string;
+      total: number;
+      filter_note: string;
+      items: Array<Record<string, unknown>>;
+    };
+    expect(parsed.exported_at).toBe('2026-07-01T12:00:00.000Z');
+    expect(parsed.total).toBe(3);
+    expect(parsed.filter_note).toBe('search: “rates”');
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0]).toMatchObject({
+      task_id: 'task_abc',
+      title: 'Rate path scan',
+      question: 'Will rates cut this quarter?',
+      score: 84,
+      confidence: 0.72,
+      user_feedback: 'positive',
+      is_live: true,
+      topics: ['macro'],
+      orchestration_id: 'orch_1',
+      watchlist_item_id: 'watch_1',
+    });
+    expect(json.trimEnd().endsWith('}')).toBe(true);
+  });
+
+  it('normalizes missing fields to empty/null and exports empty views', () => {
+    const json = formatAgentHistoryJson({
+      items: [{ question: '  ', taskId: 'task_empty' }],
+      exportedAt: '2026-07-01T12:00:00.000Z',
+    });
+    const parsed = JSON.parse(json) as { items: Array<Record<string, unknown>> };
+    expect(parsed.items[0]).toMatchObject({
+      task_id: 'task_empty',
+      title: '',
+      score: null,
+      confidence: null,
+      user_feedback: null,
+      is_live: false,
+      topics: [],
+      orchestration_id: null,
+      watchlist_item_id: null,
+    });
+    expect(parsed.items[0].question).toBe('');
   });
 });

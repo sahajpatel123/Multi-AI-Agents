@@ -100,11 +100,15 @@ import { copyToClipboard } from '../lib/clipboard';
 import {
   downloadBlobFile,
   downloadMarkdownFile,
+  downloadTextFile,
+  withDownloadDate,
 } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import {
+  formatAgentHistoryCsv,
   formatAgentHistoryExport,
   formatAgentHistoryItemCopy,
+  formatAgentHistoryJson,
 } from '../lib/agentHistoryExport';
 import {
   AGENT_HISTORY_SORT_OPTIONS,
@@ -814,8 +818,14 @@ export function AgentPage() {
     useState<AgentHistoryTopicFilter>(AGENT_HISTORY_TOPIC_ALL);
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyCsvDownloadStatus, setHistoryCsvDownloadStatus] =
+    useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyJsonDownloadStatus, setHistoryJsonDownloadStatus] =
+    useState<'idle' | 'done' | 'failed'>('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
+  const historyCsvDownloadTimerRef = useRef<number | null>(null);
+  const historyJsonDownloadTimerRef = useRef<number | null>(null);
   const [roomsCopyStatus, setRoomsCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [roomsDownloadStatus, setRoomsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [roomLinkCopyStatus, setRoomLinkCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -2398,6 +2408,12 @@ export function AgentPage() {
       if (historyDownloadTimerRef.current != null) {
         window.clearTimeout(historyDownloadTimerRef.current);
       }
+      if (historyCsvDownloadTimerRef.current != null) {
+        window.clearTimeout(historyCsvDownloadTimerRef.current);
+      }
+      if (historyJsonDownloadTimerRef.current != null) {
+        window.clearTimeout(historyJsonDownloadTimerRef.current);
+      }
       if (roomsCopyTimerRef.current != null) {
         window.clearTimeout(roomsCopyTimerRef.current);
       }
@@ -2502,7 +2518,21 @@ export function AgentPage() {
     }, hold > 0 ? hold : 0);
   };
 
-  const buildFilteredHistoryMarkdown = () => {
+  const toHistoryExportItem = (item: HistoryTask) => ({
+    title: item.title,
+    question: item.task_text,
+    score: item.final_score,
+    confidence: item.final_confidence,
+    createdAt: item.created_at,
+    topics: item.topics,
+    isLive: item.is_live,
+    taskId: item.task_id,
+    userFeedback: item.user_feedback,
+    orchestrationId: item.orchestration_id,
+    watchlistItemId: item.watchlist_item_id,
+  });
+
+  const buildHistoryFilterNote = () => {
     const q = historySearchQuery.trim();
     const filterBits: string[] = [];
     if (historyStatusFilter !== 'all') {
@@ -2527,19 +2557,14 @@ export function AgentPage() {
     }
     if (q) filterBits.push(`search: “${q}”`);
     if (historySort !== 'newest') filterBits.push(`sort: ${agentHistorySortLabel(historySort)}`);
+    return filterBits.length ? filterBits.join(' · ') : undefined;
+  };
+
+  const buildFilteredHistoryMarkdown = () => {
     return formatAgentHistoryExport({
-      items: filteredTaskHistory.map((item) => ({
-        title: item.title,
-        question: item.task_text,
-        score: item.final_score,
-        confidence: item.final_confidence,
-        createdAt: item.created_at,
-        topics: item.topics,
-        isLive: item.is_live,
-        taskId: item.task_id,
-      })),
+      items: filteredTaskHistory.map(toHistoryExportItem),
       totalCount: taskHistory.length,
-      filterNote: filterBits.length ? filterBits.join(' · ') : undefined,
+      filterNote: buildHistoryFilterNote(),
     });
   };
 
@@ -2574,6 +2599,52 @@ export function AgentPage() {
     historyDownloadTimerRef.current = window.setTimeout(() => {
       setHistoryDownloadStatus('idle');
       historyDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadFilteredHistoryCsv = () => {
+    const csv = formatAgentHistoryCsv({
+      items: filteredTaskHistory.map(toHistoryExportItem),
+    });
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('agent-research-history')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    if (historyCsvDownloadTimerRef.current != null) {
+      window.clearTimeout(historyCsvDownloadTimerRef.current);
+    }
+    setHistoryCsvDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download history CSV — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historyCsvDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryCsvDownloadStatus('idle');
+      historyCsvDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadFilteredHistoryJson = () => {
+    const json = formatAgentHistoryJson({
+      items: filteredTaskHistory.map(toHistoryExportItem),
+      totalCount: taskHistory.length,
+      filterNote: buildHistoryFilterNote(),
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('agent-research-history')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    if (historyJsonDownloadTimerRef.current != null) {
+      window.clearTimeout(historyJsonDownloadTimerRef.current);
+    }
+    setHistoryJsonDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download history JSON — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historyJsonDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryJsonDownloadStatus('idle');
+      historyJsonDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -4333,6 +4404,78 @@ export function AgentPage() {
                       : historyDownloadStatus === 'failed'
                         ? 'Failed'
                         : 'Download'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadFilteredHistoryCsv()}
+                    title="Download current history view as CSV"
+                    aria-label={
+                      historyCsvDownloadStatus === 'done'
+                        ? 'History CSV downloaded'
+                        : historyCsvDownloadStatus === 'failed'
+                          ? 'History CSV download failed'
+                          : 'Download research history as CSV'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyCsvDownloadStatus === 'failed'
+                          ? '#D85A30'
+                          : historyCsvDownloadStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {historyCsvDownloadStatus === 'done'
+                      ? 'Downloaded'
+                      : historyCsvDownloadStatus === 'failed'
+                        ? 'Failed'
+                        : 'CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadFilteredHistoryJson()}
+                    title="Download current history view as JSON"
+                    aria-label={
+                      historyJsonDownloadStatus === 'done'
+                        ? 'History JSON downloaded'
+                        : historyJsonDownloadStatus === 'failed'
+                          ? 'History JSON download failed'
+                          : 'Download research history as JSON'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyJsonDownloadStatus === 'failed'
+                          ? '#D85A30'
+                          : historyJsonDownloadStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {historyJsonDownloadStatus === 'done'
+                      ? 'Downloaded'
+                      : historyJsonDownloadStatus === 'failed'
+                        ? 'Failed'
+                        : 'JSON'}
                   </button>
                 </div>
               ) : null}
