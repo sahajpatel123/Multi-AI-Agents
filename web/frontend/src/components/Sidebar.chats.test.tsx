@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Sidebar } from './Sidebar';
 import type { SavedResponseItem } from '../types';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadMarkdownFile, downloadTextFile } from '../lib/downloadTextFile';
 import type {
   BulkDuplicateSessionsResult,
   BulkPinSessionsResult,
@@ -16,6 +16,7 @@ vi.mock('../lib/downloadTextFile', async () => {
   return {
     ...actual,
     downloadMarkdownFile: vi.fn(() => true),
+    downloadTextFile: vi.fn(() => true),
   };
 });
 
@@ -588,6 +589,79 @@ describe('Sidebar recent chats', () => {
         name: 'Export 2 selected chats as markdown',
       }),
     ).toBeInTheDocument();
+  });
+
+  it('exports only the selected chats as JSON', async () => {
+    renderSidebar();
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chats as JSON',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(downloadTextFile).toHaveBeenCalledWith(
+        expect.stringContaining('"session_id": "chat-1"'),
+        expect.objectContaining({
+          filename: expect.stringMatching(/arena-selected-chats-\d{4}-\d{2}-\d{2}\.json/),
+        }),
+      ),
+    );
+    const exported = vi.mocked(downloadTextFile).mock.calls[0]?.[0];
+    expect(exported).not.toContain('"session_id": "chat-2"');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Exported 1 selected chats as JSON' }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('exports only the selected chats as CSV', async () => {
+    renderSidebar();
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[1]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chats as CSV',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(downloadTextFile).toHaveBeenCalledWith(
+        expect.stringContaining('"Untitled chat"'),
+        expect.objectContaining({
+          filename: expect.stringMatching(/arena-selected-chats-\d{4}-\d{2}-\d{2}\.csv/),
+        }),
+      ),
+    );
+    const exported = vi.mocked(downloadTextFile).mock.calls[0]?.[0];
+    expect(exported).toContain('"chat-2"');
+    expect(exported).not.toContain('"chat-1"');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Exported 1 selected chats as CSV' }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('announces a failure when the selected chat JSON export is blocked', async () => {
+    vi.mocked(downloadTextFile).mockReturnValueOnce(false);
+    renderSidebar();
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chats as JSON',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Selected chat JSON export failed' }),
+      ).toBeInTheDocument(),
+    );
   });
 
   it('surfaces a failure when bulk deleting selected chats fails', async () => {
