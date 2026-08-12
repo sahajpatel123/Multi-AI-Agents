@@ -53,6 +53,11 @@ import {
   formatArenaRecentsJsonExport,
 } from '../lib/arenaRecentsExport';
 import {
+  formatArenaChatsCsvExport,
+  formatArenaChatsExport,
+  formatArenaChatsJsonExport,
+} from '../lib/arenaChatsExport';
+import {
   formatSavedTakesCsvExport,
   formatSavedTakeExport,
   formatSavedTakesJsonExport,
@@ -227,6 +232,10 @@ export function Sidebar({
   const [downloadRecentsStatus, setDownloadRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [downloadJsonRecentsStatus, setDownloadJsonRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [downloadCsvRecentsStatus, setDownloadCsvRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [copyChatsStatus, setCopyChatsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadChatsStatus, setDownloadChatsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadJsonChatsStatus, setDownloadJsonChatsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadCsvChatsStatus, setDownloadCsvChatsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Per-recent row copy feedback: turn_id + kind. */
   const [recentItemCopyId, setRecentItemCopyId] = useState<string | null>(null);
   const [recentItemCopyKind, setRecentItemCopyKind] = useState<'turn' | 'prompt' | null>(null);
@@ -523,6 +532,34 @@ export function Sidebar({
   }, [downloadCsvRecentsStatus]);
 
   useEffect(() => {
+    if (copyChatsStatus === 'idle') return;
+    const hold = motionDuration(copyChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setCopyChatsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [copyChatsStatus]);
+
+  useEffect(() => {
+    if (downloadChatsStatus === 'idle') return;
+    const hold = motionDuration(downloadChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadChatsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadChatsStatus]);
+
+  useEffect(() => {
+    if (downloadJsonChatsStatus === 'idle') return;
+    const hold = motionDuration(downloadJsonChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadJsonChatsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadJsonChatsStatus]);
+
+  useEffect(() => {
+    if (downloadCsvChatsStatus === 'idle') return;
+    const hold = motionDuration(downloadCsvChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadCsvChatsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadCsvChatsStatus]);
+
+  useEffect(() => {
     if (clearSessionsStatus === 'idle' || clearSessionsStatus === 'busy') return;
     const hold = motionDuration(clearSessionsStatus === 'failed' ? 2800 : 2000);
     const t = window.setTimeout(
@@ -787,6 +824,71 @@ export function Sidebar({
     });
     setDownloadCsvRecentsStatus(ok ? 'done' : 'failed');
     if (ok) void track('arena_recents_csv_downloaded');
+  };
+
+  const buildChatsFilterNote = () => {
+    const q = chatSearchQuery.trim();
+    return q ? `search “${q}”` : undefined;
+  };
+
+  const buildChatsItems = () =>
+    filteredChats.map((session) => ({
+      sessionId: session.session_id,
+      title: session.title || null,
+      prompt: session.last_prompt || null,
+      topics: session.topics || [],
+      primaryTopic: session.primary_topic || null,
+      turnCount: session.turn_count,
+      pinned: session.pinned === true,
+      timestamp: session.last_active || null,
+    }));
+
+  const handleCopyChats = async () => {
+    const md = formatArenaChatsExport({
+      totalCount: recentSessions.length,
+      filterNote: buildChatsFilterNote(),
+      items: buildChatsItems(),
+    });
+    const ok = await copyToClipboard(md);
+    setCopyChatsStatus(ok ? 'copied' : 'failed');
+    if (ok) void track('arena_chats_copied');
+  };
+
+  const handleDownloadChats = () => {
+    const md = formatArenaChatsExport({
+      totalCount: recentSessions.length,
+      filterNote: buildChatsFilterNote(),
+      items: buildChatsItems(),
+    });
+    const ok = downloadMarkdownFile(md, 'arena-chats');
+    setDownloadChatsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_chats_downloaded');
+  };
+
+  const handleDownloadChatsJson = () => {
+    const json = formatArenaChatsJsonExport({
+      totalCount: recentSessions.length,
+      filterNote: buildChatsFilterNote(),
+      items: buildChatsItems(),
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('arena-chats')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    setDownloadJsonChatsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_chats_json_downloaded');
+  };
+
+  const handleDownloadChatsCsv = () => {
+    const csv = formatArenaChatsCsvExport({
+      items: buildChatsItems(),
+    });
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('arena-chats')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    setDownloadCsvChatsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_chats_csv_downloaded');
   };
 
   const handleCopyRecentItem = async (
@@ -1190,6 +1292,157 @@ export function Sidebar({
                   </button>
                 ) : null}
               </div>
+              {recentSessions.length > 0 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 6,
+                    marginBottom: 8,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <button
+                    type="button"
+                    title="Copy chats as markdown"
+                    aria-label={
+                      copyChatsStatus === 'copied'
+                        ? 'Chats copied'
+                        : copyChatsStatus === 'failed'
+                          ? 'Copy failed'
+                          : 'Copy chats as markdown'
+                    }
+                    onClick={() => void handleCopyChats()}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color:
+                        copyChatsStatus === 'failed'
+                          ? '#D85A30'
+                          : copyChatsStatus === 'copied'
+                            ? '#5A8C6A'
+                            : '#F0B84E',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    {copyChatsStatus === 'copied'
+                      ? 'Copied'
+                      : copyChatsStatus === 'failed'
+                        ? 'Failed'
+                        : 'Copy'}
+                  </button>
+                  <button
+                    type="button"
+                    title="Download chats as markdown"
+                    aria-label={
+                      downloadChatsStatus === 'done'
+                        ? 'Chats downloaded'
+                        : downloadChatsStatus === 'failed'
+                          ? 'Download failed'
+                          : 'Download chats as markdown'
+                    }
+                    onClick={() => handleDownloadChats()}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color:
+                        downloadChatsStatus === 'failed'
+                          ? '#D85A30'
+                          : downloadChatsStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#F0B84E',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    {downloadChatsStatus === 'done'
+                      ? 'Downloaded'
+                      : downloadChatsStatus === 'failed'
+                        ? 'Failed'
+                        : 'Download'}
+                  </button>
+                  <button
+                    type="button"
+                    title="Download chats as JSON"
+                    aria-label={
+                      downloadJsonChatsStatus === 'done'
+                        ? 'Chats JSON downloaded'
+                        : downloadJsonChatsStatus === 'failed'
+                          ? 'JSON download failed'
+                          : 'Download chats as JSON'
+                    }
+                    onClick={() => handleDownloadChatsJson()}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color:
+                        downloadJsonChatsStatus === 'failed'
+                          ? '#D85A30'
+                          : downloadJsonChatsStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#F0B84E',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    {downloadJsonChatsStatus === 'done'
+                      ? 'Saved JSON'
+                      : downloadJsonChatsStatus === 'failed'
+                        ? 'Failed'
+                        : 'JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    title="Download chats as CSV"
+                    aria-label={
+                      downloadCsvChatsStatus === 'done'
+                        ? 'Chats CSV downloaded'
+                        : downloadCsvChatsStatus === 'failed'
+                          ? 'CSV download failed'
+                          : 'Download chats as CSV'
+                    }
+                    onClick={() => handleDownloadChatsCsv()}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color:
+                        downloadCsvChatsStatus === 'failed'
+                          ? '#D85A30'
+                          : downloadCsvChatsStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#F0B84E',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    {downloadCsvChatsStatus === 'done'
+                      ? 'Saved CSV'
+                      : downloadCsvChatsStatus === 'failed'
+                        ? 'Failed'
+                        : 'CSV'}
+                  </button>
+                </div>
+              ) : null}
               {confirmClearSessions ? (
                 <div
                   role="dialog"
@@ -1274,6 +1527,44 @@ export function Sidebar({
                 >
                   Couldn't update pin. Please try again.
                 </p>
+              ) : null}
+              {copyChatsStatus !== 'idle' ||
+              downloadChatsStatus !== 'idle' ||
+              downloadJsonChatsStatus !== 'idle' ||
+              downloadCsvChatsStatus !== 'idle' ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    position: 'absolute',
+                    width: 1,
+                    height: 1,
+                    padding: 0,
+                    margin: -1,
+                    overflow: 'hidden',
+                    clip: 'rect(0, 0, 0, 0)',
+                    whiteSpace: 'nowrap',
+                    border: 0,
+                  }}
+                >
+                  {copyChatsStatus === 'copied'
+                    ? 'Arena chats copied to clipboard'
+                    : copyChatsStatus === 'failed'
+                      ? 'Could not copy Arena chats'
+                      : downloadChatsStatus === 'done'
+                        ? 'Arena chats downloaded'
+                        : downloadChatsStatus === 'failed'
+                          ? 'Could not download Arena chats'
+                          : downloadJsonChatsStatus === 'done'
+                            ? 'Arena chats JSON downloaded'
+                            : downloadJsonChatsStatus === 'failed'
+                              ? 'Could not download Arena chats JSON'
+                              : downloadCsvChatsStatus === 'done'
+                                ? 'Arena chats CSV downloaded'
+                                : downloadCsvChatsStatus === 'failed'
+                                  ? 'Could not download Arena chats CSV'
+                                  : ''}
+                </div>
               ) : null}
               {isChatSearchActive && filteredChats.length === 0 ? (
                 <p

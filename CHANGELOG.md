@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Resumable chat list export (Markdown, JSON, or CSV) from the sidebar with
+  spreadsheet-formula-safe CSV cells
 - Workflow security gate that enforces least-privilege permissions, job
   timeouts, no dangerous triggers or `secrets: inherit`, and
   `persist-credentials: false` on every checkout

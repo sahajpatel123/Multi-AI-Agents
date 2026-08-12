@@ -505,6 +505,37 @@ describe('Sidebar recent chats', () => {
     expect(screen.getAllByRole('button', { name: /Open session/ })).toHaveLength(7);
     expect(screen.getByRole('button', { name: /Show fewer chats/ })).toBeInTheDocument();
   });
+
+  it('offers chat export controls when resumable chats exist', () => {
+    renderSidebar();
+
+    expect(
+      screen.getByRole('button', { name: 'Copy chats as markdown' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Download chats as markdown' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Download chats as JSON' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Download chats as CSV' }),
+    ).toBeInTheDocument();
+  });
+
+  it('hides chat export controls when there are no resumable chats', () => {
+    renderSidebar({ sessions: [] });
+
+    expect(
+      screen.queryByRole('button', { name: 'Copy chats as markdown' }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Download chats as JSON' }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Download chats as CSV' }),
+    ).toBeNull();
+  });
 });
 
 describe('Sidebar recents export', () => {
