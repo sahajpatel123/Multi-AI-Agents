@@ -4,6 +4,7 @@ import {
   isFavoriteTemplateId,
   loadFavoriteTemplateIds,
   pickFavoriteTemplates,
+  pruneFavoriteTemplateIds,
   TEMPLATES_FAVORITES_KEY,
   TEMPLATES_FAVORITES_LIMIT,
   templatesFavoritesUseful,
@@ -96,6 +97,38 @@ describe('templatesFavorites', () => {
     ).toEqual(['b', 'a']);
     expect(pickFavoriteTemplates(items, ['gone'], 1)).toEqual([]);
     expect(pickFavoriteTemplates([], ['a'], 3)).toEqual([]);
+  });
+
+  it('prunes stale ids against the catalog and persists', () => {
+    toggleFavoriteTemplateId('alpha');
+    toggleFavoriteTemplateId('vanished');
+    const kept = pruneFavoriteTemplateIds([{ id: 'alpha' }], loadFavoriteTemplateIds());
+    expect(kept).toEqual(['alpha']);
+    expect(loadFavoriteTemplateIds()).toEqual(['alpha']);
+  });
+
+  it('keeps favorites untouched when the catalog still has them', () => {
+    toggleFavoriteTemplateId('alpha');
+    const kept = pruneFavoriteTemplateIds(
+      [{ id: 'alpha' }, { id: 'beta' }],
+      loadFavoriteTemplateIds(),
+    );
+    expect(kept).toEqual(['alpha']);
+    expect(loadFavoriteTemplateIds()).toEqual(['alpha']);
+  });
+
+  it('never prunes against an empty or missing catalog', () => {
+    toggleFavoriteTemplateId('alpha');
+    expect(pruneFavoriteTemplateIds([], loadFavoriteTemplateIds())).toEqual(['alpha']);
+    expect(pruneFavoriteTemplateIds(undefined as never, ['alpha'])).toEqual(['alpha']);
+    expect(loadFavoriteTemplateIds()).toEqual(['alpha']);
+  });
+
+  it('matches catalog ids after trimming', () => {
+    toggleFavoriteTemplateId('alpha');
+    expect(pruneFavoriteTemplateIds([{ id: ' alpha ' }], loadFavoriteTemplateIds())).toEqual([
+      'alpha',
+    ]);
   });
 
   it('templatesFavoritesUseful reflects non-empty lists', () => {

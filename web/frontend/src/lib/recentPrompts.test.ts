@@ -154,4 +154,25 @@ describe('recentPrompts', () => {
     expect(next.filter((item) => item.pinned)).toHaveLength(7);
     expect(next.map((item) => item.text)).toContain('Brand new');
   });
+
+  it('keeps the newest prompt even when pushes share a wall-clock millisecond', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_750_000_000_000);
+      for (let i = 0; i < 8; i += 1) {
+        pushRecentPrompt(`Prompt ${i}`);
+      }
+      for (let i = 0; i < 8; i += 1) {
+        setRecentPromptPinned(`Prompt ${i}`, true);
+      }
+      pushRecentPrompt('Brand new');
+
+      const next = setRecentPromptPinned('Prompt 7', false);
+      expect(next).toHaveLength(8);
+      expect(next.filter((item) => item.pinned)).toHaveLength(7);
+      expect(next.map((item) => item.text)).toContain('Brand new');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

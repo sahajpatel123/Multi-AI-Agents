@@ -97,6 +97,29 @@ export function clearFavoriteTemplateIds(): string[] {
   return [];
 }
 
+/**
+ * Drop favorite ids that no longer exist in the loaded catalog, persisting
+ * the cleaned list when anything was removed. Returns the surviving ids in
+ * the same order as `favoriteIds`. An empty/partial `templates` list never
+ * prunes, so a failed or incomplete catalog cannot wipe favorites.
+ */
+export function pruneFavoriteTemplateIds<T extends { id?: string | null }>(
+  templates: readonly T[],
+  favoriteIds: readonly string[] = loadFavoriteTemplateIds(),
+): string[] {
+  const list = Array.isArray(templates) ? templates : [];
+  const prev = favoriteIds || [];
+  if (list.length === 0) return [...prev];
+  const live = new Set<string>();
+  for (const t of list) {
+    const id = (t.id || '').trim();
+    if (id) live.add(id);
+  }
+  const kept = prev.filter((id) => live.has(id));
+  if (kept.length !== prev.length) persist(kept);
+  return kept;
+}
+
 /** Pick up to `limit` favorited templates that still exist in the catalog. */
 export function pickFavoriteTemplates<T extends { id?: string | null }>(
   templates: T[],

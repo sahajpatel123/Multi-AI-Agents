@@ -48,6 +48,7 @@ import {
 import {
   clearFavoriteTemplateIds,
   loadFavoriteTemplateIds,
+  pruneFavoriteTemplateIds,
   toggleFavoriteTemplateId,
 } from '../lib/templatesFavorites';
 import '../styles/templates-modal.css';
@@ -221,6 +222,17 @@ export function TemplatesModal({
       setFavoriteIds(loadFavoriteTemplateIds());
     }
   }, [open]);
+
+  const catalogIsList = catalogMode === 'list' && flatTemplates.length > 0;
+
+  useEffect(() => {
+    // Keep favorites truthful to the loaded catalog: drop ids that no
+    // longer exist so the tab never strands users with dead storage.
+    if (!open || !catalogIsList) return;
+    const stored = loadFavoriteTemplateIds();
+    const pruned = pruneFavoriteTemplateIds(flatTemplates, stored);
+    if (pruned.length !== stored.length) setFavoriteIds(pruned);
+  }, [open, catalogIsList, flatTemplates]);
 
   useEffect(() => {
     return () => {

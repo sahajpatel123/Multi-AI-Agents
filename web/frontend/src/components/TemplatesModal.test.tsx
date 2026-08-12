@@ -121,6 +121,30 @@ describe('TemplatesModal favorites', () => {
     expect(starAlpha).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('prunes stale favorites that left the catalog', () => {
+    window.localStorage.setItem(
+      'arena_agent_templates_favorites_v1',
+      JSON.stringify(['alpha', 'vanished']),
+    );
+    renderModal();
+
+    expect(loadFavoriteTemplateIds()).toEqual(['alpha']);
+    fireEvent.click(screen.getByRole('tab', { name: 'Favorites' }));
+    expect(screen.getByText('Alpha brief')).toBeInTheDocument();
+    expect(screen.queryByText('Vanished')).toBeNull();
+  });
+
+  it('hides the Favorites tab when every stored favorite is stale', () => {
+    window.localStorage.setItem(
+      'arena_agent_templates_favorites_v1',
+      JSON.stringify(['vanished']),
+    );
+    renderModal();
+
+    expect(loadFavoriteTemplateIds()).toEqual([]);
+    expect(screen.queryByRole('tab', { name: 'Favorites' })).toBeNull();
+  });
+
   it('selecting a template records recent use and closes', () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();

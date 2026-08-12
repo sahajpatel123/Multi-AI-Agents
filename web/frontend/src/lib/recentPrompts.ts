@@ -2,6 +2,8 @@ const STORAGE_KEY = 'arena-recent-prompts-storage-v1';
 const MAX_ITEMS = 8;
 const MAX_LEN = 500;
 
+let lastTimestamp = 0;
+
 export type RecentPrompt = {
   text: string;
   at: number;
@@ -11,6 +13,18 @@ export type RecentPrompt = {
 
 function normalize(text: string): string {
   return text.replace(/\s+/g, ' ').trim().slice(0, MAX_LEN);
+}
+
+/**
+ * Monotonic clock for recency ordering. `Date.now()` can repeat within a
+ * millisecond; equal timestamps let an older pinned prompt win the tie when
+ * the over-cap list is trimmed, silently evicting a newer prompt. Every push
+ * therefore gets a strictly newer timestamp than the previous one.
+ */
+function nextTimestamp(): number {
+  const now = Date.now();
+  lastTimestamp = Math.max(now, lastTimestamp + 1);
+  return lastTimestamp;
 }
 
 /**
@@ -86,7 +100,7 @@ export function pushRecentPrompt(text: string): RecentPrompt[] {
   );
   const rest = prev.filter((p) => p.text.toLowerCase() !== clean.toLowerCase());
   const next: RecentPrompt[] = [
-    { text: clean, at: Date.now(), pinned: existing?.pinned ?? false },
+    { text: clean, at: nextTimestamp(), pinned: existing?.pinned ?? false },
     ...rest,
   ];
   const capped = capRecentPrompts(next);
