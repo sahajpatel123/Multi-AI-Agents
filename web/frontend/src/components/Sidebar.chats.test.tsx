@@ -4,6 +4,14 @@ import { Sidebar } from './Sidebar';
 import type { SavedResponseItem } from '../types';
 import type { SessionSummary } from '../api';
 
+type MinimalSidebarTurn = {
+  turn_id: string;
+  prompt: string;
+  prompt_category?: string;
+  winner_id: string;
+  timestamp: string;
+};
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
@@ -84,6 +92,7 @@ const sessions: SessionSummary[] = [
 ];
 
 function renderSidebar(overrides?: {
+  turns?: MinimalSidebarTurn[];
   sessions?: SessionSummary[];
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
@@ -99,7 +108,7 @@ function renderSidebar(overrides?: {
   const onToggleSessionPin = overrides?.onToggleSessionPin ?? vi.fn(() => true);
   render(
     <Sidebar
-      turns={[]}
+      turns={overrides?.turns ?? []}
       activeTurnId={null}
       onTurnClick={vi.fn()}
       onNewChat={vi.fn()}
@@ -495,5 +504,39 @@ describe('Sidebar recent chats', () => {
     fireEvent.click(screen.getByRole('button', { name: /Show all 7 chats/ }));
     expect(screen.getAllByRole('button', { name: /Open session/ })).toHaveLength(7);
     expect(screen.getByRole('button', { name: /Show fewer chats/ })).toBeInTheDocument();
+  });
+});
+
+describe('Sidebar recents export', () => {
+  it('offers JSON and CSV export controls when recents exist', () => {
+    renderSidebar({
+      turns: [
+        {
+          turn_id: 'turn-1',
+          prompt: 'Should we ship today?',
+          prompt_category: 'question',
+          winner_id: 'agent_1',
+          timestamp: '2026-07-01T12:00:00Z',
+        },
+      ],
+    });
+
+    expect(
+      screen.getByRole('button', { name: 'Download recents as JSON' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Download recents as CSV' }),
+    ).toBeInTheDocument();
+  });
+
+  it('hides export controls when there are no recent turns', () => {
+    renderSidebar();
+
+    expect(
+      screen.queryByRole('button', { name: 'Download recents as JSON' }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Download recents as CSV' }),
+    ).toBeNull();
   });
 });

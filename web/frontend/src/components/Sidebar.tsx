@@ -46,9 +46,11 @@ import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from '../lib/downloadTextFile';
 import { formatRelativePast } from '../lib/relativeTime';
 import {
+  formatArenaRecentsCsvExport,
   formatArenaRecentItemCopy,
   formatArenaRecentPromptCopy,
   formatArenaRecentsExport,
+  formatArenaRecentsJsonExport,
 } from '../lib/arenaRecentsExport';
 import {
   formatSavedTakesCsvExport,
@@ -223,6 +225,8 @@ export function Sidebar({
   const [deleteSavedFailed, setDeleteSavedFailed] = useState(false);
   const [copyRecentsStatus, setCopyRecentsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadRecentsStatus, setDownloadRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadJsonRecentsStatus, setDownloadJsonRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadCsvRecentsStatus, setDownloadCsvRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Per-recent row copy feedback: turn_id + kind. */
   const [recentItemCopyId, setRecentItemCopyId] = useState<string | null>(null);
   const [recentItemCopyKind, setRecentItemCopyKind] = useState<'turn' | 'prompt' | null>(null);
@@ -505,6 +509,20 @@ export function Sidebar({
   }, [downloadRecentsStatus]);
 
   useEffect(() => {
+    if (downloadJsonRecentsStatus === 'idle') return;
+    const hold = motionDuration(downloadJsonRecentsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadJsonRecentsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadJsonRecentsStatus]);
+
+  useEffect(() => {
+    if (downloadCsvRecentsStatus === 'idle') return;
+    const hold = motionDuration(downloadCsvRecentsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadCsvRecentsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadCsvRecentsStatus]);
+
+  useEffect(() => {
     if (clearSessionsStatus === 'idle' || clearSessionsStatus === 'busy') return;
     const hold = motionDuration(clearSessionsStatus === 'failed' ? 2800 : 2000);
     const t = window.setTimeout(
@@ -693,7 +711,7 @@ export function Sidebar({
     }
   };
 
-  const buildRecentsMarkdown = () => {
+  const buildRecentsFilterNote = () => {
     const parts: string[] = [];
     if (activeFilter !== 'all') {
       parts.push(`category ${activeFilter.charAt(0).toUpperCase()}${activeFilter.slice(1)}`);
@@ -709,18 +727,25 @@ export function Sidebar({
     const q = searchQuery.trim();
     if (q) parts.push(`search “${q}”`);
     if (recentsSort !== 'newest') parts.push(`sort: ${sidebarRecentsSortLabel(recentsSort)}`);
+    return parts.length > 0 ? parts.join(' · ') : undefined;
+  };
+
+  const buildRecentsItems = () =>
+    filteredTurns.map((turn) => ({
+      title: customTitles[turn.turn_id] || undefined,
+      prompt: turn.prompt,
+      category: turn.prompt_category,
+      winnerName:
+        turn.winnerName || AGENTS[turn.winner_id]?.name || turn.winner_id || undefined,
+      timestamp: turn.timestamp,
+      turnId: turn.turn_id,
+    }));
+
+  const buildRecentsMarkdown = () => {
     return formatArenaRecentsExport({
       totalCount: reversedTurns.length,
-      filterNote: parts.length > 0 ? parts.join(' · ') : undefined,
-      items: filteredTurns.map((turn) => ({
-        title: customTitles[turn.turn_id] || undefined,
-        prompt: turn.prompt,
-        category: turn.prompt_category,
-        winnerName:
-          turn.winnerName || AGENTS[turn.winner_id]?.name || turn.winner_id || undefined,
-        timestamp: turn.timestamp,
-        turnId: turn.turn_id,
-      })),
+      filterNote: buildRecentsFilterNote(),
+      items: buildRecentsItems(),
     });
   };
 
@@ -736,6 +761,32 @@ export function Sidebar({
     const ok = downloadMarkdownFile(md, 'arena-recents');
     setDownloadRecentsStatus(ok ? 'done' : 'failed');
     if (ok) void track('arena_recents_downloaded');
+  };
+
+  const handleDownloadRecentsJson = () => {
+    const json = formatArenaRecentsJsonExport({
+      totalCount: reversedTurns.length,
+      filterNote: buildRecentsFilterNote(),
+      items: buildRecentsItems(),
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('arena-recents')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    setDownloadJsonRecentsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_recents_json_downloaded');
+  };
+
+  const handleDownloadRecentsCsv = () => {
+    const csv = formatArenaRecentsCsvExport({
+      items: buildRecentsItems(),
+    });
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('arena-recents')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    setDownloadCsvRecentsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_recents_csv_downloaded');
   };
 
   const handleCopyRecentItem = async (
@@ -1467,10 +1518,83 @@ export function Sidebar({
                       ? 'Failed'
                       : 'Download'}
                 </button>
+                <button
+                  type="button"
+                  title="Download recents as JSON"
+                  aria-label={
+                    downloadJsonRecentsStatus === 'done'
+                      ? 'Recents JSON downloaded'
+                      : downloadJsonRecentsStatus === 'failed'
+                        ? 'JSON download failed'
+                        : 'Download recents as JSON'
+                  }
+                  onClick={() => handleDownloadRecentsJson()}
+                  style={{
+                    background: 'none',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    color:
+                      downloadJsonRecentsStatus === 'failed'
+                        ? '#D85A30'
+                        : downloadJsonRecentsStatus === 'done'
+                          ? '#5A8C6A'
+                          : '#F0B84E',
+                    padding: '3px 8px',
+                    fontSize: 10,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--vp-font-sans)',
+                  }}
+                >
+                  {downloadJsonRecentsStatus === 'done'
+                    ? 'Saved JSON'
+                    : downloadJsonRecentsStatus === 'failed'
+                      ? 'Failed'
+                      : 'JSON'}
+                </button>
+                <button
+                  type="button"
+                  title="Download recents as CSV"
+                  aria-label={
+                    downloadCsvRecentsStatus === 'done'
+                      ? 'Recents CSV downloaded'
+                      : downloadCsvRecentsStatus === 'failed'
+                        ? 'CSV download failed'
+                        : 'Download recents as CSV'
+                  }
+                  onClick={() => handleDownloadRecentsCsv()}
+                  style={{
+                    background: 'none',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    color:
+                      downloadCsvRecentsStatus === 'failed'
+                        ? '#D85A30'
+                        : downloadCsvRecentsStatus === 'done'
+                          ? '#5A8C6A'
+                          : '#F0B84E',
+                    padding: '3px 8px',
+                    fontSize: 10,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--vp-font-sans)',
+                  }}
+                >
+                  {downloadCsvRecentsStatus === 'done'
+                    ? 'Saved CSV'
+                    : downloadCsvRecentsStatus === 'failed'
+                      ? 'Failed'
+                      : 'CSV'}
+                </button>
               </div>
             ) : null}
           </div>
-          {copyRecentsStatus !== 'idle' || downloadRecentsStatus !== 'idle' ? (
+          {copyRecentsStatus !== 'idle' ||
+          downloadRecentsStatus !== 'idle' ||
+          downloadJsonRecentsStatus !== 'idle' ||
+          downloadCsvRecentsStatus !== 'idle' ? (
             <div
               role="status"
               aria-live="polite"
@@ -1494,7 +1618,15 @@ export function Sidebar({
                     ? 'Arena recents downloaded'
                     : downloadRecentsStatus === 'failed'
                       ? 'Could not download Arena recents'
-                      : ''}
+                      : downloadJsonRecentsStatus === 'done'
+                        ? 'Arena recents JSON downloaded'
+                        : downloadJsonRecentsStatus === 'failed'
+                          ? 'Could not download Arena recents JSON'
+                          : downloadCsvRecentsStatus === 'done'
+                            ? 'Arena recents CSV downloaded'
+                            : downloadCsvRecentsStatus === 'failed'
+                              ? 'Could not download Arena recents CSV'
+                              : ''}
             </div>
           ) : null}
           <div className="flex items-center gap-2 mb-2">

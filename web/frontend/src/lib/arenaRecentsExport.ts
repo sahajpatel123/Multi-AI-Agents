@@ -98,6 +98,88 @@ export function formatArenaRecentsExport(opts: {
 }
 
 /**
+ * JSON export of sidebar recents (full list or current filter).
+ * Keeps the same normalized fields as the markdown snapshot so consumers can
+ * round-trip titles, prompts, winners, and timestamps programmatically.
+ */
+export function formatArenaRecentsJsonExport(opts: {
+  items: ArenaRecentExportItem[];
+  totalCount?: number | null;
+  filterNote?: string | null;
+  exportedAt?: string;
+}): string {
+  const items = (opts.items || []).map((item) => ({
+    title: displayTitle(item),
+    prompt: (item.prompt || '').trim() || null,
+    category: categoryLabel(item.category) || null,
+    winnerName: (item.winnerName || '').trim() || null,
+    timestamp: item.timestamp || null,
+    turnId: (item.turnId || '').trim() || null,
+  }));
+  return JSON.stringify(
+    {
+      exported_from: 'arena',
+      exported_at: opts.exportedAt || new Date().toISOString(),
+      total_recents:
+        typeof opts.totalCount === 'number' && Number.isFinite(opts.totalCount)
+          ? opts.totalCount
+          : null,
+      filter_note: (opts.filterNote || '').trim() || null,
+      count: items.length,
+      items,
+    },
+    null,
+    2,
+  ) + '\n';
+}
+
+
+function toCsvCell(value: string | number | boolean | null | undefined): string {
+  const raw = value == null ? '' : String(value);
+  return `"${raw.replace(/"/g, '""')}"`;
+}
+
+/**
+ * CSV export of sidebar recents (full list or current filter).
+ * The first row is headers; every cell is quoted so commas/newlines in
+ * prompts cannot break the column layout.
+ */
+export function formatArenaRecentsCsvExport(opts: { items: ArenaRecentExportItem[] }): string {
+  const items = (opts.items || []).map((item) => ({
+    title: displayTitle(item),
+    prompt: (item.prompt || '').trim() || '',
+    category: categoryLabel(item.category) || '',
+    winnerName: (item.winnerName || '').trim() || '',
+    timestamp: item.timestamp || '',
+    turnId: (item.turnId || '').trim() || '',
+  }));
+  const headers = [
+    'title',
+    'prompt',
+    'category',
+    'winnerName',
+    'timestamp',
+    'turnId',
+  ];
+  const lines: string[] = [headers.map(toCsvCell).join(',')];
+  items.forEach((item) => {
+    lines.push(
+      [
+        item.title,
+        item.prompt,
+        item.category,
+        item.winnerName,
+        item.timestamp,
+        item.turnId,
+      ]
+        .map(toCsvCell)
+        .join(','),
+    );
+  });
+  return lines.join('\n') + '\n';
+}
+
+/**
  * Clipboard text for a single Arena recent turn (markdown snapshot).
  * Prefer full context over bare prompt so notes outside the app stay useful.
  */
