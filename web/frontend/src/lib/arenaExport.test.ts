@@ -9,6 +9,7 @@ import {
   formatArenaTranscriptsExport,
   formatArenaTranscriptCsvExport,
   formatArenaTranscriptJsonExport,
+  formatArenaTranscriptsJsonExport,
   formatArenaWinnerExport,
   pickArenaWinner,
   sanitizeArenaTranscriptTitle,
@@ -1102,5 +1103,123 @@ describe('formatArenaTranscriptJsonExport', () => {
     );
     expect(parsed.exchange_count).toBe(0);
     expect(parsed.exchanges).toEqual([]);
+  });
+});
+
+describe('formatArenaTranscriptsJsonExport', () => {
+  const bundleTurns: SessionTurn[] = [
+    {
+      turn_id: 't1',
+      prompt: 'Should we ship this week?',
+      prompt_category: 'question',
+      winner_id: 'agent_1',
+      timestamp: '2026-08-07T10:00:00Z',
+      agent_responses: {
+        agent_1: {
+          agent_id: 'agent_1',
+          agent_number: 1,
+          one_liner: 'Ship the smallest honest slice.',
+          verdict: 'Ship a thin vertical that de-risks the week.',
+          confidence: 0.9,
+          key_assumption: 'quality bar is fixed',
+          timestamp: '2026-08-07T10:00:00Z',
+        },
+      },
+    },
+  ];
+
+  it('archives every selected chat with provenance and transcripts', () => {
+    const json = formatArenaTranscriptsJsonExport(
+      [
+        {
+          sessionId: 'chat-1',
+          title: 'Launch plan',
+          turns: bundleTurns,
+        },
+        {
+          sessionId: null,
+          title: null,
+          turns: bundleTurns,
+        },
+      ],
+      (id) => ({ name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher' }),
+      { exportedAt: '2026-08-07T12:00:00.000Z' },
+    );
+    const parsed = JSON.parse(json);
+    expect(parsed.exported_from).toBe('arena');
+    expect(parsed.export_type).toBe('selected_chat_transcripts');
+    expect(parsed.format_version).toBe(1);
+    expect(parsed.exported_at).toBe('2026-08-07T12:00:00.000Z');
+    expect(parsed.chat_count).toBe(2);
+    expect(parsed.chats).toHaveLength(2);
+    expect(parsed.chats[0]).toMatchObject({
+      index: 1,
+      session_id: 'chat-1',
+      title: 'Launch plan',
+    });
+    expect(parsed.chats[0].transcript).toMatchObject({
+      export_type: 'session_transcript',
+      session_id: 'chat-1',
+      exchange_count: 1,
+    });
+    expect(parsed.chats[0].transcript.exchanges[0].takes[0]).toMatchObject({
+      agent_id: 'agent_1',
+      agent_name: 'The Analyst',
+      is_winner: true,
+      one_liner: 'Ship the smallest honest slice.',
+    });
+    expect(parsed.chats[1].session_id).toBeNull();
+    expect(parsed.chats[1].title).toBe('Chat 2');
+    expect(json.endsWith('\n')).toBe(true);
+  });
+
+  it('normalizes a missing title with the session id before the index fallback', () => {
+    const parsed = JSON.parse(
+      formatArenaTranscriptsJsonExport(
+        [
+          {
+            sessionId: 'chat-7',
+            title: '',
+            turns: bundleTurns,
+          },
+        ],
+        () => ({ name: 'The Analyst' }),
+        { exportedAt: '2026-08-07T12:00:00.000Z' },
+      ),
+    );
+    expect(parsed.chats[0].title).toBe('chat-7');
+  });
+
+  it('handles an empty selection and skips bundles without turn lists', () => {
+    const empty = JSON.parse(
+      formatArenaTranscriptsJsonExport(
+        [],
+        () => ({ name: 'The Analyst' }),
+        { exportedAt: '2026-08-07T12:00:00.000Z' },
+      ),
+    );
+    expect(empty.chat_count).toBe(0);
+    expect(empty.chats).toEqual([]);
+
+    const sparse = JSON.parse(
+      formatArenaTranscriptsJsonExport(
+        [
+          {
+            sessionId: 'broken',
+            title: 'Broken',
+            turns: undefined as unknown as SessionTurn[],
+          },
+          {
+            sessionId: 'chat-9',
+            title: 'Good',
+            turns: bundleTurns,
+          },
+        ],
+        () => ({ name: 'The Analyst' }),
+        { exportedAt: '2026-08-07T12:00:00.000Z' },
+      ),
+    );
+    expect(sparse.chat_count).toBe(1);
+    expect(sparse.chats[0].session_id).toBe('chat-9');
   });
 });

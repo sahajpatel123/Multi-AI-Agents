@@ -294,11 +294,11 @@ function pickExchangeTimestamp(turn: SessionTurn): string {
  * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
  * the current UTC ISO timestamp.
  */
-export function formatArenaTranscriptJsonExport(
+function buildArenaTranscriptJson(
   turns: SessionTurn[],
   resolvePersona: (agentId: string) => ArenaExportPersona,
   opts?: ArenaTranscriptOptions,
-): string {
+): Record<string, unknown> {
   const exchanges = turns ?? [];
   const data = {
     exported_from: 'arena',
@@ -341,6 +341,57 @@ export function formatArenaTranscriptJsonExport(
             key_assumption: (agentResponse.key_assumption || '').trim() || null,
             timestamp: (agentResponse.timestamp || '').trim() || null,
           };
+        }),
+      };
+    }),
+  };
+  return data;
+}
+
+export function formatArenaTranscriptJsonExport(
+  turns: SessionTurn[],
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: ArenaTranscriptOptions,
+): string {
+  return JSON.stringify(buildArenaTranscriptJson(turns, resolvePersona, opts), null, 2) + '\n';
+}
+
+/**
+ * Structured JSON archive of several full chat transcripts in one file.
+ * Each chat is wrapped with its session id and user-facing title, then the
+ * same machine-readable transcript shape used by the single-chat JSON export,
+ * so a combined backup can be re-imported, diffed, or analyzed as one unit.
+ *
+ * Deterministic except for the optional exported-at timestamp: pass
+ * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
+ * the current UTC ISO timestamp.
+ */
+export function formatArenaTranscriptsJsonExport(
+  bundles: ArenaTranscriptBundle[],
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: { exportedAt?: string },
+): string {
+  const chats = (bundles || []).filter(
+    (bundle) => bundle && Array.isArray(bundle.turns),
+  );
+  const data = {
+    exported_from: 'arena',
+    export_type: 'selected_chat_transcripts',
+    format_version: 1,
+    exported_at: opts?.exportedAt || new Date().toISOString(),
+    chat_count: chats.length,
+    chats: chats.map((bundle, index) => {
+      const title =
+        sanitizeArenaTranscriptTitle(bundle.title || '') ||
+        sanitizeArenaTranscriptTitle(bundle.sessionId || '') ||
+        `Chat ${index + 1}`;
+      return {
+        index: index + 1,
+        session_id: bundle.sessionId || null,
+        title,
+        transcript: buildArenaTranscriptJson(bundle.turns, resolvePersona, {
+          sessionId: bundle.sessionId || undefined,
+          exportedAt: opts?.exportedAt,
         }),
       };
     }),

@@ -54,6 +54,7 @@ import {
   copyArenaTranscriptsToClipboard,
   formatArenaTranscriptExport,
   formatArenaTranscriptsExport,
+  formatArenaTranscriptsJsonExport,
   formatArenaTranscriptCsvExport,
   formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
@@ -1205,6 +1206,31 @@ function App() {
     [recentSessions, resolveArenaPersona],
   );
 
+  const handleBulkExportChatTranscriptsJson = useCallback(
+    async (sessionIds: string[]) => {
+      if (sessionIds.length === 0) return null;
+      const bundles = await loadSessionTranscriptBundles(
+        sessionIds,
+        getSession,
+        recentSessions,
+      );
+      if (bundles.length === 0) return null;
+      const json = formatArenaTranscriptsJsonExport(bundles, resolveArenaPersona);
+      const ok = downloadTextFile(json, {
+        filename: `${withDownloadDate('arena-selected-chats-transcripts')}.json`,
+        mimeType: 'application/json;charset=utf-8',
+      });
+      if (ok) {
+        void track('arena_selected_chats_transcripts_json_exported', undefined, undefined, {
+          count: bundles.length,
+          requested: sessionIds.length,
+        });
+      }
+      return ok ? bundles.length : null;
+    },
+    [recentSessions, resolveArenaPersona],
+  );
+
   const handleBulkCopyChatTranscripts = useCallback(
     async (sessionIds: string[]) => {
       if (sessionIds.length === 0) return null;
@@ -2019,6 +2045,7 @@ function App() {
           onBulkPinSessions={handleBulkPinSessions}
           onBulkDuplicateSessions={handleBulkDuplicateSessions}
           onBulkExportTranscripts={handleBulkExportChatTranscripts}
+          onBulkExportTranscriptsJson={handleBulkExportChatTranscriptsJson}
           onBulkCopyTranscripts={handleBulkCopyChatTranscripts}
           onClearSessions={handleClearSessions}
           onRenameSession={handleRenameSession}

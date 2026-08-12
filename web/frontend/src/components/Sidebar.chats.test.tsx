@@ -136,6 +136,9 @@ function renderSidebar(overrides?: {
   onBulkExportTranscripts?:
     | ((sessionIds: string[]) => number | null | Promise<number | null> | void)
     | null;
+  onBulkExportTranscriptsJson?:
+    | ((sessionIds: string[]) => number | null | Promise<number | null> | void)
+    | null;
   onBulkCopyTranscripts?:
     | ((sessionIds: string[]) => number | null | Promise<number | null> | void)
     | null;
@@ -159,6 +162,10 @@ function renderSidebar(overrides?: {
     overrides?.onBulkExportTranscripts === undefined
       ? vi.fn(() => 2)
       : (overrides.onBulkExportTranscripts ?? undefined);
+  const onBulkExportTranscriptsJson =
+    overrides?.onBulkExportTranscriptsJson === undefined
+      ? undefined
+      : (overrides.onBulkExportTranscriptsJson ?? undefined);
   const onBulkCopyTranscripts =
     overrides?.onBulkCopyTranscripts === undefined
       ? vi.fn(() => 2)
@@ -186,6 +193,7 @@ function renderSidebar(overrides?: {
       onBulkPinSessions={onBulkPinSessions}
       onBulkDuplicateSessions={onBulkDuplicateSessions}
       onBulkExportTranscripts={onBulkExportTranscripts}
+      onBulkExportTranscriptsJson={onBulkExportTranscriptsJson}
       onBulkCopyTranscripts={onBulkCopyTranscripts}
       onClearSessions={onClearSessions}
       onRenameSession={onRenameSession}
@@ -200,6 +208,7 @@ function renderSidebar(overrides?: {
     onBulkPinSessions,
     onBulkDuplicateSessions,
     onBulkExportTranscripts,
+    onBulkExportTranscriptsJson,
     onBulkCopyTranscripts,
     onClearSessions,
     onRenameSession,
@@ -225,6 +234,7 @@ function renderSidebar(overrides?: {
           onBulkPinSessions={onBulkPinSessions}
           onBulkDuplicateSessions={onBulkDuplicateSessions}
           onBulkExportTranscripts={onBulkExportTranscripts}
+          onBulkExportTranscriptsJson={onBulkExportTranscriptsJson}
           onBulkCopyTranscripts={onBulkCopyTranscripts}
           onClearSessions={onClearSessions}
           onRenameSession={onRenameSession}
@@ -923,6 +933,70 @@ describe('Sidebar recent chats', () => {
     expect(
       screen.queryByRole('button', {
         name: 'Export 1 selected chat as transcripts',
+      }),
+    ).toBeNull();
+  });
+
+  it('exports only the selected chats as JSON transcripts', async () => {
+    const onBulkExportTranscriptsJson = vi.fn(() => 1);
+    renderSidebar({ onBulkExportTranscriptsJson });
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chat as JSON transcripts',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(onBulkExportTranscriptsJson).toHaveBeenCalledWith(['chat-1']),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Exported 1 selected chat as JSON transcripts',
+        }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('surfaces a partial JSON transcript export honestly', async () => {
+    renderSidebar({
+      onBulkExportTranscriptsJson: vi.fn(() => Promise.resolve(1)),
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 2 selected chats as JSON transcripts',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Exported 1 of 2 selected chats as JSON transcripts',
+        }),
+      ).toBeInTheDocument(),
+    );
+    const statuses = screen.getAllByRole('status');
+    expect(
+      statuses.some((status) =>
+        status.textContent?.includes(
+          'Some selected chat transcripts could not be exported as JSON',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('hides the JSON transcript export control when no callback is provided', () => {
+    renderSidebar({ onBulkExportTranscriptsJson: null });
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    expect(
+      screen.queryByRole('button', {
+        name: 'Export 1 selected chat as JSON transcripts',
       }),
     ).toBeNull();
   });
