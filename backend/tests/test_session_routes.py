@@ -318,6 +318,7 @@ async def test_duplicate_creates_independent_copy(app_client, make_user):
     assert dup["last_prompt"] == "Should we launch the experiment now?"
     assert dup["turn_count"] == 1
     assert dup["pinned"] is False
+    assert dup["last_active"] is not None
 
     # Both chats appear in the sidebar list.
     listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
@@ -329,6 +330,10 @@ async def test_duplicate_creates_independent_copy(app_client, make_user):
     dup_state = memory.short_term._store[body["session_id"]]
     orig_state = memory.short_term._store["orig"]
     assert len(dup_state["session_data"].turns) == 1
+    assert dup_state["session_pinned"] is False
+    # The fork starts its own activity clock and leaves the source pin alone.
+    assert dup_state["session_data"].created_at == dup_state["session_data"].last_active
+    assert orig_state["session_pinned"] is True
     orig_state["session_data"].turns.append(
         SessionTurn(
             turn_id="turn-2",
@@ -367,12 +372,69 @@ async def test_duplicate_404_for_foreign_session(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_duplicate_uses_session_data_owner_when_state_owner_missing(
+    app_client, make_user
+):
+    """Ownership falls back to session_data when the top-level owner is stale."""
+    user = make_user(email="sess-dup-fallback@test.com", tier=UserTier.PRO)
+    memory = get_memory_manager()
+    state = memory.short_term._get_or_create_state("fallback-1", user_id=str(user.id))
+    state["session_data"] = _make_session(
+        user.id, session_id="fallback-1", topics=["fork"]
+    )
+    state.pop("user_id", None)  # Simulate a stale/missing top-level owner.
+
+    res = await app_client.post(
+        "/api/session/fallback-1/duplicate", headers=_pro_headers(user)
+    )
+    assert res.status_code == 200
+
+    # A foreign caller still gets the uniform 404 oracle.
+    bob = make_user(email="sess-dup-fallback-b@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/session/fallback-1/duplicate", headers=_pro_headers(bob)
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_duplicate_404_for_malformed_state_without_session_data(
+    app_client, make_user
+):
+    """A broken state must 404 like a missing session, never 500."""
+    user = make_user(email="sess-dup-broken@test.com", tier=UserTier.PRO)
+    memory = get_memory_manager()
+    state = memory.short_term._get_or_create_state("broken-1", user_id=str(user.id))
+    state["session_data"] = None
+
+    res = await app_client.post(
+        "/api/session/broken-1/duplicate", headers=_pro_headers(user)
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_duplicate_404_for_missing_session(app_client, make_user):
     user = make_user(email="sess-dup-miss@test.com", tier=UserTier.PRO)
     res = await app_client.post(
         "/api/session/never-existed/duplicate", headers=_pro_headers(user)
     )
     assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_skips_malformed_state_without_session_data(app_client, make_user):
+    """Listing must not 500 on a malformed state; it skips the broken row."""
+    user = make_user(email="sess-list-broken@test.com", tier=UserTier.PRO)
+    memory = get_memory_manager()
+    state = memory.short_term._get_or_create_state("broken-list", user_id=str(user.id))
+    state["session_data"] = None
+    _seed_in_memory(user.id, session_id="healthy")
+
+    res = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert res.status_code == 200
+    sids = {row["session_id"] for row in res.json()["sessions"]}
+    assert sids == {"healthy"}
 
 
 # ─── Pin / unpin ─────────────────────────────────────────────────────────────

@@ -350,8 +350,15 @@ class ShortTermMemory:
             state = self._store.get(session_id)
             if not state:
                 return None
+            session_data = state.get("session_data")
+            if session_data is None:
+                return None
             try:
-                assert_session_owner(state.get("user_id"), user_id)
+                # Use the same fallback as the session routes' _is_owner so a
+                # stale/missing top-level owner never turns the owner's own
+                # duplicate into a false 404 (or a foreign fork).
+                owner = state.get("user_id") or getattr(session_data, "user_id", None)
+                assert_session_owner(owner, user_id)
             except SessionOwnershipError:
                 return None
 
@@ -363,11 +370,11 @@ class ShortTermMemory:
             new_state["session_start"] = now
             new_state["session_pinned"] = False
 
-            session_data: SessionData = new_state["session_data"]
-            session_data.session_id = new_id
-            session_data.user_id = user_id
-            session_data.created_at = now
-            session_data.last_active = now
+            new_session_data: SessionData = new_state["session_data"]
+            new_session_data.session_id = new_id
+            new_session_data.user_id = user_id
+            new_session_data.created_at = now
+            new_session_data.last_active = now
 
             self._store[new_id] = new_state
             return new_id

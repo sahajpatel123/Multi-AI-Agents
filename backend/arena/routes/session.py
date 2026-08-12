@@ -48,11 +48,12 @@ class PinSessionRequest(BaseModel):
 def _state_user_id(state: dict) -> str:
     """Pull the owning user id from a session state, falling back to
     the session_data payload if the state itself doesn't carry one."""
-    return str(
-        state.get("user_id")
-        or state.get("session_data", {}).user_id
-        or ""
-    ).strip()
+    owner = state.get("user_id")
+    if not owner:
+        session_data = state.get("session_data")
+        if session_data is not None:
+            owner = getattr(session_data, "user_id", None)
+    return str(owner or "").strip()
 
 
 def _is_owner(state: dict, user_id) -> bool:
@@ -243,10 +244,17 @@ async def duplicate_session(
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Session not found"},
         )
 
+    duplicated_state = store.get(new_id)
+    if duplicated_state is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Session not found"},
+        )
+
     return {
         "status": "duplicated",
         "session_id": new_id,
-        "session": _session_summary(new_id, store[new_id]),
+        "session": _session_summary(new_id, duplicated_state),
     }
 
 
