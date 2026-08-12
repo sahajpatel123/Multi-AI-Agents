@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import logging
 import re
@@ -333,6 +334,43 @@ class ShortTermMemory:
     def clear_session(self, session_id: str) -> None:
         with self._lock:
             self._store.pop(session_id, None)
+
+    def duplicate_session(
+        self, session_id: str, user_id: str = "anonymous"
+    ) -> str | None:
+        """Clone a caller-owned session under a fresh id.
+
+        The duplicate keeps the original transcript, topics, and custom
+        title, but starts with a clean session start time, an unpinned
+        state, and its own id so the user can branch the conversation
+        without mutating the source chat. Foreign and missing sessions
+        both return None so the route can keep the 404-oracle contract.
+        """
+        with self._lock:
+            state = self._store.get(session_id)
+            if not state:
+                return None
+            try:
+                assert_session_owner(state.get("user_id"), user_id)
+            except SessionOwnershipError:
+                return None
+
+            new_id = str(uuid.uuid4())
+            now = _now_utc()
+            new_state = copy.deepcopy(state)
+            new_state["session_id"] = new_id
+            new_state["user_id"] = user_id
+            new_state["session_start"] = now
+            new_state["session_pinned"] = False
+
+            session_data: SessionData = new_state["session_data"]
+            session_data.session_id = new_id
+            session_data.user_id = user_id
+            session_data.created_at = now
+            session_data.last_active = now
+
+            self._store[new_id] = new_state
+            return new_id
 
 
 class SessionCompressor:

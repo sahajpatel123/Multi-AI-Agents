@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pencil, Pin, X } from 'lucide-react';
+import { CopyPlus, Pencil, Pin, X } from 'lucide-react';
 import { AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
 
@@ -19,10 +19,14 @@ interface SessionCardProps {
   onRename?: () => void;
   /** Optional pin affordance — keeps this chat at the top of the sidebar. */
   onPin?: () => void;
+  /** Optional duplicate affordance — forks this chat as a new session. */
+  onDuplicate?: () => void;
   /** Whether this chat is currently pinned. */
   pinned?: boolean;
   /** Whether a pin update is in flight for this chat. */
   busy?: boolean;
+  /** Whether a duplicate request is in flight for this chat. */
+  duplicateBusy?: boolean;
   /** Optional count of saved/messages/etc. rendered in the meta line. */
   messageCount?: number;
   onClick: () => void;
@@ -39,15 +43,17 @@ export function SessionCard({
   onDelete,
   onRename,
   onPin,
+  onDuplicate,
   pinned = false,
   busy = false,
+  duplicateBusy = false,
   messageCount,
 }: SessionCardProps) {
   const winnerConfig = AGENTS[winnerAgentId || ''];
   const winnerName = winnerConfig?.name || 'Arena chat';
   const timeAgo = formatTimeAgo(timestamp);
   const promptPreview = prompt.trim() || 'Untitled session';
-  const actionCount = [onPin, onRename, onDelete].filter(Boolean).length;
+  const actionCount = [onPin, onDuplicate, onRename, onDelete].filter(Boolean).length;
 
   return (
     <div
@@ -57,6 +63,7 @@ export function SessionCard({
         onDelete || onRename ? 'session-card--deletable' : '',
         onRename ? 'session-card--renamable' : '',
         onPin ? 'session-card--pinnable' : '',
+        onDuplicate ? 'session-card--duplicatable' : '',
         actionCount > 0 ? `session-card--actions-${actionCount}` : '',
       ]
         .filter(Boolean)
@@ -117,6 +124,23 @@ export function SessionCard({
               aria-hidden
               fill={pinned ? 'currentColor' : 'none'}
             />
+          </button>
+        ) : null}
+
+        {onDuplicate ? (
+          <button
+            type="button"
+            className="session-card__duplicate"
+            aria-label="Duplicate session"
+            title="Duplicate session"
+            aria-busy={duplicateBusy}
+            disabled={duplicateBusy}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicate();
+            }}
+          >
+            <CopyPlus width={12} height={12} strokeWidth={2} aria-hidden />
           </button>
         ) : null}
 

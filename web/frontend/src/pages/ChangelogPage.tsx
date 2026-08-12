@@ -214,6 +214,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Sidebar Chats: exports escape markdown-sensitive text and CSV opens reliably in Excel',
       '[NEW] Sidebar Chats: sort chats by newest, oldest, title, or most turns',
       '[IMPROVED] Sidebar Chats: chats with missing activity or title stay at the end in every sort order',
+      '[NEW] Sidebar Chats: duplicate any chat as a fresh, independent fork',
     ],
   },
   {

@@ -26,6 +26,7 @@ import {
   deleteSession,
   clearAllSessions,
   renameSession,
+  duplicateSession,
   setSessionPin,
   saveMemory,
   getSavedResponses,
@@ -1162,6 +1163,20 @@ function App() {
     [],
   );
 
+  const handleDuplicateSession = async (sessionId: string) => {
+    const duplicated = await duplicateSession(sessionId);
+    if (!duplicated) return false;
+    setRecentSessions((prev) => [
+      duplicated,
+      ...prev.filter((session) => session.session_id !== duplicated.session_id),
+    ]);
+    await handleSessionSelect(duplicated.session_id);
+    void track('recent_chat_duplicated', undefined, sessionId, {
+      duplicate: duplicated.session_id,
+    });
+    return true;
+  };
+
   const handleSubmit = async (
     prompt: string,
     followUpContext?: PromptContextItem[],
@@ -1893,6 +1908,7 @@ function App() {
           onClearSessions={handleClearSessions}
           onRenameSession={handleRenameSession}
           onToggleSessionPin={handleToggleSessionPin}
+          onDuplicateSession={handleDuplicateSession}
         />
       )}
 

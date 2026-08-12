@@ -274,6 +274,107 @@ async def test_rename_rejects_overlong_title(app_client, make_user):
     assert res.status_code == 422
 
 
+# ─── Duplicate ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_duplicate_creates_independent_copy(app_client, make_user):
+    user = make_user(email="sess-dup@test.com", tier=UserTier.PRO)
+    state = _seed_in_memory(user.id, session_id="orig", topics=["launch"])
+    state["session_title"] = "Launch plan review"
+    state["session_pinned"] = True
+    state["session_data"].turns = [
+        SessionTurn(
+            turn_id="turn-1",
+            prompt="Should we launch the experiment now?",
+            agent_responses={
+                "agent_1": AgentResponse(
+                    agent_id="agent_1",
+                    agent_number=1,
+                    verdict="Yes, bounded experiment.",
+                    one_liner="Yes, bounded experiment.",
+                    confidence=82,
+                    key_assumption="The test stays small.",
+                    timestamp="2026-08-12T10:00:00Z",
+                )
+            },
+            winner_id="agent_1",
+            timestamp="2026-08-12T10:00:00Z",
+        )
+    ]
+
+    res = await app_client.post(
+        "/api/session/orig/duplicate", headers=_pro_headers(user)
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "duplicated"
+    assert body["session_id"] != "orig"
+
+    dup = body["session"]
+    assert dup["title"] == "Launch plan review"
+    assert dup["topics"] == ["launch"]
+    assert dup["primary_topic"] == "launch"
+    assert dup["last_prompt"] == "Should we launch the experiment now?"
+    assert dup["turn_count"] == 1
+    assert dup["pinned"] is False
+
+    # Both chats appear in the sidebar list.
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    sids = {row["session_id"] for row in listing.json()["sessions"]}
+    assert sids == {"orig", body["session_id"]}
+
+    # The copy is a real fork: appending to the original does not change it.
+    memory = get_memory_manager()
+    dup_state = memory.short_term._store[body["session_id"]]
+    orig_state = memory.short_term._store["orig"]
+    assert len(dup_state["session_data"].turns) == 1
+    orig_state["session_data"].turns.append(
+        SessionTurn(
+            turn_id="turn-2",
+            prompt="What about the risk?",
+            agent_responses={
+                "agent_2": AgentResponse(
+                    agent_id="agent_2",
+                    agent_number=2,
+                    verdict="Keep it small.",
+                    one_liner="Keep it small.",
+                    confidence=74,
+                    key_assumption="The team can move fast.",
+                    timestamp="2026-08-12T10:10:00Z",
+                )
+            },
+            winner_id="agent_2",
+            timestamp="2026-08-12T10:10:00Z",
+        )
+    )
+    assert len(dup_state["session_data"].turns) == 1
+
+
+@pytest.mark.asyncio
+async def test_duplicate_404_for_foreign_session(app_client, make_user):
+    alice = make_user(email="sess-dup-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-dup-b@test.com", tier=UserTier.PRO)
+    _seed_in_memory(alice.id, session_id="alice-1")
+
+    res = await app_client.post(
+        "/api/session/alice-1/duplicate", headers=_pro_headers(bob)
+    )
+    assert res.status_code == 404
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    assert len(listing.json()["sessions"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_duplicate_404_for_missing_session(app_client, make_user):
+    user = make_user(email="sess-dup-miss@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/session/never-existed/duplicate", headers=_pro_headers(user)
+    )
+    assert res.status_code == 404
+
+
 # ─── Pin / unpin ─────────────────────────────────────────────────────────────
 
 
@@ -457,6 +558,7 @@ async def test_session_endpoints_require_auth(app_client):
     for method, path in [
         ("GET", "/api/sessions"),
         ("PATCH", "/api/session/x"),
+        ("POST", "/api/session/x/duplicate"),
         ("PATCH", "/api/session/x/pin"),
         ("DELETE", "/api/session/x"),
         ("DELETE", "/api/sessions"),

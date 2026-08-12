@@ -984,6 +984,22 @@ export async function renameSession(sessionId: string, title: string): Promise<b
   }
 }
 
+export async function duplicateSession(
+  sessionId: string,
+): Promise<SessionSummary | null> {
+  try {
+    const response = await apiFetch(
+      `/api/session/${encodeURIComponent(sessionId)}/duplicate`,
+      { method: 'POST' },
+    );
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<{ session?: SessionSummary }>(response);
+    return data?.session ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function setSessionPin(sessionId: string, pinned: boolean): Promise<boolean> {
   try {
     const response = await apiFetch(

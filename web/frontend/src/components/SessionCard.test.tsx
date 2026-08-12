@@ -258,6 +258,24 @@ describe('SessionCard', () => {
     expect(getByRole('button', { name: /Delete session/ })).toHaveClass('session-card__delete');
   });
 
+  it('duplicates a session without activating it', () => {
+    const onDuplicate = vi.fn();
+    const onClick = vi.fn();
+    const { getByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={onClick}
+        onDuplicate={onDuplicate}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /Duplicate session/ }));
+    expect(onDuplicate).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
   it('renders message count when provided', () => {
     const { getByText } = render(
       <SessionCard

@@ -163,6 +163,9 @@ interface SidebarProps {
     sessionId: string,
     pinned: boolean,
   ) => Promise<boolean> | boolean | void;
+  onDuplicateSession?: (
+    sessionId: string,
+  ) => Promise<boolean> | boolean | void;
 }
 
 type FilterValue = 'all' | PromptCategory;
@@ -197,6 +200,7 @@ export function Sidebar({
   onClearSessions,
   onRenameSession,
   onToggleSessionPin,
+  onDuplicateSession,
 }: SidebarProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -262,6 +266,8 @@ export function Sidebar({
   const [sessionRenameBusyId, setSessionRenameBusyId] = useState<string | null>(null);
   const [sessionPinBusyId, setSessionPinBusyId] = useState<string | null>(null);
   const [sessionPinFailedId, setSessionPinFailedId] = useState<string | null>(null);
+  const [sessionDuplicateBusyId, setSessionDuplicateBusyId] = useState<string | null>(null);
+  const [sessionDuplicateFailedId, setSessionDuplicateFailedId] = useState<string | null>(null);
   const [customTitles, setCustomTitles] = useState<Record<string, string>>(() =>
     loadSidebarTurnTitles(),
   );
@@ -582,6 +588,16 @@ export function Sidebar({
     );
     return () => window.clearTimeout(t);
   }, [sessionPinFailedId]);
+
+  useEffect(() => {
+    if (!sessionDuplicateFailedId) return;
+    const hold = motionDuration(2800);
+    const t = window.setTimeout(
+      () => setSessionDuplicateFailedId(null),
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [sessionDuplicateFailedId]);
 
   useEffect(() => {
     if (recentSessions.length === 0) setConfirmClearSessions(false);
@@ -1100,6 +1116,20 @@ export function Sidebar({
     }
   };
 
+  const handleDuplicateSession = async (sessionId: string) => {
+    if (!onDuplicateSession || sessionDuplicateBusyId) return;
+    setSessionDuplicateBusyId(sessionId);
+    setSessionDuplicateFailedId((current) => (current === sessionId ? null : current));
+    try {
+      const ok = await onDuplicateSession(sessionId);
+      if (ok === false) setSessionDuplicateFailedId(sessionId);
+    } catch {
+      setSessionDuplicateFailedId(sessionId);
+    } finally {
+      setSessionDuplicateBusyId((current) => (current === sessionId ? null : current));
+    }
+  };
+
   return (
     <>
       <div
@@ -1559,6 +1589,19 @@ export function Sidebar({
                   Couldn't update pin. Please try again.
                 </p>
               ) : null}
+              {sessionDuplicateFailedId ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Couldn't duplicate this chat. Please try again.
+                </p>
+              ) : null}
               {copyChatsStatus !== 'idle' ||
               downloadChatsStatus !== 'idle' ||
               downloadJsonChatsStatus !== 'idle' ||
@@ -1731,8 +1774,16 @@ export function Sidebar({
                               }
                             : undefined
                         }
+                        onDuplicate={
+                          onDuplicateSession && session.turn_count > 0
+                            ? () => {
+                                void handleDuplicateSession(session.session_id);
+                              }
+                            : undefined
+                        }
                         pinned={session.pinned === true}
                         busy={sessionPinBusyId !== null}
+                        duplicateBusy={sessionDuplicateBusyId === session.session_id}
                         messageCount={session.turn_count}
                       />
                     );

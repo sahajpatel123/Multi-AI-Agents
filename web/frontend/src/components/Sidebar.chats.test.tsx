@@ -100,12 +100,14 @@ function renderSidebar(overrides?: {
   onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (sessionId: string, title: string) => boolean | Promise<boolean>;
   onToggleSessionPin?: (sessionId: string, pinned: boolean) => boolean | Promise<boolean>;
+  onDuplicateSession?: (sessionId: string) => boolean | Promise<boolean>;
 }) {
   const onSessionSelect = overrides?.onSessionSelect ?? vi.fn();
   const onDeleteSession = overrides?.onDeleteSession ?? vi.fn();
   const onClearSessions = overrides?.onClearSessions;
   const onRenameSession = overrides?.onRenameSession ?? vi.fn(() => true);
   const onToggleSessionPin = overrides?.onToggleSessionPin ?? vi.fn(() => true);
+  const onDuplicateSession = overrides?.onDuplicateSession ?? vi.fn(() => true);
   render(
     <Sidebar
       turns={overrides?.turns ?? []}
@@ -124,6 +126,7 @@ function renderSidebar(overrides?: {
       onClearSessions={onClearSessions}
       onRenameSession={onRenameSession}
       onToggleSessionPin={onToggleSessionPin}
+      onDuplicateSession={onDuplicateSession}
     />,
   );
   return {
@@ -132,6 +135,7 @@ function renderSidebar(overrides?: {
     onClearSessions,
     onRenameSession,
     onToggleSessionPin,
+    onDuplicateSession,
   };
 }
 
@@ -147,6 +151,30 @@ describe('Sidebar recent chats', () => {
   it('offers a chat search box when resumable chats exist', () => {
     renderSidebar();
     expect(screen.getByRole('searchbox', { name: 'Search chats' })).toBeInTheDocument();
+  });
+
+  it('duplicates a resumable chat from its card action', () => {
+    const { onDuplicateSession } = renderSidebar();
+    const duplicateButtons = screen.getAllByRole('button', {
+      name: 'Duplicate session',
+    });
+    expect(duplicateButtons).toHaveLength(2);
+    fireEvent.click(duplicateButtons[0]);
+    expect(onDuplicateSession).toHaveBeenCalledWith('chat-1');
+  });
+
+  it('hides duplicate for empty chats with nothing to fork', () => {
+    renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          turn_count: 0,
+        },
+      ],
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Duplicate session' }),
+    ).toBeNull();
   });
 
   it('filters chats by last prompt', () => {

@@ -6564,6 +6564,10 @@ canvas {
   padding-right: 96px;
 }
 
+.session-card--actions-4 .session-card__main {
+  padding-right: 126px;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .session-card:not(.session-card--active):hover .session-card__main {
     background: rgba(240, 235, 227, 0.85);
@@ -6668,7 +6672,8 @@ canvas {
 
 .session-card__delete,
 .session-card__rename,
-.session-card__pin {
+.session-card__pin,
+.session-card__duplicate {
   width: 28px;
   height: 28px;
   display: inline-flex;
@@ -6700,10 +6705,16 @@ canvas {
   cursor: default;
 }
 
+.session-card__duplicate:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .session-card__delete:hover,
   .session-card__rename:hover,
-  .session-card__pin:hover {
+  .session-card__pin:hover,
+  .session-card__duplicate:hover {
     color: #993c1d;
     border-color: rgba(153, 60, 29, 0.28);
     background: #fcf0ee;
@@ -6712,7 +6723,8 @@ canvas {
 
   .session-card__delete:active,
   .session-card__rename:active,
-  .session-card__pin:active {
+  .session-card__pin:active,
+  .session-card__duplicate:active {
     transform: scale(0.92);
   }
 }
@@ -6742,7 +6754,8 @@ canvas {
 @media (hover: hover) and (pointer: fine) {
   .session-card__delete:hover,
   .session-card__rename:hover,
-  .session-card__pin:hover {
+  .session-card__pin:hover,
+  .session-card__duplicate:hover {
     color: #993c1d;
     background: #fcf0ee;
     border-color: rgba(240, 153, 123, 0.55);
@@ -6751,7 +6764,8 @@ canvas {
 
 .session-card__delete:focus-visible,
 .session-card__rename:focus-visible,
-.session-card__pin:focus-visible {
+.session-card__pin:focus-visible,
+.session-card__duplicate:focus-visible {
   outline: 2px solid #c4956a;
   outline-offset: 1px;
   color: #993c1d;
@@ -6763,7 +6777,8 @@ canvas {
   .session-card__actions,
   .session-card__delete,
   .session-card__rename,
-  .session-card__pin {
+  .session-card__pin,
+  .session-card__duplicate {
     transition: none !important;
   }
 }

@@ -62,6 +62,25 @@ def _is_owner(state: dict, user_id) -> bool:
     return owner == str(user_id)
 
 
+def _session_summary(session_id: str, state: dict) -> dict:
+    """Project the small sidebar row for a live session state."""
+    session_data = state.get("session_data")
+    topics = list(getattr(session_data, "topics", []) or [])
+    turns = list(getattr(session_data, "turns", []) or [])
+    return {
+        "session_id": session_id,
+        "title": state.get("session_title"),
+        "topics": topics,
+        "primary_topic": topics[0] if topics else None,
+        "last_prompt": turns[-1].prompt if turns else None,
+        "turn_count": len(turns),
+        "pinned": bool(state.get("session_pinned", False)),
+        "last_active": session_data.last_active.isoformat()
+        if getattr(session_data, "last_active", None)
+        else None,
+    }
+
+
 @router.get(
     "/session/{session_id}",
     response_model=SessionData,
@@ -135,23 +154,9 @@ async def list_sessions(
     for sid, state in store.items():
         if not _is_owner(state, user.id):
             continue
-        session_data = state.get("session_data")
-        if session_data is None:
+        if state.get("session_data") is None:
             continue
-        topics = list(getattr(session_data, "topics", []) or [])
-        turns = list(getattr(session_data, "turns", []) or [])
-        rows.append({
-            "session_id": sid,
-            "title": state.get("session_title"),
-            "topics": topics,
-            "primary_topic": topics[0] if topics else None,
-            "last_prompt": turns[-1].prompt if turns else None,
-            "turn_count": len(turns),
-            "pinned": bool(state.get("session_pinned", False)),
-            "last_active": session_data.last_active.isoformat()
-            if getattr(session_data, "last_active", None)
-            else None,
-        })
+        rows.append(_session_summary(sid, state))
 
     # Newest first so the UI's "Recent" tab shows the most recent
     # activity at the top without a client-side sort.
@@ -199,6 +204,50 @@ async def rename_session(
 
     state["session_title"] = body.title
     return {"status": "renamed", "session_id": session_id, "title": body.title}
+
+
+@router.post("/session/{session_id}/duplicate")
+async def duplicate_session(
+    session_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+) -> dict:
+    """Duplicate one of the caller's live in-memory sessions.
+
+    A duplicate is an independent fork: same transcript, topics, and
+    custom title, but a fresh id, unpinned state, and its own activity
+    clock. Missing and foreign ids return the same 404 so session ids
+    cannot be enumerated.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="session_duplicate",
+        limit=30,
+        window_seconds=60,
+        message="Too many session duplicates. Please slow down.",
+    )
+    memory = get_memory_manager()
+    store = getattr(memory, "short_term", None)
+    store = getattr(store, "_store", {}) if store is not None else {}
+
+    state = store.get(session_id)
+    if state is None or not _is_owner(state, user.id):
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Session not found"},
+        )
+
+    new_id = memory.short_term.duplicate_session(session_id, user_id=str(user.id))
+    if new_id is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Session not found"},
+        )
+
+    return {
+        "status": "duplicated",
+        "session_id": new_id,
+        "session": _session_summary(new_id, store[new_id]),
+    }
 
 
 @router.patch("/session/{session_id}/pin")
