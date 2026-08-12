@@ -148,15 +148,21 @@ export function formatAgentHistoryItemCopy(item: AgentHistoryExportItem): string
  * CSV export for the current Agent research history view.
  *
  * Cells are quoted when they contain commas, quotes, or line breaks, and any
- * cell that starts with a spreadsheet formula trigger is neutralized with a
- * leading apostrophe (OWASP CWE-1236 defense, matching the backend exports).
+ * cell whose first significant character is a spreadsheet formula trigger is
+ * neutralized with a leading apostrophe (OWASP CWE-1236 defense, matching the
+ * backend exports). The file starts with a UTF-8 BOM so Excel detects the
+ * Unicode question text, and rows use CRLF line endings per RFC 4180.
  */
 export function formatAgentHistoryCsv(opts: { items: AgentHistoryExportItem[] }): string {
-  const CSV_FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'] as const;
+  const CSV_FORMULA_PREFIXES: readonly string[] = ['=', '+', '-', '@', '\t', '\r'];
 
   const csvSafe = (value: unknown): string => {
     const s = value === null || value === undefined ? '' : String(value);
-    return s && CSV_FORMULA_PREFIXES.some((prefix) => s.startsWith(prefix))
+    // Spreadsheets commonly ignore leading whitespace before deciding whether
+    // a cell is a formula, so neutralize the first significant character, not
+    // just the raw first byte.
+    const firstSignificant = s.trimStart()[0] || '';
+    return firstSignificant && CSV_FORMULA_PREFIXES.includes(firstSignificant)
       ? `'${s}`
       : s;
   };
@@ -196,9 +202,13 @@ export function formatAgentHistoryCsv(opts: { items: AgentHistoryExportItem[] })
     item.watchlistItemId,
   ]);
 
-  return [header.map(csvCell).join(','), ...rows.map((row) => row.map(csvCell).join(','))].join(
-    '\r\n',
-  ) + '\r\n';
+  return (
+    '\uFEFF' +
+    [header.map(csvCell).join(','), ...rows.map((row) => row.map(csvCell).join(','))].join(
+      '\r\n',
+    ) +
+    '\r\n'
+  );
 }
 
 /**

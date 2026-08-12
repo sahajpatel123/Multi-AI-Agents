@@ -77,6 +77,9 @@ describe('formatAgentHistoryItemCopy', () => {
 });
 
 describe('formatAgentHistoryCsv', () => {
+  const csvLines = (csv: string) =>
+    csv.replace(/^\uFEFF/, '').trim().split(/\r?\n/);
+
   it('exports rows with escaped commas, quotes, and topic joins', () => {
     const csv = formatAgentHistoryCsv({
       items: [
@@ -106,7 +109,15 @@ describe('formatAgentHistoryCsv', () => {
     expect(csv).toContain(',true,macro; fed,orch_1,watch_1');
   });
 
-  it('neutralizes spreadsheet formula injection and handles empty views', () => {
+  it('starts with a UTF-8 BOM and uses CRLF record separators', () => {
+    const csv = formatAgentHistoryCsv({
+      items: [{ question: 'How is the Indian IPO market evolving?' }],
+    });
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv).toMatch(/[^\r]\r\n$/);
+  });
+
+  it('neutralizes spreadsheet formula injection, including hidden leading whitespace', () => {
     const csv = formatAgentHistoryCsv({
       items: [
         {
@@ -114,16 +125,38 @@ describe('formatAgentHistoryCsv', () => {
           question: '+SUM(A1:A2)',
           taskId: '-task',
         },
+        {
+          title: '  =HYPERLINK("http://evil")',
+          question: '\t+SUM(A1:A2)',
+          taskId: '\r@task',
+        },
       ],
     });
 
     expect(csv).toContain("'=HYPERLINK");
     expect(csv).toContain("'+SUM");
     expect(csv).toContain("'-task");
+    expect(csv).toContain("'  =HYPERLINK");
+    expect(csv).toContain("'\t+SUM");
+    expect(csv).toContain("'\r@task");
 
     const empty = formatAgentHistoryCsv({ items: [] });
     expect(empty).toContain('task_id,title,question');
     expect(empty.endsWith('\r\n')).toBe(true);
+  });
+
+  it('keeps header and row layout stable', () => {
+    const csv = formatAgentHistoryCsv({
+      items: [{ taskId: 'task_1', question: 'Will rates cut this quarter?' }],
+    });
+    const lines = csvLines(csv);
+    expect(lines[0]).toBe(
+      'task_id,title,question,score,confidence,user_feedback,created_at,is_live,topics,orchestration_id,watchlist_item_id',
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[1].split(',')).toHaveLength(11);
+    expect(lines[1].split(',')[0]).toBe('task_1');
+    expect(lines[1].split(',')[2]).toBe('Will rates cut this quarter?');
   });
 });
 
