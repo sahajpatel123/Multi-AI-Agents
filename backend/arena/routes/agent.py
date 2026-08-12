@@ -3425,6 +3425,70 @@ async def get_watchlist_item_history_csv(
     )
 
 
+@router.get("/watchlist/{item_id}/history/export.json")
+async def get_watchlist_item_history_json(
+    http_request: Request,
+    item_id: str,
+    limit: int = Query(100, ge=1, le=500, description="Max history rows to export."),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """JSON export of run history for a single watchlist item.
+
+    Emits the same items/stats payload as the history endpoint, plus item
+    metadata and an exported_at timestamp, so a downloaded file is
+    self-describing when piped into scripts or dashboards. The payload keeps
+    the full final_answer field (unlike the CSV export's truncated snippet).
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_history_json",
+        limit=30,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait a moment.",
+    )
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
+    payload = get_watchlist_history(db, user.id, item.id, limit=limit)
+
+    clean_question = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in item.question[:30]).strip("_") or "watchlist-item"
+    filename = f"arena-watch-history-{clean_question}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    body = json.dumps(
+        {
+            "request_id": correlation_request_id(http_request),
+            "success": True,
+            "exported_at": utcnow_naive().isoformat(),
+            "item_id": item.id,
+            "question": item.question,
+            "limit": limit,
+            **payload,
+        },
+        indent=2,
+        default=str,
+        sort_keys=True,
+    ) + "\n"
+
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=body,
+        media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/watchlist/statistics")
 async def get_watchlist_statistics(
     user: UserResponse = Depends(get_current_user_required),

@@ -8,6 +8,7 @@ import {
   exportAnalyticsPersonaStatsTimelineCsv,
   exportAnalyticsPersonaStatsByCategoryCsv,
   exportAgentWatchlistHistoryCsv,
+  exportAgentWatchlistHistoryJson,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -135,6 +136,20 @@ describe('Analytics CSV export frontend API helpers', () => {
     expectBlob(res);
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/agent/watchlist/item-123%2Fabc/history/export.csv?limit=100',
+      {}
+    );
+  });
+
+  it('exportAgentWatchlistHistoryJson encodes item ID and clamps limit', async () => {
+    const mockBlob = new Blob(['{"success":true}'], { type: 'application/json' });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(mockBlob, { status: 200 })
+    );
+
+    const res = await exportAgentWatchlistHistoryJson('item-123/abc', 100);
+    expectBlob(res);
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/watchlist/item-123%2Fabc/history/export.json?limit=100',
       {}
     );
   });

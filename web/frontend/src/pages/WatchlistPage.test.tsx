@@ -49,6 +49,8 @@ const postAgentWatchlistRunMock = vi.fn();
 const postAgentWatchlistDuplicateMock = vi.fn();
 const getAgentWatchlistStatisticsMock = vi.fn();
 const exportAgentWatchlistStatisticsCsvMock = vi.fn();
+const exportAgentWatchlistHistoryJsonMock = vi.fn();
+const getAgentWatchlistHistoryMock = vi.fn();
 
 vi.mock('../context/TierContext', () => ({
   useTier: () => tierState,
@@ -73,16 +75,10 @@ vi.mock('../api', async () => {
       getAgentWatchlistStatisticsMock(...args),
     exportAgentWatchlistStatisticsCsv: (...args: unknown[]) =>
       exportAgentWatchlistStatisticsCsvMock(...args),
-    getAgentWatchlistHistory: vi.fn().mockResolvedValue({
-      items: [],
-      stats: {
-        run_count: 0,
-        avg_score: null,
-        best_score: null,
-        worst_score: null,
-        last_run_at: null,
-      },
-    }),
+    exportAgentWatchlistHistoryJson: (...args: unknown[]) =>
+      exportAgentWatchlistHistoryJsonMock(...args),
+    getAgentWatchlistHistory: (...args: unknown[]) =>
+      getAgentWatchlistHistoryMock(...args),
     patchAgentWatchlist: (...args: unknown[]) => patchAgentWatchlistMock(...args),
     postAgentWatchlistRun: (...args: unknown[]) => postAgentWatchlistRunMock(...args),
     postAgentWatchlistDuplicate: (...args: unknown[]) =>
@@ -217,6 +213,30 @@ describe('WatchlistPage', () => {
     exportAgentWatchlistStatisticsCsvMock.mockReset();
     exportAgentWatchlistStatisticsCsvMock.mockResolvedValue(
       new Blob(['summary'], { type: 'text/csv' }),
+    );
+    getAgentWatchlistHistoryMock.mockReset();
+    getAgentWatchlistHistoryMock.mockResolvedValue({
+      items: [
+        {
+          task_id: 'task-1',
+          title: 'IPO market mid-year recap',
+          final_score: 82,
+          final_confidence: 0.72,
+          user_feedback: null,
+          created_at: '2026-07-18T10:00:00Z',
+        },
+      ],
+      stats: {
+        count: 1,
+        scored_count: 1,
+        avg_score: 82,
+        min_score: 82,
+        max_score: 82,
+      },
+    });
+    exportAgentWatchlistHistoryJsonMock.mockReset();
+    exportAgentWatchlistHistoryJsonMock.mockResolvedValue(
+      new Blob(['{"success":true}'], { type: 'application/json' }),
     );
   });
 
@@ -577,5 +597,27 @@ describe('WatchlistPage', () => {
     expect(vi.mocked(downloadBlobFile).mock.calls[0][1]).toMatch(
       /^arena-watchlist-stats-\d{4}-\d{2}-\d{2}\.csv$/,
     );
+  });
+
+  it('downloads run history as JSON from the history panel', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run history' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '.json' }));
+    await waitFor(() => {
+      expect(exportAgentWatchlistHistoryJsonMock).toHaveBeenCalledWith('item-1', 100);
+    });
+
+    const { downloadBlobFile } = await import('../lib/downloadTextFile');
+    const calls = vi.mocked(downloadBlobFile).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[calls.length - 1][1]).toMatch(/^watch-history-.*\.json$/);
   });
 });
