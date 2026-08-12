@@ -2405,10 +2405,10 @@ async def export_task_json(
 
     # Pretty-print so the file is diff-friendly when a user checks it
     # into a repo or pastes a snippet into a bug report. The /result
-    # endpoint returns compact JSON; the export is for humans.
-    import json
-
-    body = json.dumps(out, indent=2, default=str, sort_keys=True)
+    # endpoint returns compact JSON; the export is for humans. The
+    # trailing newline follows the POSIX text-file convention so
+    # shell pipelines and `tail` behave predictably.
+    body = json.dumps(out, indent=2, default=str, sort_keys=True) + "\n"
     filename = f"arena-task-{tid[:8]}.json"
     return Response(
         content=body,

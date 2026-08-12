@@ -116,6 +116,27 @@ async def test_export_json_pretty_printed(
     assert "\n  " in res.text
 
 
+@pytest.mark.asyncio
+async def test_export_json_ends_with_trailing_newline(
+    app_client, make_user, db_session
+):
+    """The exported file follows the POSIX text-file convention so
+    shell pipelines (`jq`, `tail`, `diff`) don't choke on the last
+    line."""
+    user = make_user(email="jsonexp-newline@test.com", tier=UserTier.PRO)
+    row = _seed_task(db_session, user_id=user.id)
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/tasks/{row.task_id}/export.json",
+        headers=_headers(user),
+    )
+    assert res.status_code == 200
+    assert res.text.endswith("\n")
+    # The payload must still parse cleanly with the newline attached.
+    assert isinstance(res.json(), dict)
+
+
 # ─── Auth + ownership + isolation ─────────────────────────────────────────
 
 
@@ -323,3 +344,36 @@ async def test_export_json_filename_does_not_leak_task_id(
     assert "arena-task-abcdef12.json" in cd
     # Full id absent — only the 8-char prefix.
     assert full_id not in cd
+
+
+# ─── Abuse posture ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_export_json_rate_limit_blocks_runaway(
+    app_client, make_user
+):
+    """Per-task JSON export is bounded per user (120/hour) so a client
+    cannot pin the DB or overlay builder with a flood of downloads."""
+    import time as _time
+    from collections import deque
+
+    from arena.core import rate_limits as _rl
+
+    if hasattr(_rl.rate_limiter, "_events"):
+        _rl.rate_limiter._events.clear()
+
+    user = make_user(email="jsonexp-rl@test.com", tier=UserTier.PRO)
+    key = f"user:agent_task_export_json:{user.id}"
+    _rl.rate_limiter._events[key] = deque([_time.time()] * 120)
+
+    res = await app_client.get(
+        "/api/agent/tasks/any-id/export.json",
+        headers=_headers(user),
+    )
+    assert res.status_code == 429, res.text[:300]
+    detail = res.json().get("detail", {})
+    assert detail.get("error") == "rate_limit_exceeded"
+    assert "task JSON exports" in detail.get("message", "")
+    assert res.headers.get("retry-after")
+    _rl.rate_limiter._events.clear()
