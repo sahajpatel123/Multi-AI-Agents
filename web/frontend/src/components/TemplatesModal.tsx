@@ -122,6 +122,10 @@ export function TemplatesModal({
   const copyTimerRef = useRef<number | null>(null);
   const downloadTimerRef = useRef<number | null>(null);
   const itemCopyTimerRef = useRef<number | null>(null);
+  /** Only restore the saved view on the closed→open transition. */
+  const modalOpenRef = useRef<boolean | null>(null);
+  /** Saved expertise that wasn't resolvable yet because the catalog was loading. */
+  const pendingExpertiseRestoreRef = useRef<TemplatesExpertiseFilter | null>(null);
   const visible = open || closing;
   const reducedMotion = prefersReducedMotion();
 
@@ -184,6 +188,8 @@ export function TemplatesModal({
     () => collectTemplatesExpertiseOptions(flatTemplates),
     [flatTemplates],
   );
+  const expertiseOptionsRef = useRef(expertiseOptions);
+  expertiseOptionsRef.current = expertiseOptions;
 
   const showExpertiseFilter = useMemo(
     () => templatesExpertiseFilterUseful(flatTemplates),
@@ -218,34 +224,64 @@ export function TemplatesModal({
   );
 
   useEffect(() => {
-    if (open) {
-      const storedFavorites = loadFavoriteTemplateIds();
-      const saved = loadTemplatesViewState();
-      const restoredTab = (TAB_ORDER as readonly string[]).includes(saved.tab)
-        ? (saved.tab as TabId)
-        : 'All';
-      setActiveTab(
-        restoredTab === 'Favorites' && storedFavorites.length === 0
-          ? 'All'
-          : restoredTab,
-      );
-      setSearchQuery(saved.search);
-      setTemplatesSort(saved.sort);
-      setAvailabilityFilter(saved.availability);
-      setExpertiseFilter(
-        expertiseOptions.some((opt) => opt.value === saved.expertise)
-          ? saved.expertise
-          : TEMPLATES_EXPERTISE_ALL,
-      );
-      setCopyStatus('idle');
-      setDownloadStatus('idle');
-      setItemCopyStatus('idle');
-      setItemCopyId(null);
-      setItemCopyKind(null);
-      setRecentIds(loadRecentTemplateIds());
-      setFavoriteIds(storedFavorites);
+    if (!open) {
+      modalOpenRef.current = false;
+      return;
     }
+    // Once a modal session has restored its view, later catalog updates
+    // (e.g. expertise options arriving after the initial fetch) must not
+    // clobber in-progress edits by re-running the restore.
+    if (modalOpenRef.current === true) return;
+    modalOpenRef.current = true;
+
+    const storedFavorites = loadFavoriteTemplateIds();
+    const saved = loadTemplatesViewState();
+    const restoredTab = (TAB_ORDER as readonly string[]).includes(saved.tab)
+      ? (saved.tab as TabId)
+      : 'All';
+    setActiveTab(
+      restoredTab === 'Favorites' && storedFavorites.length === 0
+        ? 'All'
+        : restoredTab,
+    );
+    setSearchQuery(saved.search);
+    setTemplatesSort(saved.sort);
+    setAvailabilityFilter(saved.availability);
+    const expertiseAvailable = expertiseOptionsRef.current.some(
+      (opt) => opt.value === saved.expertise,
+    );
+    pendingExpertiseRestoreRef.current =
+      !expertiseAvailable && saved.expertise !== TEMPLATES_EXPERTISE_ALL
+        ? saved.expertise
+        : null;
+    setExpertiseFilter(
+      expertiseAvailable ? saved.expertise : TEMPLATES_EXPERTISE_ALL,
+    );
+    setCopyStatus('idle');
+    setDownloadStatus('idle');
+    setItemCopyStatus('idle');
+    setItemCopyId(null);
+    setItemCopyKind(null);
+    setRecentIds(loadRecentTemplateIds());
+    setFavoriteIds(storedFavorites);
+  }, [open]);
+
+  useEffect(() => {
+    // The catalog may still be loading when the modal opens. If the saved
+    // expertise was valid in the last session but isn't visible yet, apply
+    // it now that the options have arrived — without touching any other view
+    // state the user may have changed in the meantime.
+    if (!open || !pendingExpertiseRestoreRef.current) return;
+    const pending = pendingExpertiseRestoreRef.current;
+    if (!expertiseOptions.some((opt) => opt.value === pending)) return;
+    setExpertiseFilter(pending);
+    pendingExpertiseRestoreRef.current = null;
   }, [open, expertiseOptions]);
+
+  const handleExpertiseFilterChange = (value: TemplatesExpertiseFilter) => {
+    pendingExpertiseRestoreRef.current = null;
+    setExpertiseFilter(value);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -613,7 +649,7 @@ export function TemplatesModal({
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setExpertiseFilter(opt.value)}
+                    onClick={() => handleExpertiseFilterChange(opt.value)}
                     aria-pressed={selected}
                     className={`templates-modal__chip${selected ? ' templates-modal__chip--active' : ''}`}
                   >

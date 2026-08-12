@@ -224,4 +224,58 @@ describe('TemplatesModal favorites', () => {
       'true',
     );
   });
+
+  it('keeps in-progress edits when the catalog finishes loading', () => {
+    const { rerender } = renderModal({ loading: true, categories: {} });
+    fireEvent.change(
+      screen.getByRole('searchbox', { name: 'Search task templates' }),
+      { target: { value: 'Gamma' } },
+    );
+
+    rerender(
+      <TemplatesModal
+        open
+        closing={false}
+        categories={categories}
+        onClose={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('searchbox', { name: 'Search task templates' }),
+    ).toHaveValue('Gamma');
+    const grid = document.querySelector('.templates-modal__grid');
+    expect(grid?.textContent).toContain('Gamma review');
+    expect(grid?.textContent).not.toContain('Alpha brief');
+  });
+
+  it('applies a saved expertise filter once the catalog finishes loading', () => {
+    window.localStorage.setItem(
+      TEMPLATES_VIEW_STATE_KEY,
+      JSON.stringify({
+        tab: 'All',
+        search: '',
+        sort: 'default',
+        availability: 'all',
+        expertise: 'expert',
+      }),
+    );
+    const { rerender } = renderModal({ loading: true, categories: {} });
+
+    rerender(
+      <TemplatesModal
+        open
+        closing={false}
+        categories={{ Business: [alpha, { ...beta, default_expertise: 'expert' }] }}
+        onClose={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Expert' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
 });
