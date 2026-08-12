@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Arena recent prompts: expand to see every stored prompt on this device',
       '[NEW] Arena recent prompts: pin a question so it stays front and center on this device',
       '[NEW] Sidebar Chats: export the selected resumable chats as a Markdown archive',
       '[NEW] Sidebar Chats: bulk-delete selected resumable chats with select-all and inline confirmation',

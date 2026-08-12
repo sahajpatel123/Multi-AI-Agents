@@ -157,4 +157,102 @@ describe('RecentPromptChips', () => {
       screen.getByRole('button', { name: /reuse recent prompt: pinned d/i }),
     ).toBeInTheDocument();
   });
+
+  it('shows a toggle only when prompts are hidden behind the limit', () => {
+    const { container } = render(
+      <RecentPromptChips
+        prompts={[
+          prompt('One', 3),
+          prompt('Two', 2),
+          prompt('Three', 1),
+        ]}
+        onReuse={() => {}}
+        onRemove={() => {}}
+        onClear={() => {}}
+        onTogglePin={() => {}}
+        limit={2}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /show all recent prompts/i }),
+    ).toBeInTheDocument();
+    expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(2);
+  });
+
+  it('omits the toggle when every stored prompt is already visible', () => {
+    render(
+      <RecentPromptChips
+        prompts={[prompt('One', 2), prompt('Two', 1)]}
+        onReuse={() => {}}
+        onRemove={() => {}}
+        onClear={() => {}}
+        onTogglePin={() => {}}
+        limit={2}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: /show all recent prompts/i }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /show fewer recent prompts/i }),
+    ).toBeNull();
+  });
+
+  it('expands to reveal every stored prompt and collapses again', () => {
+    const { container } = render(
+      <RecentPromptChips
+        prompts={[
+          prompt('One', 5),
+          prompt('Two', 4),
+          prompt('Three', 3),
+          prompt('Four', 2),
+          prompt('Five', 1),
+        ]}
+        onReuse={() => {}}
+        onRemove={() => {}}
+        onClear={() => {}}
+        onTogglePin={() => {}}
+        limit={2}
+      />,
+    );
+    expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(2);
+
+    const expand = screen.getByRole('button', { name: /show all recent prompts/i });
+    fireEvent.click(expand);
+    expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(5);
+    expect(
+      screen.getByRole('button', { name: /reuse recent prompt: five/i }),
+    ).toBeInTheDocument();
+    expect(expand).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: /show fewer recent prompts/i }));
+    expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(2);
+    expect(
+      screen.queryByRole('button', { name: /reuse recent prompt: five/i }),
+    ).toBeNull();
+  });
+
+  it('keeps pinned prompts first when expanded', () => {
+    const { container } = render(
+      <RecentPromptChips
+        prompts={[
+          prompt('Fresh', 3),
+          prompt('Pinned oldie', 1, true),
+        ]}
+        onReuse={() => {}}
+        onRemove={() => {}}
+        onClear={() => {}}
+        onTogglePin={() => {}}
+        limit={1}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /show all recent prompts/i }));
+    const labels = Array.from(
+      container.querySelectorAll('[role="listitem"] button'),
+    )
+      .map((button) => button.getAttribute('aria-label'))
+      .filter((label) => label?.startsWith('Reuse recent prompt:'));
+    expect(labels[0]).toContain('Pinned oldie');
+    expect(labels[1]).toContain('Fresh');
+  });
 });

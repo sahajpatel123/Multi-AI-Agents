@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pin } from 'lucide-react';
 import type { RecentPrompt } from '../lib/recentPrompts';
 
@@ -32,11 +33,16 @@ export function RecentPromptChips({
   limit = 4,
   isMobile = false,
 }: RecentPromptChipsProps) {
+  const [expanded, setExpanded] = useState(false);
   if (!prompts.length) return null;
 
   const pinned = prompts.filter((item) => item.pinned);
   const unpinned = prompts.filter((item) => !item.pinned);
-  const visible = [...pinned, ...unpinned.slice(0, Math.max(0, limit - pinned.length))];
+  const visible = expanded
+    ? [...pinned, ...unpinned]
+    : [...pinned, ...unpinned.slice(0, Math.max(0, limit - pinned.length))];
+  const hiddenCount = prompts.length - visible.length;
+  const showToggle = hiddenCount > 0 || expanded;
 
   return (
     <div
@@ -156,6 +162,30 @@ export function RecentPromptChips({
           </div>
         );
       })}
+      {showToggle ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          aria-label={
+            expanded ? 'Show fewer recent prompts' : 'Show all recent prompts'
+          }
+          title={expanded ? 'Show fewer prompts' : `Show all ${prompts.length} prompts`}
+          style={{
+            fontSize: 11,
+            color: '#A0A39A',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '4px 8px',
+            fontFamily: 'var(--vp-font-sans)',
+            textDecoration: 'underline',
+            textUnderlineOffset: 3,
+          }}
+        >
+          {expanded ? 'Show less' : `Show all (${prompts.length})`}
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={onClear}
