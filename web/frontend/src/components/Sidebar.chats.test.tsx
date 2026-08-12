@@ -79,7 +79,7 @@ const sessions: SessionSummary[] = [
     primary_topic: 'launch',
     last_prompt: 'Should we launch today?',
     turn_count: 3,
-    last_active: new Date().toISOString(),
+    last_active: '2026-08-01T10:00:00Z',
   },
   {
     session_id: 'chat-2',
@@ -87,7 +87,7 @@ const sessions: SessionSummary[] = [
     primary_topic: null,
     last_prompt: null,
     turn_count: 1,
-    last_active: new Date().toISOString(),
+    last_active: '2026-08-01T09:00:00Z',
   },
 ];
 
@@ -356,6 +356,55 @@ describe('Sidebar recent chats', () => {
       'aria-label',
       'Open session: Newest unpinned chat',
     );
+  });
+
+  it('sorts chats by title when the sort control is changed', () => {
+    renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          title: 'Zebra planning',
+        },
+        {
+          ...(sessions[1] as SessionSummary),
+          title: 'Alpha review',
+        },
+      ],
+    });
+    const sort = screen.getByRole('combobox', { name: 'Sort chats' });
+    expect(sort).toHaveValue('newest');
+    expect(screen.getAllByRole('button', { name: /Open session/ })[0]).toHaveAttribute(
+      'aria-label',
+      'Open session: Zebra planning',
+    );
+
+    fireEvent.change(sort, { target: { value: 'title' } });
+    expect(screen.getAllByRole('button', { name: /Open session/ })[0]).toHaveAttribute(
+      'aria-label',
+      'Open session: Alpha review',
+    );
+  });
+
+  it('keeps pinned chats above the chosen chat sort', () => {
+    renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          title: 'Zebra planning',
+        },
+        {
+          ...(sessions[1] as SessionSummary),
+          title: 'Alpha review',
+          pinned: true,
+        },
+      ],
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sort chats' }), {
+      target: { value: 'title' },
+    });
+    const openButtons = screen.getAllByRole('button', { name: /Open session/ });
+    expect(openButtons[0]).toHaveAttribute('aria-label', 'Open session: Alpha review');
+    expect(openButtons[1]).toHaveAttribute('aria-label', 'Open session: Zebra planning');
   });
 
   it('clears all chats only after inline confirmation', async () => {

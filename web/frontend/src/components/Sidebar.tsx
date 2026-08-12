@@ -75,6 +75,12 @@ import {
   type SidebarSavedSort,
 } from '../lib/sidebarListSort';
 import {
+  SIDEBAR_CHATS_SORT_OPTIONS,
+  sidebarChatsSortLabel,
+  sortSidebarChats,
+  type SidebarChatsSort,
+} from '../lib/sidebarChatsSort';
+import {
   SIDEBAR_SAVED_MIND_ALL,
   collectSavedMindFilterOptions,
   filterSavedByMind,
@@ -204,6 +210,7 @@ export function Sidebar({
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [savedSearchQuery, setSavedSearchQuery] = useState('');
   const [recentsSort, setRecentsSort] = useState<SidebarRecentsSort>('newest');
+  const [chatsSort, setChatsSort] = useState<SidebarChatsSort>('newest');
   const [savedSort, setSavedSort] = useState<SidebarSavedSort>('newest');
   const [savedMindFilter, setSavedMindFilter] =
     useState<SidebarSavedMindFilter>(SIDEBAR_SAVED_MIND_ALL);
@@ -287,11 +294,8 @@ export function Sidebar({
   );
 
   const sortedChats = useMemo(
-    () =>
-      [...recentSessions].sort(
-        (a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)),
-      ),
-    [recentSessions],
+    () => sortSidebarChats(recentSessions, chatsSort),
+    [recentSessions, chatsSort],
   );
   const filteredChats = useMemo(
     () => filterSessionsBySearchQuery(sortedChats, chatSearchQuery),
@@ -828,7 +832,10 @@ export function Sidebar({
 
   const buildChatsFilterNote = () => {
     const q = chatSearchQuery.trim();
-    return q ? `search “${q}”` : undefined;
+    const bits: string[] = [];
+    if (q) bits.push(`search “${q}”`);
+    if (chatsSort !== 'newest') bits.push(`sort: ${sidebarChatsSortLabel(chatsSort)}`);
+    return bits.length > 0 ? bits.join(' · ') : undefined;
   };
 
   const buildChatsItems = () =>
@@ -1292,6 +1299,30 @@ export function Sidebar({
                   </button>
                 ) : null}
               </div>
+              <select
+                value={chatsSort}
+                onChange={(e) => setChatsSort(e.target.value as SidebarChatsSort)}
+                aria-label="Sort chats"
+                title="Sort chats"
+                style={{
+                  width: '100%',
+                  fontSize: 11,
+                  fontFamily: 'var(--vp-font-sans)',
+                  color: '#4A3728',
+                  background: '#0B0C0A',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: 6,
+                  padding: '5px 8px',
+                  cursor: 'pointer',
+                  marginBottom: 8,
+                }}
+              >
+                {SIDEBAR_CHATS_SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
               {recentSessions.length > 0 ? (
                 <div
                   style={{

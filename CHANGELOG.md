@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Resumable chat list export (Markdown, JSON, or CSV) from the sidebar with
   spreadsheet-formula-safe CSV cells
+- Sidebar resumable chat sorting by newest, oldest, title, or most turns
+  (pinned chats stay pinned above the chosen order)
 - Workflow security gate that enforces least-privilege permissions, job
   timeouts, no dangerous triggers or `secrets: inherit`, and
   `persist-credentials: false` on every checkout
