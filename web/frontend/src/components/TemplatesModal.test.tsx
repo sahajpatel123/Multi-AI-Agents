@@ -4,6 +4,7 @@ import { TemplatesModal } from './TemplatesModal';
 import type { AgentTaskTemplate } from '../api';
 import { loadFavoriteTemplateIds } from '../lib/templatesFavorites';
 import { loadRecentTemplateIds } from '../lib/templatesRecent';
+import { TEMPLATES_VIEW_STATE_KEY } from '../lib/templatesViewState';
 
 function template(overrides: Partial<AgentTaskTemplate> = {}): AgentTaskTemplate {
   return {
@@ -159,5 +160,68 @@ describe('TemplatesModal favorites', () => {
     expect(onSelect).toHaveBeenCalledWith(alpha);
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(loadRecentTemplateIds()).toContain('alpha');
+  });
+
+  it('restores the last tab and search query on reopen', () => {
+    const { unmount } = renderModal();
+    fireEvent.click(screen.getByRole('tab', { name: 'Research' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search task templates' }), {
+      target: { value: 'Gamma' },
+    });
+    unmount();
+
+    renderModal();
+    expect(screen.getByRole('tab', { name: 'Research' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(
+      screen.getByRole('searchbox', { name: 'Search task templates' }),
+    ).toHaveValue('Gamma');
+    const grid = document.querySelector('.templates-modal__grid');
+    expect(grid?.textContent).toContain('Gamma review');
+    expect(grid?.textContent).not.toContain('Alpha brief');
+  });
+
+  it('restores the sort and availability filter on reopen', () => {
+    const mixedCategories: Record<string, AgentTaskTemplate[]> = {
+      Business: [alpha, { ...beta, disabled: true }],
+      Research: [gamma],
+    };
+    const { unmount } = renderModal({ categories: mixedCategories });
+    fireEvent.click(screen.getByRole('tab', { name: 'Business' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sort templates' }), {
+      target: { value: 'title' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ready' }));
+    unmount();
+
+    renderModal({ categories: mixedCategories });
+    expect(
+      screen.getByRole('combobox', { name: 'Sort templates' }),
+    ).toHaveValue('title');
+    expect(screen.getByRole('button', { name: 'Ready' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('falls back to All when a saved Favorites tab has no favorites', () => {
+    window.localStorage.setItem(
+      TEMPLATES_VIEW_STATE_KEY,
+      JSON.stringify({
+        tab: 'Favorites',
+        search: '',
+        sort: 'default',
+        availability: 'all',
+        expertise: 'all',
+      }),
+    );
+
+    renderModal();
+    expect(screen.getByRole('tab', { name: 'All' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 });

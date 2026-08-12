@@ -51,6 +51,10 @@ import {
   pruneFavoriteTemplateIds,
   toggleFavoriteTemplateId,
 } from '../lib/templatesFavorites';
+import {
+  loadTemplatesViewState,
+  saveTemplatesViewState,
+} from '../lib/templatesViewState';
 import '../styles/templates-modal.css';
 
 const TAB_ORDER = [
@@ -91,13 +95,20 @@ export function TemplatesModal({
   loadFailed = false,
   onRetryLoad,
 }: TemplatesModalProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [templatesSort, setTemplatesSort] = useState<TemplatesSort>('default');
+  const restoredView = useMemo(() => loadTemplatesViewState(), []);
+  const [activeTab, setActiveTab] = useState<TabId>(() =>
+    (TAB_ORDER as readonly string[]).includes(restoredView.tab)
+      ? (restoredView.tab as TabId)
+      : 'All',
+  );
+  const [searchQuery, setSearchQuery] = useState(restoredView.search);
+  const [templatesSort, setTemplatesSort] = useState<TemplatesSort>(
+    restoredView.sort,
+  );
   const [availabilityFilter, setAvailabilityFilter] =
-    useState<TemplatesAvailability>('all');
+    useState<TemplatesAvailability>(restoredView.availability);
   const [expertiseFilter, setExpertiseFilter] =
-    useState<TemplatesExpertiseFilter>(TEMPLATES_EXPERTISE_ALL);
+    useState<TemplatesExpertiseFilter>(restoredView.expertise);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Per-card copy: template id + kind. */
@@ -208,20 +219,51 @@ export function TemplatesModal({
 
   useEffect(() => {
     if (open) {
-      setActiveTab('All');
-      setSearchQuery('');
-      setTemplatesSort('default');
-      setAvailabilityFilter('all');
-      setExpertiseFilter(TEMPLATES_EXPERTISE_ALL);
+      const storedFavorites = loadFavoriteTemplateIds();
+      const saved = loadTemplatesViewState();
+      const restoredTab = (TAB_ORDER as readonly string[]).includes(saved.tab)
+        ? (saved.tab as TabId)
+        : 'All';
+      setActiveTab(
+        restoredTab === 'Favorites' && storedFavorites.length === 0
+          ? 'All'
+          : restoredTab,
+      );
+      setSearchQuery(saved.search);
+      setTemplatesSort(saved.sort);
+      setAvailabilityFilter(saved.availability);
+      setExpertiseFilter(
+        expertiseOptions.some((opt) => opt.value === saved.expertise)
+          ? saved.expertise
+          : TEMPLATES_EXPERTISE_ALL,
+      );
       setCopyStatus('idle');
       setDownloadStatus('idle');
       setItemCopyStatus('idle');
       setItemCopyId(null);
       setItemCopyKind(null);
       setRecentIds(loadRecentTemplateIds());
-      setFavoriteIds(loadFavoriteTemplateIds());
+      setFavoriteIds(storedFavorites);
     }
-  }, [open]);
+  }, [open, expertiseOptions]);
+
+  useEffect(() => {
+    if (!open) return;
+    saveTemplatesViewState({
+      tab: activeTab,
+      search: searchQuery,
+      sort: templatesSort,
+      availability: availabilityFilter,
+      expertise: expertiseFilter,
+    });
+  }, [
+    open,
+    activeTab,
+    searchQuery,
+    templatesSort,
+    availabilityFilter,
+    expertiseFilter,
+  ]);
 
   const catalogIsList = catalogMode === 'list' && flatTemplates.length > 0;
 
