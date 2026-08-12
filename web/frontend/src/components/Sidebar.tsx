@@ -126,6 +126,8 @@ interface SidebarProps {
     ids: number[],
     pinned: boolean,
   ) => Promise<{ applied: number; pin_limit_reached: boolean }> | void;
+  onDeleteSaved?: (item: SavedResponseItem) => Promise<void> | void;
+  onBulkDeleteSaved?: (ids: number[]) => Promise<number> | void;
 }
 
 type FilterValue = 'all' | PromptCategory;
@@ -151,6 +153,8 @@ export function Sidebar({
   onToggleSavedPin,
   onReuseSavedPrompt,
   onBulkPinSaved,
+  onDeleteSaved,
+  onBulkDeleteSaved,
 }: SidebarProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -183,6 +187,10 @@ export function Sidebar({
   const [downloadJsonSavedStatus, setDownloadJsonSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [downloadCsvSavedStatus, setDownloadCsvSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [bulkPinStatus, setBulkPinStatus] = useState<'idle' | 'busy' | 'done' | 'failed' | 'partial'>('idle');
+  const [bulkDeleteStatus, setBulkDeleteStatus] = useState<'idle' | 'busy' | 'done' | 'failed'>('idle');
+  const [confirmBulkDeleteSaved, setConfirmBulkDeleteSaved] = useState(false);
+  const [pendingDeleteSavedId, setPendingDeleteSavedId] = useState<number | string | null>(null);
+  const [deleteSavedFailed, setDeleteSavedFailed] = useState(false);
   const [copyRecentsStatus, setCopyRecentsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadRecentsStatus, setDownloadRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Per-recent row copy feedback: turn_id + kind. */
@@ -405,6 +413,20 @@ export function Sidebar({
   }, [bulkPinStatus]);
 
   useEffect(() => {
+    if (bulkDeleteStatus === 'idle' || bulkDeleteStatus === 'busy') return;
+    const hold = motionDuration(bulkDeleteStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setBulkDeleteStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [bulkDeleteStatus]);
+
+  useEffect(() => {
+    if (!deleteSavedFailed) return;
+    const hold = motionDuration(2800);
+    const t = window.setTimeout(() => setDeleteSavedFailed(false), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [deleteSavedFailed]);
+
+  useEffect(() => {
     if (copyRecentsStatus === 'idle') return;
     const hold = motionDuration(copyRecentsStatus === 'failed' ? 2800 : 2000);
     const t = window.setTimeout(() => setCopyRecentsStatus('idle'), hold > 0 ? hold : 0);
@@ -553,6 +575,35 @@ export function Sidebar({
       void track(shouldPin ? 'saved_takes_bulk_pinned' : 'saved_takes_bulk_unpinned');
     } catch {
       setBulkPinStatus('failed');
+    }
+  };
+
+  const handleDeleteSaved = async (item: SavedResponseItem) => {
+    if (!onDeleteSaved) return;
+    setPendingDeleteSavedId(null);
+    setDeleteSavedFailed(false);
+    try {
+      await onDeleteSaved(item);
+      void track('saved_take_deleted', undefined, item.agent_id);
+    } catch {
+      setDeleteSavedFailed(true);
+    }
+  };
+
+  const handleBulkDeleteSaved = async () => {
+    if (!onBulkDeleteSaved) return;
+    const ids = filteredSaved
+      .map((item) => Number(item.id))
+      .filter((id) => Number.isFinite(id));
+    if (ids.length === 0) return;
+    setConfirmBulkDeleteSaved(false);
+    setBulkDeleteStatus('busy');
+    try {
+      await onBulkDeleteSaved(ids);
+      setBulkDeleteStatus('done');
+      void track('saved_takes_bulk_deleted');
+    } catch {
+      setBulkDeleteStatus('failed');
     }
   };
 
@@ -1468,6 +1519,58 @@ export function Sidebar({
                     <button
                       type="button"
                       disabled={
+                        bulkDeleteStatus === 'busy' ||
+                        filteredSaved.length === 0
+                      }
+                      title="Delete all shown saved takes"
+                      aria-label={
+                        confirmBulkDeleteSaved
+                          ? 'Confirm deleting shown saved takes'
+                          : bulkDeleteStatus === 'busy'
+                            ? 'Deleting shown saved takes'
+                            : `Delete ${filteredSaved.length} shown saved takes`
+                      }
+                      onClick={() => {
+                        setPendingDeleteSavedId(null);
+                        setConfirmBulkDeleteSaved((prev) => !prev);
+                      }}
+                      style={{
+                        background: confirmBulkDeleteSaved
+                          ? '#FEF2F2'
+                          : 'none',
+                        border: confirmBulkDeleteSaved
+                          ? '0.5px solid #C0392B'
+                          : '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: bulkDeleteStatus === 'busy' ? 'default' : 'pointer',
+                        color:
+                          bulkDeleteStatus === 'failed'
+                            ? '#D85A30'
+                            : bulkDeleteStatus === 'done'
+                              ? '#5A8C6A'
+                              : confirmBulkDeleteSaved
+                                ? '#C0392B'
+                                : '#F0B84E',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {bulkDeleteStatus === 'busy'
+                        ? 'Deleting…'
+                        : bulkDeleteStatus === 'done'
+                          ? 'Deleted'
+                          : bulkDeleteStatus === 'failed'
+                            ? 'Failed'
+                            : confirmBulkDeleteSaved
+                              ? 'Confirm?'
+                              : 'Delete shown'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
                         bulkPinStatus === 'busy' ||
                         filteredSaved.length === 0 ||
                         (savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
@@ -1666,12 +1769,75 @@ export function Sidebar({
                           : 'CSV'}
                     </button>
                   </div>
+                  {confirmBulkDeleteSaved ? (
+                    <div
+                      role="dialog"
+                      aria-label="Delete shown saved takes"
+                      style={{
+                        marginTop: 8,
+                        padding: '8px 10px',
+                        background: '#FFF7F5',
+                        border: '0.5px solid #E3B7A7',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: '0 0 8px',
+                          fontSize: 12,
+                          color: '#1A1714',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Delete {filteredSaved.length} shown saved {filteredSaved.length === 1 ? 'take' : 'takes'}?
+                      </p>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                          gap: 8,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setConfirmBulkDeleteSaved(false)}
+                          style={{
+                            padding: '5px 10px',
+                            fontSize: 11,
+                            borderRadius: 6,
+                            color: '#A0A39A',
+                            background: '#F0EBE3',
+                            cursor: 'pointer',
+                            border: 'none',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleBulkDeleteSaved()}
+                          style={{
+                            padding: '5px 10px',
+                            fontSize: 11,
+                            borderRadius: 6,
+                            color: '#FFFFFF',
+                            background: '#C0392B',
+                            cursor: 'pointer',
+                            border: 'none',
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 {copyAllSavedStatus !== 'idle' ||
                 downloadAllSavedStatus !== 'idle' ||
                 downloadJsonSavedStatus !== 'idle' ||
                 downloadCsvSavedStatus !== 'idle' ||
-                (bulkPinStatus !== 'idle' && bulkPinStatus !== 'busy') ? (
+                (bulkPinStatus !== 'idle' && bulkPinStatus !== 'busy') ||
+                (bulkDeleteStatus !== 'idle' && bulkDeleteStatus !== 'busy') ? (
                   <div
                     role="status"
                     aria-live="polite"
@@ -1711,6 +1877,10 @@ export function Sidebar({
                               ? 'Pin limit reached — some shown takes were not pinned'
                               : bulkPinStatus === 'failed'
                                 ? 'Could not update saved takes'
+                                : bulkDeleteStatus === 'done'
+                                  ? 'Shown saved takes deleted'
+                                  : bulkDeleteStatus === 'failed'
+                                    ? 'Could not delete shown saved takes'
                                 : ''}
                   </div>
                 ) : null}
@@ -2040,7 +2210,10 @@ export function Sidebar({
                         <div key={item.id} className="sidebar-list-row sidebar-list-row--saved">
                           <button
                             type="button"
-                            onClick={() => onSavedItemClick(item)}
+                            onClick={() => {
+                              setPendingDeleteSavedId(null);
+                              onSavedItemClick(item);
+                            }}
                             style={{
                               flex: 1,
                               minWidth: 0,
@@ -2164,6 +2337,87 @@ export function Sidebar({
                               <Copy style={{ width: 13, height: 13 }} />
                             )}
                           </button>
+                          {pendingDeleteSavedId === item.id ? (
+                            <>
+                              <button
+                                type="button"
+                                aria-label={`Cancel delete ${displayName} take`}
+                                title="Cancel delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPendingDeleteSavedId(null);
+                                }}
+                                style={{
+                                  flexShrink: 0,
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 6,
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: '#A0A39A',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 0,
+                                }}
+                              >
+                                <span style={{ fontSize: 14, lineHeight: 1 }}>×</span>
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Confirm delete ${displayName} take`}
+                                title="Delete take"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleDeleteSaved(item);
+                                }}
+                                style={{
+                                  flexShrink: 0,
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 6,
+                                  border: 'none',
+                                  background: '#FEF2F2',
+                                  color: '#C0392B',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 0,
+                                }}
+                              >
+                                <Trash2 style={{ width: 13, height: 13 }} />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              aria-label={`Delete ${displayName} take`}
+                              title="Delete take"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmBulkDeleteSaved(false);
+                                setPendingDeleteSavedId(item.id);
+                              }}
+                              style={{
+                                flexShrink: 0,
+                                width: 28,
+                                height: 28,
+                                borderRadius: 6,
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#A0A39A',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                              }}
+                            >
+                              <Trash2 style={{ width: 13, height: 13 }} />
+                            </button>
+                          )}
                           <button
                             type="button"
                             aria-label={
@@ -2219,6 +2473,19 @@ export function Sidebar({
                     }}
                   >
                     Could not copy — try again.
+                  </p>
+                ) : null}
+                {deleteSavedFailed ? (
+                  <p
+                    role="alert"
+                    style={{
+                      fontSize: 11,
+                      color: '#993C1D',
+                      margin: '8px 0 0',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Could not delete — try again.
                   </p>
                 ) : null}
               </div>

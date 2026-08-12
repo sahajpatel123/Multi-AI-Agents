@@ -26,6 +26,7 @@ import {
   getSavedResponses,
   saveResponse,
   deleteSavedResponse,
+  deleteSavedResponses,
   setSavedResponsePinned,
   setSavedResponsesPinned,
   verifyArenaAnswerInAgent,
@@ -925,6 +926,56 @@ function App() {
     [],
   );
 
+  /** Delete one saved take and keep the sidebar library in sync. */
+  const handleDeleteSavedItem = useCallback(async (item: SavedResponseItem) => {
+    try {
+      await deleteSavedResponse(Number(item.id));
+      setSavedItems((current) =>
+        current.filter((saved) => Number(saved.id) !== Number(item.id)),
+      );
+      void track('saved_take_deleted', undefined, item.agent_id);
+    } catch (err) {
+      const detail =
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't delete take — try again.";
+      setSaveSyncMessage(detail);
+      throw err;
+    }
+  }, []);
+
+  /** Delete the current filtered set of saved takes (chunked at the API cap). */
+  const handleBulkDeleteSaved = useCallback(async (ids: number[]) => {
+    const uniqueIds = [...new Set(ids.map(Number))];
+    if (uniqueIds.length === 0) return 0;
+    const deletedIds = new Set<number>();
+    try {
+      // The backend caps one bulk request at 50 ids; delete in chunks so the
+      // sidebar's "delete all shown" action stays safe for larger libraries.
+      for (let i = 0; i < uniqueIds.length; i += 50) {
+        const chunk = uniqueIds.slice(i, i + 50);
+        const result = await deleteSavedResponses(chunk);
+        if (result.deleted > 0) {
+          chunk.forEach((id) => {
+            deletedIds.add(id);
+          });
+        }
+      }
+      setSavedItems((current) =>
+        current.filter((saved) => !deletedIds.has(Number(saved.id))),
+      );
+      void track('saved_takes_bulk_deleted', undefined);
+      return deletedIds.size;
+    } catch (err) {
+      const detail =
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't delete shown takes — try again.";
+      setSaveSyncMessage(detail);
+      throw err;
+    }
+  }, []);
+
   const handleNewChat = useCallback(async () => {
     void track('new_chat_clicked');
     const currentSessionId = sessionData?.session_id || safeLocalStorage.getItem('arena_session_id');
@@ -1691,6 +1742,8 @@ function App() {
           }}
           onReuseSavedPrompt={handleReuseSavedPrompt}
           onBulkPinSaved={handleBulkPinSaved}
+          onDeleteSaved={handleDeleteSavedItem}
+          onBulkDeleteSaved={handleBulkDeleteSaved}
         />
       )}
 

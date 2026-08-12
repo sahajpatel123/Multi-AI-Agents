@@ -472,6 +472,32 @@ export async function deleteSavedResponse(id: number): Promise<void> {
   }
 }
 
+export type SavedBulkDeleteResult = {
+  status: 'deleted';
+  requested: number;
+  deleted: number;
+};
+
+export async function deleteSavedResponses(
+  ids: number[],
+): Promise<SavedBulkDeleteResult> {
+  const res = await apiFetch('/api/saved/bulk', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to delete saved takes'), res));
+  }
+  const body = await parseJsonSafely<Partial<SavedBulkDeleteResult>>(res);
+  return {
+    status: 'deleted',
+    requested: typeof body?.requested === 'number' ? body.requested : ids.length,
+    deleted: typeof body?.deleted === 'number' ? body.deleted : 0,
+  };
+}
+
 export type SavedPinResult = {
   id: number;
   pinned: boolean;
