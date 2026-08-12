@@ -294,6 +294,39 @@ describe('Sidebar recent chats', () => {
     expect(onToggleSessionPin).toHaveBeenCalledWith('chat-1', false);
   });
 
+  it('surfaces a failure when a pin update is rejected', async () => {
+    const onToggleSessionPin = vi.fn().mockResolvedValue(false);
+    renderSidebar({ onToggleSessionPin });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin session' })[0]);
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        "Couldn't update pin. Please try again.",
+      ),
+    );
+    expect(onToggleSessionPin).toHaveBeenCalledWith('chat-1', true);
+  });
+
+  it('ignores repeated pin clicks while an update is in flight', async () => {
+    let resolvePin!: (value: boolean) => void;
+    const onToggleSessionPin = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolvePin = resolve;
+        }),
+    );
+    renderSidebar({ onToggleSessionPin });
+
+    const pinButton = screen.getAllByRole('button', { name: 'Pin session' })[0];
+    fireEvent.click(pinButton);
+    await waitFor(() => expect(pinButton).toBeDisabled());
+    fireEvent.click(pinButton);
+    resolvePin(true);
+
+    await waitFor(() => expect(onToggleSessionPin).toHaveBeenCalledTimes(1));
+  });
+
   it('keeps pinned chats at the top of the list', () => {
     renderSidebar({
       sessions: [

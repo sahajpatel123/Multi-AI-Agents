@@ -209,6 +209,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Sidebar Chats: clear all resumable chats with inline confirmation',
       '[IMPROVED] Sidebar Chats: clear-all distinguishes failures from zero-count clears and starts fresh',
       '[NEW] Sidebar Chats: pin important chats to the top of the list',
+      '[IMPROVED] Sidebar Chats: pin updates surface failures and ignore double-clicks',
     ],
   },
   {

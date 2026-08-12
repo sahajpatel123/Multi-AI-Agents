@@ -206,6 +206,23 @@ describe('SessionCard', () => {
     );
   });
 
+  it('disables the pin button while a pin update is in flight', () => {
+    const { getByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+        onPin={() => {}}
+        busy
+      />,
+    );
+    const pinButton = getByRole('button', { name: /Pin session/ });
+    expect(pinButton).toBeDisabled();
+    expect(pinButton).toHaveAttribute('aria-busy', 'true');
+  });
+
   it('fires onDelete without firing onClick', () => {
     const onClick = vi.fn();
     const onDelete = vi.fn();

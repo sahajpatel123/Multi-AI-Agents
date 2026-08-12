@@ -21,6 +21,8 @@ interface SessionCardProps {
   onPin?: () => void;
   /** Whether this chat is currently pinned. */
   pinned?: boolean;
+  /** Whether a pin update is in flight for this chat. */
+  busy?: boolean;
   /** Optional count of saved/messages/etc. rendered in the meta line. */
   messageCount?: number;
   onClick: () => void;
@@ -38,6 +40,7 @@ export function SessionCard({
   onRename,
   onPin,
   pinned = false,
+  busy = false,
   messageCount,
 }: SessionCardProps) {
   const winnerConfig = AGENTS[winnerAgentId || ''];
@@ -99,6 +102,8 @@ export function SessionCard({
             className="session-card__pin"
             aria-label={pinned ? 'Unpin session' : 'Pin session'}
             aria-pressed={pinned}
+            aria-busy={busy}
+            disabled={busy}
             title={pinned ? 'Unpin session' : 'Pin session'}
             onClick={(e) => {
               e.stopPropagation();

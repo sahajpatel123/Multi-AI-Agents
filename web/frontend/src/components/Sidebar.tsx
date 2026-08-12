@@ -240,6 +240,8 @@ export function Sidebar({
   const [editingSessionValue, setEditingSessionValue] = useState('');
   const [sessionRenameError, setSessionRenameError] = useState<string | null>(null);
   const [sessionRenameBusyId, setSessionRenameBusyId] = useState<string | null>(null);
+  const [sessionPinBusyId, setSessionPinBusyId] = useState<string | null>(null);
+  const [sessionPinFailedId, setSessionPinFailedId] = useState<string | null>(null);
   const [customTitles, setCustomTitles] = useState<Record<string, string>>(() =>
     loadSidebarTurnTitles(),
   );
@@ -511,6 +513,16 @@ export function Sidebar({
     );
     return () => window.clearTimeout(t);
   }, [clearSessionsStatus]);
+
+  useEffect(() => {
+    if (!sessionPinFailedId) return;
+    const hold = motionDuration(2800);
+    const t = window.setTimeout(
+      () => setSessionPinFailedId(null),
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [sessionPinFailedId]);
 
   useEffect(() => {
     if (recentSessions.length === 0) setConfirmClearSessions(false);
@@ -914,6 +926,20 @@ export function Sidebar({
     setConfirmClearSessions(false);
   };
 
+  const handleToggleSessionPin = async (sessionId: string, pinned: boolean) => {
+    if (!onToggleSessionPin || sessionPinBusyId) return;
+    setSessionPinBusyId(sessionId);
+    setSessionPinFailedId((current) => (current === sessionId ? null : current));
+    try {
+      const ok = await onToggleSessionPin(sessionId, pinned);
+      if (ok === false) setSessionPinFailedId(sessionId);
+    } catch {
+      setSessionPinFailedId(sessionId);
+    } finally {
+      setSessionPinBusyId((current) => (current === sessionId ? null : current));
+    }
+  };
+
   return (
     <>
       <div
@@ -1185,6 +1211,19 @@ export function Sidebar({
                   Could not clear chats. Please try again.
                 </p>
               ) : null}
+              {sessionPinFailedId ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Couldn't update pin. Please try again.
+                </p>
+              ) : null}
               {isChatSearchActive && filteredChats.length === 0 ? (
                 <p
                   role="status"
@@ -1312,7 +1351,7 @@ export function Sidebar({
                         onPin={
                           onToggleSessionPin
                             ? () => {
-                                void onToggleSessionPin(
+                                void handleToggleSessionPin(
                                   session.session_id,
                                   !(session.pinned === true),
                                 );
@@ -1320,6 +1359,7 @@ export function Sidebar({
                             : undefined
                         }
                         pinned={session.pinned === true}
+                        busy={sessionPinBusyId !== null}
                         messageCount={session.turn_count}
                       />
                     );

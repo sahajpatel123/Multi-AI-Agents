@@ -6695,6 +6695,11 @@ canvas {
   background: #fbf1e4;
 }
 
+.session-card__pin:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .session-card__delete:hover,
   .session-card__rename:hover,
