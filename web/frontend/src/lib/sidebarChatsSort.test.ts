@@ -62,6 +62,85 @@ describe('sortSidebarChats', () => {
     ]);
   });
 
+  it('keeps chats with missing or invalid activity times after dated chats', () => {
+    const chats = [
+      {
+        session_id: 'invalid-1',
+        title: 'Invalid time',
+        last_prompt: 'x',
+        turn_count: 1,
+        last_active: 'not-a-date',
+      },
+      {
+        session_id: 'missing-1',
+        title: 'Missing time',
+        last_prompt: 'x',
+        turn_count: 1,
+        last_active: null,
+      },
+      {
+        session_id: 'old-1',
+        title: 'Old',
+        last_prompt: 'x',
+        turn_count: 1,
+        last_active: '2026-01-01T00:00:00Z',
+      },
+      {
+        session_id: 'new-1',
+        title: 'New',
+        last_prompt: 'x',
+        turn_count: 1,
+        last_active: '2026-03-01T00:00:00Z',
+      },
+    ];
+
+    expect(sortSidebarChats(chats, 'newest').map((c) => c.session_id)).toEqual([
+      'new-1',
+      'old-1',
+      'invalid-1',
+      'missing-1',
+    ]);
+    expect(sortSidebarChats(chats, 'oldest').map((c) => c.session_id)).toEqual([
+      'old-1',
+      'new-1',
+      'invalid-1',
+      'missing-1',
+    ]);
+  });
+
+  it('keeps chats with no title or prompt at the end of title sort', () => {
+    const chats = [
+      {
+        session_id: 'untitled-1',
+        title: null,
+        last_prompt: null,
+        primary_topic: null,
+        turn_count: 1,
+        last_active: '2026-01-01T00:00:00Z',
+      },
+      {
+        session_id: 'zzz-1',
+        title: 'Zzzz planning',
+        last_prompt: 'x',
+        turn_count: 1,
+        last_active: '2026-02-01T00:00:00Z',
+      },
+      {
+        session_id: 'alpha-1',
+        title: 'Alpha review',
+        last_prompt: 'x',
+        turn_count: 1,
+        last_active: '2026-03-01T00:00:00Z',
+      },
+    ];
+
+    expect(sortSidebarChats(chats, 'title').map((c) => c.session_id)).toEqual([
+      'alpha-1',
+      'zzz-1',
+      'untitled-1',
+    ]);
+  });
+
   it('keeps pinned chats above unpinned chats in every sort mode', () => {
     const withPin = sample.map((chat, i) =>
       i === 2 ? { ...chat, pinned: true } : chat,

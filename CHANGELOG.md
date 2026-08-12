@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spreadsheet-formula-safe CSV cells
 - Sidebar resumable chat sorting by newest, oldest, title, or most turns
   (pinned chats stay pinned above the chosen order)
+- Sidebar chat sorting treats missing/invalid activity times and untitled
+  chats as unknowns that stay at the end of the list
 - Workflow security gate that enforces least-privilege permissions, job
   timeouts, no dangerous triggers or `secrets: inherit`, and
   `persist-credentials: false` on every checkout

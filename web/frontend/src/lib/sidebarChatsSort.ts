@@ -26,24 +26,41 @@ export type SidebarChatsSortable = {
   pinned?: boolean;
 };
 
-function createdMs(iso: string | null | undefined): number {
-  if (!iso) return 0;
+/** Return null when a chat has no parseable activity time. */
+function createdMs(iso: string | null | undefined): number | null {
+  if (!iso) return null;
   const t = new Date(iso).getTime();
-  return Number.isNaN(t) ? 0 : t;
+  return Number.isNaN(t) ? null : t;
 }
 
 function cmpStr(a: string, b: string): number {
   return a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
 }
 
-function displayTitle(item: SidebarChatsSortable): string {
+/**
+ * Return the sortable title, or null when the chat has no title, prompt,
+ * or topic. Missing titles sort after real titles instead of colliding
+ * with a fake "zzz" sentinel.
+ */
+function displayTitle(item: SidebarChatsSortable): string | null {
   return (
     item.title ||
     item.last_prompt ||
     item.primary_topic ||
-    'zzz'
-  )
-    .trim() || 'zzz';
+    ''
+  ).trim() || null;
+}
+
+/** Unknown activity times sort after dated chats in either direction. */
+function compareTimes(
+  a: number | null,
+  b: number | null,
+  newestFirst: boolean,
+): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return newestFirst ? b - a : a - b;
 }
 
 /**
@@ -63,11 +80,16 @@ export function sortSidebarChats<T extends SidebarChatsSortable>(
 
     switch (sort) {
       case 'oldest': {
-        const d = createdMs(a.last_active) - createdMs(b.last_active);
+        const d = compareTimes(createdMs(a.last_active), createdMs(b.last_active), false);
         return d !== 0 ? d : tie(a, b);
       }
       case 'title': {
-        const d = cmpStr(displayTitle(a), displayTitle(b));
+        const ta = displayTitle(a);
+        const tb = displayTitle(b);
+        if (ta === null && tb === null) return tie(a, b);
+        if (ta === null) return 1;
+        if (tb === null) return -1;
+        const d = cmpStr(ta, tb);
         return d !== 0 ? d : tie(a, b);
       }
       case 'turns': {
@@ -89,7 +111,7 @@ export function sortSidebarChats<T extends SidebarChatsSortable>(
       }
       case 'newest':
       default: {
-        const d = createdMs(b.last_active) - createdMs(a.last_active);
+        const d = compareTimes(createdMs(a.last_active), createdMs(b.last_active), true);
         return d !== 0 ? d : tie(a, b);
       }
     }

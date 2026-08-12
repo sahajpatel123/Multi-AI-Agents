@@ -213,6 +213,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Sidebar Chats: export resumable chats as Markdown, JSON, or CSV',
       '[IMPROVED] Sidebar Chats: exports escape markdown-sensitive text and CSV opens reliably in Excel',
       '[NEW] Sidebar Chats: sort chats by newest, oldest, title, or most turns',
+      '[IMPROVED] Sidebar Chats: chats with missing activity or title stay at the end in every sort order',
     ],
   },
   {
