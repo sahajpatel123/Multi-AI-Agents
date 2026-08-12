@@ -314,6 +314,7 @@ export function Sidebar({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const chatSearchInputRef = useRef<HTMLInputElement>(null);
   const savedSearchInputRef = useRef<HTMLInputElement>(null);
+  const bulkPinUnpinActionRef = useRef<boolean | null>(null);
 
   const winnerNameByAgentId = useMemo(() => {
     const map: Record<string, string> = {};
@@ -368,6 +369,13 @@ export function Sidebar({
     [...selectedChatIds].every((id) =>
       recentSessions.some((session) => session.session_id === id && session.pinned === true),
     );
+  const canBulkManageChats = Boolean(onBulkDeleteSessions || onBulkPinSessions);
+  const bulkChatsBusy =
+    bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy';
+  const bulkPinBusyTarget =
+    bulkPinChatsStatus === 'busy' && bulkPinUnpinActionRef.current !== null
+      ? bulkPinUnpinActionRef.current
+      : allSelectedChatsPinned;
 
   const filteredTurns = useMemo(() => {
     const byCategory = reversedTurns.filter(
@@ -1204,8 +1212,10 @@ export function Sidebar({
   };
 
   const toggleChatSelected = (sessionId: string) => {
+    if (bulkChatsBusy) return;
     setConfirmBulkDeleteChats(false);
     setBulkPinChatsStatus('idle');
+    bulkPinUnpinActionRef.current = null;
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
       if (next.has(sessionId)) {
@@ -1218,8 +1228,10 @@ export function Sidebar({
   };
 
   const toggleAllVisibleChats = () => {
+    if (bulkChatsBusy) return;
     setConfirmBulkDeleteChats(false);
     setBulkPinChatsStatus('idle');
+    bulkPinUnpinActionRef.current = null;
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
       for (const session of visibleChats) {
@@ -1234,8 +1246,10 @@ export function Sidebar({
   };
 
   const clearChatSelection = () => {
+    if (bulkChatsBusy) return;
     setConfirmBulkDeleteChats(false);
     setBulkPinChatsStatus('idle');
+    bulkPinUnpinActionRef.current = null;
     setSelectedChatIds(new Set());
   };
 
@@ -1267,6 +1281,7 @@ export function Sidebar({
     const ids = [...selectedChatIds];
     if (ids.length === 0) return;
     const pinned = !allSelectedChatsPinned;
+    bulkPinUnpinActionRef.current = allSelectedChatsPinned;
     setBulkPinChatsStatus('busy');
     try {
       const result = await onBulkPinSessions(ids, pinned);
@@ -1281,6 +1296,8 @@ export function Sidebar({
       setBulkPinChatsStatus('done');
     } catch {
       setBulkPinChatsStatus('failed');
+    } finally {
+      bulkPinUnpinActionRef.current = null;
     }
   };
 
@@ -1426,7 +1443,7 @@ export function Sidebar({
                       ? `${filteredChats.length} / ${recentSessions.length}`
                       : recentSessions.length}
                   </span>
-                  {onBulkDeleteSessions && visibleChats.length > 0 ? (
+                  {canBulkManageChats && visibleChats.length > 0 ? (
                     <button
                       type="button"
                       aria-label={
@@ -1440,11 +1457,12 @@ export function Sidebar({
                           : 'Select all visible chats'
                       }
                       onClick={toggleAllVisibleChats}
+                      disabled={bulkChatsBusy}
                       style={{
                         background: 'none',
                         border: '0.5px solid #E0D8D0',
                         borderRadius: 5,
-                        cursor: 'pointer',
+                        cursor: bulkChatsBusy ? 'default' : 'pointer',
                         color: allVisibleChatsSelected ? '#5A8C6A' : '#A0A39A',
                         padding: '3px 6px',
                         fontSize: 10,
@@ -1789,72 +1807,67 @@ export function Sidebar({
                       type="button"
                       aria-label="Cancel chat selection"
                       onClick={clearChatSelection}
-                      disabled={bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'}
+                      disabled={bulkChatsBusy}
                       style={{
                         padding: '4px 8px',
                         fontSize: 10,
                         borderRadius: 6,
                         color: '#A0A39A',
                         background: '#F0EBE3',
-                        cursor:
-                          bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'
-                            ? 'default'
-                            : 'pointer',
+                        cursor: bulkChatsBusy ? 'default' : 'pointer',
                         border: 'none',
                       }}
                     >
                       Cancel
                     </button>
-                    <button
-                      type="button"
-                      aria-label={
-                        allSelectedChatsPinned
-                          ? `Unpin ${selectedChatIds.size} selected chats`
-                          : `Pin ${selectedChatIds.size} selected chats`
-                      }
-                      onClick={() => void handleBulkPinChats()}
-                      disabled={bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'}
-                      style={{
-                        padding: '4px 8px',
-                        fontSize: 10,
-                        borderRadius: 6,
-                        color: '#FFFFFF',
-                        background: '#4A6FA5',
-                        cursor:
-                          bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'
-                            ? 'default'
-                            : 'pointer',
-                        border: 'none',
-                      }}
-                    >
-                      {bulkPinChatsStatus === 'busy'
-                        ? allSelectedChatsPinned
-                          ? 'Unpinning…'
-                          : 'Pinning…'
-                        : allSelectedChatsPinned
-                          ? 'Unpin'
-                          : 'Pin'}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Delete ${selectedChatIds.size} selected chats`}
-                      onClick={() => setConfirmBulkDeleteChats(true)}
-                      disabled={bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'}
-                      style={{
-                        padding: '4px 8px',
-                        fontSize: 10,
-                        borderRadius: 6,
-                        color: '#FFFFFF',
-                        background: '#C0392B',
-                        cursor:
-                          bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'
-                            ? 'default'
-                            : 'pointer',
-                        border: 'none',
-                      }}
-                    >
-                      {bulkDeleteChatsStatus === 'busy' ? 'Deleting…' : 'Delete'}
-                    </button>
+                    {onBulkPinSessions ? (
+                      <button
+                        type="button"
+                        aria-label={
+                          bulkPinBusyTarget
+                            ? `Unpin ${selectedChatIds.size} selected chats`
+                            : `Pin ${selectedChatIds.size} selected chats`
+                        }
+                        onClick={() => void handleBulkPinChats()}
+                        disabled={bulkChatsBusy}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          borderRadius: 6,
+                          color: '#FFFFFF',
+                          background: '#4A6FA5',
+                          cursor: bulkChatsBusy ? 'default' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        {bulkPinChatsStatus === 'busy'
+                          ? bulkPinBusyTarget
+                            ? 'Unpinning…'
+                            : 'Pinning…'
+                          : bulkPinBusyTarget
+                            ? 'Unpin'
+                            : 'Pin'}
+                      </button>
+                    ) : null}
+                    {onBulkDeleteSessions ? (
+                      <button
+                        type="button"
+                        aria-label={`Delete ${selectedChatIds.size} selected chats`}
+                        onClick={() => setConfirmBulkDeleteChats(true)}
+                        disabled={bulkChatsBusy}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          borderRadius: 6,
+                          color: '#FFFFFF',
+                          background: '#C0392B',
+                          cursor: bulkChatsBusy ? 'default' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        {bulkDeleteChatsStatus === 'busy' ? 'Deleting…' : 'Delete'}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -2232,12 +2245,12 @@ export function Sidebar({
                           gap: 6,
                         }}
                       >
-                        {onBulkDeleteSessions ? (
+                        {canBulkManageChats ? (
                           <input
                             type="checkbox"
                             aria-label={`Select chat: ${displayTitle}`}
                             checked={selectedChatIds.has(session.session_id)}
-                            disabled={bulkDeleteChatsStatus === 'busy'}
+                            disabled={bulkChatsBusy}
                             onChange={() => toggleChatSelected(session.session_id)}
                             style={{ flexShrink: 0, cursor: 'pointer' }}
                           />

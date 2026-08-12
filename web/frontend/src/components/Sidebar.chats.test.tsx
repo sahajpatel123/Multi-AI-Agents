@@ -97,7 +97,9 @@ function renderSidebar(overrides?: {
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
-  onBulkDeleteSessions?: (sessionIds: string[]) => number | null | Promise<number | null>;
+  onBulkDeleteSessions?:
+    | ((sessionIds: string[]) => number | null | Promise<number | null>)
+    | null;
   onBulkPinSessions?: (
     sessionIds: string[],
     pinned: boolean,
@@ -109,7 +111,10 @@ function renderSidebar(overrides?: {
 }) {
   const onSessionSelect = overrides?.onSessionSelect ?? vi.fn();
   const onDeleteSession = overrides?.onDeleteSession ?? vi.fn();
-  const onBulkDeleteSessions = overrides?.onBulkDeleteSessions ?? vi.fn(() => 2);
+  const onBulkDeleteSessions =
+    overrides?.onBulkDeleteSessions === undefined
+      ? vi.fn(() => 2)
+      : (overrides.onBulkDeleteSessions ?? undefined);
   const onBulkPinSessions = overrides?.onBulkPinSessions ?? vi.fn();
   const onClearSessions = overrides?.onClearSessions;
   const onRenameSession = overrides?.onRenameSession ?? vi.fn(() => true);
@@ -559,6 +564,109 @@ describe('Sidebar recent chats', () => {
       expect(screen.getByRole('alert')).toHaveTextContent(
         /could not update selected chats/i,
       ),
+    );
+  });
+
+  it('locks chat selection while a bulk pin is in flight', async () => {
+    let resolveBulkPin!: (value: BulkPinSessionsResult | null) => void;
+    const onBulkPinSessions = vi.fn(
+      () =>
+        new Promise<BulkPinSessionsResult | null>((resolve) => {
+          resolveBulkPin = resolve;
+        }),
+    );
+    renderSidebar({ onBulkPinSessions });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pin 2 selected chats' }),
+    );
+
+    await waitFor(() => expect(checkboxes[0]).toBeDisabled());
+    expect(checkboxes[1]).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Clear chat selection' }),
+    ).toBeDisabled();
+
+    resolveBulkPin({ updated: 2, updated_ids: ['chat-1', 'chat-2'] });
+    await waitFor(() => {
+      const statuses = screen.getAllByRole('status');
+      expect(
+        statuses.some((status) =>
+          status.textContent?.includes('Selected chats updated'),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('keeps the busy label on the intended pin action when parent state changes', async () => {
+    let resolveBulkPin!: (value: BulkPinSessionsResult | null) => void;
+    const onBulkPinSessions = vi.fn(
+      () =>
+        new Promise<BulkPinSessionsResult | null>((resolve) => {
+          resolveBulkPin = resolve;
+        }),
+    );
+    const { rerender } = renderSidebar({ onBulkPinSessions });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    const pinButton = screen.getByRole('button', {
+      name: 'Pin 2 selected chats',
+    });
+    fireEvent.click(pinButton);
+
+    await waitFor(() => expect(pinButton).toHaveTextContent('Pinning…'));
+    rerender([
+      {
+        ...(sessions[0] as SessionSummary),
+        pinned: true,
+      },
+      {
+        ...(sessions[1] as SessionSummary),
+        pinned: true,
+      },
+    ]);
+    expect(pinButton).toHaveTextContent('Pinning…');
+    expect(
+      screen.getByRole('button', { name: 'Pin 2 selected chats' }),
+    ).toBeInTheDocument();
+
+    resolveBulkPin({ updated: 2, updated_ids: ['chat-1', 'chat-2'] });
+    await waitFor(() => {
+      const statuses = screen.getAllByRole('status');
+      expect(
+        statuses.some((status) =>
+          status.textContent?.includes('Selected chats updated'),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('bulk pins selected chats when only the pin callback is provided', async () => {
+    const onBulkPinSessions = vi
+      .fn()
+      .mockResolvedValue({ updated: 1, updated_ids: ['chat-1'] });
+    renderSidebar({ onBulkPinSessions, onBulkDeleteSessions: null });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    expect(checkboxes).toHaveLength(2);
+    fireEvent.click(checkboxes[0]);
+    expect(
+      screen.getByRole('button', { name: 'Pin 1 selected chats' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Delete 1 selected chats/ }),
+    ).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pin 1 selected chats' }),
+    );
+    await waitFor(() =>
+      expect(onBulkPinSessions).toHaveBeenCalledWith(['chat-1'], true),
     );
   });
 
