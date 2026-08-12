@@ -317,13 +317,21 @@ async def duplicate_selected_sessions(
 
     sessions: list[dict] = []
     for sid in dict.fromkeys(body.session_ids):
+        state = store.get(sid)
+        # Same ownership gate as single-session duplicate and every other
+        # session route. duplicate_session also checks ownership, but its
+        # anonymous-session semantics are deliberately more permissive for
+        # claimable write paths; bulk fork must not become a way for an
+        # authenticated caller to fork an anonymous session by id.
+        if state is None or not _is_owner(state, user.id):
+            continue
         new_id = memory.short_term.duplicate_session(sid, user_id=str(user.id))
         if new_id is None:
             continue
-        state = store.get(new_id)
-        if state is None:
+        new_state = store.get(new_id)
+        if new_state is None:
             continue
-        sessions.append(_session_summary(new_id, state))
+        sessions.append(_session_summary(new_id, new_state))
 
     return {
         "status": "duplicated",

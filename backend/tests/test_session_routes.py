@@ -517,6 +517,33 @@ async def test_bulk_duplicate_rejects_empty_or_overlong_id_lists(
 
 
 @pytest.mark.asyncio
+async def test_bulk_duplicate_skips_anonymous_sessions(app_client, make_user):
+    """Bulk duplicate must not fork anonymous sessions for an authenticated
+    caller, matching the list/get/single-duplicate ownership oracle."""
+    user = make_user(email="sess-bulk-dup-anon@test.com", tier=UserTier.PRO)
+    memory = get_memory_manager()
+    state = memory.short_term._get_or_create_state("anon-bulk", user_id="anonymous")
+    state["session_data"] = _make_session("anonymous", session_id="anon-bulk")
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(user),
+        json={"session_ids": ["anon-bulk", "mine"]},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["duplicated"] == 1
+    assert len(body["sessions"]) == 1
+    assert body["sessions"][0]["session_id"] != "anon-bulk"
+
+    # The anonymous session remains untouched; only the owned fork was added.
+    store_ids = set(memory.short_term._store)
+    assert "anon-bulk" in store_ids
+    assert store_ids == {"anon-bulk", "mine", body["sessions"][0]["session_id"]}
+
+
+@pytest.mark.asyncio
 async def test_list_skips_malformed_state_without_session_data(app_client, make_user):
     """Listing must not 500 on a malformed state; it skips the broken row."""
     user = make_user(email="sess-list-broken@test.com", tier=UserTier.PRO)
