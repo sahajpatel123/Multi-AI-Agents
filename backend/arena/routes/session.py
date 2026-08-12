@@ -187,7 +187,7 @@ async def rename_session(
     if state is None or not _is_owner(state, user.id):
         raise HTTPException(
             status_code=404,
-            detail={"error": "not_found", "message": "Session not found"},
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Session not found"},
         )
 
     state["session_title"] = body.title

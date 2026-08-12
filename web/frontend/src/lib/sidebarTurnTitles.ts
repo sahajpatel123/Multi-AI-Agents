@@ -28,6 +28,11 @@ export const SIDEBAR_TURN_TITLE_MAX = 120;
 
 export type SidebarTurnTitleIssue = 'title_required' | 'title_too_long' | null;
 
+/** Collapse whitespace and cap length the same way titles are persisted. */
+export function cleanSidebarTurnTitle(title: string): string {
+  return (title || '').replace(/\s+/g, ' ').trim().slice(0, SIDEBAR_TURN_TITLE_MAX);
+}
+
 export function validateSidebarTurnTitle(title: string): SidebarTurnTitleIssue {
   const t = (title || '').trim();
   if (!t) return 'title_required';
@@ -52,7 +57,7 @@ function sanitizeMap(raw: unknown): Record<string, string> {
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (typeof k !== 'string' || !k.trim()) continue;
     if (typeof v !== 'string') continue;
-    const title = v.replace(/\s+/g, ' ').trim().slice(0, SIDEBAR_TURN_TITLE_MAX);
+    const title = cleanSidebarTurnTitle(v);
     if (!title) continue;
     out[k] = title;
     if (Object.keys(out).length >= MAX_ENTRIES) break;
@@ -84,7 +89,7 @@ export function saveSidebarTurnTitle(
   if (!id) return { ...current };
 
   const next = { ...current };
-  const clean = (title || '').replace(/\s+/g, ' ').trim().slice(0, SIDEBAR_TURN_TITLE_MAX);
+  const clean = cleanSidebarTurnTitle(title);
   if (!clean) {
     delete next[id];
   } else {

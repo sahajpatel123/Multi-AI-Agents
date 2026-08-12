@@ -88,7 +88,7 @@ function renderSidebar(overrides?: {
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
-  onRenameSession?: (sessionId: string, title: string) => boolean;
+  onRenameSession?: (sessionId: string, title: string) => boolean | Promise<boolean>;
 }) {
   const onSessionSelect = overrides?.onSessionSelect ?? vi.fn();
   const onDeleteSession = overrides?.onDeleteSession ?? vi.fn();
@@ -155,6 +155,61 @@ describe('Sidebar recent chats', () => {
 
     await waitFor(() =>
       expect(onRenameSession).toHaveBeenCalledWith('chat-1', 'Launch plan review'),
+    );
+  });
+
+  it('normalizes whitespace before saving a chat title', async () => {
+    const { onRenameSession } = renderSidebar();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rename session' })[0]);
+
+    const input = screen.getByRole('textbox', { name: 'Rename chat' });
+    fireEvent.change(input, { target: { value: 'Launch \n  plan\treview' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(onRenameSession).toHaveBeenCalledWith('chat-1', 'Launch plan review'),
+    );
+  });
+
+  it('does not close a second rename editor while an earlier save is pending', async () => {
+    let resolveFirst!: (value: boolean) => void;
+    let resolveSecond!: (value: boolean) => void;
+    const firstSave = new Promise<boolean>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondSave = new Promise<boolean>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const onRenameSession = vi.fn((sessionId: string) =>
+      sessionId === 'chat-1' ? firstSave : secondSave,
+    );
+    renderSidebar({ onRenameSession });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rename session' })[0]);
+    const firstInput = screen.getByRole('textbox', { name: 'Rename chat' });
+    fireEvent.change(firstInput, { target: { value: 'First title' } });
+    fireEvent.keyDown(firstInput, { key: 'Enter' });
+
+    // The second chat card is still interactive while the first save is in flight.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rename session' })[0]);
+    const secondInput = screen.getByRole('textbox', { name: 'Rename chat' });
+    fireEvent.change(secondInput, { target: { value: 'Second title' } });
+
+    resolveFirst(true);
+    await waitFor(() =>
+      expect(onRenameSession).toHaveBeenCalledWith('chat-1', 'First title'),
+    );
+    expect(screen.getByRole('textbox', { name: 'Rename chat' })).toHaveValue(
+      'Second title',
+    );
+
+    fireEvent.keyDown(secondInput, { key: 'Enter' });
+    await waitFor(() =>
+      expect(onRenameSession).toHaveBeenCalledWith('chat-2', 'Second title'),
+    );
+    resolveSecond(true);
+    await waitFor(() =>
+      expect(screen.queryByRole('textbox', { name: 'Rename chat' })).toBeNull(),
     );
   });
 

@@ -205,6 +205,23 @@ async def test_rename_updates_session_title_in_list(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_rename_collapses_internal_whitespace(app_client, make_user):
+    user = make_user(email="sess-rename-space@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.patch(
+        "/api/session/mine",
+        headers=_pro_headers(user),
+        json={"title": "Launch \n  plan\treview"},
+    )
+    assert res.status_code == 200
+    assert res.json()["title"] == "Launch plan review"
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert listing.json()["sessions"][0]["title"] == "Launch plan review"
+
+
+@pytest.mark.asyncio
 async def test_rename_404_for_foreign_session(app_client, make_user):
     alice = make_user(email="sess-rename-a@test.com", tier=UserTier.PRO)
     bob = make_user(email="sess-rename-b@test.com", tier=UserTier.PRO)
@@ -216,6 +233,7 @@ async def test_rename_404_for_foreign_session(app_client, make_user):
         json={"title": "Not mine"},
     )
     assert res.status_code == 404
+    assert res.json()["detail"]["error"] == "not_found"
 
     listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
     assert listing.json()["sessions"][0]["title"] is None

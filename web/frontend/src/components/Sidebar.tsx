@@ -98,6 +98,7 @@ import {
 } from '../lib/agentHistoryRecencyFilter';
 import {
   SIDEBAR_TURN_TITLE_MAX,
+  cleanSidebarTurnTitle,
   loadSidebarTurnTitles,
   saveSidebarTurnTitle,
   sidebarTurnTitleIssueMessage,
@@ -221,7 +222,7 @@ export function Sidebar({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionValue, setEditingSessionValue] = useState('');
   const [sessionRenameError, setSessionRenameError] = useState<string | null>(null);
-  const [sessionRenameBusy, setSessionRenameBusy] = useState(false);
+  const [sessionRenameBusyId, setSessionRenameBusyId] = useState<string | null>(null);
   const [customTitles, setCustomTitles] = useState<Record<string, string>>(() =>
     loadSidebarTurnTitles(),
   );
@@ -229,7 +230,8 @@ export function Sidebar({
   const [deletedTurnIds, setDeletedTurnIds] = useState<Set<string>>(new Set());
   const renameCancelledRef = useRef(false);
   const sessionRenameCancelledRef = useRef(false);
-  const sessionRenameSavingRef = useRef(false);
+  const sessionRenameEditingIdRef = useRef<string | null>(null);
+  const sessionRenameSavingIdsRef = useRef<Set<string>>(new Set());
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -748,6 +750,7 @@ export function Sidebar({
     setConfirmDeleteTurnId(null);
     setEditingTurnId(null);
     sessionRenameCancelledRef.current = true;
+    sessionRenameEditingIdRef.current = null;
     setEditingSessionId(null);
     setEditingSessionValue('');
     setSessionRenameError(null);
@@ -788,6 +791,7 @@ export function Sidebar({
 
   const startSessionRename = (session: SessionSummary) => {
     sessionRenameCancelledRef.current = false;
+    sessionRenameEditingIdRef.current = session.session_id;
     setEditingSessionId(session.session_id);
     setEditingSessionValue(
       session.title || session.last_prompt || session.primary_topic || '',
@@ -797,34 +801,48 @@ export function Sidebar({
 
   const cancelSessionRename = () => {
     sessionRenameCancelledRef.current = true;
+    sessionRenameEditingIdRef.current = null;
     setEditingSessionId(null);
     setEditingSessionValue('');
     setSessionRenameError(null);
   };
 
   const saveSessionRename = async (sessionId: string) => {
-    if (sessionRenameCancelledRef.current || sessionRenameSavingRef.current) return;
-    const nextValue = editingSessionValue.trim();
-    const issue = validateSidebarTurnTitle(nextValue);
+    if (sessionRenameCancelledRef.current || sessionRenameSavingIdsRef.current.has(sessionId)) {
+      return;
+    }
+    const issue = validateSidebarTurnTitle(editingSessionValue);
     if (issue) {
       setSessionRenameError(sidebarTurnTitleIssueMessage(issue));
       sessionRenameInputRef.current?.focus();
       return;
     }
-    sessionRenameSavingRef.current = true;
-    setSessionRenameBusy(true);
-    const ok = (await onRenameSession?.(sessionId, nextValue)) !== false;
-    sessionRenameSavingRef.current = false;
-    setSessionRenameBusy(false);
+    const nextValue = cleanSidebarTurnTitle(editingSessionValue);
+    sessionRenameSavingIdsRef.current.add(sessionId);
+    setSessionRenameBusyId(sessionId);
+    let ok: boolean;
+    try {
+      ok = (await onRenameSession?.(sessionId, nextValue)) !== false;
+    } catch {
+      ok = false;
+    } finally {
+      sessionRenameSavingIdsRef.current.delete(sessionId);
+      setSessionRenameBusyId((current) => (current === sessionId ? null : current));
+    }
     if (!ok) {
-      setSessionRenameError('Could not rename this chat. Please try again.');
-      sessionRenameInputRef.current?.focus();
+      if (sessionRenameEditingIdRef.current === sessionId) {
+        setSessionRenameError('Could not rename this chat. Please try again.');
+        sessionRenameInputRef.current?.focus();
+      }
       return;
     }
-    sessionRenameCancelledRef.current = true;
-    setEditingSessionId(null);
-    setEditingSessionValue('');
-    setSessionRenameError(null);
+    if (sessionRenameEditingIdRef.current === sessionId) {
+      sessionRenameCancelledRef.current = true;
+      sessionRenameEditingIdRef.current = null;
+      setEditingSessionId(null);
+      setEditingSessionValue('');
+      setSessionRenameError(null);
+    }
   };
 
   const deleteTurn = (turnId: string) => {
@@ -989,7 +1007,7 @@ export function Sidebar({
                             {sessionRenameError}
                           </p>
                         ) : null}
-                        {sessionRenameBusy ? (
+                        {sessionRenameBusyId === session.session_id ? (
                           <p
                             style={{
                               margin: '4px 8px 0',
