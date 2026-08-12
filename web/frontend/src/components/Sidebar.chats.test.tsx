@@ -133,6 +133,9 @@ function renderSidebar(overrides?: {
         sessionIds: string[],
       ) => BulkDuplicateSessionsResult | null | Promise<BulkDuplicateSessionsResult | null>)
     | null;
+  onBulkExportTranscripts?:
+    | ((sessionIds: string[]) => number | null | Promise<number | null> | void)
+    | null;
   onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (sessionId: string, title: string) => boolean | Promise<boolean>;
   onToggleSessionPin?: (sessionId: string, pinned: boolean) => boolean | Promise<boolean>;
@@ -149,6 +152,10 @@ function renderSidebar(overrides?: {
     overrides?.onBulkDuplicateSessions === undefined
       ? vi.fn(() => ({ duplicated: 0, sessions: [] }))
       : (overrides.onBulkDuplicateSessions ?? undefined);
+  const onBulkExportTranscripts =
+    overrides?.onBulkExportTranscripts === undefined
+      ? vi.fn(() => 2)
+      : (overrides.onBulkExportTranscripts ?? undefined);
   const onClearSessions = overrides?.onClearSessions;
   const onRenameSession = overrides?.onRenameSession ?? vi.fn(() => true);
   const onToggleSessionPin = overrides?.onToggleSessionPin ?? vi.fn(() => true);
@@ -171,6 +178,7 @@ function renderSidebar(overrides?: {
       onBulkDeleteSessions={onBulkDeleteSessions}
       onBulkPinSessions={onBulkPinSessions}
       onBulkDuplicateSessions={onBulkDuplicateSessions}
+      onBulkExportTranscripts={onBulkExportTranscripts}
       onClearSessions={onClearSessions}
       onRenameSession={onRenameSession}
       onToggleSessionPin={onToggleSessionPin}
@@ -183,6 +191,7 @@ function renderSidebar(overrides?: {
     onBulkDeleteSessions,
     onBulkPinSessions,
     onBulkDuplicateSessions,
+    onBulkExportTranscripts,
     onClearSessions,
     onRenameSession,
     onToggleSessionPin,
@@ -206,6 +215,7 @@ function renderSidebar(overrides?: {
           onBulkDeleteSessions={onBulkDeleteSessions}
           onBulkPinSessions={onBulkPinSessions}
           onBulkDuplicateSessions={onBulkDuplicateSessions}
+          onBulkExportTranscripts={onBulkExportTranscripts}
           onClearSessions={onClearSessions}
           onRenameSession={onRenameSession}
           onToggleSessionPin={onToggleSessionPin}
@@ -846,6 +856,65 @@ describe('Sidebar recent chats', () => {
         screen.getByRole('button', { name: 'Copied 1 selected chat' }),
       ).toBeInTheDocument(),
     );
+  });
+
+  it('exports only the selected chats as full transcripts', async () => {
+    const onBulkExportTranscripts = vi.fn(() => 1);
+    renderSidebar({ onBulkExportTranscripts });
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chat as transcripts',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(onBulkExportTranscripts).toHaveBeenCalledWith(['chat-1']),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Exported 1 selected chat as transcripts',
+        }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('surfaces a partial full-transcript export honestly', async () => {
+    renderSidebar({
+      onBulkExportTranscripts: vi.fn(() => Promise.resolve(1)),
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 2 selected chats as transcripts',
+      }),
+    );
+
+    await waitFor(() => {
+      const statuses = screen.getAllByRole('status');
+      expect(
+        statuses.some((status) =>
+          status.textContent?.includes(
+            'Some selected chat transcripts could not be exported',
+          ),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('hides the full-transcript export control when no callback is provided', () => {
+    renderSidebar({ onBulkExportTranscripts: null });
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    expect(
+      screen.queryByRole('button', {
+        name: 'Export 1 selected chat as transcripts',
+      }),
+    ).toBeNull();
   });
 
   it('ignores a second copy click while the first copy is in flight', async () => {

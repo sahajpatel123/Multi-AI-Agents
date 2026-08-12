@@ -5,6 +5,7 @@ import {
   formatArenaCsvExport,
   formatArenaJsonExport,
   formatArenaTranscriptExport,
+  formatArenaTranscriptsExport,
   formatArenaTranscriptCsvExport,
   formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
@@ -639,6 +640,103 @@ describe('copyArenaTranscriptToClipboard', () => {
     });
     const ok = await copyArenaTranscriptToClipboard([], () => ({ name: 'The Analyst' }));
     expect(ok).toBe(false);
+  });
+});
+
+describe('formatArenaTranscriptsExport', () => {
+  const turn: SessionTurn = {
+    turn_id: 't1',
+    prompt: 'Should we ship this week?',
+    prompt_category: 'question',
+    winner_id: 'agent_1',
+    timestamp: '2026-08-07T10:00:00Z',
+    agent_responses: {
+      agent_1: {
+        agent_id: 'agent_1',
+        agent_number: 1,
+        one_liner: 'Ship the smallest honest slice.',
+        verdict: 'Ship a thin vertical.',
+        confidence: 0.9,
+        key_assumption: 'quality bar is fixed',
+        timestamp: '2026-08-07T10:00:00Z',
+      },
+    },
+  };
+
+  it('combines multiple full transcripts into one indexed archive', () => {
+    const md = formatArenaTranscriptsExport(
+      [
+        {
+          sessionId: 'chat-1',
+          title: 'Launch plan',
+          turns: [turn],
+        },
+        {
+          sessionId: 'chat-2',
+          title: 'Roadmap review',
+          turns: [
+            {
+              ...turn,
+              turn_id: 't2',
+              prompt: 'Who owns the checklist?',
+              winner_id: 'agent_2',
+              agent_responses: {
+                agent_2: {
+                  agent_id: 'agent_2',
+                  agent_number: 2,
+                  one_liner: 'Name a single owner.',
+                  verdict: 'Assign one accountable owner.',
+                  confidence: 0.8,
+                  key_assumption: 'ownership beats committee',
+                  timestamp: '2026-08-07T10:05:00Z',
+                },
+              },
+            },
+          ],
+        },
+      ],
+      (id) => ({ name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher' }),
+      { exportedAt: '2026-08-07T12:00:00.000Z' },
+    );
+
+    expect(md).toContain('# Arena — selected chat transcripts');
+    expect(md).toContain('**Chats:** 2');
+    expect(md).toContain('**Exported:** 2026-08-07T12:00:00.000Z');
+    expect(md).toContain('## 1. Launch plan');
+    expect(md).toContain('## 2. Roadmap review');
+    expect(md).toContain('**Session:** chat-1');
+    expect(md).toContain('**Session:** chat-2');
+    expect(md).toContain('**Question:** Should we ship this week?');
+    expect(md).toContain('**Question:** Who owns the checklist?');
+    expect(md).toContain('### The Analyst · winner · confidence 0.9');
+    expect(md).toContain('### The Philosopher · winner · confidence 0.8');
+    expect(md).toContain('---');
+    expect(md.trimEnd().endsWith('_Shared from Arena_')).toBe(true);
+  });
+
+  it('falls back to session id and handles empty transcripts honestly', () => {
+    const md = formatArenaTranscriptsExport(
+      [
+        { sessionId: 'chat-1', turns: [] },
+        { sessionId: 'chat-2', turns: [turn] },
+      ],
+      () => ({ name: 'The Analyst' }),
+      { exportedAt: '2026-08-07T12:00:00.000Z' },
+    );
+
+    expect(md).toContain('## 1. chat-1');
+    expect(md).toContain('_No exchanges in this session yet._');
+    expect(md).toContain('## 2. chat-2');
+    expect(md).toContain('### The Analyst · winner · confidence 0.9');
+  });
+
+  it('returns a valid empty archive when no bundles are provided', () => {
+    const md = formatArenaTranscriptsExport([], () => ({ name: 'The Analyst' }), {
+      exportedAt: '2026-08-07T12:00:00.000Z',
+    });
+    expect(md).toContain('# Arena — selected chat transcripts');
+    expect(md).toContain('**Chats:** 0');
+    expect(md).toContain('_Shared from Arena_');
   });
 });
 

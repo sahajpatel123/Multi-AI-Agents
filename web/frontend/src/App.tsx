@@ -52,6 +52,7 @@ import {
   formatArenaJsonExport,
   copyArenaTranscriptToClipboard,
   formatArenaTranscriptExport,
+  formatArenaTranscriptsExport,
   formatArenaTranscriptCsvExport,
   formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
@@ -1180,6 +1181,41 @@ function App() {
     return result;
   }, []);
 
+  const handleBulkExportChatTranscripts = useCallback(
+    async (sessionIds: string[]) => {
+      if (sessionIds.length === 0) return null;
+      const bundles: Array<{
+        sessionId: string;
+        title: string | null;
+        turns: SessionTurn[];
+      }> = [];
+      for (const sessionId of sessionIds) {
+        const session = await getSession(sessionId);
+        if (!session) continue;
+        const summary = recentSessions.find(
+          (candidate) => candidate.session_id === sessionId,
+        );
+        bundles.push({
+          sessionId: session.session_id,
+          title:
+            summary?.title || session.topics?.[0] || null,
+          turns: session.turns || [],
+        });
+      }
+      if (bundles.length === 0) return null;
+      const md = formatArenaTranscriptsExport(bundles, resolveArenaPersona);
+      const ok = downloadMarkdownFile(md, 'arena-selected-chats-transcripts');
+      if (ok) {
+        void track('arena_selected_chats_transcripts_exported', undefined, undefined, {
+          count: bundles.length,
+          requested: sessionIds.length,
+        });
+      }
+      return ok ? bundles.length : null;
+    },
+    [recentSessions, resolveArenaPersona],
+  );
+
   const handleClearSessions = useCallback(async () => {
     const cleared = await clearAllSessions();
     if (cleared === null) return null;
@@ -1973,6 +2009,7 @@ function App() {
           onBulkDeleteSessions={handleBulkDeleteSessions}
           onBulkPinSessions={handleBulkPinSessions}
           onBulkDuplicateSessions={handleBulkDuplicateSessions}
+          onBulkExportTranscripts={handleBulkExportChatTranscripts}
           onClearSessions={handleClearSessions}
           onRenameSession={handleRenameSession}
           onToggleSessionPin={handleToggleSessionPin}

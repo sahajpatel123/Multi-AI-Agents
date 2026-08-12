@@ -13,6 +13,15 @@ export type ArenaTranscriptOptions = {
   sessionId?: string;
 };
 
+export type ArenaTranscriptBundle = {
+  /** Source session id, kept for provenance when available. */
+  sessionId?: string | null;
+  /** Optional user-facing title used in the combined archive index. */
+  title?: string | null;
+  /** Full stored turn list for one resumable chat. */
+  turns: SessionTurn[];
+};
+
 /**
  * Pick the winning scored take from an Arena response.
  * Prefers `is_winner`, then `winner_agent_id`, then highest score.
@@ -183,6 +192,50 @@ export async function copyArenaTranscriptToClipboard(
   opts?: ArenaTranscriptOptions,
 ): Promise<boolean> {
   return copyToClipboard(formatArenaTranscriptExport(turns, resolvePersona, opts));
+}
+
+/**
+ * Portable markdown archive of several full chat transcripts in one file.
+ * Each chat is rendered with the same transcript formatter used by the
+ * Arena view, prefixed by an index section so the combined export stays
+ * scannable and keeps provenance for every included session.
+ */
+export function formatArenaTranscriptsExport(
+  bundles: ArenaTranscriptBundle[],
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: { exportedAt?: string },
+): string {
+  const chats = (bundles || []).filter(
+    (bundle) => bundle && Array.isArray(bundle.turns),
+  );
+  const lines: string[] = [
+    '# Arena — selected chat transcripts',
+    '',
+    `**Chats:** ${chats.length}`,
+    `**Exported:** ${opts?.exportedAt || new Date().toISOString()}`,
+    '',
+  ];
+
+  chats.forEach((bundle, index) => {
+    const title =
+      (bundle.title || '').trim() || bundle.sessionId || `Chat ${index + 1}`;
+    lines.push(`## ${index + 1}. ${title}`, '');
+    const transcript = formatArenaTranscriptExport(
+      bundle.turns,
+      resolvePersona,
+      {
+        sessionId: bundle.sessionId || undefined,
+        exportedAt: opts?.exportedAt,
+      },
+    );
+    lines.push(transcript.trim());
+    if (index < chats.length - 1) {
+      lines.push('', '---', '');
+    }
+  });
+
+  lines.push('', '---', '_Shared from Arena_');
+  return lines.join('\n').trim() + '\n';
 }
 
 /**
