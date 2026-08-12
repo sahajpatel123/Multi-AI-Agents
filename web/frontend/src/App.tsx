@@ -26,6 +26,7 @@ import {
   deleteSession,
   clearAllSessions,
   renameSession,
+  setSessionPin,
   saveMemory,
   getSavedResponses,
   saveResponse,
@@ -1146,6 +1147,21 @@ function App() {
     [],
   );
 
+  const handleToggleSessionPin = useCallback(
+    async (sessionId: string, pinned: boolean) => {
+      const updated = await setSessionPin(sessionId, pinned);
+      if (!updated) return false;
+      setRecentSessions((prev) =>
+        prev.map((session) =>
+          session.session_id === sessionId ? { ...session, pinned } : session,
+        ),
+      );
+      void track('recent_chat_pinned', undefined, sessionId, { pinned });
+      return true;
+    },
+    [],
+  );
+
   const handleSubmit = async (
     prompt: string,
     followUpContext?: PromptContextItem[],
@@ -1876,6 +1892,7 @@ function App() {
           }}
           onClearSessions={handleClearSessions}
           onRenameSession={handleRenameSession}
+          onToggleSessionPin={handleToggleSessionPin}
         />
       )}
 

@@ -208,6 +208,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Discuss/Debate: End jumps to latest; Sidebar Recents/Saved times refresh live',
       '[NEW] Sidebar Chats: clear all resumable chats with inline confirmation',
       '[IMPROVED] Sidebar Chats: clear-all distinguishes failures from zero-count clears and starts fresh',
+      '[NEW] Sidebar Chats: pin important chats to the top of the list',
     ],
   },
   {

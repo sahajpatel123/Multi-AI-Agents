@@ -90,11 +90,13 @@ function renderSidebar(overrides?: {
   onDeleteSession?: (sessionId: string) => void;
   onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (sessionId: string, title: string) => boolean | Promise<boolean>;
+  onToggleSessionPin?: (sessionId: string, pinned: boolean) => boolean | Promise<boolean>;
 }) {
   const onSessionSelect = overrides?.onSessionSelect ?? vi.fn();
   const onDeleteSession = overrides?.onDeleteSession ?? vi.fn();
   const onClearSessions = overrides?.onClearSessions;
   const onRenameSession = overrides?.onRenameSession ?? vi.fn(() => true);
+  const onToggleSessionPin = overrides?.onToggleSessionPin ?? vi.fn(() => true);
   render(
     <Sidebar
       turns={[]}
@@ -112,9 +114,16 @@ function renderSidebar(overrides?: {
       onDeleteSession={onDeleteSession}
       onClearSessions={onClearSessions}
       onRenameSession={onRenameSession}
+      onToggleSessionPin={onToggleSessionPin}
     />,
   );
-  return { onSessionSelect, onDeleteSession, onClearSessions, onRenameSession };
+  return {
+    onSessionSelect,
+    onDeleteSession,
+    onClearSessions,
+    onRenameSession,
+    onToggleSessionPin,
+  };
 }
 
 describe('Sidebar recent chats', () => {
@@ -262,6 +271,49 @@ describe('Sidebar recent chats', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Delete session' })[0]);
     expect(onDeleteSession).toHaveBeenCalledWith('chat-1');
     expect(onSessionSelect).not.toHaveBeenCalled();
+  });
+
+  it('pins a chat without opening it', () => {
+    const { onSessionSelect, onToggleSessionPin } = renderSidebar();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin session' })[0]);
+    expect(onToggleSessionPin).toHaveBeenCalledWith('chat-1', true);
+    expect(onSessionSelect).not.toHaveBeenCalled();
+  });
+
+  it('unpins a chat through its pin button', () => {
+    const { onToggleSessionPin } = renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          pinned: true,
+        },
+        sessions[1] as SessionSummary,
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Unpin session' }));
+    expect(onToggleSessionPin).toHaveBeenCalledWith('chat-1', false);
+  });
+
+  it('keeps pinned chats at the top of the list', () => {
+    renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          pinned: true,
+          last_prompt: 'Pinned launch plan',
+        },
+        {
+          ...(sessions[1] as SessionSummary),
+          last_prompt: 'Newest unpinned chat',
+        },
+      ],
+    });
+    const openButtons = screen.getAllByRole('button', { name: /Open session/ });
+    expect(openButtons[0]).toHaveAttribute('aria-label', 'Open session: Pinned launch plan');
+    expect(openButtons[1]).toHaveAttribute(
+      'aria-label',
+      'Open session: Newest unpinned chat',
+    );
   });
 
   it('clears all chats only after inline confirmation', async () => {

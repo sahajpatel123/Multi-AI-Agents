@@ -6552,12 +6552,16 @@ canvas {
     box-shadow 150ms var(--ease-btn);
 }
 
-.session-card--deletable .session-card__main {
+.session-card--actions-1 .session-card__main {
   padding-right: 36px;
 }
 
-.session-card--deletable.session-card--renamable .session-card__main {
+.session-card--actions-2 .session-card__main {
   padding-right: 66px;
+}
+
+.session-card--actions-3 .session-card__main {
+  padding-right: 96px;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -6649,12 +6653,22 @@ canvas {
   font-variant-numeric: tabular-nums;
 }
 
-.session-card__delete,
-.session-card__rename {
+.session-card__actions {
   position: absolute;
   right: 6px;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-hover-ms) var(--ease-btn);
+}
+
+.session-card__delete,
+.session-card__rename,
+.session-card__pin {
   width: 28px;
   height: 28px;
   display: inline-flex;
@@ -6667,10 +6681,7 @@ canvas {
   cursor: pointer;
   padding: 0;
   font-family: inherit;
-  opacity: 0;
-  pointer-events: none;
   transition:
-    opacity var(--motion-hover-ms) var(--ease-btn),
     color var(--motion-hover-ms) var(--ease-btn),
     background var(--motion-hover-ms) var(--ease-btn),
     border-color var(--motion-hover-ms) var(--ease-btn),
@@ -6678,56 +6689,55 @@ canvas {
     box-shadow var(--motion-lift-ms) var(--ease-out-premium);
 }
 
-.session-card__rename {
-  right: 38px;
+.session-card__pin[aria-pressed='true'] {
+  color: #b87a44;
+  border-color: rgba(184, 122, 68, 0.42);
+  background: #fbf1e4;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .session-card__delete:hover,
-  .session-card__rename:hover {
+  .session-card__rename:hover,
+  .session-card__pin:hover {
     color: #993c1d;
     border-color: rgba(153, 60, 29, 0.28);
     background: #fcf0ee;
     box-shadow: 0 2px 8px rgba(153, 60, 29, 0.12);
   }
 
-  .session-card__delete:active {
-    transform: translateY(-50%) scale(0.92);
-  }
-
-  .session-card__rename:active {
-    transform: translateY(-50%) scale(0.92);
+  .session-card__delete:active,
+  .session-card__rename:active,
+  .session-card__pin:active {
+    transform: scale(0.92);
   }
 }
 
 /* Reveal delete on hover, keyboard focus, or touch (always on coarse pointers). */
 @media (hover: hover) and (pointer: fine) {
-  .session-card:hover .session-card__delete,
-  .session-card:hover .session-card__rename,
-  .session-card:focus-within .session-card__delete,
-  .session-card:focus-within .session-card__rename {
+  .session-card:hover .session-card__actions,
+  .session-card:focus-within .session-card__actions {
     opacity: 1;
     pointer-events: auto;
   }
 }
 
 @media (hover: none), (pointer: coarse) {
-  .session-card__delete,
-  .session-card__rename {
+  .session-card__actions {
     opacity: 1;
     pointer-events: auto;
   }
 }
 
-.session-card:focus-within .session-card__delete,
-.session-card:focus-within .session-card__rename {
+.session-card:focus-within .session-card__actions,
+.session-card__actions:focus-within {
   opacity: 1;
   pointer-events: auto;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .session-card__delete:hover,
-  .session-card__rename:hover {
+  .session-card__rename:hover,
+  .session-card__pin:hover {
     color: #993c1d;
     background: #fcf0ee;
     border-color: rgba(240, 153, 123, 0.55);
@@ -6735,9 +6745,8 @@ canvas {
 }
 
 .session-card__delete:focus-visible,
-.session-card__rename:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
+.session-card__rename:focus-visible,
+.session-card__pin:focus-visible {
   outline: 2px solid #c4956a;
   outline-offset: 1px;
   color: #993c1d;
@@ -6746,8 +6755,10 @@ canvas {
 @media (prefers-reduced-motion: reduce) {
   .session-card,
   .session-card__main,
+  .session-card__actions,
   .session-card__delete,
-  .session-card__rename {
+  .session-card__rename,
+  .session-card__pin {
     transition: none !important;
   }
 }

@@ -274,6 +274,98 @@ async def test_rename_rejects_overlong_title(app_client, make_user):
     assert res.status_code == 422
 
 
+# ─── Pin / unpin ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_pin_marks_session_in_list(app_client, make_user):
+    user = make_user(email="sess-pin@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.patch(
+        "/api/session/mine/pin",
+        headers=_pro_headers(user),
+        json={"pinned": True},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "pinned",
+        "session_id": "mine",
+        "pinned": True,
+    }
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert listing.json()["sessions"][0]["pinned"] is True
+
+
+@pytest.mark.asyncio
+async def test_unpin_clears_session_flag(app_client, make_user):
+    user = make_user(email="sess-unpin@test.com", tier=UserTier.PRO)
+    state = _seed_in_memory(user.id, session_id="mine")
+    state["session_pinned"] = True
+
+    res = await app_client.patch(
+        "/api/session/mine/pin",
+        headers=_pro_headers(user),
+        json={"pinned": False},
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "unpinned"
+    assert res.json()["pinned"] is False
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert listing.json()["sessions"][0]["pinned"] is False
+
+
+@pytest.mark.asyncio
+async def test_unpinned_sessions_default_to_false_in_list(app_client, make_user):
+    user = make_user(email="sess-pin-default@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert listing.json()["sessions"][0]["pinned"] is False
+
+
+@pytest.mark.asyncio
+async def test_pin_404_for_foreign_session(app_client, make_user):
+    alice = make_user(email="sess-pin-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-pin-b@test.com", tier=UserTier.PRO)
+    _seed_in_memory(alice.id, session_id="alice-1")
+
+    res = await app_client.patch(
+        "/api/session/alice-1/pin",
+        headers=_pro_headers(bob),
+        json={"pinned": True},
+    )
+    assert res.status_code == 404
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    assert listing.json()["sessions"][0]["pinned"] is False
+
+
+@pytest.mark.asyncio
+async def test_pin_404_for_missing_session(app_client, make_user):
+    user = make_user(email="sess-pin-miss@test.com", tier=UserTier.PRO)
+    res = await app_client.patch(
+        "/api/session/never-existed/pin",
+        headers=_pro_headers(user),
+        json={"pinned": True},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_pin_rejects_non_boolean_body(app_client, make_user):
+    user = make_user(email="sess-pin-bool@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+    res = await app_client.patch(
+        "/api/session/mine/pin",
+        headers=_pro_headers(user),
+        json={"pinned": "not-a-boolean"},
+    )
+    assert res.status_code == 422
+
+
 # ─── Delete single ──────────────────────────────────────────────────────────
 
 
@@ -365,6 +457,7 @@ async def test_session_endpoints_require_auth(app_client):
     for method, path in [
         ("GET", "/api/sessions"),
         ("PATCH", "/api/session/x"),
+        ("PATCH", "/api/session/x/pin"),
         ("DELETE", "/api/session/x"),
         ("DELETE", "/api/sessions"),
     ]:

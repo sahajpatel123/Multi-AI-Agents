@@ -146,6 +146,10 @@ interface SidebarProps {
     sessionId: string,
     title: string,
   ) => Promise<boolean> | boolean | void;
+  onToggleSessionPin?: (
+    sessionId: string,
+    pinned: boolean,
+  ) => Promise<boolean> | boolean | void;
 }
 
 type FilterValue = 'all' | PromptCategory;
@@ -179,6 +183,7 @@ export function Sidebar({
   onDeleteSession,
   onClearSessions,
   onRenameSession,
+  onToggleSessionPin,
 }: SidebarProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -266,16 +271,23 @@ export function Sidebar({
     [turns, deletedTurnIds],
   );
 
+  const sortedChats = useMemo(
+    () =>
+      [...recentSessions].sort(
+        (a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)),
+      ),
+    [recentSessions],
+  );
   const filteredChats = useMemo(
-    () => filterSessionsBySearchQuery(recentSessions, chatSearchQuery),
-    [recentSessions, chatSearchQuery],
+    () => filterSessionsBySearchQuery(sortedChats, chatSearchQuery),
+    [sortedChats, chatSearchQuery],
   );
   const isChatSearchActive = chatSearchQuery.trim().length > 0;
   const visibleChats = isChatSearchActive
     ? filteredChats
     : showAllChats
-      ? recentSessions
-      : recentSessions.slice(0, 5);
+      ? sortedChats
+      : sortedChats.slice(0, 5);
 
   const filteredTurns = useMemo(() => {
     const byCategory = reversedTurns.filter(
@@ -1297,6 +1309,17 @@ export function Sidebar({
                               }
                             : undefined
                         }
+                        onPin={
+                          onToggleSessionPin
+                            ? () => {
+                                void onToggleSessionPin(
+                                  session.session_id,
+                                  !(session.pinned === true),
+                                );
+                              }
+                            : undefined
+                        }
+                        pinned={session.pinned === true}
                         messageCount={session.turn_count}
                       />
                     );

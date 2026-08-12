@@ -33,6 +33,12 @@ class RenameSessionRequest(BaseModel):
         return " ".join(cleaned.split())
 
 
+class PinSessionRequest(BaseModel):
+    """Body for pinning / unpinning a live session in the sidebar."""
+
+    pinned: bool
+
+
 # In-memory sessions are stored as raw dicts in MemoryManager._store.
 # Each entry has a `session_data` (SessionData) and we need to project
 # a small summary for the list endpoint so the response stays tiny.
@@ -141,6 +147,7 @@ async def list_sessions(
             "primary_topic": topics[0] if topics else None,
             "last_prompt": turns[-1].prompt if turns else None,
             "turn_count": len(turns),
+            "pinned": bool(state.get("session_pinned", False)),
             "last_active": session_data.last_active.isoformat()
             if getattr(session_data, "last_active", None)
             else None,
@@ -192,6 +199,45 @@ async def rename_session(
 
     state["session_title"] = body.title
     return {"status": "renamed", "session_id": session_id, "title": body.title}
+
+
+@router.patch("/session/{session_id}/pin")
+async def set_session_pin(
+    session_id: str,
+    body: PinSessionRequest,
+    user: UserResponse = Depends(get_current_user_required),
+) -> dict:
+    """Pin or unpin one of the caller's live in-memory sessions.
+
+    Pinned chats are surfaced first in the sidebar so users can keep
+    important threads within reach. The flag lives on the same session
+    state dict as the custom title, so it disappears along with the
+    session when the in-memory chat is cleared or compressed.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="session_pin",
+        limit=60,
+        window_seconds=60,
+        message="Too many session pin updates. Please slow down.",
+    )
+    memory = get_memory_manager()
+    store = getattr(memory, "short_term", None)
+    store = getattr(store, "_store", {}) if store is not None else {}
+
+    state = store.get(session_id)
+    if state is None or not _is_owner(state, user.id):
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Session not found"},
+        )
+
+    state["session_pinned"] = body.pinned
+    return {
+        "status": "pinned" if body.pinned else "unpinned",
+        "session_id": session_id,
+        "pinned": body.pinned,
+    }
 
 
 @router.delete("/session/{session_id}")

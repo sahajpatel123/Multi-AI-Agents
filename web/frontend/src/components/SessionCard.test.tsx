@@ -123,6 +123,19 @@ describe('SessionCard', () => {
     expect(queryByRole('button', { name: /Rename session/ })).toBeNull();
   });
 
+  it('does not show pin button when onPin is not provided', () => {
+    const { queryByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+      />,
+    );
+    expect(queryByRole('button', { name: /Pin session/ })).toBeNull();
+  });
+
   it('fires onRename without firing onClick', () => {
     const onClick = vi.fn();
     const onRename = vi.fn();
@@ -139,6 +152,58 @@ describe('SessionCard', () => {
     fireEvent.click(getByRole('button', { name: /Rename session/ }));
     expect(onRename).toHaveBeenCalledTimes(1);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('fires onPin without firing onClick', () => {
+    const onClick = vi.fn();
+    const onPin = vi.fn();
+    const { getByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={onClick}
+        onPin={onPin}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /Pin session/ }));
+    expect(onPin).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('reflects the pinned state in the pin button', () => {
+    const { getByRole, rerender } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+        onPin={() => {}}
+        pinned
+      />,
+    );
+    expect(getByRole('button', { name: /Unpin session/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    rerender(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+        onPin={() => {}}
+        pinned={false}
+      />,
+    );
+    expect(getByRole('button', { name: /Pin session/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('fires onDelete without firing onClick', () => {

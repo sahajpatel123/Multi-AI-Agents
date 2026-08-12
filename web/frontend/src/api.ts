@@ -927,6 +927,8 @@ export interface SessionSummary {
   primary_topic: string | null;
   last_prompt: string | null;
   turn_count: number;
+  /** Whether the user pinned this chat to the top of the sidebar. */
+  pinned?: boolean;
   last_active: string | null;
 }
 
@@ -976,6 +978,22 @@ export async function renameSession(sessionId: string, title: string): Promise<b
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title }),
     });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function setSessionPin(sessionId: string, pinned: boolean): Promise<boolean> {
+  try {
+    const response = await apiFetch(
+      `/api/session/${encodeURIComponent(sessionId)}/pin`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned }),
+      },
+    );
     return response.ok;
   } catch {
     return false;

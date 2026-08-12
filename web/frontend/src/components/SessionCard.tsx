@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pencil, X } from 'lucide-react';
+import { Pencil, Pin, X } from 'lucide-react';
 import { AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
 
@@ -17,6 +17,10 @@ interface SessionCardProps {
   onDelete?: () => void;
   /** Optional rename affordance — opens the sidebar's inline title editor. */
   onRename?: () => void;
+  /** Optional pin affordance — keeps this chat at the top of the sidebar. */
+  onPin?: () => void;
+  /** Whether this chat is currently pinned. */
+  pinned?: boolean;
   /** Optional count of saved/messages/etc. rendered in the meta line. */
   messageCount?: number;
   onClick: () => void;
@@ -32,12 +36,15 @@ export function SessionCard({
   onClick,
   onDelete,
   onRename,
+  onPin,
+  pinned = false,
   messageCount,
 }: SessionCardProps) {
   const winnerConfig = AGENTS[winnerAgentId || ''];
   const winnerName = winnerConfig?.name || 'Arena chat';
   const timeAgo = formatTimeAgo(timestamp);
   const promptPreview = prompt.trim() || 'Untitled session';
+  const actionCount = [onPin, onRename, onDelete].filter(Boolean).length;
 
   return (
     <div
@@ -46,6 +53,8 @@ export function SessionCard({
         isActive ? 'session-card--active' : '',
         onDelete || onRename ? 'session-card--deletable' : '',
         onRename ? 'session-card--renamable' : '',
+        onPin ? 'session-card--pinnable' : '',
+        actionCount > 0 ? `session-card--actions-${actionCount}` : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -83,35 +92,59 @@ export function SessionCard({
         </div>
       </button>
 
-      {onRename ? (
-        <button
-          type="button"
-          className="session-card__rename"
-          aria-label="Rename session"
-          title="Rename session"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRename();
-          }}
-        >
-          <Pencil width={12} height={12} strokeWidth={2} aria-hidden />
-        </button>
-      ) : null}
+      <div className="session-card__actions">
+        {onPin ? (
+          <button
+            type="button"
+            className="session-card__pin"
+            aria-label={pinned ? 'Unpin session' : 'Pin session'}
+            aria-pressed={pinned}
+            title={pinned ? 'Unpin session' : 'Pin session'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPin();
+            }}
+          >
+            <Pin
+              width={12}
+              height={12}
+              strokeWidth={2}
+              aria-hidden
+              fill={pinned ? 'currentColor' : 'none'}
+            />
+          </button>
+        ) : null}
 
-      {onDelete ? (
-        <button
-          type="button"
-          className="session-card__delete"
-          aria-label="Delete session"
-          title="Delete session"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-        >
-          <X width={12} height={12} strokeWidth={2} aria-hidden />
-        </button>
-      ) : null}
+        {onRename ? (
+          <button
+            type="button"
+            className="session-card__rename"
+            aria-label="Rename session"
+            title="Rename session"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRename();
+            }}
+          >
+            <Pencil width={12} height={12} strokeWidth={2} aria-hidden />
+          </button>
+        ) : null}
+
+        {onDelete ? (
+          <button
+            type="button"
+            className="session-card__delete"
+            aria-label="Delete session"
+            title="Delete session"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            <X width={12} height={12} strokeWidth={2} aria-hidden />
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
