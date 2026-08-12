@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Combined transcript exports (Markdown and JSON) share one exported-at
+  timestamp across the archive header/envelope and every included chat, and
+  archive loading follows the fetched session id for provenance while
+  deduplicating aliased selections
 - Combined transcript copy/export archives sanitize the session-id heading
   fallback, so even unusual ids keep the Markdown well-formed
 - Combined transcript export fetches selected sessions in bounded parallel

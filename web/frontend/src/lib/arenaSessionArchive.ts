@@ -23,7 +23,9 @@ const DEFAULT_SESSION_FETCH_CONCURRENCY = 4;
  * serial chain: a large selection exports far faster, while the concurrency
  * cap keeps the sidebar from firing dozens of session requests at once.
  * Fetches that return null or reject are skipped, so the resulting archive
- * is still produced for every chat that could be loaded.
+ * is still produced for every chat that could be loaded. Provenance and
+ * deduplication follow the session id the fetcher actually returned, so
+ * requested ids that alias the same chat cannot duplicate entries.
  */
 export async function loadSessionTranscriptBundles(
   sessionIds: string[],
@@ -34,10 +36,14 @@ export async function loadSessionTranscriptBundles(
   const ids = Array.from(
     new Set(Array.isArray(sessionIds) ? sessionIds : []),
   );
+  const summariesById = new Map(
+    summaries.map((summary) => [summary.session_id, summary]),
+  );
   const limit = Number.isFinite(concurrency)
     ? Math.max(1, Math.floor(concurrency))
     : 1;
   const bundles: ArenaTranscriptBundle[] = [];
+  const seenSessionIds = new Set<string>();
 
   for (let start = 0; start < ids.length; start += limit) {
     const batch = ids.slice(start, start + limit);
@@ -45,11 +51,10 @@ export async function loadSessionTranscriptBundles(
       batch.map(async (sessionId) => {
         const session = await fetcher(sessionId);
         if (!session) return null;
-        const summary = summaries.find(
-          (candidate) => candidate.session_id === sessionId,
-        );
+        const actualId = session.session_id || sessionId;
+        const summary = summariesById.get(actualId);
         return {
-          sessionId: session.session_id,
+          sessionId: actualId,
           title: summary?.title || session.topics?.[0] || null,
           turns: session.turns || [],
         } satisfies ArenaTranscriptBundle;
@@ -58,6 +63,8 @@ export async function loadSessionTranscriptBundles(
 
     for (const result of results) {
       if (result.status === 'fulfilled' && result.value) {
+        if (seenSessionIds.has(result.value.sessionId)) continue;
+        seenSessionIds.add(result.value.sessionId);
         bundles.push(result.value);
       }
     }

@@ -101,4 +101,26 @@ describe('loadSessionTranscriptBundles', () => {
     expect(peak).toBeLessThanOrEqual(2);
     expect(fetcher).toHaveBeenCalledTimes(5);
   });
+
+  it('uses the returned session id for provenance and deduplicates aliased requests', async () => {
+    const fetcher = vi.fn((sessionId: string) => {
+      if (sessionId === 'chat-1' || sessionId === 'chat-1-alias') {
+        return Promise.resolve(makeSession('chat-1', ['Canonical plan']));
+      }
+      return Promise.resolve(makeSession('chat-2'));
+    });
+
+    const bundles = await loadSessionTranscriptBundles(
+      ['chat-1-alias', 'chat-2', 'chat-1'],
+      fetcher,
+      [{ session_id: 'chat-1', title: 'Canonical title' }],
+    );
+
+    expect(bundles.map((bundle) => bundle.sessionId)).toEqual([
+      'chat-1',
+      'chat-2',
+    ]);
+    expect(bundles[0]?.title).toBe('Canonical title');
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
 });

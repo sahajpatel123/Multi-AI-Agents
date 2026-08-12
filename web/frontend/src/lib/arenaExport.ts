@@ -224,7 +224,8 @@ export async function copyArenaTranscriptsToClipboard(
  * Portable markdown archive of several full chat transcripts in one file.
  * Each chat is rendered with the same transcript formatter used by the
  * Arena view, prefixed by an index section so the combined export stays
- * scannable and keeps provenance for every included session.
+ * scannable and keeps provenance for every included session. The archive
+ * header and every included transcript share the same exported-at timestamp.
  */
 export function formatArenaTranscriptsExport(
   bundles: ArenaTranscriptBundle[],
@@ -234,11 +235,12 @@ export function formatArenaTranscriptsExport(
   const chats = (bundles || []).filter(
     (bundle) => bundle && Array.isArray(bundle.turns),
   );
+  const exportedAt = opts?.exportedAt || new Date().toISOString();
   const lines: string[] = [
     '# Arena — selected chat transcripts',
     '',
     `**Chats:** ${chats.length}`,
-    `**Exported:** ${opts?.exportedAt || new Date().toISOString()}`,
+    `**Exported:** ${exportedAt}`,
     '',
   ];
 
@@ -253,7 +255,7 @@ export function formatArenaTranscriptsExport(
       resolvePersona,
       {
         sessionId: bundle.sessionId || undefined,
-        exportedAt: opts?.exportedAt,
+        exportedAt,
       },
     );
     lines.push(transcript.trim());
@@ -364,7 +366,8 @@ export function formatArenaTranscriptJsonExport(
  *
  * Deterministic except for the optional exported-at timestamp: pass
  * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
- * the current UTC ISO timestamp.
+ * the current UTC ISO timestamp. The archive envelope and every included
+ * transcript share the same exported-at timestamp.
  */
 export function formatArenaTranscriptsJsonExport(
   bundles: ArenaTranscriptBundle[],
@@ -374,11 +377,12 @@ export function formatArenaTranscriptsJsonExport(
   const chats = (bundles || []).filter(
     (bundle) => bundle && Array.isArray(bundle.turns),
   );
+  const exportedAt = opts?.exportedAt || new Date().toISOString();
   const data = {
     exported_from: 'arena',
     export_type: 'selected_chat_transcripts',
     format_version: 1,
-    exported_at: opts?.exportedAt || new Date().toISOString(),
+    exported_at: exportedAt,
     chat_count: chats.length,
     chats: chats.map((bundle, index) => {
       const title =
@@ -391,7 +395,7 @@ export function formatArenaTranscriptsJsonExport(
         title,
         transcript: buildArenaTranscriptJson(bundle.turns, resolvePersona, {
           sessionId: bundle.sessionId || undefined,
-          exportedAt: opts?.exportedAt,
+          exportedAt,
         }),
       };
     }),

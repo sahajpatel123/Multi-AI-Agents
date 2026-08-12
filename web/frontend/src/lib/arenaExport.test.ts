@@ -789,6 +789,22 @@ describe('formatArenaTranscriptsExport', () => {
     expect(md).toContain('## 1. weird id');
     expect(md).not.toContain('## 1. # weird');
   });
+
+  it('shares one exported timestamp across the header and every chat', () => {
+    const md = formatArenaTranscriptsExport(
+      [
+        { sessionId: 'chat-1', title: 'Launch plan', turns: [turn] },
+        { sessionId: 'chat-2', title: 'Roadmap review', turns: [turn] },
+      ],
+      () => ({ name: 'The Analyst' }),
+    );
+
+    const exportedLines = md
+      .split('\n')
+      .filter((line) => line.startsWith('**Exported:**'));
+    expect(exportedLines).toHaveLength(3);
+    expect(new Set(exportedLines).size).toBe(1);
+  });
 });
 
 describe('copyArenaTranscriptsToClipboard', () => {
@@ -1161,7 +1177,11 @@ describe('formatArenaTranscriptsJsonExport', () => {
       export_type: 'session_transcript',
       session_id: 'chat-1',
       exchange_count: 1,
+      exported_at: '2026-08-07T12:00:00.000Z',
     });
+    expect(parsed.chats[1].transcript.exported_at).toBe(
+      '2026-08-07T12:00:00.000Z',
+    );
     expect(parsed.chats[0].transcript.exchanges[0].takes[0]).toMatchObject({
       agent_id: 'agent_1',
       agent_name: 'The Analyst',
@@ -1221,5 +1241,31 @@ describe('formatArenaTranscriptsJsonExport', () => {
     );
     expect(sparse.chat_count).toBe(1);
     expect(sparse.chats[0].session_id).toBe('chat-9');
+  });
+
+  it('shares one exported-at timestamp across the envelope and every chat', () => {
+    const parsed = JSON.parse(
+      formatArenaTranscriptsJsonExport(
+        [
+          {
+            sessionId: 'chat-1',
+            title: 'Launch plan',
+            turns: bundleTurns,
+          },
+          {
+            sessionId: 'chat-2',
+            title: 'Roadmap review',
+            turns: bundleTurns,
+          },
+        ],
+        () => ({ name: 'The Analyst' }),
+      ),
+    );
+
+    const innerTimes = parsed.chats.map(
+      (chat: { transcript: { exported_at: string } }) =>
+        chat.transcript.exported_at,
+    );
+    expect(new Set([parsed.exported_at, ...innerTimes]).size).toBe(1);
   });
 });

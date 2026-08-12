@@ -1001,6 +1001,102 @@ describe('Sidebar recent chats', () => {
     ).toBeNull();
   });
 
+  it('ignores a second JSON transcript export click while the first is in flight', async () => {
+    let resolveExport: (count: number | null) => void = () => {};
+    const onBulkExportTranscriptsJson = vi.fn(
+      () =>
+        new Promise<number | null>((resolve) => {
+          resolveExport = resolve;
+        }),
+    );
+    renderSidebar({ onBulkExportTranscriptsJson });
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chat as JSON transcripts',
+      }),
+    );
+
+    const busyButton = await screen.findByRole('button', {
+      name: 'Exporting 1 selected chat transcript as JSON…',
+    });
+    expect(busyButton).toBeDisabled();
+    fireEvent.click(busyButton);
+
+    resolveExport(1);
+    await waitFor(() =>
+      expect(onBulkExportTranscriptsJson).toHaveBeenCalledTimes(1),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Exported 1 selected chat as JSON transcripts',
+        }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('surfaces a failure when the JSON transcript export is blocked', async () => {
+    renderSidebar({
+      onBulkExportTranscriptsJson: vi.fn(() => null),
+    });
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chat as JSON transcripts',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Selected chat transcript JSON export failed',
+        }),
+      ).toBeInTheDocument(),
+    );
+    const statuses = screen.getAllByRole('status');
+    expect(
+      statuses.some((status) =>
+        status.textContent?.includes(
+          'Could not export selected chat transcripts as JSON',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('resets JSON transcript export feedback when the selection changes after a success', async () => {
+    renderSidebar({ onBulkExportTranscriptsJson: vi.fn(() => 1) });
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chat as JSON transcripts',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Exported 1 selected chat as JSON transcripts',
+        }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[1]);
+    expect(
+      screen.getByRole('button', {
+        name: 'Export 2 selected chats as JSON transcripts',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', {
+        name: /Exported .* selected chat.* as JSON transcripts/,
+      }),
+    ).toBeNull();
+  });
+
   it('copies only the selected chats as full transcripts', async () => {
     const onBulkCopyTranscripts = vi.fn(() => 1);
     renderSidebar({ onBulkCopyTranscripts });
