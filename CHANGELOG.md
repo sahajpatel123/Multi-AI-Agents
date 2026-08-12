@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sidebar resumable chat bulk copy: copy selected chats to the clipboard as Markdown
 - Sidebar resumable chat bulk delete: select individual chats or all visible,
   then remove them with one confirmed request
 - Sidebar resumable chat bulk pin/unpin: flip the pin flag for every selected

@@ -310,6 +310,12 @@ export function Sidebar({
   const [bulkExportedChatsCount, setBulkExportedChatsCount] = useState<number | null>(
     null,
   );
+  const [bulkCopyChatsStatus, setBulkCopyChatsStatus] = useState<
+    'idle' | 'copied' | 'failed'
+  >('idle');
+  const [bulkCopiedChatsCount, setBulkCopiedChatsCount] = useState<number | null>(
+    null,
+  );
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -769,6 +775,16 @@ export function Sidebar({
     return () => window.clearTimeout(t);
   }, [bulkExportChatsJsonStatus, bulkExportChatsCsvStatus]);
 
+  useEffect(() => {
+    if (bulkCopyChatsStatus === 'idle') return;
+    const hold = motionDuration(bulkCopyChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => {
+      setBulkCopyChatsStatus('idle');
+      setBulkCopiedChatsCount(null);
+    }, hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [bulkCopyChatsStatus]);
+
   // Keep the stored filter in sync with reality: drop the pinned-only view
   // when the last pinned chat is unpinned and normalize any stale value.
   // Rendering uses `activeChatsPinFilter`, so this effect is only cleanup.
@@ -1054,6 +1070,30 @@ export function Sidebar({
       .filter((session) => selectedChatIds.has(session.session_id))
       .map(toArenaChatExportItem);
 
+  const handleBulkCopyChats = async () => {
+    const items = buildSelectedChatsItems();
+    setBulkExportChatsStatus('idle');
+    setBulkExportChatsJsonStatus('idle');
+    setBulkExportChatsCsvStatus('idle');
+    if (items.length === 0) {
+      setBulkCopiedChatsCount(null);
+      setBulkCopyChatsStatus('failed');
+      return;
+    }
+    const md = formatArenaChatsExport({
+      totalCount: items.length,
+      items,
+    });
+    const ok = await copyToClipboard(md);
+    setBulkCopiedChatsCount(ok ? items.length : null);
+    setBulkCopyChatsStatus(ok ? 'copied' : 'failed');
+    if (ok) {
+      void track('arena_selected_chats_copied', undefined, undefined, {
+        count: items.length,
+      });
+    }
+  };
+
   const handleCopyChats = async () => {
     const md = formatArenaChatsExport({
       totalCount: recentSessions.length,
@@ -1103,6 +1143,8 @@ export function Sidebar({
   };
 
   const handleBulkExportChats = () => {
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
     const items = buildSelectedChatsItems();
     if (items.length === 0) {
       // The selection toolbar may still reference chats that no longer
@@ -1131,6 +1173,8 @@ export function Sidebar({
   };
 
   const handleBulkExportChatsJson = () => {
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
     const items = buildSelectedChatsItems();
     if (items.length === 0) {
       setBulkExportedChatsCount(null);
@@ -1159,6 +1203,8 @@ export function Sidebar({
   };
 
   const handleBulkExportChatsCsv = () => {
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
     const items = buildSelectedChatsItems();
     if (items.length === 0) {
       setBulkExportedChatsCount(null);
@@ -1256,6 +1302,8 @@ export function Sidebar({
     setBulkExportChatsJsonStatus('idle');
     setBulkExportChatsCsvStatus('idle');
     setBulkExportedChatsCount(null);
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
   };
 
   const handleNewChatClick = () => {
@@ -2112,6 +2160,39 @@ export function Sidebar({
                     <button
                       type="button"
                       aria-label={
+                        bulkCopyChatsStatus === 'copied'
+                          ? `Copied ${bulkCopiedChatsCount ?? selectedChatIds.size} selected chats`
+                          : bulkCopyChatsStatus === 'failed'
+                            ? 'Selected chat copy failed'
+                            : `Copy ${selectedChatIds.size} selected chats as markdown`
+                      }
+                      title="Copy selected chats as markdown"
+                      onClick={() => void handleBulkCopyChats()}
+                      disabled={bulkChatsBusy}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 10,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background:
+                          bulkCopyChatsStatus === 'failed'
+                            ? '#D85A30'
+                            : bulkCopyChatsStatus === 'copied'
+                              ? '#5A8C6A'
+                              : '#8C7355',
+                        cursor: bulkChatsBusy ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {bulkCopyChatsStatus === 'copied'
+                        ? 'Copied'
+                        : bulkCopyChatsStatus === 'failed'
+                          ? 'Failed'
+                          : 'Copy'}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={
                         bulkExportChatsStatus === 'done'
                           ? `Exported ${bulkExportedChatsCount ?? selectedChatIds.size} selected chats`
                           : bulkExportChatsStatus === 'failed'
@@ -2474,6 +2555,7 @@ export function Sidebar({
                 bulkPinChatsStatus !== 'busy') ||
               (bulkDuplicateChatsStatus !== 'idle' &&
                 bulkDuplicateChatsStatus !== 'busy') ||
+              bulkCopyChatsStatus !== 'idle' ||
               bulkExportChatsStatus !== 'idle' ||
               bulkExportChatsJsonStatus !== 'idle' ||
               bulkExportChatsCsvStatus !== 'idle' ||
@@ -2496,11 +2578,15 @@ export function Sidebar({
                     border: 0,
                   }}
                 >
-                  {copyChatsStatus === 'copied'
-                    ? 'Arena chats copied to clipboard'
-                    : copyChatsStatus === 'failed'
-                      ? 'Could not copy Arena chats'
-                      : bulkPinChatsStatus === 'partial'
+                  {bulkCopyChatsStatus === 'copied'
+                    ? `${bulkCopiedChatsCount ?? selectedChatIds.size} ${(bulkCopiedChatsCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} copied to clipboard`
+                    : bulkCopyChatsStatus === 'failed'
+                      ? 'Could not copy selected chats'
+                      : copyChatsStatus === 'copied'
+                        ? 'Arena chats copied to clipboard'
+                        : copyChatsStatus === 'failed'
+                          ? 'Could not copy Arena chats'
+                          : bulkPinChatsStatus === 'partial'
                         ? 'Some selected chats could not be updated'
                         : bulkPinChatsStatus === 'done'
                           ? 'Selected chats updated'

@@ -20,6 +20,10 @@ vi.mock('../lib/downloadTextFile', async () => {
   };
 });
 
+vi.mock('../lib/clipboard', () => ({
+  copyToClipboard: vi.fn().mockResolvedValue(true),
+}));
+
 type MinimalSidebarTurn = {
   turn_id: string;
   prompt: string;
@@ -814,6 +818,51 @@ describe('Sidebar recent chats', () => {
     await waitFor(() =>
       expect(
         screen.getByRole('button', { name: 'Exported 1 selected chats' }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('copies only the selected chats as markdown', async () => {
+    renderSidebar();
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy 1 selected chats as markdown',
+      }),
+    );
+
+    const { copyToClipboard } = await import('../lib/clipboard');
+    await waitFor(() =>
+      expect(copyToClipboard).toHaveBeenCalledWith(
+        expect.stringContaining('## 1. Should we launch today?'),
+      ),
+    );
+    const copied = vi.mocked(copyToClipboard).mock.calls[0]?.[0];
+    expect(copied).toContain('Chat `chat-1`');
+    expect(copied).not.toContain('Chat `chat-2`');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Copied 1 selected chats' }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('announces a failure when copying selected chats is blocked', async () => {
+    const { copyToClipboard } = await import('../lib/clipboard');
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderSidebar();
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy 1 selected chats as markdown',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Selected chat copy failed' }),
       ).toBeInTheDocument(),
     );
   });
