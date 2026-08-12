@@ -3,6 +3,7 @@ import {
   filterBySearchQuery,
   filterSessionsBySearchQuery,
   filterTurnsBySearchQuery,
+  findTopicOnlyMatch,
 } from './sidebarSearch';
 
 const turns = [
@@ -95,5 +96,38 @@ describe('filterSessionsBySearchQuery', () => {
 
   it('returns empty when nothing matches', () => {
     expect(filterSessionsBySearchQuery(sessions, 'quantum')).toEqual([]);
+  });
+});
+
+describe('findTopicOnlyMatch', () => {
+  const session = {
+    session_id: 'chat-1',
+    title: 'Launch plan review',
+    topics: ['launch', 'marketing'],
+    primary_topic: 'launch',
+    last_prompt: 'Should we ship today?',
+  };
+
+  it('returns null for an empty query', () => {
+    expect(findTopicOnlyMatch(session, '')).toBeNull();
+    expect(findTopicOnlyMatch(session, '   ')).toBeNull();
+  });
+
+  it('returns null when the displayed fields already contain the query', () => {
+    expect(findTopicOnlyMatch(session, 'plan')).toBeNull();
+    expect(findTopicOnlyMatch(session, 'ship')).toBeNull();
+    expect(findTopicOnlyMatch(session, 'LAUNCH')).toBeNull();
+  });
+
+  it('returns the first topic that matches when only the topic list matches', () => {
+    expect(findTopicOnlyMatch(session, 'marketing')).toBe('marketing');
+  });
+
+  it('matches topic case-insensitively and handles missing topic arrays', () => {
+    expect(findTopicOnlyMatch({ ...session, topics: ['SEO', 'Ads'] }, 'seo')).toBe('SEO');
+    expect(
+      findTopicOnlyMatch({ ...session, topics: undefined }, 'marketing'),
+    ).toBeNull();
+    expect(findTopicOnlyMatch({ ...session, topics: [] }, 'marketing')).toBeNull();
   });
 });

@@ -133,7 +133,9 @@ describe('Sidebar recent chats', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
       target: { value: 'launch' },
     });
-    expect(screen.getByText(/Should we launch today/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Open session: Should we launch today/ }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Untitled chat')).toBeNull();
   });
 
@@ -153,8 +155,57 @@ describe('Sidebar recent chats', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
       target: { value: 'roadmap' },
     });
-    expect(screen.getByText('Roadmap review')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Open session: Roadmap review/ })).toBeInTheDocument();
     expect(screen.queryByText('Draft copy')).toBeNull();
+  });
+
+  it('highlights the query in matching chat cards', () => {
+    renderSidebar();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
+      target: { value: 'launch' },
+    });
+    const marks = document.querySelectorAll('.session-card__prompt mark');
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toHaveTextContent('launch');
+  });
+
+  it('explains when a chat matches only through its topic list', () => {
+    renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          title: 'Q3 plan',
+          primary_topic: 'planning',
+          topics: ['planning', 'marketing'],
+          last_prompt: 'Review the roadmap',
+        },
+      ],
+    });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
+      target: { value: 'marketing' },
+    });
+    expect(screen.getByRole('button', { name: /Open session: Q3 plan/ })).toBeInTheDocument();
+    expect(screen.getByText(/topic: marketing/)).toBeInTheDocument();
+  });
+
+  it('does not show a topic hint when the visible title already matches', () => {
+    renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          title: 'Marketing launch review',
+          topics: ['marketing'],
+          primary_topic: 'marketing',
+        },
+      ],
+    });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
+      target: { value: 'marketing' },
+    });
+    expect(
+      screen.getByRole('button', { name: /Open session: Marketing launch review/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/topic: marketing/)).toBeNull();
   });
 
   it('shows a no-results message and restores chats after clearing', () => {

@@ -40,6 +40,7 @@ import {
   filterBySearchQuery,
   filterSessionsBySearchQuery,
   filterTurnsBySearchQuery,
+  findTopicOnlyMatch,
 } from '../lib/sidebarSearch';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from '../lib/downloadTextFile';
@@ -1055,6 +1056,9 @@ export function Sidebar({
                       session.last_prompt ||
                       session.primary_topic ||
                       'Untitled chat';
+                    const topicOnlyMatch = isChatSearchActive
+                      ? findTopicOnlyMatch(session, chatSearchQuery)
+                      : null;
                     if (editingSessionId === session.session_id) {
                       return (
                         <div
@@ -1123,6 +1127,12 @@ export function Sidebar({
                       <SessionCard
                         key={session.session_id}
                         prompt={displayTitle}
+                        promptNode={
+                          isChatSearchActive ? (
+                            <HighlightQuery text={displayTitle} query={chatSearchQuery} />
+                          ) : undefined
+                        }
+                        matchTopic={topicOnlyMatch}
                         winnerAgentId=""
                         timestamp={session.last_active || ''}
                         isActive={session.session_id === activeSessionId}

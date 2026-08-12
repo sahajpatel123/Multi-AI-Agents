@@ -6632,6 +6632,15 @@ canvas {
   flex-shrink: 0;
 }
 
+.session-card__topic-match {
+  color: #6b6460;
+  opacity: 0.75;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-card__time {
   color: #6b6460;
   opacity: 0.65;

@@ -18,6 +18,38 @@ describe('SessionCard', () => {
     expect(getByText(/Should we ship this feature/)).toBeInTheDocument();
   });
 
+  it('renders a prompt node in place of the plain prompt text', () => {
+    const { container, getByRole } = render(
+      <SessionCard
+        prompt="Roadmap review"
+        promptNode={<mark>Roadmap review</mark>}
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+      />,
+    );
+    expect(container.querySelector('.session-card__prompt mark')).toHaveTextContent(
+      'Roadmap review',
+    );
+    expect(getByRole('button', { name: /Open session: Roadmap review/ })).toBeInTheDocument();
+  });
+
+  it('renders a topic match label in the meta line', () => {
+    const { getByText } = render(
+      <SessionCard
+        prompt="Q3 plan"
+        matchTopic="marketing"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+        messageCount={3}
+      />,
+    );
+    expect(getByText(/topic: marketing/)).toBeInTheDocument();
+  });
+
   it('fires onClick when the card body is clicked', () => {
     const onClick = vi.fn();
     const { getByRole } = render(

@@ -1,9 +1,14 @@
+import type { ReactNode } from 'react';
 import { Pencil, X } from 'lucide-react';
 import { AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
 
 interface SessionCardProps {
   prompt: string;
+  /** Optional rendered prompt content (e.g. search highlights). Takes precedence over `prompt` for display; the accessible label still uses the plain text. */
+  promptNode?: ReactNode;
+  /** Optional topic that explains a search match that is not visible in the prompt line. */
+  matchTopic?: string | null;
   /** Winner agent slot id. Omit for session rows that predate a winner mapping. */
   winnerAgentId?: string;
   timestamp: string;
@@ -19,6 +24,8 @@ interface SessionCardProps {
 
 export function SessionCard({
   prompt,
+  promptNode,
+  matchTopic,
   winnerAgentId,
   timestamp,
   isActive,
@@ -50,7 +57,7 @@ export function SessionCard({
         aria-pressed={isActive}
         aria-label={`Open session: ${promptPreview}`}
       >
-        <p className="session-card__prompt">{promptPreview}</p>
+        <p className="session-card__prompt">{promptNode ?? promptPreview}</p>
         <div className="session-card__meta">
           <div className="session-card__winner">
             {winnerConfig && winnerAgentId ? (
@@ -61,6 +68,9 @@ export function SessionCard({
             <span className="session-card__winner-name">{winnerName}</span>
             {messageCount !== undefined && messageCount > 0 ? (
               <span className="session-card__count">· {messageCount} msg</span>
+            ) : null}
+            {matchTopic ? (
+              <span className="session-card__topic-match">· topic: {matchTopic}</span>
             ) : null}
           </div>
           {timeAgo ? (
