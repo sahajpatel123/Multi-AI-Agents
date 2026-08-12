@@ -179,6 +179,83 @@ async def test_list_row_includes_last_prompt(app_client, make_user):
     assert row["turn_count"] == 1
 
 
+# ─── Rename ────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_rename_updates_session_title_in_list(app_client, make_user):
+    user = make_user(email="sess-rename@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.patch(
+        "/api/session/mine",
+        headers=_pro_headers(user),
+        json={"title": "   Launch plan review  "},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "renamed",
+        "session_id": "mine",
+        "title": "Launch plan review",
+    }
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    row = listing.json()["sessions"][0]
+    assert row["title"] == "Launch plan review"
+
+
+@pytest.mark.asyncio
+async def test_rename_404_for_foreign_session(app_client, make_user):
+    alice = make_user(email="sess-rename-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-rename-b@test.com", tier=UserTier.PRO)
+    _seed_in_memory(alice.id, session_id="alice-1")
+
+    res = await app_client.patch(
+        "/api/session/alice-1",
+        headers=_pro_headers(bob),
+        json={"title": "Not mine"},
+    )
+    assert res.status_code == 404
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    assert listing.json()["sessions"][0]["title"] is None
+
+
+@pytest.mark.asyncio
+async def test_rename_404_for_missing_session(app_client, make_user):
+    user = make_user(email="sess-rename-miss@test.com", tier=UserTier.PRO)
+    res = await app_client.patch(
+        "/api/session/never-existed",
+        headers=_pro_headers(user),
+        json={"title": "Ghost"},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_rename_rejects_empty_title(app_client, make_user):
+    user = make_user(email="sess-rename-empty@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+    res = await app_client.patch(
+        "/api/session/mine",
+        headers=_pro_headers(user),
+        json={"title": "   "},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_rename_rejects_overlong_title(app_client, make_user):
+    user = make_user(email="sess-rename-long@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+    res = await app_client.patch(
+        "/api/session/mine",
+        headers=_pro_headers(user),
+        json={"title": "x" * 121},
+    )
+    assert res.status_code == 422
+
+
 # ─── Delete single ──────────────────────────────────────────────────────────
 
 
@@ -269,6 +346,7 @@ async def test_delete_all_zero_when_nothing_owned(app_client, make_user):
 async def test_session_endpoints_require_auth(app_client):
     for method, path in [
         ("GET", "/api/sessions"),
+        ("PATCH", "/api/session/x"),
         ("DELETE", "/api/session/x"),
         ("DELETE", "/api/sessions"),
     ]:

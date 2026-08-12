@@ -1,10 +1,12 @@
 """Session route — retrieve and manage session data"""
 
+from pydantic import BaseModel, Field, field_validator
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 
 from arena.models.schemas import SessionData, ErrorResponse, UserResponse
 from arena.core.memory import get_memory_manager
+from arena.core.input_validation import sanitize_model_text
 from arena.core.persona_integrity import clear_session_history
 from arena.core.dependencies import get_current_user_required
 from arena.core.errors import ErrorCodes
@@ -13,6 +15,22 @@ from arena.database import get_db
 
 
 router = APIRouter(prefix="/api", tags=["session"])
+
+SESSION_TITLE_MAX = 120
+
+
+class RenameSessionRequest(BaseModel):
+    """Body for renaming a live session in the sidebar."""
+
+    title: str = Field(..., max_length=SESSION_TITLE_MAX)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        cleaned = sanitize_model_text(
+            value, max_length=SESSION_TITLE_MAX, field_name="title"
+        )
+        return " ".join(cleaned.split())
 
 
 # In-memory sessions are stored as raw dicts in MemoryManager._store.
@@ -118,6 +136,7 @@ async def list_sessions(
         turns = list(getattr(session_data, "turns", []) or [])
         rows.append({
             "session_id": sid,
+            "title": state.get("session_title"),
             "topics": topics,
             "primary_topic": topics[0] if topics else None,
             "last_prompt": turns[-1].prompt if turns else None,
@@ -139,6 +158,40 @@ async def list_sessions(
         "total": len(rows),
         "limit": limit,
     }
+
+
+@router.patch("/session/{session_id}")
+async def rename_session(
+    session_id: str,
+    body: RenameSessionRequest,
+    user: UserResponse = Depends(get_current_user_required),
+) -> dict:
+    """Rename one of the caller's live in-memory sessions.
+
+    The title is stored on the session state so the sidebar can show a
+    readable, user-chosen label instead of the last prompt. Foreign and
+    missing ids return the same 404 so session ids cannot be enumerated.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="session_rename",
+        limit=60,
+        window_seconds=60,
+        message="Too many session renames. Please slow down.",
+    )
+    memory = get_memory_manager()
+    store = getattr(memory, "short_term", None)
+    store = getattr(store, "_store", {}) if store is not None else {}
+
+    state = store.get(session_id)
+    if state is None or not _is_owner(state, user.id):
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Session not found"},
+        )
+
+    state["session_title"] = body.title
+    return {"status": "renamed", "session_id": session_id, "title": body.title}
 
 
 @router.delete("/session/{session_id}")

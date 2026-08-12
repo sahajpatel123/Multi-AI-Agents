@@ -135,6 +135,10 @@ interface SidebarProps {
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => Promise<void> | void;
+  onRenameSession?: (
+    sessionId: string,
+    title: string,
+  ) => Promise<boolean> | boolean | void;
 }
 
 type FilterValue = 'all' | PromptCategory;
@@ -166,6 +170,7 @@ export function Sidebar({
   activeSessionId = null,
   onSessionSelect,
   onDeleteSession,
+  onRenameSession,
 }: SidebarProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -213,15 +218,22 @@ export function Sidebar({
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingSessionValue, setEditingSessionValue] = useState('');
+  const [sessionRenameError, setSessionRenameError] = useState<string | null>(null);
+  const [sessionRenameBusy, setSessionRenameBusy] = useState(false);
   const [customTitles, setCustomTitles] = useState<Record<string, string>>(() =>
     loadSidebarTurnTitles(),
   );
   const [showAllChats, setShowAllChats] = useState(false);
   const [deletedTurnIds, setDeletedTurnIds] = useState<Set<string>>(new Set());
   const renameCancelledRef = useRef(false);
+  const sessionRenameCancelledRef = useRef(false);
+  const sessionRenameSavingRef = useRef(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const sessionRenameInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const savedSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -724,11 +736,21 @@ export function Sidebar({
     editInputRef.current?.select();
   }, [editingTurnId]);
 
+  useEffect(() => {
+    if (!editingSessionId) return;
+    sessionRenameInputRef.current?.focus();
+    sessionRenameInputRef.current?.select();
+  }, [editingSessionId]);
+
   const handleNewChatClick = () => {
     scrollAreaRef.current?.scrollTo({ top: 0, behavior: 'auto' });
     setOpenMenuTurnId(null);
     setConfirmDeleteTurnId(null);
     setEditingTurnId(null);
+    sessionRenameCancelledRef.current = true;
+    setEditingSessionId(null);
+    setEditingSessionValue('');
+    setSessionRenameError(null);
     onNewChat();
   };
 
@@ -762,6 +784,47 @@ export function Sidebar({
     setEditingTurnId(null);
     setEditingValue('');
     setRenameError(null);
+  };
+
+  const startSessionRename = (session: SessionSummary) => {
+    sessionRenameCancelledRef.current = false;
+    setEditingSessionId(session.session_id);
+    setEditingSessionValue(
+      session.title || session.last_prompt || session.primary_topic || '',
+    );
+    setSessionRenameError(null);
+  };
+
+  const cancelSessionRename = () => {
+    sessionRenameCancelledRef.current = true;
+    setEditingSessionId(null);
+    setEditingSessionValue('');
+    setSessionRenameError(null);
+  };
+
+  const saveSessionRename = async (sessionId: string) => {
+    if (sessionRenameCancelledRef.current || sessionRenameSavingRef.current) return;
+    const nextValue = editingSessionValue.trim();
+    const issue = validateSidebarTurnTitle(nextValue);
+    if (issue) {
+      setSessionRenameError(sidebarTurnTitleIssueMessage(issue));
+      sessionRenameInputRef.current?.focus();
+      return;
+    }
+    sessionRenameSavingRef.current = true;
+    setSessionRenameBusy(true);
+    const ok = (await onRenameSession?.(sessionId, nextValue)) !== false;
+    sessionRenameSavingRef.current = false;
+    setSessionRenameBusy(false);
+    if (!ok) {
+      setSessionRenameError('Could not rename this chat. Please try again.');
+      sessionRenameInputRef.current?.focus();
+      return;
+    }
+    sessionRenameCancelledRef.current = true;
+    setEditingSessionId(null);
+    setEditingSessionValue('');
+    setSessionRenameError(null);
   };
 
   const deleteTurn = (turnId: string) => {
@@ -870,24 +933,100 @@ export function Sidebar({
                 <span style={{ fontSize: 10, color: '#A0A39A' }}>{recentSessions.length}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {visibleChats.map((session) => (
-                  <SessionCard
-                    key={session.session_id}
-                    prompt={session.last_prompt || session.primary_topic || 'Untitled chat'}
-                    winnerAgentId=""
-                    timestamp={session.last_active || ''}
-                    isActive={session.session_id === activeSessionId}
-                    onClick={() => onSessionSelect?.(session.session_id)}
-                    onDelete={
-                      onDeleteSession
-                        ? () => {
-                            void onDeleteSession(session.session_id);
-                          }
-                        : undefined
-                    }
-                    messageCount={session.turn_count}
-                  />
-                ))}
+                {visibleChats.map((session) => {
+                  const displayTitle =
+                    session.title ||
+                    session.last_prompt ||
+                    session.primary_topic ||
+                    'Untitled chat';
+                  if (editingSessionId === session.session_id) {
+                    return (
+                      <div
+                        key={session.session_id}
+                        className="session-card session-card--editing"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          ref={sessionRenameInputRef}
+                          value={editingSessionValue}
+                          maxLength={SIDEBAR_TURN_TITLE_MAX + 20}
+                          aria-invalid={Boolean(sessionRenameError)}
+                          aria-label="Rename chat"
+                          onChange={(e) => {
+                            setEditingSessionValue(e.target.value);
+                            if (sessionRenameError) setSessionRenameError(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void saveSessionRename(session.session_id);
+                            }
+                            if (e.key === 'Escape') {
+                              e.preventDefault();
+                              cancelSessionRename();
+                            }
+                          }}
+                          onBlur={() => {
+                            if (!sessionRenameCancelledRef.current) {
+                              void saveSessionRename(session.session_id);
+                            }
+                          }}
+                          className="w-full bg-white border border-border rounded-md px-2 py-1 text-[13px] text-text-primary outline-none"
+                          style={{
+                            borderColor: sessionRenameError ? '#D85A30' : undefined,
+                          }}
+                        />
+                        {sessionRenameError ? (
+                          <p
+                            role="alert"
+                            style={{
+                              margin: '4px 8px 0',
+                              fontSize: 11,
+                              color: '#D85A30',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {sessionRenameError}
+                          </p>
+                        ) : null}
+                        {sessionRenameBusy ? (
+                          <p
+                            style={{
+                              margin: '4px 8px 0',
+                              fontSize: 11,
+                              color: '#A0A39A',
+                            }}
+                          >
+                            Saving…
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  }
+                  return (
+                    <SessionCard
+                      key={session.session_id}
+                      prompt={displayTitle}
+                      winnerAgentId=""
+                      timestamp={session.last_active || ''}
+                      isActive={session.session_id === activeSessionId}
+                      onClick={() => onSessionSelect?.(session.session_id)}
+                      onRename={
+                        onRenameSession
+                          ? () => startSessionRename(session)
+                          : undefined
+                      }
+                      onDelete={
+                        onDeleteSession
+                          ? () => {
+                              void onDeleteSession(session.session_id);
+                            }
+                          : undefined
+                      }
+                      messageCount={session.turn_count}
+                    />
+                  );
+                })}
               </div>
               {recentSessions.length > 5 ? (
                 <button

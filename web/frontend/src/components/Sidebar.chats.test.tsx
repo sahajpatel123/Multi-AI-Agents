@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Sidebar } from './Sidebar';
 import type { SavedResponseItem } from '../types';
 import type { SessionSummary } from '../api';
@@ -88,9 +88,11 @@ function renderSidebar(overrides?: {
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
+  onRenameSession?: (sessionId: string, title: string) => boolean;
 }) {
   const onSessionSelect = overrides?.onSessionSelect ?? vi.fn();
   const onDeleteSession = overrides?.onDeleteSession ?? vi.fn();
+  const onRenameSession = overrides?.onRenameSession ?? vi.fn(() => true);
   render(
     <Sidebar
       turns={[]}
@@ -106,9 +108,10 @@ function renderSidebar(overrides?: {
       activeSessionId={overrides?.activeSessionId ?? null}
       onSessionSelect={onSessionSelect}
       onDeleteSession={onDeleteSession}
+      onRenameSession={onRenameSession}
     />,
   );
-  return { onSessionSelect, onDeleteSession };
+  return { onSessionSelect, onDeleteSession, onRenameSession };
 }
 
 describe('Sidebar recent chats', () => {
@@ -140,6 +143,32 @@ describe('Sidebar recent chats', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Delete session' })[0]);
     expect(onDeleteSession).toHaveBeenCalledWith('chat-1');
     expect(onSessionSelect).not.toHaveBeenCalled();
+  });
+
+  it('renames a chat inline through the callback', async () => {
+    const { onRenameSession } = renderSidebar();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rename session' })[0]);
+
+    const input = screen.getByRole('textbox', { name: 'Rename chat' });
+    fireEvent.change(input, { target: { value: 'Launch plan review' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(onRenameSession).toHaveBeenCalledWith('chat-1', 'Launch plan review'),
+    );
+  });
+
+  it('shows a custom title instead of the last prompt', () => {
+    renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          title: 'My launch plan',
+        },
+      ],
+    });
+    expect(screen.getByText('My launch plan')).toBeInTheDocument();
+    expect(screen.queryByText(/Should we launch today/)).toBeNull();
   });
 
   it('collapses long chat lists behind a show-all toggle', () => {

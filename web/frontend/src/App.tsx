@@ -24,6 +24,7 @@ import {
   getSession,
   listSessions,
   deleteSession,
+  renameSession,
   saveMemory,
   getSavedResponses,
   saveResponse,
@@ -1109,6 +1110,21 @@ function App() {
     [handleNewChat, sessionData?.session_id],
   );
 
+  const handleRenameSession = useCallback(
+    async (sessionId: string, title: string) => {
+      const renamed = await renameSession(sessionId, title);
+      if (!renamed) return false;
+      setRecentSessions((prev) =>
+        prev.map((session) =>
+          session.session_id === sessionId ? { ...session, title } : session,
+        ),
+      );
+      void track('recent_chat_renamed', undefined, sessionId);
+      return true;
+    },
+    [],
+  );
+
   const handleSubmit = async (
     prompt: string,
     followUpContext?: PromptContextItem[],
@@ -1837,6 +1853,7 @@ function App() {
           onDeleteSession={(sessionId) => {
             void handleDeleteSession(sessionId);
           }}
+          onRenameSession={handleRenameSession}
         />
       )}
 

@@ -6556,6 +6556,10 @@ canvas {
   padding-right: 36px;
 }
 
+.session-card--deletable.session-card--renamable .session-card__main {
+  padding-right: 66px;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .session-card:not(.session-card--active):hover .session-card__main {
     background: rgba(240, 235, 227, 0.85);
@@ -6636,7 +6640,8 @@ canvas {
   font-variant-numeric: tabular-nums;
 }
 
-.session-card__delete {
+.session-card__delete,
+.session-card__rename {
   position: absolute;
   right: 6px;
   top: 50%;
@@ -6664,8 +6669,13 @@ canvas {
     box-shadow var(--motion-lift-ms) var(--ease-out-premium);
 }
 
+.session-card__rename {
+  right: 38px;
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .session-card__delete:hover {
+  .session-card__delete:hover,
+  .session-card__rename:hover {
     color: #993c1d;
     border-color: rgba(153, 60, 29, 0.28);
     background: #fcf0ee;
@@ -6675,38 +6685,48 @@ canvas {
   .session-card__delete:active {
     transform: translateY(-50%) scale(0.92);
   }
+
+  .session-card__rename:active {
+    transform: translateY(-50%) scale(0.92);
+  }
 }
 
 /* Reveal delete on hover, keyboard focus, or touch (always on coarse pointers). */
 @media (hover: hover) and (pointer: fine) {
   .session-card:hover .session-card__delete,
-  .session-card:focus-within .session-card__delete {
+  .session-card:hover .session-card__rename,
+  .session-card:focus-within .session-card__delete,
+  .session-card:focus-within .session-card__rename {
     opacity: 1;
     pointer-events: auto;
   }
 }
 
 @media (hover: none), (pointer: coarse) {
-  .session-card__delete {
+  .session-card__delete,
+  .session-card__rename {
     opacity: 1;
     pointer-events: auto;
   }
 }
 
-.session-card:focus-within .session-card__delete {
+.session-card:focus-within .session-card__delete,
+.session-card:focus-within .session-card__rename {
   opacity: 1;
   pointer-events: auto;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .session-card__delete:hover {
+  .session-card__delete:hover,
+  .session-card__rename:hover {
     color: #993c1d;
     background: #fcf0ee;
     border-color: rgba(240, 153, 123, 0.55);
   }
 }
 
-.session-card__delete:focus-visible {
+.session-card__delete:focus-visible,
+.session-card__rename:focus-visible {
   opacity: 1;
   pointer-events: auto;
   outline: 2px solid #c4956a;
@@ -6717,7 +6737,8 @@ canvas {
 @media (prefers-reduced-motion: reduce) {
   .session-card,
   .session-card__main,
-  .session-card__delete {
+  .session-card__delete,
+  .session-card__rename {
     transition: none !important;
   }
 }

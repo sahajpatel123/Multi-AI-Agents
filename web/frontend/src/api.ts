@@ -922,6 +922,7 @@ export async function getSession(sessionId: string): Promise<SessionData | null>
 
 export interface SessionSummary {
   session_id: string;
+  title?: string | null;
   topics: string[];
   primary_topic: string | null;
   last_prompt: string | null;
@@ -948,6 +949,19 @@ export async function deleteSession(sessionId: string): Promise<boolean> {
   try {
     const response = await apiFetch(`/api/session/${encodeURIComponent(sessionId)}`, {
       method: 'DELETE',
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function renameSession(sessionId: string, title: string): Promise<boolean> {
+  try {
+    const response = await apiFetch(`/api/session/${encodeURIComponent(sessionId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
     });
     return response.ok;
   } catch {

@@ -78,6 +78,37 @@ describe('SessionCard', () => {
     expect(queryByRole('button', { name: /Delete session/ })).toBeNull();
   });
 
+  it('does not show rename button when onRename is not provided', () => {
+    const { queryByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+      />,
+    );
+    expect(queryByRole('button', { name: /Rename session/ })).toBeNull();
+  });
+
+  it('fires onRename without firing onClick', () => {
+    const onClick = vi.fn();
+    const onRename = vi.fn();
+    const { getByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={onClick}
+        onRename={onRename}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /Rename session/ }));
+    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
   it('fires onDelete without firing onClick', () => {
     const onClick = vi.fn();
     const onDelete = vi.fn();

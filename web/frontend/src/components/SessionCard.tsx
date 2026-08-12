@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 import { AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
 
@@ -10,6 +10,8 @@ interface SessionCardProps {
   isActive: boolean;
   /** Optional delete affordance — visible on hover/focus so keyboard users can reach it. */
   onDelete?: () => void;
+  /** Optional rename affordance — opens the sidebar's inline title editor. */
+  onRename?: () => void;
   /** Optional count of saved/messages/etc. rendered in the meta line. */
   messageCount?: number;
   onClick: () => void;
@@ -22,6 +24,7 @@ export function SessionCard({
   isActive,
   onClick,
   onDelete,
+  onRename,
   messageCount,
 }: SessionCardProps) {
   const winnerConfig = AGENTS[winnerAgentId || ''];
@@ -34,7 +37,8 @@ export function SessionCard({
       className={[
         'session-card',
         isActive ? 'session-card--active' : '',
-        onDelete ? 'session-card--deletable' : '',
+        onDelete || onRename ? 'session-card--deletable' : '',
+        onRename ? 'session-card--renamable' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -68,6 +72,21 @@ export function SessionCard({
           )}
         </div>
       </button>
+
+      {onRename ? (
+        <button
+          type="button"
+          className="session-card__rename"
+          aria-label="Rename session"
+          title="Rename session"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRename();
+          }}
+        >
+          <Pencil width={12} height={12} strokeWidth={2} aria-hidden />
+        </button>
+      ) : null}
 
       {onDelete ? (
         <button
