@@ -311,7 +311,7 @@ export function Sidebar({
     null,
   );
   const [bulkCopyChatsStatus, setBulkCopyChatsStatus] = useState<
-    'idle' | 'copied' | 'failed'
+    'idle' | 'busy' | 'copied' | 'failed'
   >('idle');
   const [bulkCopiedChatsCount, setBulkCopiedChatsCount] = useState<number | null>(
     null,
@@ -344,6 +344,7 @@ export function Sidebar({
   const chatSearchInputRef = useRef<HTMLInputElement>(null);
   const savedSearchInputRef = useRef<HTMLInputElement>(null);
   const bulkPinUnpinActionRef = useRef<boolean | null>(null);
+  const bulkCopyChatsInFlightRef = useRef(false);
   const chatSelectionAnchorRef = useRef<string | null>(null);
 
   const winnerNameByAgentId = useMemo(() => {
@@ -403,7 +404,8 @@ export function Sidebar({
   const bulkChatsBusy =
     bulkDeleteChatsStatus === 'busy' ||
     bulkPinChatsStatus === 'busy' ||
-    bulkDuplicateChatsStatus === 'busy';
+    bulkDuplicateChatsStatus === 'busy' ||
+    bulkCopyChatsStatus === 'busy';
   const bulkPinBusyTarget =
     bulkPinChatsStatus === 'busy' && bulkPinUnpinActionRef.current !== null
       ? bulkPinUnpinActionRef.current
@@ -776,7 +778,7 @@ export function Sidebar({
   }, [bulkExportChatsJsonStatus, bulkExportChatsCsvStatus]);
 
   useEffect(() => {
-    if (bulkCopyChatsStatus === 'idle') return;
+    if (bulkCopyChatsStatus === 'idle' || bulkCopyChatsStatus === 'busy') return;
     const hold = motionDuration(bulkCopyChatsStatus === 'failed' ? 2800 : 2000);
     const t = window.setTimeout(() => {
       setBulkCopyChatsStatus('idle');
@@ -1071,6 +1073,7 @@ export function Sidebar({
       .map(toArenaChatExportItem);
 
   const handleBulkCopyChats = async () => {
+    if (bulkCopyChatsInFlightRef.current) return;
     const items = buildSelectedChatsItems();
     setBulkExportChatsStatus('idle');
     setBulkExportChatsJsonStatus('idle');
@@ -1080,17 +1083,26 @@ export function Sidebar({
       setBulkCopyChatsStatus('failed');
       return;
     }
-    const md = formatArenaChatsExport({
-      totalCount: items.length,
-      items,
-    });
-    const ok = await copyToClipboard(md);
-    setBulkCopiedChatsCount(ok ? items.length : null);
-    setBulkCopyChatsStatus(ok ? 'copied' : 'failed');
-    if (ok) {
-      void track('arena_selected_chats_copied', undefined, undefined, {
-        count: items.length,
+    bulkCopyChatsInFlightRef.current = true;
+    setBulkCopyChatsStatus('busy');
+    try {
+      const md = formatArenaChatsExport({
+        totalCount: items.length,
+        items,
       });
+      const ok = await copyToClipboard(md);
+      setBulkCopiedChatsCount(ok ? items.length : null);
+      setBulkCopyChatsStatus(ok ? 'copied' : 'failed');
+      if (ok) {
+        void track('arena_selected_chats_copied', undefined, undefined, {
+          count: items.length,
+        });
+      }
+    } catch {
+      setBulkCopiedChatsCount(null);
+      setBulkCopyChatsStatus('failed');
+    } finally {
+      bulkCopyChatsInFlightRef.current = false;
     }
   };
 
@@ -2161,10 +2173,12 @@ export function Sidebar({
                       type="button"
                       aria-label={
                         bulkCopyChatsStatus === 'copied'
-                          ? `Copied ${bulkCopiedChatsCount ?? selectedChatIds.size} selected chats`
-                          : bulkCopyChatsStatus === 'failed'
-                            ? 'Selected chat copy failed'
-                            : `Copy ${selectedChatIds.size} selected chats as markdown`
+                          ? `Copied ${bulkCopiedChatsCount ?? selectedChatIds.size} selected chat${(bulkCopiedChatsCount ?? selectedChatIds.size) === 1 ? '' : 's'}`
+                          : bulkCopyChatsStatus === 'busy'
+                            ? `Copying ${selectedChatIds.size} selected chat${selectedChatIds.size === 1 ? '' : 's'}…`
+                            : bulkCopyChatsStatus === 'failed'
+                              ? 'Selected chat copy failed'
+                              : `Copy ${selectedChatIds.size} selected chat${selectedChatIds.size === 1 ? '' : 's'} as markdown`
                       }
                       title="Copy selected chats as markdown"
                       onClick={() => void handleBulkCopyChats()}
@@ -2186,9 +2200,11 @@ export function Sidebar({
                     >
                       {bulkCopyChatsStatus === 'copied'
                         ? 'Copied'
-                        : bulkCopyChatsStatus === 'failed'
-                          ? 'Failed'
-                          : 'Copy'}
+                        : bulkCopyChatsStatus === 'busy'
+                          ? 'Copying…'
+                          : bulkCopyChatsStatus === 'failed'
+                            ? 'Failed'
+                            : 'Copy'}
                     </button>
                     <button
                       type="button"
@@ -2578,10 +2594,12 @@ export function Sidebar({
                     border: 0,
                   }}
                 >
-                  {bulkCopyChatsStatus === 'copied'
-                    ? `${bulkCopiedChatsCount ?? selectedChatIds.size} ${(bulkCopiedChatsCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} copied to clipboard`
-                    : bulkCopyChatsStatus === 'failed'
-                      ? 'Could not copy selected chats'
+                  {bulkCopyChatsStatus === 'busy'
+                    ? 'Copying selected chats to clipboard…'
+                    : bulkCopyChatsStatus === 'copied'
+                      ? `${bulkCopiedChatsCount ?? selectedChatIds.size} ${(bulkCopiedChatsCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} copied to clipboard`
+                      : bulkCopyChatsStatus === 'failed'
+                        ? 'Could not copy selected chats'
                       : copyChatsStatus === 'copied'
                         ? 'Arena chats copied to clipboard'
                         : copyChatsStatus === 'failed'

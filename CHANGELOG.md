@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Sidebar selected-chat copy is hardened against overlapping in-flight copies,
+  announces the busy state, and reports singular/plural counts correctly
 - Sidebar bulk chat delete reports partial deletions honestly and announces
   completion to screen readers
 - Sidebar pinned-only chat filter safely falls back to all chats when the last

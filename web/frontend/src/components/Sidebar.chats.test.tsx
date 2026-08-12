@@ -828,7 +828,7 @@ describe('Sidebar recent chats', () => {
     fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Copy 1 selected chats as markdown',
+        name: 'Copy 1 selected chat as markdown',
       }),
     );
 
@@ -843,7 +843,40 @@ describe('Sidebar recent chats', () => {
     expect(copied).not.toContain('Chat `chat-2`');
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Copied 1 selected chats' }),
+        screen.getByRole('button', { name: 'Copied 1 selected chat' }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('ignores a second copy click while the first copy is in flight', async () => {
+    const { copyToClipboard } = await import('../lib/clipboard');
+    let resolveCopy: (ok: boolean) => void = () => {};
+    vi.mocked(copyToClipboard).mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveCopy = resolve;
+        }),
+    );
+    renderSidebar();
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy 1 selected chat as markdown',
+      }),
+    );
+
+    const copyingButton = await screen.findByRole('button', {
+      name: 'Copying 1 selected chat…',
+    });
+    expect(copyingButton).toBeDisabled();
+    fireEvent.click(copyingButton);
+
+    resolveCopy(true);
+    await waitFor(() => expect(copyToClipboard).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Copied 1 selected chat' }),
       ).toBeInTheDocument(),
     );
   });
@@ -856,7 +889,7 @@ describe('Sidebar recent chats', () => {
     fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Copy 1 selected chats as markdown',
+        name: 'Copy 1 selected chat as markdown',
       }),
     );
 
