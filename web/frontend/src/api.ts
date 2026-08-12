@@ -1322,6 +1322,21 @@ export async function exportAgentTaskMarkdown(taskId: string): Promise<Blob> {
   return response.blob();
 }
 
+export async function exportAgentTaskJson(taskId: string): Promise<Blob> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/export.json`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Export failed'), response),
+      response.status,
+      err,
+    );
+  }
+  return response.blob();
+}
+
 export async function postAgentOrchestrate(body: {
   questions: string[];
   expertise_level?: string;

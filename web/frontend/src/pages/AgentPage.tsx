@@ -23,6 +23,7 @@ import {
   deleteAgentTask,
   exportAgentTaskPdf,
   exportAgentTaskMarkdown,
+  exportAgentTaskJson,
   exportOrchestrationPdf,
   getDiscoverRooms,
   getAgentHistory,
@@ -873,6 +874,7 @@ export function AgentPage() {
   const [pendingNote, setPendingNote] = useState('');
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingMd, setExportingMd] = useState(false);
+  const [exportingJson, setExportingJson] = useState(false);
   const [multiMode, setMultiMode] = useState(false);
   const [multiTasks, setMultiTasks] = useState(['', '', '', '']);
   const [activeTaskCount, setActiveTaskCount] = useState(2);
@@ -1893,6 +1895,23 @@ export function AgentPage() {
       setError(e instanceof Error ? e.message : 'Export failed');
     } finally {
       setExportingMd(false);
+    }
+  };
+
+  const handleExportTaskJson = async () => {
+    if (!result?.task_id || exportingJson) return;
+    setExportingJson(true);
+    try {
+      const blob = await exportAgentTaskJson(result.task_id);
+      const ok = downloadBlobFile(
+        blob,
+        `arena-task-${result.task_id.slice(0, 8)}.json`,
+      );
+      if (!ok) setError('Export failed');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExportingJson(false);
     }
   };
 
@@ -8829,6 +8848,20 @@ export function AgentPage() {
                         onClick={() => void handleExportTaskMarkdown()}
                       >
                         {exportingMd ? 'Exporting…' : 'Report .md'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={exportingJson ? undefined : Icons.download(14)}
+                        loading={exportingJson}
+                        disabled={exportingJson}
+                        title="Download the full research report as machine-readable JSON"
+                        onClick={() => void handleExportTaskJson()}
+                      >
+                        {exportingJson ? 'Exporting…' : 'Report .json'}
                       </Button>
                     ) : null}
                     {result.status === 'complete' && !isRunning && user?.email ? (
