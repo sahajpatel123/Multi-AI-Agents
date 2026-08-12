@@ -35,3 +35,27 @@ export function filterTurnsBySearchQuery<T extends SearchableTurn>(
 ): T[] {
   return filterBySearchQuery(turns, query, (turn) => [turn.prompt, turn.title]);
 }
+
+export type SearchableSession = {
+  session_id: string;
+  title?: string | null;
+  topics?: string[];
+  primary_topic?: string | null;
+  last_prompt?: string | null;
+};
+
+/**
+ * Case-insensitive match against a resumable chat's title, last prompt,
+ * primary topic, and topic list. Empty query returns all sessions.
+ */
+export function filterSessionsBySearchQuery<T extends SearchableSession>(
+  sessions: readonly T[],
+  query: string,
+): T[] {
+  return filterBySearchQuery(sessions, query, (session) => [
+    session.title,
+    session.last_prompt,
+    session.primary_topic,
+    ...(session.topics || []),
+  ]);
+}

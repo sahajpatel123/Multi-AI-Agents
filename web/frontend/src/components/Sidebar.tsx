@@ -36,7 +36,11 @@ import { useTier } from '../context/TierContext';
 import { useAuth } from '../hooks/useAuth';
 import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
-import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSearch';
+import {
+  filterBySearchQuery,
+  filterSessionsBySearchQuery,
+  filterTurnsBySearchQuery,
+} from '../lib/sidebarSearch';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from '../lib/downloadTextFile';
 import { formatRelativePast } from '../lib/relativeTime';
@@ -182,6 +186,7 @@ export function Sidebar({
   /** Tick every 60s so relative timestamps stay accurate without a full reload. */
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [searchQuery, setSearchQuery] = useState('');
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [savedSearchQuery, setSavedSearchQuery] = useState('');
   const [recentsSort, setRecentsSort] = useState<SidebarRecentsSort>('newest');
   const [savedSort, setSavedSort] = useState<SidebarSavedSort>('newest');
@@ -237,6 +242,7 @@ export function Sidebar({
   const editInputRef = useRef<HTMLInputElement>(null);
   const sessionRenameInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const chatSearchInputRef = useRef<HTMLInputElement>(null);
   const savedSearchInputRef = useRef<HTMLInputElement>(null);
 
   const winnerNameByAgentId = useMemo(() => {
@@ -253,7 +259,16 @@ export function Sidebar({
     [turns, deletedTurnIds],
   );
 
-  const visibleChats = showAllChats ? recentSessions : recentSessions.slice(0, 5);
+  const filteredChats = useMemo(
+    () => filterSessionsBySearchQuery(recentSessions, chatSearchQuery),
+    [recentSessions, chatSearchQuery],
+  );
+  const isChatSearchActive = chatSearchQuery.trim().length > 0;
+  const visibleChats = isChatSearchActive
+    ? filteredChats
+    : showAllChats
+      ? recentSessions
+      : recentSessions.slice(0, 5);
 
   const filteredTurns = useMemo(() => {
     const byCategory = reversedTurns.filter(
@@ -948,105 +963,189 @@ export function Sidebar({
                 >
                   Chats
                 </p>
-                <span style={{ fontSize: 10, color: '#A0A39A' }}>{recentSessions.length}</span>
+                <span style={{ fontSize: 10, color: '#A0A39A' }}>
+                  {isChatSearchActive
+                    ? `${filteredChats.length} / ${recentSessions.length}`
+                    : recentSessions.length}
+                </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {visibleChats.map((session) => {
-                  const displayTitle =
-                    session.title ||
-                    session.last_prompt ||
-                    session.primary_topic ||
-                    'Untitled chat';
-                  if (editingSessionId === session.session_id) {
+              <div style={{ position: 'relative', marginBottom: 8 }}>
+                <input
+                  id="sidebar-chats-search"
+                  ref={chatSearchInputRef}
+                  type="search"
+                  value={chatSearchQuery}
+                  onChange={(e) => setChatSearchQuery(e.target.value)}
+                  placeholder="Search chats…"
+                  aria-label="Search chats"
+                  autoComplete="off"
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: 12,
+                    fontFamily: 'var(--vp-font-sans)',
+                    color: '#1A1714',
+                    background: '#0B0C0A',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 8,
+                    padding: '7px 28px 7px 10px',
+                    outline: 'none',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(196,149,106,0.55)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#E0D8D0';
+                  }}
+                />
+                {chatSearchQuery ? (
+                  <button
+                    type="button"
+                    aria-label="Clear chat search"
+                    onClick={() => {
+                      setChatSearchQuery('');
+                      chatSearchInputRef.current?.focus();
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: 6,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      color: '#A0A39A',
+                      lineHeight: 1,
+                      padding: 4,
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+              {isChatSearchActive && filteredChats.length === 0 ? (
+                <p
+                  role="status"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#A0A39A',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  No chats match “{chatSearchQuery.trim()}”.{' '}
+                  <button
+                    type="button"
+                    className="sidebar-text-link"
+                    style={{ fontSize: 11 }}
+                    onClick={() => {
+                      setChatSearchQuery('');
+                      chatSearchInputRef.current?.focus();
+                    }}
+                  >
+                    Clear search
+                  </button>
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {visibleChats.map((session) => {
+                    const displayTitle =
+                      session.title ||
+                      session.last_prompt ||
+                      session.primary_topic ||
+                      'Untitled chat';
+                    if (editingSessionId === session.session_id) {
+                      return (
+                        <div
+                          key={session.session_id}
+                          className="session-card session-card--editing"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            ref={sessionRenameInputRef}
+                            value={editingSessionValue}
+                            maxLength={SIDEBAR_TURN_TITLE_MAX + 20}
+                            aria-invalid={Boolean(sessionRenameError)}
+                            aria-label="Rename chat"
+                            onChange={(e) => {
+                              setEditingSessionValue(e.target.value);
+                              if (sessionRenameError) setSessionRenameError(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void saveSessionRename(session.session_id);
+                              }
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                cancelSessionRename();
+                              }
+                            }}
+                            onBlur={() => {
+                              if (!sessionRenameCancelledRef.current) {
+                                void saveSessionRename(session.session_id);
+                              }
+                            }}
+                            className="w-full bg-white border border-border rounded-md px-2 py-1 text-[13px] text-text-primary outline-none"
+                            style={{
+                              borderColor: sessionRenameError ? '#D85A30' : undefined,
+                            }}
+                          />
+                          {sessionRenameError ? (
+                            <p
+                              role="alert"
+                              style={{
+                                margin: '4px 8px 0',
+                                fontSize: 11,
+                                color: '#D85A30',
+                                lineHeight: 1.35,
+                              }}
+                            >
+                              {sessionRenameError}
+                            </p>
+                          ) : null}
+                          {sessionRenameBusyId === session.session_id ? (
+                            <p
+                              style={{
+                                margin: '4px 8px 0',
+                                fontSize: 11,
+                                color: '#A0A39A',
+                              }}
+                            >
+                              Saving…
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    }
                     return (
-                      <div
+                      <SessionCard
                         key={session.session_id}
-                        className="session-card session-card--editing"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <input
-                          ref={sessionRenameInputRef}
-                          value={editingSessionValue}
-                          maxLength={SIDEBAR_TURN_TITLE_MAX + 20}
-                          aria-invalid={Boolean(sessionRenameError)}
-                          aria-label="Rename chat"
-                          onChange={(e) => {
-                            setEditingSessionValue(e.target.value);
-                            if (sessionRenameError) setSessionRenameError(null);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              void saveSessionRename(session.session_id);
-                            }
-                            if (e.key === 'Escape') {
-                              e.preventDefault();
-                              cancelSessionRename();
-                            }
-                          }}
-                          onBlur={() => {
-                            if (!sessionRenameCancelledRef.current) {
-                              void saveSessionRename(session.session_id);
-                            }
-                          }}
-                          className="w-full bg-white border border-border rounded-md px-2 py-1 text-[13px] text-text-primary outline-none"
-                          style={{
-                            borderColor: sessionRenameError ? '#D85A30' : undefined,
-                          }}
-                        />
-                        {sessionRenameError ? (
-                          <p
-                            role="alert"
-                            style={{
-                              margin: '4px 8px 0',
-                              fontSize: 11,
-                              color: '#D85A30',
-                              lineHeight: 1.35,
-                            }}
-                          >
-                            {sessionRenameError}
-                          </p>
-                        ) : null}
-                        {sessionRenameBusyId === session.session_id ? (
-                          <p
-                            style={{
-                              margin: '4px 8px 0',
-                              fontSize: 11,
-                              color: '#A0A39A',
-                            }}
-                          >
-                            Saving…
-                          </p>
-                        ) : null}
-                      </div>
+                        prompt={displayTitle}
+                        winnerAgentId=""
+                        timestamp={session.last_active || ''}
+                        isActive={session.session_id === activeSessionId}
+                        onClick={() => onSessionSelect?.(session.session_id)}
+                        onRename={
+                          onRenameSession
+                            ? () => startSessionRename(session)
+                            : undefined
+                        }
+                        onDelete={
+                          onDeleteSession
+                            ? () => {
+                                void onDeleteSession(session.session_id);
+                              }
+                            : undefined
+                        }
+                        messageCount={session.turn_count}
+                      />
                     );
-                  }
-                  return (
-                    <SessionCard
-                      key={session.session_id}
-                      prompt={displayTitle}
-                      winnerAgentId=""
-                      timestamp={session.last_active || ''}
-                      isActive={session.session_id === activeSessionId}
-                      onClick={() => onSessionSelect?.(session.session_id)}
-                      onRename={
-                        onRenameSession
-                          ? () => startSessionRename(session)
-                          : undefined
-                      }
-                      onDelete={
-                        onDeleteSession
-                          ? () => {
-                              void onDeleteSession(session.session_id);
-                            }
-                          : undefined
-                      }
-                      messageCount={session.turn_count}
-                    />
-                  );
-                })}
-              </div>
-              {recentSessions.length > 5 ? (
+                  })}
+                </div>
+              )}
+              {!isChatSearchActive && recentSessions.length > 5 ? (
                 <button
                   type="button"
                   className="sidebar-text-link"

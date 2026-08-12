@@ -123,6 +123,71 @@ describe('Sidebar recent chats', () => {
     expect(screen.getByText('Untitled chat')).toBeInTheDocument();
   });
 
+  it('offers a chat search box when resumable chats exist', () => {
+    renderSidebar();
+    expect(screen.getByRole('searchbox', { name: 'Search chats' })).toBeInTheDocument();
+  });
+
+  it('filters chats by last prompt', () => {
+    renderSidebar();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
+      target: { value: 'launch' },
+    });
+    expect(screen.getByText(/Should we launch today/)).toBeInTheDocument();
+    expect(screen.queryByText('Untitled chat')).toBeNull();
+  });
+
+  it('filters chats by a custom title', () => {
+    renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          title: 'Roadmap review',
+        },
+        {
+          ...(sessions[1] as SessionSummary),
+          title: 'Draft copy',
+        },
+      ],
+    });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
+      target: { value: 'roadmap' },
+    });
+    expect(screen.getByText('Roadmap review')).toBeInTheDocument();
+    expect(screen.queryByText('Draft copy')).toBeNull();
+  });
+
+  it('shows a no-results message and restores chats after clearing', () => {
+    renderSidebar();
+    const search = screen.getByRole('searchbox', { name: 'Search chats' });
+    fireEvent.change(search, { target: { value: 'quantum' } });
+    expect(screen.getByText(/No chats match “quantum”/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear chat search' }));
+    expect(screen.getByText(/Should we launch today/)).toBeInTheDocument();
+    expect(screen.getByText('Untitled chat')).toBeInTheDocument();
+  });
+
+  it('searches the full list while collapsed', () => {
+    const many: SessionSummary[] = Array.from({ length: 7 }, (_, i) => ({
+      session_id: `chat-${i}`,
+      topics: [],
+      primary_topic: null,
+      last_prompt: `Prompt ${i}`,
+      turn_count: 1,
+      last_active: new Date().toISOString(),
+    }));
+    renderSidebar({ sessions: many });
+    expect(screen.getAllByRole('button', { name: /Open session/ })).toHaveLength(5);
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
+      target: { value: 'Prompt 6' },
+    });
+    expect(screen.getAllByRole('button', { name: /Open session/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /Open session: Prompt 6/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Show all 7 chats/ })).toBeNull();
+  });
+
   it('opens a chat when its card is clicked', () => {
     const { onSessionSelect } = renderSidebar();
     fireEvent.click(
