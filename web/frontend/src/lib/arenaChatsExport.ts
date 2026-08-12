@@ -36,6 +36,18 @@ function turnCountLabel(turnCount: number | null | undefined): string {
   return `${turnCount} ${turnCount === 1 ? 'turn' : 'turns'}`;
 }
 
+const MARKDOWN_ESCAPE_PATTERN = /([\\`*_{}[\]()#+!>|~<\-=])/g;
+
+/**
+ * Escape markdown-sensitive characters in user- and model-controlled text so
+ * a prompt or title cannot inject headings, list items, links, images, or
+ * thematic breaks into the exported snapshot. Session ids stay in inline
+ * code and are handled separately because backslashes there would be literal.
+ */
+function escapeMarkdown(text: string): string {
+  return text.replace(MARKDOWN_ESCAPE_PATTERN, '\\$1');
+}
+
 /**
  * Markdown snapshot of the sidebar's resumable chats (full list or the
  * current search-filtered view). Titles, last prompts, topics, turn counts,
@@ -68,7 +80,7 @@ export function formatArenaChatsExport(opts: {
 
   const filterNote = (opts.filterNote || '').trim();
   if (filterNote) {
-    lines.push(`_Filtered view: ${filterNote}_`);
+    lines.push(`_Filtered view: ${escapeMarkdown(filterNote)}_`);
     lines.push('');
   }
 
@@ -81,18 +93,18 @@ export function formatArenaChatsExport(opts: {
     lines.push('');
   } else {
     items.forEach((item, i) => {
-      lines.push(`## ${i + 1}. ${displayTitle(item)}`);
+      lines.push(`## ${i + 1}. ${escapeMarkdown(displayTitle(item))}`);
       lines.push('');
 
       const prompt = (item.prompt || '').trim();
       if (prompt && prompt !== displayTitle(item)) {
-        lines.push(`**Last prompt:** ${prompt}`);
+        lines.push(`**Last prompt:** ${escapeMarkdown(prompt)}`);
         lines.push('');
       }
 
       const meta: string[] = [];
       const topics = topicsText(item);
-      if (topics) meta.push(`Topics: ${topics}`);
+      if (topics) meta.push(`Topics: ${escapeMarkdown(topics)}`);
       const turns = turnCountLabel(item.turnCount);
       if (turns) meta.push(turns);
       if (item.pinned === true) meta.push('Pinned');
@@ -103,7 +115,7 @@ export function formatArenaChatsExport(opts: {
       }
       const sessionId = (item.sessionId || '').trim();
       if (sessionId) {
-        lines.push(`- _Chat \`${sessionId}\`_`);
+        lines.push(`- _Chat \`${sessionId.replace(/`/g, '')}\`_`);
       }
       lines.push('');
     });
@@ -165,6 +177,8 @@ export function formatArenaChatsJsonExport(opts: {
  * Every cell is quoted so commas/newlines in prompts or topics cannot break
  * the column layout. User- and model-controlled text is neutralized against
  * spreadsheet formula injection (OWASP CWE-1236), matching recents/saved.
+ * The file starts with a UTF-8 BOM so Excel detects Unicode prompts, and rows
+ * use CRLF line endings per RFC 4180, matching watchlist/agent-history CSV.
  */
 export function formatArenaChatsCsvExport(opts: {
   items: ArenaChatExportItem[];
@@ -220,5 +234,5 @@ export function formatArenaChatsCsvExport(opts: {
         .join(','),
     );
   });
-  return lines.join('\n') + '\n';
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
 }

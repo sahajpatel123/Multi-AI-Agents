@@ -5,6 +5,8 @@ import {
   formatArenaChatsJsonExport,
 } from './arenaChatsExport';
 
+const csvLines = (csv: string) => csv.replace(/^\uFEFF/, '').trim().split(/\r?\n/);
+
 describe('formatArenaChatsExport', () => {
   it('formats filtered chats with titles, topics, and turn counts', () => {
     const md = formatArenaChatsExport({
@@ -75,6 +77,31 @@ describe('formatArenaChatsExport', () => {
     expect(md).toContain('## 1. Roadmap review');
     expect(md).toContain('## 2. planning');
     expect(md).toContain('2 turns');
+  });
+
+  it('escapes markdown-sensitive user text so exports stay portable', () => {
+    const md = formatArenaChatsExport({
+      totalCount: 1,
+      filterNote: 'search "*star*"',
+      items: [
+        {
+          sessionId: 'chat-1',
+          title: '# Launch [plan](https://evil.example)',
+          prompt: 'Line one\n# Heading\n- item\n= summary\n<script>alert(1)</script>',
+          topics: ['*bold*', 'a|b'],
+          primaryTopic: '>quote',
+          turnCount: 2,
+        },
+      ],
+    });
+
+    expect(md).toContain('## 1. \\# Launch \\[plan\\]\\(https://evil.example\\)');
+    expect(md).toContain(
+      '**Last prompt:** Line one\n\\# Heading\n\\- item\n\\= summary\n\\<script\\>alert\\(1\\)\\</script\\>',
+    );
+    expect(md).toContain('Topics: \\*bold\\*, a\\|b');
+    expect(md).toContain('_Filtered view: search "\\*star\\*"_');
+    expect(md).toContain('Chat `chat-1`');
   });
 });
 
@@ -160,7 +187,7 @@ describe('formatArenaChatsCsvExport', () => {
       ],
     });
 
-    expect(csv.split('\n')[0]).toBe(
+    expect(csvLines(csv)[0]).toBe(
       '"title","prompt","topics","primaryTopic","turnCount","pinned","timestamp","sessionId"',
     );
     expect(csv).toContain('"Ship, plan"');
@@ -168,6 +195,16 @@ describe('formatArenaChatsCsvExport', () => {
     expect(csv).toContain('"launch, marketing"');
     expect(csv).toContain('"true"');
     expect(csv.trimEnd().endsWith('"chat-1"')).toBe(true);
+  });
+
+  it('starts with a UTF-8 BOM and uses CRLF record separators', () => {
+    const csv = formatArenaChatsCsvExport({
+      items: [{ sessionId: 'chat-1', prompt: 'How is the launch going?' }],
+    });
+
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv).toMatch(/[^\r]\r\n$/);
+    expect(csv).toContain('\r\n');
   });
 
   it('neutralizes spreadsheet formula injection, including hidden leading whitespace', () => {
@@ -205,5 +242,11 @@ describe('formatArenaChatsCsvExport', () => {
     });
     expect(csv).toContain('"Launch plan"');
     expect(csv).toContain('"2"');
+  });
+
+  it('emits only the header row for an empty export', () => {
+    expect(formatArenaChatsCsvExport({ items: [] })).toBe(
+      '\uFEFF"title","prompt","topics","primaryTopic","turnCount","pinned","timestamp","sessionId"\r\n',
+    );
   });
 });

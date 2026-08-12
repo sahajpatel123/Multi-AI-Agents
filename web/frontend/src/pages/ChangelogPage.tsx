@@ -211,6 +211,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Sidebar Chats: pin important chats to the top of the list',
       '[IMPROVED] Sidebar Chats: pin updates surface failures and ignore double-clicks',
       '[NEW] Sidebar Chats: export resumable chats as Markdown, JSON, or CSV',
+      '[IMPROVED] Sidebar Chats: exports escape markdown-sensitive text and CSV opens reliably in Excel',
     ],
   },
   {

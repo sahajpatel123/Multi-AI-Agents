@@ -90,6 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tests for every invariant it enforces
 - Full-session transcript copy now prevents overlapping copy attempts and the
   clipboard fallback always cleans up its temporary textarea, even on failure
+- Resumable chat export now escapes markdown-sensitive user text and writes
+  CSV with a UTF-8 BOM and CRLF records for spreadsheet compatibility
 - Activity Markdown export now escapes table cells and is covered by window-boundary,
   caller-isolation, row-order, and report-structure regression tests
 - JSON session transcript export now pins a format version, drops stale
