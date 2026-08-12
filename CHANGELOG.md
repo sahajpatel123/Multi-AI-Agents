@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sidebar "Select all" now stages every matching chat in one click (count is
+  shown on the button), even when the list is collapsed to the five-chat
+  preview, so bulk export, copy, pin, duplicate, and delete cover the whole
+  filtered list without expanding first
 - Sidebar resumable chats can be restored from exported JSON transcript
   archives (single chat or combined archive) as new resumable chats
 - Sidebar selected chats can be exported as one combined full-session JSON

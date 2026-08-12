@@ -505,7 +505,7 @@ describe('Sidebar recent chats', () => {
   it('selects all visible chats and clears the selection without deleting', () => {
     renderSidebar();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Select all visible chats' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select all 2 chats' }));
     expect(screen.getByText('2 chats selected')).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox', { name: /Select chat:/ })).toHaveLength(2);
     expect(
@@ -516,6 +516,70 @@ describe('Sidebar recent chats', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear chat selection' }));
     expect(screen.queryByText('2 chats selected')).toBeNull();
+  });
+
+  it('selects every matching chat in one click even when the list is collapsed to five preview rows', () => {
+    const manySessions: SessionSummary[] = Array.from({ length: 7 }, (_, i) => ({
+      session_id: `chat-${i + 1}`,
+      topics: [],
+      primary_topic: null,
+      last_prompt: `Prompt ${i + 1}`,
+      turn_count: 1,
+      last_active: `2026-08-01T0${i}:00:00Z`,
+    }));
+    renderSidebar({ sessions: manySessions });
+
+    // The list previews only five rows, but "Select all" must stage every chat.
+    expect(screen.getAllByRole('checkbox', { name: /Select chat:/ })).toHaveLength(5);
+    expect(
+      screen.getByRole('button', { name: 'Select all 7 chats' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Select all 7 chats' }));
+
+    expect(screen.getByText('7 chats selected')).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('checkbox', { name: /Select chat:/ })
+        .every((box) => (box as HTMLInputElement).checked),
+    ).toBe(true);
+
+    // The hidden rows are part of the bulk selection, so one export covers all.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Export 7 selected chats as markdown' }),
+    );
+    expect(downloadMarkdownFile).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear chat selection' }));
+    expect(screen.queryByText('7 chats selected')).toBeNull();
+  });
+
+  it('selects only the filtered matches when a chat search is active', () => {
+    const manySessions: SessionSummary[] = Array.from({ length: 7 }, (_, i) => ({
+      session_id: `chat-${i + 1}`,
+      topics: [],
+      primary_topic: null,
+      last_prompt: `Prompt ${i + 1}`,
+      turn_count: 1,
+      last_active: `2026-08-01T0${i}:00:00Z`,
+    }));
+    renderSidebar({ sessions: manySessions });
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
+      target: { value: 'Prompt 7' },
+    });
+
+    const visible = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    expect(visible).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Select all 1 chat' }));
+
+    expect(screen.getByText('1 chat selected')).toBeInTheDocument();
+    expect((visible[0] as HTMLInputElement).checked).toBe(true);
+
+    // Non-matching chats stay out of the bulk selection.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Export 1 selected chats as markdown' }),
+    );
+    expect(downloadMarkdownFile).toHaveBeenCalled();
   });
 
   it('shift-clicks a chat to select the whole visible range since the anchor', () => {
@@ -742,7 +806,7 @@ describe('Sidebar recent chats', () => {
 
     const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
     fireEvent.click(checkboxes[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Select all visible chats' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select all 3 chats' }));
     expect(screen.getByText('3 chats selected')).toBeInTheDocument();
 
     fireEvent.click(checkboxes[1], { shiftKey: true });

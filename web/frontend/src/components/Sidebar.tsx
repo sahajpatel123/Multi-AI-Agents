@@ -434,11 +434,12 @@ export function Sidebar({
       : showAllChats
         ? sortedChats
         : sortedChats.slice(0, 5);
-  const selectedVisibleCount = visibleChats.filter((session) =>
-    selectedChatIds.has(session.session_id),
-  ).length;
-  const allVisibleChatsSelected =
-    visibleChats.length > 0 && selectedVisibleCount === visibleChats.length;
+  // "Select all" targets the full filtered list, not just the first five
+  // preview rows, so one click can stage every matching chat for a bulk
+  // action (export, copy, pin, duplicate, delete) without expanding first.
+  const allFilteredChatsSelected =
+    filteredChats.length > 0 &&
+    filteredChats.every((session) => selectedChatIds.has(session.session_id));
   const allSelectedChatsPinned =
     selectedChatIds.size > 0 &&
     [...selectedChatIds].every((id) =>
@@ -1751,7 +1752,7 @@ export function Sidebar({
     });
   };
 
-  const toggleAllVisibleChats = () => {
+  const toggleAllFilteredChats = () => {
     if (bulkChatsBusy) return;
     chatSelectionAnchorRef.current = null;
     setConfirmBulkDeleteChats(false);
@@ -1761,8 +1762,8 @@ export function Sidebar({
     bulkPinUnpinActionRef.current = null;
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
-      for (const session of visibleChats) {
-        if (allVisibleChatsSelected) {
+      for (const session of filteredChats) {
+        if (allFilteredChatsSelected) {
           next.delete(session.session_id);
         } else {
           next.add(session.session_id);
@@ -2106,23 +2107,23 @@ export function Sidebar({
                     <button
                       type="button"
                       aria-label={
-                        allVisibleChatsSelected
+                        allFilteredChatsSelected
                           ? 'Clear chat selection'
-                          : 'Select all visible chats'
+                          : `Select all ${filteredChats.length} ${filteredChats.length === 1 ? 'chat' : 'chats'}`
                       }
                       title={
-                        allVisibleChatsSelected
+                        allFilteredChatsSelected
                           ? 'Clear chat selection'
-                          : 'Select all visible chats'
+                          : `Select all ${filteredChats.length} ${filteredChats.length === 1 ? 'chat' : 'chats'}`
                       }
-                      onClick={toggleAllVisibleChats}
+                      onClick={toggleAllFilteredChats}
                       disabled={bulkChatsBusy}
                       style={{
                         background: 'none',
                         border: '0.5px solid #E0D8D0',
                         borderRadius: 5,
                         cursor: bulkChatsBusy ? 'default' : 'pointer',
-                        color: allVisibleChatsSelected ? '#5A8C6A' : '#A0A39A',
+                        color: allFilteredChatsSelected ? '#5A8C6A' : '#A0A39A',
                         padding: '3px 6px',
                         fontSize: 10,
                         letterSpacing: '0.04em',
@@ -2130,7 +2131,11 @@ export function Sidebar({
                         fontFamily: 'var(--vp-font-sans)',
                       }}
                     >
-                      {allVisibleChatsSelected ? 'Clear' : 'Select all'}
+                      {allFilteredChatsSelected
+                        ? 'Clear'
+                        : filteredChats.length === 1
+                          ? 'Select all'
+                          : `Select all ${filteredChats.length}`}
                     </button>
                   ) : null}
                   {onClearSessions && recentSessions.length > 0 ? (
