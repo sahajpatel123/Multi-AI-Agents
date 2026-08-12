@@ -24,6 +24,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Agent full research report: download as JSON (machine-readable parity with /result)',
       '[NEW] Agent history: download the current filtered view as CSV or JSON',
       '[NEW] Arena: Copy winner — grab just the winning take as markdown (not the full comparison)',
+      '[NEW] Arena: Save winner — bookmark the winning take to your saved-takes library from the round header or with Shift+S',
       '[NEW] Agent templates: Copy template or Copy prompt on any card',
       '[NEW] Personas library: Copy mind on any card (name, quote, description)',
       '[NEW] Agent history: Copy research snapshot (score, topics, question) from the ⋯ menu',

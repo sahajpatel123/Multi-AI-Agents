@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arena winner take can be saved to or removed from the saved-takes library
+  with a new round-header "Save winner" action or the Shift+S shortcut
 - Sidebar "Select all" now stages every matching chat in one click (count is
   shown on the button), even when the list is collapsed to the five-chat
   preview, so bulk export, copy, pin, duplicate, and delete cover the whole

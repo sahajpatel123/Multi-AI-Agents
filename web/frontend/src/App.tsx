@@ -59,6 +59,7 @@ import {
   formatArenaTranscriptCsvExport,
   formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
+  pickArenaWinner,
 } from './lib/arenaExport';
 import { buildFollowUpContext } from './lib/followUpContext';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
@@ -90,6 +91,7 @@ import {
   isArenaCopyQuestionKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
+  isArenaSaveWinnerKey,
 } from './lib/keyboardShortcuts';
 import { RecentPromptChips } from './components/RecentPromptChips';
 import { usePanel } from './context/PanelContext';
@@ -148,6 +150,7 @@ function App() {
   const [promptCopied, setPromptCopied] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
   const [winnerDownloaded, setWinnerDownloaded] = useState(false);
+  const [winnerSaveFeedback, setWinnerSaveFeedback] = useState<'saved' | 'removed' | null>(null);
   const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
   const [followUpSuggestionsSource, setFollowUpSuggestionsSource] = useState<'llm' | 'fallback'>('llm');
   const [recentPrompts, setRecentPrompts] = useState<RecentPrompt[]>(() => loadRecentPrompts());
@@ -726,41 +729,6 @@ function App() {
     }
   }, [response]);
 
-  // Keyboard-first Arena exports: Shift+C / Shift+D / Shift+Q mirror the
-  // header export buttons once a round has finished. Form controls are
-  // skipped so normal Shift+letter typing is never swallowed.
-  useEffect(() => {
-    if (
-      (viewMode !== 'arena' && viewMode !== 'leaderboard') ||
-      phase !== 'done' ||
-      !response
-    ) {
-      return;
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (!shouldCaptureSlashFocus(e.target)) return;
-      if (isArenaCopyWinnerKey(e)) {
-        e.preventDefault();
-        void handleExportWinner();
-      } else if (isArenaDownloadWinnerKey(e)) {
-        e.preventDefault();
-        handleDownloadWinner();
-      } else if (isArenaCopyQuestionKey(e)) {
-        e.preventDefault();
-        void handleCopyPrompt();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [
-    handleCopyPrompt,
-    handleDownloadWinner,
-    handleExportWinner,
-    phase,
-    response,
-    viewMode,
-  ]);
-
   const handleLikeResponse = useCallback((scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
     const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
@@ -862,6 +830,71 @@ function App() {
       return [...prev, nextItem];
     });
   }, [activeTurnId, canUseFeature, getPersonaForAgentId, getResponseKey, response, showPlusUpgrade]);
+
+  /**
+   * Save or unsave the winning take in the saved-takes library. Mirrors the
+   * bookmark on the winner card, but without hunting for the winning card
+   * first — the header button and Shift+S both land here.
+   */
+  const handleSaveWinner = useCallback(() => {
+    if (!response) return;
+    const winner = pickArenaWinner(response);
+    if (!winner) return;
+    if (!canUseFeature('saved_responses')) {
+      handleSaveResponse(winner);
+      return;
+    }
+    const alreadySaved = savedItems.some(
+      (item) =>
+        item.session_id === response.session_id &&
+        item.agent_id === winner.response.agent_id,
+    );
+    handleSaveResponse(winner);
+    if (!alreadySaved) {
+      void track('arena_save_winner');
+    }
+    setWinnerSaveFeedback(alreadySaved ? 'removed' : 'saved');
+    window.setTimeout(() => setWinnerSaveFeedback(null), 1800);
+  }, [canUseFeature, handleSaveResponse, response, savedItems]);
+
+  // Keyboard-first Arena exports: Shift+C / Shift+D / Shift+S / Shift+Q mirror
+  // the header action buttons once a round has finished. Form controls are
+  // skipped so normal Shift+letter typing is never swallowed.
+  useEffect(() => {
+    if (
+      (viewMode !== 'arena' && viewMode !== 'leaderboard') ||
+      phase !== 'done' ||
+      !response
+    ) {
+      return;
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      if (isArenaCopyWinnerKey(e)) {
+        e.preventDefault();
+        void handleExportWinner();
+      } else if (isArenaDownloadWinnerKey(e)) {
+        e.preventDefault();
+        handleDownloadWinner();
+      } else if (isArenaSaveWinnerKey(e)) {
+        e.preventDefault();
+        handleSaveWinner();
+      } else if (isArenaCopyQuestionKey(e)) {
+        e.preventDefault();
+        void handleCopyPrompt();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    handleCopyPrompt,
+    handleDownloadWinner,
+    handleExportWinner,
+    handleSaveWinner,
+    phase,
+    response,
+    viewMode,
+  ]);
 
   const handleVerifyWinnerInAgent = useCallback(
     async (scoredAgent: ScoredAgent) => {
@@ -2017,6 +2050,10 @@ function App() {
     ? [...currentResponses.all_responses].sort((a, b) => b.score - a.score)
     : [];
   const savedKeys = new Set(savedItems.map((item) => `${item.session_id}:${item.agent_id}`));
+  const winnerTake = response ? pickArenaWinner(response) : null;
+  const winnerIsSaved = winnerTake
+    ? savedKeys.has(`${response?.session_id}:${winnerTake.response.agent_id}`)
+    : false;
   const focusedTargetStyle = {
     left: isMobile ? '0' : '50%',
     top: isMobile ? 'auto' : '50%',
@@ -2252,6 +2289,26 @@ function App() {
                     style={{ fontSize: 12 }}
                   >
                     {winnerDownloaded ? 'Winner saved' : 'Download winner'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={handleSaveWinner}
+                    aria-pressed={winnerIsSaved}
+                    title={
+                      winnerIsSaved
+                        ? 'Remove the winning take from your saved takes'
+                        : 'Save the winning take to your saved takes (Shift+S)'
+                    }
+                    style={{ fontSize: 12 }}
+                  >
+                    {winnerSaveFeedback === 'saved'
+                      ? 'Winner saved'
+                      : winnerSaveFeedback === 'removed'
+                        ? 'Winner removed'
+                        : winnerIsSaved
+                          ? 'Unsave winner'
+                          : 'Save winner'}
                   </button>
                   <button
                     type="button"
