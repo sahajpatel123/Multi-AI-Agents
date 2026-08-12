@@ -29,6 +29,7 @@ import {
   renameSession,
   duplicateSession,
   duplicateSessionsBulk,
+  importChatsBulk,
   setSessionPin,
   setSessionsPinBulk,
   saveMemory,
@@ -63,6 +64,10 @@ import { buildFollowUpContext } from './lib/followUpContext';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
 import { buildSessionTurnResponse } from './lib/arenaTurn';
 import { loadSessionTranscriptBundles } from './lib/arenaSessionArchive';
+import {
+  parseArenaTranscriptsArchive,
+  type ImportedChat,
+} from './lib/arenaChatsImport';
 import { isScrollNearBottom, shouldAutoScrollChat } from './lib/chatScroll';
 import { scrollBehavior } from './lib/motion';
 import {
@@ -1184,6 +1189,36 @@ function App() {
     return result;
   }, []);
 
+  const handleImportChats = useCallback(async (file: File) => {
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      return null;
+    }
+    let chats: ImportedChat[];
+    try {
+      chats = parseArenaTranscriptsArchive(text);
+    } catch {
+      return null;
+    }
+    if (chats.length === 0) return null;
+    const result = await importChatsBulk(chats);
+    if (!result) return null;
+    setRecentSessions((prev) => {
+      const existingIds = new Set(prev.map((session) => session.session_id));
+      const fresh = result.sessions.filter(
+        (session) => !existingIds.has(session.session_id),
+      );
+      return [...fresh, ...prev];
+    });
+    void track('recent_chats_imported', undefined, undefined, {
+      imported: result.imported,
+      requested: chats.length,
+    });
+    return result.imported;
+  }, []);
+
   const handleBulkExportChatTranscripts = useCallback(
     async (sessionIds: string[]) => {
       if (sessionIds.length === 0) return null;
@@ -2044,6 +2079,7 @@ function App() {
           onBulkDeleteSessions={handleBulkDeleteSessions}
           onBulkPinSessions={handleBulkPinSessions}
           onBulkDuplicateSessions={handleBulkDuplicateSessions}
+          onImportChats={handleImportChats}
           onBulkExportTranscripts={handleBulkExportChatTranscripts}
           onBulkExportTranscriptsJson={handleBulkExportChatTranscriptsJson}
           onBulkCopyTranscripts={handleBulkCopyChatTranscripts}

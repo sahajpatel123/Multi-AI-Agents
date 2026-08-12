@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sidebar resumable chats can be restored from exported JSON transcript
+  archives (single chat or combined archive) as new resumable chats
 - Sidebar selected chats can be exported as one combined full-session JSON
   transcript archive (machine-readable, with per-chat provenance)
 - Sidebar selected chats can be copied to the clipboard as one combined

@@ -1,10 +1,20 @@
 """Session route — retrieve and manage session data"""
 
+import uuid
+from datetime import datetime
+
 from pydantic import BaseModel, Field, field_validator
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 
-from arena.models.schemas import SessionData, ErrorResponse, UserResponse
+from arena.core.datetime_utils import utcnow_naive
+from arena.models.schemas import (
+    AgentResponse,
+    ErrorResponse,
+    SessionData,
+    SessionTurn,
+    UserResponse,
+)
 from arena.core.memory import get_memory_manager
 from arena.core.input_validation import sanitize_model_text
 from arena.core.persona_integrity import clear_session_history
@@ -70,6 +80,68 @@ class BulkDuplicateSessionsRequest(BaseModel):
         min_length=1,
         max_length=100,
         description="Sessions to duplicate, capped so one request stays bounded.",
+    )
+
+
+class ImportedAgentResponse(BaseModel):
+    """One stored take inside an imported transcript archive."""
+
+    agent_id: str = Field(..., max_length=50)
+    agent_number: int | None = Field(None, ge=1, le=4)
+    verdict: str = Field("", max_length=2000)
+    one_liner: str | None = Field(None, max_length=500)
+    confidence: int = Field(80, ge=0, le=100)
+    key_assumption: str | None = Field(None, max_length=500)
+    timestamp: datetime | None = Field(None)
+
+
+class ImportedChatTurn(BaseModel):
+    """One exchange inside an imported transcript archive."""
+
+    turn_id: str = Field("", max_length=64)
+    prompt: str = Field(..., max_length=2000)
+    prompt_category: str | None = Field(None, max_length=50)
+    agent_responses: dict[str, ImportedAgentResponse] = Field(
+        ...,
+        max_length=8,
+        description="Stored takes keyed by agent id.",
+    )
+    winner_id: str = Field("", max_length=50)
+    timestamp: datetime | None = Field(None)
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, value: str) -> str:
+        return sanitize_model_text(value, max_length=2000, field_name="prompt")
+
+    @field_validator("prompt_category")
+    @classmethod
+    def validate_category(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return sanitize_model_text(value, max_length=50, field_name="prompt_category")
+
+
+class ImportedChat(BaseModel):
+    """One chat to restore from an exported Arena archive."""
+
+    title: str | None = Field(None, max_length=SESSION_TITLE_MAX)
+    turns: list[ImportedChatTurn] = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="Imported exchanges, capped at the live short-term limit.",
+    )
+
+
+class ImportChatsRequest(BaseModel):
+    """Body for restoring exported Arena transcript archives."""
+
+    chats: list[ImportedChat] = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Chats to restore, capped so one request stays bounded.",
     )
 
 
@@ -336,6 +408,149 @@ async def duplicate_selected_sessions(
     return {
         "status": "duplicated",
         "duplicated": len(sessions),
+        "sessions": sessions,
+    }
+
+
+def _clean_import_text(value: str | None, *, max_length: int, field_name: str) -> str:
+    """Clean imported free text without failing on empty optional fields."""
+    if value is None or not value.strip():
+        return ""
+    return sanitize_model_text(value, max_length=max_length, field_name=field_name)
+
+
+def _agent_number_for_id(agent_id: str) -> int | None:
+    """Map an official Arena slot id (agent_1..agent_4) to its number."""
+    if agent_id not in {"agent_1", "agent_2", "agent_3", "agent_4"}:
+        return None
+    try:
+        number = int(agent_id.rsplit("_", 1)[-1])
+    except (TypeError, ValueError):
+        return None
+    return number if 1 <= number <= 4 else None
+
+
+@router.post("/sessions/import")
+async def import_sessions(
+    body: ImportChatsRequest,
+    user: UserResponse = Depends(get_current_user_required),
+) -> dict:
+    """Restore exported Arena transcript archives as new resumable chats.
+
+    Imported chats are always created fresh: new ids, unpinned, owned by the
+    caller, with their own activity clock. Source session ids and timestamps
+    are preserved inside the transcript for provenance but never trusted as
+    ownership. Only official Arena slot ids (agent_1..agent_4) are accepted
+    for imported takes; anything else is dropped rather than resurrected as
+    a spoofed or stale persona.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="session_import",
+        limit=10,
+        window_seconds=3600,
+        message="Too many chat archive imports. Limit is 10 per hour.",
+    )
+    memory = get_memory_manager()
+
+    bundles: list[dict] = []
+    for chat in body.chats:
+        turns: list[SessionTurn] = []
+        exchanges: list[dict] = []
+        for raw_turn in chat.turns:
+            agent_responses: dict[str, AgentResponse] = {}
+            for agent_id, raw in raw_turn.agent_responses.items():
+                agent_number = _agent_number_for_id(agent_id)
+                if agent_number is None:
+                    continue
+                verdict = _clean_import_text(
+                    raw.verdict, max_length=2000, field_name="verdict"
+                )
+                one_liner = _clean_import_text(
+                    raw.one_liner, max_length=500, field_name="one_liner"
+                )
+                key_assumption = _clean_import_text(
+                    raw.key_assumption, max_length=500, field_name="key_assumption"
+                )
+                agent_responses[agent_id] = AgentResponse(
+                    agent_id=agent_id,
+                    agent_number=agent_number,
+                    verdict=verdict,
+                    one_liner=one_liner,
+                    confidence=raw.confidence,
+                    key_assumption=key_assumption,
+                    timestamp=raw.timestamp or utcnow_naive(),
+                )
+            if not agent_responses:
+                continue
+
+            prompt = _clean_import_text(
+                raw_turn.prompt, max_length=2000, field_name="prompt"
+            )
+            if not prompt:
+                continue
+            category = raw_turn.prompt_category
+            if category is not None and not category.strip():
+                category = None
+            winner_id = (
+                raw_turn.winner_id
+                if raw_turn.winner_id in agent_responses
+                else next(iter(agent_responses))
+            )
+            turn = SessionTurn(
+                turn_id=raw_turn.turn_id or str(uuid.uuid4()),
+                prompt=prompt,
+                agent_responses=agent_responses,
+                winner_id=winner_id,
+                timestamp=raw_turn.timestamp or utcnow_naive(),
+            )
+            turns.append(turn)
+            exchanges.append(
+                {
+                    "turn": len(turns),
+                    "prompt": prompt,
+                    "prompt_category": category or "question",
+                    "winner_agent_id": winner_id,
+                    "winner_persona_id": None,
+                    "winner_one_liner": agent_responses[winner_id].one_liner,
+                    "all_responses": [
+                        {
+                            "agent_id": response.agent_id,
+                            "persona_id": None,
+                            "one_liner": response.one_liner,
+                            "score": 0,
+                            "confidence": response.confidence,
+                        }
+                        for response in agent_responses.values()
+                    ],
+                    "timestamp": turn.timestamp,
+                }
+            )
+
+        if not turns:
+            continue
+        bundles.append(
+            {
+                "title": (
+                    _clean_import_text(
+                        chat.title, max_length=SESSION_TITLE_MAX, field_name="title"
+                    )
+                    or None
+                ),
+                "turns": turns,
+                "exchanges": exchanges,
+            }
+        )
+
+    restored_states = memory.short_term.restore_sessions(
+        bundles, user_id=str(user.id)
+    )
+    sessions = [
+        _session_summary(state["session_id"], state) for state in restored_states
+    ]
+    return {
+        "status": "imported",
+        "imported": len(sessions),
         "sessions": sessions,
     }
 

@@ -23,6 +23,7 @@ import pytest
 
 from arena.core.request_size import (
     DEFAULT_MAX_BODY_BYTES,
+    SESSION_IMPORT_MAX_BODY_BYTES,
     UPLOAD_MAX_BODY_BYTES,
     WEBHOOK_MAX_BODY_BYTES,
     max_request_body_bytes,
@@ -85,6 +86,14 @@ class TestMaxRequestBodyBytesWebhook:
         assert max_request_body_bytes("/api/payments/webhook/") == WEBHOOK_MAX_BODY_BYTES
 
 
+class TestMaxRequestBodyBytesSessionImport:
+    def test_import_path(self):
+        assert max_request_body_bytes("/api/sessions/import") == SESSION_IMPORT_MAX_BODY_BYTES
+
+    def test_import_path_with_trailing_slash(self):
+        assert max_request_body_bytes("/api/sessions/import/") == SESSION_IMPORT_MAX_BODY_BYTES
+
+
 class TestMaxRequestBodyBytesBucketIsolation:
     """The three buckets must NOT cross-contaminate. A regression
     that makes the default too high (e.g. matches upload cap) would
@@ -99,12 +108,16 @@ class TestMaxRequestBodyBytesBucketIsolation:
     def test_webhook_smaller_than_upload(self):
         assert WEBHOOK_MAX_BODY_BYTES < UPLOAD_MAX_BODY_BYTES
 
+    def test_import_between_default_and_upload(self):
+        assert DEFAULT_MAX_BODY_BYTES < SESSION_IMPORT_MAX_BODY_BYTES < UPLOAD_MAX_BODY_BYTES
+
     def test_constants_are_correct_values(self):
         """Pin the actual byte counts — operators watch these on
         dashboards. A regression that flips the constants (e.g.
         upload to 100KB) would silently break every upload."""
         assert DEFAULT_MAX_BODY_BYTES == 10 * 1024       # 10 KB
         assert UPLOAD_MAX_BODY_BYTES == 11 * 1024 * 1024  # 10 MB + overhead
+        assert SESSION_IMPORT_MAX_BODY_BYTES == 2 * 1024 * 1024  # 2 MB
         assert WEBHOOK_MAX_BODY_BYTES == 1024 * 1024      # 1 MB
 
 
@@ -132,6 +145,11 @@ class TestPayloadTooLargeMessage:
     def test_webhook_message_with_trailing_slash(self):
         msg = payload_too_large_message("/api/payments/webhook/")
         assert "1MB" in msg or "1 MB" in msg
+
+    def test_import_message(self):
+        msg = payload_too_large_message("/api/sessions/import")
+        assert "2MB" in msg or "2 MB" in msg
+        assert "Import" in msg
 
 
 class TestBucketPathMatching:

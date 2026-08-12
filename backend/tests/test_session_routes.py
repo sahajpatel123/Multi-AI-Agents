@@ -543,6 +543,164 @@ async def test_bulk_duplicate_skips_anonymous_sessions(app_client, make_user):
     assert store_ids == {"anon-bulk", "mine", body["sessions"][0]["session_id"]}
 
 
+# ─── Import ────────────────────────────────────────────────────────────────
+
+
+def _import_chat(
+    *,
+    title: str | None,
+    winner_id: str = "agent_1",
+    agent_ids: list[str] | None = None,
+) -> dict:
+    """Build one minimal imported chat for archive-restore tests."""
+    ids = agent_ids or ["agent_1"]
+    responses = {}
+    for agent_id in ids:
+        responses[agent_id] = {
+            "agent_id": agent_id,
+            "verdict": f"{agent_id} says yes.",
+            "one_liner": "Yes.",
+            "confidence": 80,
+            "key_assumption": "Scope stays small.",
+            "timestamp": "2026-08-12T10:00:00Z",
+        }
+    return {
+        "title": title,
+        "turns": [
+            {
+                "turn_id": "turn-1",
+                "prompt": "Should we launch the experiment now?",
+                "prompt_category": "question",
+                "winner_id": winner_id,
+                "timestamp": "2026-08-12T10:00:00Z",
+                "agent_responses": responses,
+            }
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_import_creates_owned_resumable_chats(app_client, make_user):
+    user = make_user(email="sess-import@test.com", tier=UserTier.PRO)
+
+    res = await app_client.post(
+        "/api/sessions/import",
+        headers=_pro_headers(user),
+        json={
+            "chats": [
+                _import_chat(title="Launch review"),
+                _import_chat(title="Risk review", winner_id="agent_2", agent_ids=["agent_1", "agent_2"]),
+            ]
+        },
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "imported"
+    assert body["imported"] == 2
+    assert {row["title"] for row in body["sessions"]} == {
+        "Launch review",
+        "Risk review",
+    }
+    assert all(row["pinned"] is False for row in body["sessions"])
+    assert all(row["turn_count"] == 1 for row in body["sessions"])
+
+    restored = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    sids = {row["session_id"] for row in restored.json()["sessions"]}
+    assert len(sids) == 2
+
+    imported_id = body["sessions"][0]["session_id"]
+    session = await app_client.get(
+        f"/api/session/{imported_id}", headers=_pro_headers(user)
+    )
+    assert session.status_code == 200
+    payload = session.json()
+    assert payload["turns"][0]["prompt"] == "Should we launch the experiment now?"
+    assert payload["turns"][0]["winner_id"] == "agent_1"
+
+
+@pytest.mark.asyncio
+async def test_import_rejects_empty_archive(app_client, make_user):
+    user = make_user(email="sess-import-empty@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/sessions/import",
+        headers=_pro_headers(user),
+        json={"chats": []},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_import_drops_unknown_agent_ids_and_falls_back_to_valid_winner(
+    app_client, make_user
+):
+    user = make_user(email="sess-import-drop@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/sessions/import",
+        headers=_pro_headers(user),
+        json={
+            "chats": [
+                _import_chat(
+                    title="Safe restore",
+                    winner_id="agent_999",
+                    agent_ids=["agent_1", "agent_999"],
+                )
+            ]
+        },
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["imported"] == 1
+    session_id = body["sessions"][0]["session_id"]
+
+    session = await app_client.get(
+        f"/api/session/{session_id}", headers=_pro_headers(user)
+    )
+    turn = session.json()["turns"][0]
+    assert set(turn["agent_responses"].keys()) == {"agent_1"}
+    assert turn["winner_id"] == "agent_1"
+
+
+@pytest.mark.asyncio
+async def test_import_does_not_leak_original_owner_ids(app_client, make_user):
+    """Imported archives create fresh ids; source ids never appear as
+    the live session id or leak into another user's list."""
+    user = make_user(email="sess-import-fresh@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/sessions/import",
+        headers=_pro_headers(user),
+        json={
+            "chats": [
+                {
+                    "title": "Original source title",
+                    "turns": [
+                        {
+                            "turn_id": "source-turn-1",
+                            "prompt": "Keep this question.",
+                            "prompt_category": "question",
+                            "winner_id": "agent_1",
+                            "timestamp": "2026-07-01T09:00:00Z",
+                            "agent_responses": {
+                                "agent_1": {
+                                    "agent_id": "agent_1",
+                                    "verdict": "Keep.",
+                                    "one_liner": "Keep.",
+                                    "confidence": 90,
+                                    "key_assumption": "None.",
+                                    "timestamp": "2026-07-01T09:00:00Z",
+                                }
+                            },
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    assert res.status_code == 200
+    row = res.json()["sessions"][0]
+    assert row["session_id"] != "source-session-id"
+    assert row["last_prompt"] == "Keep this question."
+
+
 @pytest.mark.asyncio
 async def test_list_skips_malformed_state_without_session_data(app_client, make_user):
     """Listing must not 500 on a malformed state; it skips the broken row."""

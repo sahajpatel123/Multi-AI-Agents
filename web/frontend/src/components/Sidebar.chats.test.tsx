@@ -133,6 +133,7 @@ function renderSidebar(overrides?: {
         sessionIds: string[],
       ) => BulkDuplicateSessionsResult | null | Promise<BulkDuplicateSessionsResult | null>)
     | null;
+  onImportChats?: ((file: File) => number | null | Promise<number | null>) | null;
   onBulkExportTranscripts?:
     | ((sessionIds: string[]) => number | null | Promise<number | null> | void)
     | null;
@@ -158,6 +159,10 @@ function renderSidebar(overrides?: {
     overrides?.onBulkDuplicateSessions === undefined
       ? vi.fn(() => ({ duplicated: 0, sessions: [] }))
       : (overrides.onBulkDuplicateSessions ?? undefined);
+  const onImportChats =
+    overrides?.onImportChats === undefined
+      ? vi.fn(() => 1)
+      : (overrides.onImportChats ?? undefined);
   const onBulkExportTranscripts =
     overrides?.onBulkExportTranscripts === undefined
       ? vi.fn(() => 2)
@@ -192,6 +197,7 @@ function renderSidebar(overrides?: {
       onBulkDeleteSessions={onBulkDeleteSessions}
       onBulkPinSessions={onBulkPinSessions}
       onBulkDuplicateSessions={onBulkDuplicateSessions}
+      onImportChats={onImportChats}
       onBulkExportTranscripts={onBulkExportTranscripts}
       onBulkExportTranscriptsJson={onBulkExportTranscriptsJson}
       onBulkCopyTranscripts={onBulkCopyTranscripts}
@@ -207,6 +213,7 @@ function renderSidebar(overrides?: {
     onBulkDeleteSessions,
     onBulkPinSessions,
     onBulkDuplicateSessions,
+    onImportChats,
     onBulkExportTranscripts,
     onBulkExportTranscriptsJson,
     onBulkCopyTranscripts,
@@ -233,6 +240,7 @@ function renderSidebar(overrides?: {
           onBulkDeleteSessions={onBulkDeleteSessions}
           onBulkPinSessions={onBulkPinSessions}
           onBulkDuplicateSessions={onBulkDuplicateSessions}
+          onImportChats={onImportChats}
           onBulkExportTranscripts={onBulkExportTranscripts}
           onBulkExportTranscriptsJson={onBulkExportTranscriptsJson}
           onBulkCopyTranscripts={onBulkCopyTranscripts}
@@ -2161,6 +2169,9 @@ describe('Sidebar recent chats', () => {
     renderSidebar();
 
     expect(
+      screen.getByRole('button', { name: 'Import chats from JSON archive' }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole('button', { name: 'Copy chats as markdown' }),
     ).toBeInTheDocument();
     expect(
@@ -2181,11 +2192,54 @@ describe('Sidebar recent chats', () => {
       screen.queryByRole('button', { name: 'Copy chats as markdown' }),
     ).toBeNull();
     expect(
+      screen.queryByRole('button', { name: 'Import chats from JSON archive' }),
+    ).toBeNull();
+    expect(
       screen.queryByRole('button', { name: 'Download chats as JSON' }),
     ).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Download chats as CSV' }),
     ).toBeNull();
+  });
+
+  it('imports chats from a JSON transcript archive', async () => {
+    const onImportChats = vi.fn().mockResolvedValue(2);
+    renderSidebar({ onImportChats });
+
+    const input = screen.getByLabelText('Choose transcript archive file', {
+      hidden: true,
+    });
+    const file = new File(['{}'], 'arena-chats.json', {
+      type: 'application/json',
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(onImportChats).toHaveBeenCalledWith(file));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Chats imported' }),
+      ).toHaveTextContent('Imported 2'),
+    );
+  });
+
+  it('announces a failed chat archive import', async () => {
+    const onImportChats = vi.fn().mockResolvedValue(null);
+    renderSidebar({ onImportChats });
+
+    const input = screen.getByLabelText('Choose transcript archive file', {
+      hidden: true,
+    });
+    fireEvent.change(input, {
+      target: {
+        files: [new File(['{}'], 'broken.json', { type: 'application/json' })],
+      },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Import failed' }),
+      ).toBeInTheDocument(),
+    );
   });
 });
 

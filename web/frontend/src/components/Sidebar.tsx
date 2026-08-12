@@ -177,6 +177,10 @@ interface SidebarProps {
   onBulkDuplicateSessions?: (
     sessionIds: string[],
   ) => Promise<BulkDuplicateSessionsResult | null> | BulkDuplicateSessionsResult | null | void;
+  /** Restore exported Arena transcript JSON archives as new resumable chats. */
+  onImportChats?: (
+    file: File,
+  ) => Promise<number | null> | number | null | void;
   /** Export full transcripts for a user-selected subset of live chats. */
   onBulkExportTranscripts?: (
     sessionIds: string[],
@@ -235,6 +239,7 @@ export function Sidebar({
   onBulkDeleteSessions,
   onBulkPinSessions,
   onBulkDuplicateSessions,
+  onImportChats,
   onBulkExportTranscripts,
   onBulkExportTranscriptsJson,
   onBulkCopyTranscripts,
@@ -347,6 +352,12 @@ export function Sidebar({
   const [bulkTranscriptCopiedCount, setBulkTranscriptCopiedCount] = useState<
     number | null
   >(null);
+  const [importChatsStatus, setImportChatsStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed'
+  >('idle');
+  const [importedChatsCount, setImportedChatsCount] = useState<number | null>(
+    null,
+  );
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -373,6 +384,7 @@ export function Sidebar({
   const sessionRenameInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const chatSearchInputRef = useRef<HTMLInputElement>(null);
+  const importChatsInputRef = useRef<HTMLInputElement>(null);
   const savedSearchInputRef = useRef<HTMLInputElement>(null);
   const bulkPinUnpinActionRef = useRef<boolean | null>(null);
   const bulkCopyChatsInFlightRef = useRef(false);
@@ -440,7 +452,8 @@ export function Sidebar({
     bulkCopyChatsStatus === 'busy' ||
     bulkTranscriptExportStatus === 'busy' ||
     bulkTranscriptJsonExportStatus === 'busy' ||
-    bulkTranscriptCopyStatus === 'busy';
+    bulkTranscriptCopyStatus === 'busy' ||
+    importChatsStatus === 'busy';
   const bulkPinBusyTarget =
     bulkPinChatsStatus === 'busy' && bulkPinUnpinActionRef.current !== null
       ? bulkPinUnpinActionRef.current
@@ -890,6 +903,19 @@ export function Sidebar({
     );
     return () => window.clearTimeout(t);
   }, [bulkTranscriptCopyStatus]);
+
+  useEffect(() => {
+    if (importChatsStatus === 'idle' || importChatsStatus === 'busy') return;
+    const hold = motionDuration(importChatsStatus === 'failed' ? 2800 : 2400);
+    const t = window.setTimeout(
+      () => {
+        setImportChatsStatus('idle');
+        setImportedChatsCount(null);
+      },
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [importChatsStatus]);
 
   // Keep the stored filter in sync with reality: drop the pinned-only view
   // when the last pinned chat is unpinned and normalize any stale value.
@@ -1757,6 +1783,27 @@ export function Sidebar({
     setSelectedChatIds(new Set());
   };
 
+  const handleImportChatsFile = async (file: File | null) => {
+    if (!file || !onImportChats || importChatsStatus === 'busy') return;
+    setImportChatsStatus('busy');
+    setImportedChatsCount(null);
+    try {
+      const count = await onImportChats(file);
+      if (typeof count === 'number' && count > 0) {
+        setImportedChatsCount(count);
+        setImportChatsStatus('done');
+      } else {
+        setImportChatsStatus('failed');
+      }
+    } catch {
+      setImportChatsStatus('failed');
+    } finally {
+      if (importChatsInputRef.current) {
+        importChatsInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleBulkDeleteChats = async () => {
     if (!onBulkDeleteSessions || bulkDeleteChatsStatus === 'busy') return;
     const ids = [...selectedChatIds];
@@ -2163,6 +2210,59 @@ export function Sidebar({
                     flexWrap: 'wrap',
                   }}
                 >
+                  {onImportChats ? (
+                    <button
+                      type="button"
+                      title="Import chats from a JSON transcript archive"
+                      aria-label={
+                        importChatsStatus === 'busy'
+                          ? 'Importing chats'
+                          : importChatsStatus === 'done'
+                            ? 'Chats imported'
+                            : importChatsStatus === 'failed'
+                              ? 'Import failed'
+                              : 'Import chats from JSON archive'
+                      }
+                      disabled={bulkChatsBusy}
+                      onClick={() => importChatsInputRef.current?.click()}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: bulkChatsBusy ? 'default' : 'pointer',
+                        color:
+                          importChatsStatus === 'failed'
+                            ? '#D85A30'
+                            : importChatsStatus === 'done'
+                              ? '#5A8C6A'
+                              : '#F0B84E',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {importChatsStatus === 'busy'
+                        ? 'Importing'
+                        : importChatsStatus === 'done'
+                          ? `Imported ${importedChatsCount ?? 0}`
+                          : importChatsStatus === 'failed'
+                            ? 'Failed'
+                            : 'Import'}
+                    </button>
+                  ) : null}
+                  <input
+                    ref={importChatsInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    aria-label="Choose transcript archive file"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      if (file) void handleImportChatsFile(file);
+                    }}
+                  />
                   <button
                     type="button"
                     title="Copy chats as markdown"

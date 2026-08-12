@@ -379,6 +379,51 @@ class ShortTermMemory:
             self._store[new_id] = new_state
             return new_id
 
+    def restore_sessions(
+        self,
+        bundles: list[dict[str, Any]],
+        user_id: str = "anonymous",
+    ) -> list[dict[str, Any]]:
+        """Restore exported chat bundles as fresh, user-owned sessions.
+
+        Every restored chat gets a brand-new id, an unpinned flag, and its
+        own activity clock, so an imported archive can never collide with an
+        existing session or leak the original owner's id. The transcript
+        turns and exchange history are kept verbatim so the restored chat
+        behaves like any other resumable session.
+        """
+        restored: list[dict[str, Any]] = []
+        with self._lock:
+            for bundle in bundles:
+                turns = list(bundle.get("turns") or [])
+                if not turns:
+                    continue
+                exchanges = list(bundle.get("exchanges") or [])
+                now = _now_utc()
+                new_id = str(uuid.uuid4())
+                session_data = SessionData(
+                    session_id=new_id,
+                    user_id=user_id,
+                    turns=turns,
+                    topics=_extract_topics_from_exchanges(exchanges, limit=4),
+                    created_at=now,
+                    last_active=now,
+                )
+                state = {
+                    "session_id": new_id,
+                    "user_id": user_id,
+                    "exchanges": exchanges,
+                    "active_debate_thread": None,
+                    "session_start": now,
+                    "session_data": session_data,
+                }
+                title = bundle.get("title")
+                if isinstance(title, str) and title.strip():
+                    state["session_title"] = title.strip()
+                self._store[new_id] = state
+                restored.append(state)
+        return restored
+
 
 class SessionCompressor:
     """Compresses raw session exchanges into compact DB-ready summaries."""

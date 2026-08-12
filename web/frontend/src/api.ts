@@ -15,6 +15,7 @@ import {
   TierStatus,
   ScoringAuditResponse,
 } from './types';
+import type { ImportedChat } from './lib/arenaChatsImport';
 
 export const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(
   /\/$/,
@@ -986,6 +987,11 @@ export type BulkDuplicateSessionsResult = {
   sessions: SessionSummary[];
 };
 
+export type BulkImportChatsResult = {
+  imported: number;
+  sessions: SessionSummary[];
+};
+
 export async function deleteSessionsBulk(
   sessionIds: string[],
 ): Promise<BulkDeleteSessionsResult | null> {
@@ -1049,6 +1055,29 @@ export async function duplicateSessionsBulk(
     }
     return {
       duplicated: data.duplicated,
+      sessions: data.sessions,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function importChatsBulk(
+  chats: ImportedChat[],
+): Promise<BulkImportChatsResult | null> {
+  try {
+    const response = await apiFetch('/api/sessions/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chats }),
+    });
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<Partial<BulkImportChatsResult>>(response);
+    if (!Array.isArray(data?.sessions) || typeof data?.imported !== 'number') {
+      return null;
+    }
+    return {
+      imported: data.imported,
       sessions: data.sessions,
     };
   } catch {
