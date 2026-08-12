@@ -150,16 +150,19 @@ export type ShortcutKeyEvent = {
   metaKey?: boolean;
   ctrlKey?: boolean;
   altKey?: boolean;
+  repeat?: boolean;
 };
 
 /**
  * True for a bare Shift+letter shortcut (no meta/ctrl/alt) so Arena can offer
- * keyboard-first export actions without stealing the user's typing.
+ * keyboard-first export actions without stealing the user's typing. Repeats
+ * from holding the key are ignored so one press means one copy/download.
  */
 function isBareShiftLetterKey(
   event: ShortcutKeyEvent,
   letter: 'c' | 'd' | 'q',
 ): boolean {
+  if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
   if (!event.shiftKey) return false;
   if (event.metaKey || event.ctrlKey || event.altKey) return false;

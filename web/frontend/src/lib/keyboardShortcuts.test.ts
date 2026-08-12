@@ -119,4 +119,15 @@ describe('keyboardShortcuts', () => {
     expect(isArenaCopyQuestionKey({ key: 'Q', shiftKey: true, altKey: true })).toBe(false);
     expect(isArenaCopyQuestionKey({ key: 'C', shiftKey: true })).toBe(false);
   });
+
+  it('ignores OS auto-repeat so holding a key cannot spam exports', () => {
+    expect(isArenaCopyWinnerKey({ key: 'C', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaCopyWinnerKey({ key: 'c', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaDownloadWinnerKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaCopyQuestionKey({ key: 'Q', shiftKey: true, repeat: true })).toBe(false);
+
+    expect(isArenaCopyWinnerKey({ key: 'C', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadWinnerKey({ key: 'D', shiftKey: true })).toBe(true);
+    expect(isArenaCopyQuestionKey({ key: 'Q', shiftKey: true })).toBe(true);
+  });
 });
