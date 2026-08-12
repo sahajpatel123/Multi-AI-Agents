@@ -577,6 +577,207 @@ describe('Sidebar recent chats', () => {
     expect((checkboxes[2] as HTMLInputElement).checked).toBe(true);
   });
 
+  it('selects a range in reverse direction from the anchor', () => {
+    renderSidebar({
+      sessions: [
+        sessions[0] as SessionSummary,
+        sessions[1] as SessionSummary,
+        {
+          session_id: 'chat-3',
+          topics: [],
+          primary_topic: null,
+          last_prompt: null,
+          turn_count: 1,
+          last_active: '2026-08-01T08:00:00Z',
+        },
+        {
+          session_id: 'chat-4',
+          topics: [],
+          primary_topic: null,
+          last_prompt: null,
+          turn_count: 1,
+          last_active: '2026-08-01T07:00:00Z',
+        },
+      ],
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    expect(checkboxes).toHaveLength(4);
+    fireEvent.click(checkboxes[2]);
+    fireEvent.click(checkboxes[0], { shiftKey: true });
+
+    expect(screen.getByText('3 chats selected')).toBeInTheDocument();
+    expect((checkboxes[0] as HTMLInputElement).checked).toBe(true);
+    expect((checkboxes[1] as HTMLInputElement).checked).toBe(true);
+    expect((checkboxes[2] as HTMLInputElement).checked).toBe(true);
+    expect((checkboxes[3] as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('does not reuse a range anchor hidden by search', () => {
+    renderSidebar({
+      sessions: [
+        sessions[0] as SessionSummary,
+        sessions[1] as SessionSummary,
+        {
+          session_id: 'chat-3',
+          topics: [],
+          primary_topic: null,
+          last_prompt: 'Third question',
+          turn_count: 1,
+          last_active: '2026-08-01T08:00:00Z',
+        },
+      ],
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+
+    const search = screen.getByRole('searchbox', { name: 'Search chats' });
+    fireEvent.change(search, { target: { value: 'Third' } });
+
+    const visible = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    expect(visible).toHaveLength(1);
+    fireEvent.click(visible[0], { shiftKey: true });
+
+    // The hidden anchor is not reused: chat-3 is toggled like a plain click and
+    // the still-selected chat-1 is left alone (no hidden chat is swept in).
+    expect(screen.getByText('2 chats selected')).toBeInTheDocument();
+    expect((visible[0] as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('computes shift-click ranges against the current visible order', () => {
+    const thirdChat: SessionSummary = {
+      session_id: 'chat-3',
+      topics: [],
+      primary_topic: null,
+      last_prompt: null,
+      turn_count: 1,
+      last_active: '2026-08-01T08:00:00Z',
+    };
+    const { rerender } = renderSidebar({
+      sessions: [
+        sessions[0] as SessionSummary,
+        sessions[1] as SessionSummary,
+        { ...thirdChat, pinned: true },
+      ],
+    });
+
+    // chat-3 is pinned, so it renders first and becomes the anchor.
+    fireEvent.click(
+      screen.getAllByRole('checkbox', { name: /Select chat:/ })[0],
+    );
+    rerender([
+      { ...(sessions[0] as SessionSummary), pinned: true },
+      sessions[1] as SessionSummary,
+      thirdChat,
+    ]);
+
+    const reordered = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    // chat-1 is now pinned first; chat-3 (the anchor) has moved to the end.
+    fireEvent.click(reordered[0], { shiftKey: true });
+
+    expect(screen.getByText('3 chats selected')).toBeInTheDocument();
+    expect(
+      reordered.every((box) => (box as HTMLInputElement).checked),
+    ).toBe(true);
+  });
+
+  it('forgets the range anchor when select-all toggles the visible list', () => {
+    renderSidebar({
+      sessions: [
+        sessions[0] as SessionSummary,
+        sessions[1] as SessionSummary,
+        {
+          session_id: 'chat-3',
+          topics: [],
+          primary_topic: null,
+          last_prompt: null,
+          turn_count: 1,
+          last_active: '2026-08-01T08:00:00Z',
+        },
+      ],
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Select all visible chats' }));
+    expect(screen.getByText('3 chats selected')).toBeInTheDocument();
+
+    fireEvent.click(checkboxes[1], { shiftKey: true });
+
+    expect(screen.getByText('2 chats selected')).toBeInTheDocument();
+    expect((checkboxes[0] as HTMLInputElement).checked).toBe(true);
+    expect((checkboxes[1] as HTMLInputElement).checked).toBe(false);
+    expect((checkboxes[2] as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('starts a fresh selection when the anchor chat disappears from the list', () => {
+    const thirdChat: SessionSummary = {
+      session_id: 'chat-3',
+      topics: [],
+      primary_topic: null,
+      last_prompt: null,
+      turn_count: 1,
+      last_active: '2026-08-01T08:00:00Z',
+    };
+    const { rerender } = renderSidebar({
+      sessions: [
+        sessions[0] as SessionSummary,
+        sessions[1] as SessionSummary,
+        thirdChat,
+      ],
+    });
+
+    fireEvent.click(
+      screen.getAllByRole('checkbox', { name: /Select chat:/ })[0],
+    );
+    rerender([sessions[1] as SessionSummary, thirdChat]);
+
+    expect(screen.queryByText(/chats selected/)).toBeNull();
+    const visible = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(visible[1], { shiftKey: true });
+
+    expect(screen.getByText('1 chat selected')).toBeInTheDocument();
+    expect((visible[0] as HTMLInputElement).checked).toBe(false);
+    expect((visible[1] as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('hints at shift-click ranges while a selection spans multiple visible chats', () => {
+    renderSidebar({
+      sessions: [
+        sessions[0] as SessionSummary,
+        sessions[1] as SessionSummary,
+        {
+          session_id: 'chat-3',
+          topics: [],
+          primary_topic: null,
+          last_prompt: null,
+          turn_count: 1,
+          last_active: '2026-08-01T08:00:00Z',
+        },
+      ],
+    });
+
+    expect(
+      screen.queryByText(/shift-click a checkbox to select a range/i),
+    ).toBeNull();
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+
+    expect(
+      screen.getByText(/shift-click a checkbox to select a range/i),
+    ).toBeInTheDocument();
+  });
+
+  it('omits the range hint when only one chat is visible', () => {
+    renderSidebar({ sessions: [sessions[0] as SessionSummary] });
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    expect(screen.getByText('1 chat selected')).toBeInTheDocument();
+    expect(
+      screen.queryByText(/shift-click a checkbox to select a range/i),
+    ).toBeNull();
+  });
+
   it('cancels a selected-chat delete without touching the callback', () => {
     const { onBulkDeleteSessions } = renderSidebar();
     fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);

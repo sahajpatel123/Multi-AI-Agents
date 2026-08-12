@@ -696,8 +696,14 @@ export function Sidebar({
     if (recentSessions.length === 0) {
       setConfirmBulkDeleteChats(false);
     }
+    const liveIds = new Set(recentSessions.map((session) => session.session_id));
+    if (
+      chatSelectionAnchorRef.current !== null &&
+      !liveIds.has(chatSelectionAnchorRef.current)
+    ) {
+      chatSelectionAnchorRef.current = null;
+    }
     setSelectedChatIds((prev) => {
-      const liveIds = new Set(recentSessions.map((session) => session.session_id));
       const next = new Set([...prev].filter((id) => liveIds.has(id)));
       return next.size === prev.size ? prev : next;
     });
@@ -1389,6 +1395,9 @@ export function Sidebar({
       });
       return;
     }
+    // No usable anchor (or a plain click): toggle the row and make it the new
+    // anchor. A stale anchor id that is no longer visible falls through here
+    // instead of silently selecting an out-of-date range.
     chatSelectionAnchorRef.current = sessionId;
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
@@ -1995,16 +2004,36 @@ export function Sidebar({
                     borderRadius: 8,
                   }}
                 >
-                  <span
+                  <div
                     style={{
-                      fontSize: 11,
-                      color: '#4A3728',
-                      lineHeight: 1.3,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                      minWidth: 0,
                     }}
                   >
-                    {selectedChatIds.size}{' '}
-                    {selectedChatIds.size === 1 ? 'chat' : 'chats'} selected
-                  </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: '#4A3728',
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {selectedChatIds.size}{' '}
+                      {selectedChatIds.size === 1 ? 'chat' : 'chats'} selected
+                    </span>
+                    {visibleChats.length > 1 ? (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: '#8A8278',
+                          lineHeight: 1.25,
+                        }}
+                      >
+                        Tip: shift-click a checkbox to select a range
+                      </span>
+                    ) : null}
+                  </div>
                   <div
                     style={{
                       display: 'flex',
