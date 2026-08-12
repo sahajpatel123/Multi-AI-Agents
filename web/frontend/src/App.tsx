@@ -288,6 +288,8 @@ function App() {
   /** Prevents overlapping transcript copy attempts and stale copied feedback. */
   const transcriptCopyInFlightRef = useRef(false);
   const transcriptCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Owns the save-winner button feedback so rapid toggles can't leave stale timers. */
+  const winnerSaveFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushStreamPreviews = useCallback(() => {
     const next: Record<string, string> = {};
@@ -417,6 +419,7 @@ function App() {
     setCurrentPrompt(turn.prompt);
     setActiveTurnId(turn.turn_id);
     setPhase('done');
+    setWinnerSaveFeedback(null);
     // A loaded turn has no live follow-up context; re-running it must replay
     // the prompt alone rather than stale context from a previous round.
     lastRoundContextRef.current = undefined;
@@ -837,7 +840,7 @@ function App() {
    * first — the header button and Shift+S both land here.
    */
   const handleSaveWinner = useCallback(() => {
-    if (!response) return;
+    if (!response || !activeTurnId) return;
     const winner = pickArenaWinner(response);
     if (!winner) return;
     if (!canUseFeature('saved_responses')) {
@@ -850,12 +853,21 @@ function App() {
         item.agent_id === winner.response.agent_id,
     );
     handleSaveResponse(winner);
-    if (!alreadySaved) {
-      void track('arena_save_winner');
+    void track(
+      alreadySaved ? 'arena_unsave_winner' : 'arena_save_winner',
+      undefined,
+      winner.response.agent_id,
+    );
+    if (winnerSaveFeedbackTimer.current) {
+      window.clearTimeout(winnerSaveFeedbackTimer.current);
+      winnerSaveFeedbackTimer.current = null;
     }
     setWinnerSaveFeedback(alreadySaved ? 'removed' : 'saved');
-    window.setTimeout(() => setWinnerSaveFeedback(null), 1800);
-  }, [canUseFeature, handleSaveResponse, response, savedItems]);
+    winnerSaveFeedbackTimer.current = window.setTimeout(() => {
+      setWinnerSaveFeedback(null);
+      winnerSaveFeedbackTimer.current = null;
+    }, 1800);
+  }, [activeTurnId, canUseFeature, handleSaveResponse, response, savedItems]);
 
   // Keyboard-first Arena exports: Shift+C / Shift+D / Shift+S / Shift+Q mirror
   // the header action buttons once a round has finished. Form controls are
@@ -1467,6 +1479,7 @@ function App() {
     setCurrentPrompt(prompt);
     setDoneAgents(new Set());
     setStreamPreviews({});
+    setWinnerSaveFeedback(null);
     setViewMode('arena');
     setChallengedAgent(null);
     setDiscussAgent(null);
@@ -1859,6 +1872,7 @@ function App() {
     if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
     if (currentResponseBarTimer.current) clearTimeout(currentResponseBarTimer.current);
     if (transcriptCopyFeedbackTimer.current) clearTimeout(transcriptCopyFeedbackTimer.current);
+    if (winnerSaveFeedbackTimer.current) clearTimeout(winnerSaveFeedbackTimer.current);
   }, []);
 
   const handleFocusedAgentSubmit = async (message: string) => {
@@ -2288,7 +2302,7 @@ function App() {
                     title="Download the winning take as markdown"
                     style={{ fontSize: 12 }}
                   >
-                    {winnerDownloaded ? 'Winner saved' : 'Download winner'}
+                    {winnerDownloaded ? 'Winner downloaded' : 'Download winner'}
                   </button>
                   <button
                     type="button"
@@ -2297,7 +2311,7 @@ function App() {
                     aria-pressed={winnerIsSaved}
                     title={
                       winnerIsSaved
-                        ? 'Remove the winning take from your saved takes'
+                        ? 'Remove the winning take from your saved takes (Shift+S)'
                         : 'Save the winning take to your saved takes (Shift+S)'
                     }
                     style={{ fontSize: 12 }}

@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Arena round header distinguishes "Winner downloaded" from the save-winner
+  action, and save/unsave feedback resets cleanly between rounds
 - Sidebar "Clear chat selection" now empties the whole selection even when a
   search or pin filter hides some selected chats, instead of stranding hidden
   picks staged under a previous filter
