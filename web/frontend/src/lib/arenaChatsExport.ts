@@ -138,15 +138,19 @@ export function formatArenaChatsJsonExport(opts: {
   exportedAt?: string;
 }): string {
   const items = (opts.items || []).map((item) => {
+    const title = (item.title || '').trim() || null;
     const topics = (item.topics || [])
       .map((topic) => (topic || '').trim())
       .filter(Boolean);
     return {
       session_id: (item.sessionId || '').trim() || null,
-      title: displayTitle(item),
+      title,
       prompt: (item.prompt || '').trim() || null,
       topics,
-      primary_topic: (item.primaryTopic || '').trim() || topics[0] || null,
+      // Keep stored fields verbatim so the JSON snapshot can round-trip
+      // back into Arena. Display fallbacks (prompt/topic as title) belong
+      // only to the human-readable markdown/CSV formats.
+      primary_topic: (item.primaryTopic || '').trim() || null,
       turn_count:
         typeof item.turnCount === 'number' && Number.isFinite(item.turnCount)
           ? item.turnCount

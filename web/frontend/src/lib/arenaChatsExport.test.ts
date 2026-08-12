@@ -151,7 +151,47 @@ describe('formatArenaChatsJsonExport', () => {
     });
     expect(parsed.items[1]).toMatchObject({
       session_id: 'chat-2',
-      title: 'Review the roadmap',
+      title: null,
+      primary_topic: null,
+    });
+  });
+
+  it('keeps stored title and primary topic verbatim so JSON can round-trip', () => {
+    const json = formatArenaChatsJsonExport({
+      items: [
+        {
+          sessionId: 'chat-1',
+          prompt: 'A very long untitled prompt that must not leak into the title field',
+          topics: ['launch', 'marketing'],
+          turnCount: 2,
+        },
+        {
+          sessionId: 'chat-2',
+          title: '  ',
+          prompt: 'Untitled but prompt-only',
+          primaryTopic: '',
+        },
+      ],
+    });
+
+    const parsed = JSON.parse(json) as {
+      items: Array<{
+        title: string | null;
+        prompt: string | null;
+        topics: string[];
+        primary_topic: string | null;
+      }>;
+    };
+    expect(parsed.items[0]).toMatchObject({
+      title: null,
+      prompt: 'A very long untitled prompt that must not leak into the title field',
+      topics: ['launch', 'marketing'],
+      primary_topic: null,
+    });
+    expect(parsed.items[1]).toMatchObject({
+      title: null,
+      prompt: 'Untitled but prompt-only',
+      topics: [],
       primary_topic: null,
     });
   });
@@ -248,5 +288,19 @@ describe('formatArenaChatsCsvExport', () => {
     expect(formatArenaChatsCsvExport({ items: [] })).toBe(
       '\uFEFF"title","prompt","topics","primaryTopic","turnCount","pinned","timestamp","sessionId"\r\n',
     );
+  });
+
+  it('keeps the friendly display-title fallback for untitled chats', () => {
+    const csv = formatArenaChatsCsvExport({
+      items: [
+        {
+          sessionId: 'chat-1',
+          prompt: 'Roadmap review',
+          primaryTopic: 'planning',
+        },
+      ],
+    });
+    expect(csv).toContain('"Roadmap review"');
+    expect(csv).toContain('"planning"');
   });
 });

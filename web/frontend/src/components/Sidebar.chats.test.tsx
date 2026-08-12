@@ -664,6 +664,24 @@ describe('Sidebar recent chats', () => {
     );
   });
 
+  it('announces a failure when the selected chat CSV export is blocked', async () => {
+    vi.mocked(downloadTextFile).mockReturnValueOnce(false);
+    renderSidebar();
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chats as CSV',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Selected chat CSV export failed' }),
+      ).toBeInTheDocument(),
+    );
+  });
+
   it('surfaces a failure when bulk deleting selected chats fails', async () => {
     renderSidebar({ onBulkDeleteSessions: vi.fn().mockResolvedValue(null) });
     fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
