@@ -255,4 +255,115 @@ describe('RecentPromptChips', () => {
     expect(labels[0]).toContain('Pinned oldie');
     expect(labels[1]).toContain('Fresh');
   });
+
+  it('wires the toggle to the chip list for assistive tech', () => {
+    const { container } = render(
+      <RecentPromptChips
+        prompts={[
+          prompt('One', 3),
+          prompt('Two', 2),
+          prompt('Three', 1),
+        ]}
+        onReuse={() => {}}
+        onRemove={() => {}}
+        onClear={() => {}}
+        onTogglePin={() => {}}
+        limit={2}
+      />,
+    );
+    const list = container.querySelector('[role="list"]');
+    expect(list).not.toBeNull();
+    expect(list?.id).toBeTruthy();
+    expect(screen.getByRole('button', { name: /show all recent prompts/i }))
+      .toHaveAttribute('aria-controls', list?.id);
+  });
+
+  it('auto-collapses when prompts shrink to fit the limit', () => {
+    const { container, rerender } = render(
+      <RecentPromptChips
+        prompts={[
+          prompt('One', 5),
+          prompt('Two', 4),
+          prompt('Three', 3),
+          prompt('Four', 2),
+          prompt('Five', 1),
+        ]}
+        onReuse={() => {}}
+        onRemove={() => {}}
+        onClear={() => {}}
+        onTogglePin={() => {}}
+        limit={2}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /show all recent prompts/i }));
+    expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(5);
+
+    rerender(
+      <RecentPromptChips
+        prompts={[prompt('One', 5), prompt('Two', 4)]}
+        onReuse={() => {}}
+        onRemove={() => {}}
+        onClear={() => {}}
+        onTogglePin={() => {}}
+        limit={2}
+      />,
+    );
+    expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(2);
+    expect(
+      screen.queryByRole('button', { name: /show fewer recent prompts/i }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /show all recent prompts/i }),
+    ).toBeNull();
+  });
+
+  it('renders safely when prompts arrive after an empty mount', () => {
+    const { container, rerender } = render(
+      <RecentPromptChips
+        prompts={[]}
+        onReuse={() => {}}
+        onRemove={() => {}}
+        onClear={() => {}}
+        onTogglePin={() => {}}
+      />,
+    );
+    expect(container.querySelector('[role="list"]')).toBeNull();
+
+    expect(() =>
+      rerender(
+        <RecentPromptChips
+          prompts={[prompt('Late arrival', 1)]}
+          onReuse={() => {}}
+          onRemove={() => {}}
+          onClear={() => {}}
+          onTogglePin={() => {}}
+        />,
+      ),
+    ).not.toThrow();
+    expect(
+      screen.getByRole('button', { name: /reuse recent prompt: late arrival/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps distinct prompts distinct even with identical timestamps', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { container } = render(
+      <RecentPromptChips
+        prompts={[
+          prompt('Why is the sky blue on a clear day?', 0),
+          prompt('Why is the sky blue on a stormy day?', 0),
+        ]}
+        onReuse={() => {}}
+        onRemove={() => {}}
+        onClear={() => {}}
+        onTogglePin={() => {}}
+      />,
+    );
+    expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(2);
+    expect(consoleError).not.toHaveBeenCalledWith(
+      expect.stringContaining('duplicate key'),
+      expect.anything(),
+    );
+    consoleError.mockRestore();
+  });
 });

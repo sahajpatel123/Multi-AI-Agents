@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Pin } from 'lucide-react';
 import type { RecentPrompt } from '../lib/recentPrompts';
 
@@ -34,19 +34,33 @@ export function RecentPromptChips({
   isMobile = false,
 }: RecentPromptChipsProps) {
   const [expanded, setExpanded] = useState(false);
-  if (!prompts.length) return null;
+  const listId = useId();
 
   const pinned = prompts.filter((item) => item.pinned);
   const unpinned = prompts.filter((item) => !item.pinned);
+  const collapsedCount = useMemo(
+    () =>
+      pinned.length +
+      Math.min(unpinned.length, Math.max(0, limit - pinned.length)),
+    [pinned, unpinned, limit],
+  );
   const visible = expanded
     ? [...pinned, ...unpinned]
     : [...pinned, ...unpinned.slice(0, Math.max(0, limit - pinned.length))];
   const hiddenCount = prompts.length - visible.length;
   const showToggle = hiddenCount > 0 || expanded;
 
+  // If removals, pinning, or a larger limit make every prompt visible in the
+  // collapsed view, fold the list back up instead of showing a pointless
+  // "Show less" toggle.
+  useEffect(() => {
+    if (expanded && collapsedCount >= prompts.length) setExpanded(false);
+  }, [expanded, collapsedCount, prompts.length]);
+
+  if (!prompts.length) return null;
+
   return (
     <div
-      role="list"
       style={{
         pointerEvents: 'all',
         display: 'flex',
@@ -57,116 +71,125 @@ export function RecentPromptChips({
         maxWidth: '100%',
         padding: isMobile ? '0 12px' : 0,
       }}
-      aria-label="Recent prompts"
     >
-      {visible.map((item) => {
-        const label =
-          item.text.length > 48 ? `${item.text.slice(0, 47).trimEnd()}…` : item.text;
-        return (
-          <div
-            key={`${item.at}-${item.text.slice(0, 24)}`}
-            role="listitem"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              maxWidth: isMobile ? '46vw' : 220,
-              background: 'rgba(255,255,255,0.72)',
-              border: '0.5px solid #E0D8D0',
-              borderRadius: 999,
-              overflow: 'hidden',
-              transition: 'background 150ms ease, border-color 150ms ease',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => onReuse(item.text)}
-              onKeyDown={(e) => {
-                if (e.key === 'Backspace' || e.key === 'Delete') {
-                  e.preventDefault();
-                  onRemove(item.text);
-                }
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                onRemove(item.text);
-              }}
-              title={item.text}
-              aria-label={`Reuse recent prompt: ${item.text}`}
+      <div
+        role="list"
+        id={listId}
+        aria-label="Recent prompts"
+        style={{ display: 'contents' }}
+      >
+        {visible.map((item) => {
+          const label =
+            item.text.length > 48
+              ? `${item.text.slice(0, 47).trimEnd()}…`
+              : item.text;
+          return (
+            <div
+              key={`${item.at}-${item.text}`}
+              role="listitem"
               style={{
-                flex: 1,
-                minWidth: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                fontSize: 12,
-                color: '#A0A39A',
-                background: 'transparent',
-                border: 'none',
-                borderRadius: 0,
-                padding: '6px 4px 6px 12px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontFamily: 'var(--vp-font-sans)',
-              }}
-            >
-              {label}
-            </button>
-            <button
-              type="button"
-              aria-label={
-                item.pinned
-                  ? `Unpin recent prompt: ${item.text}`
-                  : `Pin recent prompt: ${item.text}`
-              }
-              title={item.pinned ? 'Unpin prompt' : 'Pin prompt'}
-              aria-pressed={item.pinned}
-              onClick={(e) => {
-                e.stopPropagation();
-                onTogglePin(item.text, !item.pinned);
-              }}
-              style={{
-                flexShrink: 0,
                 display: 'inline-flex',
                 alignItems: 'center',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                lineHeight: 1,
-                padding: '6px 2px 6px 4px',
-                color: item.pinned ? '#C4956A' : '#A0A39A',
+                maxWidth: isMobile ? '46vw' : 220,
+                background: 'rgba(255,255,255,0.72)',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: 999,
+                overflow: 'hidden',
+                transition: 'background 150ms ease, border-color 150ms ease',
               }}
             >
-              <Pin width={10} height={10} aria-hidden />
-            </button>
-            <button
-              type="button"
-              aria-label={`Remove recent prompt: ${item.text}`}
-              title="Remove from recent"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemove(item.text);
-              }}
-              style={{
-                flexShrink: 0,
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 14,
-                color: '#A0A39A',
-                lineHeight: 1,
-                padding: '6px 8px 6px 2px',
-              }}
-            >
-              ×
-            </button>
-          </div>
-        );
-      })}
+              <button
+                type="button"
+                onClick={() => onReuse(item.text)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Backspace' || e.key === 'Delete') {
+                    e.preventDefault();
+                    onRemove(item.text);
+                  }
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onRemove(item.text);
+                }}
+                title={item.text}
+                aria-label={`Reuse recent prompt: ${item.text}`}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  fontSize: 12,
+                  color: '#A0A39A',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: 0,
+                  padding: '6px 4px 6px 12px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: 'var(--vp-font-sans)',
+                }}
+              >
+                {label}
+              </button>
+              <button
+                type="button"
+                aria-label={
+                  item.pinned
+                    ? `Unpin recent prompt: ${item.text}`
+                    : `Pin recent prompt: ${item.text}`
+                }
+                title={item.pinned ? 'Unpin prompt' : 'Pin prompt'}
+                aria-pressed={item.pinned}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTogglePin(item.text, !item.pinned);
+                }}
+                style={{
+                  flexShrink: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                  padding: '6px 2px 6px 4px',
+                  color: item.pinned ? '#C4956A' : '#A0A39A',
+                }}
+              >
+                <Pin width={10} height={10} aria-hidden />
+              </button>
+              <button
+                type="button"
+                aria-label={`Remove recent prompt: ${item.text}`}
+                title="Remove from recent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(item.text);
+                }}
+                style={{
+                  flexShrink: 0,
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  color: '#A0A39A',
+                  lineHeight: 1,
+                  padding: '6px 8px 6px 2px',
+                }}
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
+      </div>
       {showToggle ? (
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
           aria-expanded={expanded}
+          aria-controls={listId}
           aria-label={
             expanded ? 'Show fewer recent prompts' : 'Show all recent prompts'
           }
