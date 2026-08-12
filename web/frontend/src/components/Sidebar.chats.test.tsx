@@ -88,7 +88,7 @@ function renderSidebar(overrides?: {
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
-  onClearSessions?: () => Promise<number> | void;
+  onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (sessionId: string, title: string) => boolean | Promise<boolean>;
 }) {
   const onSessionSelect = overrides?.onSessionSelect ?? vi.fn();
@@ -289,8 +289,8 @@ describe('Sidebar recent chats', () => {
     expect(screen.queryByRole('dialog', { name: 'Clear all chats' })).toBeNull();
   });
 
-  it('surfaces a failure when clearing all chats returns zero', async () => {
-    const onClearSessions = vi.fn().mockResolvedValue(0);
+  it('surfaces a failure when clearing all chats fails', async () => {
+    const onClearSessions = vi.fn().mockResolvedValue(null);
     renderSidebar({ onClearSessions });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear 2 chats' }));
@@ -300,6 +300,18 @@ describe('Sidebar recent chats', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/could not clear chats/i);
     });
+  });
+
+  it('treats a successful zero-count clear as a no-op, not a failure', async () => {
+    const onClearSessions = vi.fn().mockResolvedValue(0);
+    renderSidebar({ onClearSessions });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear 2 chats' }));
+    const dialog = screen.getByRole('dialog', { name: 'Clear all chats' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear all' }));
+
+    await waitFor(() => expect(onClearSessions).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('renames a chat inline through the callback', async () => {

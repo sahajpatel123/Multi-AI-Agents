@@ -994,8 +994,10 @@ function App() {
     return deletedIds.size;
   }, []);
 
-  const handleNewChat = useCallback(async () => {
-    void track('new_chat_clicked');
+  const handleNewChat = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      void track('new_chat_clicked');
+    }
     const currentSessionId = sessionData?.session_id || safeLocalStorage.getItem('arena_session_id');
     if (user && currentSessionId) {
       try {
@@ -1113,11 +1115,18 @@ function App() {
 
   const handleClearSessions = useCallback(async () => {
     const cleared = await clearAllSessions();
+    if (cleared === null) return null;
     if (cleared === 0) return 0;
     setRecentSessions([]);
     if (sessionData?.session_id) {
-      await handleNewChat();
+      await handleNewChat({ silent: true });
     }
+    // Bulk delete removed every live session, including the one currently
+    // restored in the UI. Drop the in-memory transcript and the stored
+    // session pointer so a cleared chat can't be exported, reselected, or
+    // appended to after "Clear all".
+    setSessionData(null);
+    safeLocalStorage.removeItem('arena_session_id');
     void track('recent_chats_cleared', undefined, undefined, { cleared });
     return cleared;
   }, [handleNewChat, sessionData?.session_id]);

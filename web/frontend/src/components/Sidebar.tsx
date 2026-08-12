@@ -141,7 +141,7 @@ interface SidebarProps {
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => Promise<void> | void;
-  onClearSessions?: () => Promise<number> | void;
+  onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (
     sessionId: string,
     title: string,
@@ -895,7 +895,7 @@ export function Sidebar({
     setClearSessionsStatus('busy');
     try {
       const cleared = await onClearSessions();
-      setClearSessionsStatus(cleared === 0 ? 'failed' : 'done');
+      setClearSessionsStatus(cleared === null ? 'failed' : 'done');
     } catch {
       setClearSessionsStatus('failed');
     }

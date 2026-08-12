@@ -956,16 +956,16 @@ export async function deleteSession(sessionId: string): Promise<boolean> {
   }
 }
 
-export async function clearAllSessions(): Promise<number> {
+export async function clearAllSessions(): Promise<number | null> {
   try {
     const response = await apiFetch('/api/sessions', {
       method: 'DELETE',
     });
-    if (!response.ok) return 0;
+    if (!response.ok) return null;
     const data = await parseJsonSafely<{ deleted?: number }>(response);
     return typeof data?.deleted === 'number' ? data.deleted : 0;
   } catch {
-    return 0;
+    return null;
   }
 }
 

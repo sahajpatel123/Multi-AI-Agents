@@ -25,17 +25,35 @@ describe('clearAllSessions', () => {
     expect(result).toBe(3);
   });
 
-  it('returns zero when the response is not successful', async () => {
+  it('returns null when the response is not successful', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: 'Nope' }), { status: 429 }),
+    );
+
+    expect(await clearAllSessions()).toBeNull();
+  });
+
+  it('returns null when the request itself fails', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockRejectedValueOnce(
+      new TypeError('Failed to fetch'),
+    );
+
+    expect(await clearAllSessions()).toBeNull();
+  });
+
+  it('returns zero for a successful clear with no deleted count', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: 'deleted' }), { status: 200 }),
     );
 
     expect(await clearAllSessions()).toBe(0);
   });
 
-  it('returns zero when the payload is missing a deleted count', async () => {
+  it('returns zero when nothing was left to clear', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: 'deleted' }), { status: 200 }),
+      new Response(JSON.stringify({ status: 'deleted', deleted: 0 }), {
+        status: 200,
+      }),
     );
 
     expect(await clearAllSessions()).toBe(0);
