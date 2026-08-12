@@ -476,6 +476,107 @@ describe('Sidebar recent chats', () => {
     expect(screen.queryByText('2 chats selected')).toBeNull();
   });
 
+  it('shift-clicks a chat to select the whole visible range since the anchor', () => {
+    renderSidebar({
+      sessions: [
+        sessions[0] as SessionSummary,
+        sessions[1] as SessionSummary,
+        {
+          session_id: 'chat-3',
+          topics: [],
+          primary_topic: null,
+          last_prompt: null,
+          turn_count: 1,
+          last_active: '2026-08-01T08:00:00Z',
+        },
+      ],
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    expect(checkboxes).toHaveLength(3);
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[2], { shiftKey: true });
+
+    expect(screen.getByText('3 chats selected')).toBeInTheDocument();
+    expect(
+      checkboxes.every((box) => (box as HTMLInputElement).checked),
+    ).toBe(true);
+  });
+
+  it('extends a range from the most recent plain click, keeping earlier picks', () => {
+    renderSidebar({
+      sessions: [
+        sessions[0] as SessionSummary,
+        sessions[1] as SessionSummary,
+        {
+          session_id: 'chat-3',
+          topics: [],
+          primary_topic: null,
+          last_prompt: null,
+          turn_count: 1,
+          last_active: '2026-08-01T08:00:00Z',
+        },
+        {
+          session_id: 'chat-4',
+          topics: [],
+          primary_topic: null,
+          last_prompt: null,
+          turn_count: 1,
+          last_active: '2026-08-01T07:00:00Z',
+        },
+      ],
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    expect(checkboxes).toHaveLength(4);
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[2]);
+    fireEvent.click(checkboxes[3], { shiftKey: true });
+
+    expect(screen.getByText('3 chats selected')).toBeInTheDocument();
+    expect((checkboxes[0] as HTMLInputElement).checked).toBe(true);
+    expect((checkboxes[1] as HTMLInputElement).checked).toBe(false);
+    expect((checkboxes[2] as HTMLInputElement).checked).toBe(true);
+    expect((checkboxes[3] as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('treats a shift-click with no anchor as a plain toggle', () => {
+    renderSidebar();
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0], { shiftKey: true });
+
+    expect(screen.getByText('1 chat selected')).toBeInTheDocument();
+    expect((checkboxes[0] as HTMLInputElement).checked).toBe(true);
+    expect((checkboxes[1] as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('forgets the range anchor when the selection is cleared', () => {
+    renderSidebar({
+      sessions: [
+        sessions[0] as SessionSummary,
+        sessions[1] as SessionSummary,
+        {
+          session_id: 'chat-3',
+          topics: [],
+          primary_topic: null,
+          last_prompt: null,
+          turn_count: 1,
+          last_active: '2026-08-01T08:00:00Z',
+        },
+      ],
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel chat selection' }));
+    fireEvent.click(checkboxes[2], { shiftKey: true });
+
+    expect(screen.getByText('1 chat selected')).toBeInTheDocument();
+    expect((checkboxes[0] as HTMLInputElement).checked).toBe(false);
+    expect((checkboxes[2] as HTMLInputElement).checked).toBe(true);
+  });
+
   it('cancels a selected-chat delete without touching the callback', () => {
     const { onBulkDeleteSessions } = renderSidebar();
     fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);

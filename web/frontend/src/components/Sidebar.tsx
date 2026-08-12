@@ -338,6 +338,7 @@ export function Sidebar({
   const chatSearchInputRef = useRef<HTMLInputElement>(null);
   const savedSearchInputRef = useRef<HTMLInputElement>(null);
   const bulkPinUnpinActionRef = useRef<boolean | null>(null);
+  const chatSelectionAnchorRef = useRef<string | null>(null);
 
   const winnerNameByAgentId = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1257,6 +1258,7 @@ export function Sidebar({
     setConfirmDeleteTurnId(null);
     setEditingTurnId(null);
     setSelectedChatIds(new Set());
+    chatSelectionAnchorRef.current = null;
     setConfirmBulkDeleteChats(false);
     resetBulkChatExportStatuses();
     sessionRenameCancelledRef.current = true;
@@ -1364,13 +1366,30 @@ export function Sidebar({
     }
   };
 
-  const toggleChatSelected = (sessionId: string) => {
+  const toggleChatSelected = (sessionId: string, range = false) => {
     if (bulkChatsBusy) return;
     setConfirmBulkDeleteChats(false);
     setBulkPinChatsStatus('idle');
     setBulkDuplicateChatsStatus('idle');
     resetBulkChatExportStatuses();
     bulkPinUnpinActionRef.current = null;
+    const visibleIds = visibleChats.map((session) => session.session_id);
+    const anchorId = chatSelectionAnchorRef.current;
+    const anchorIndex = anchorId ? visibleIds.indexOf(anchorId) : -1;
+    const currentIndex = visibleIds.indexOf(sessionId);
+    if (range && anchorIndex !== -1 && currentIndex !== -1) {
+      const start = Math.min(anchorIndex, currentIndex);
+      const end = Math.max(anchorIndex, currentIndex);
+      setSelectedChatIds((prev) => {
+        const next = new Set(prev);
+        for (let i = start; i <= end; i += 1) {
+          next.add(visibleIds[i]);
+        }
+        return next;
+      });
+      return;
+    }
+    chatSelectionAnchorRef.current = sessionId;
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
       if (next.has(sessionId)) {
@@ -1384,6 +1403,7 @@ export function Sidebar({
 
   const toggleAllVisibleChats = () => {
     if (bulkChatsBusy) return;
+    chatSelectionAnchorRef.current = null;
     setConfirmBulkDeleteChats(false);
     setBulkPinChatsStatus('idle');
     setBulkDuplicateChatsStatus('idle');
@@ -1404,6 +1424,7 @@ export function Sidebar({
 
   const clearChatSelection = () => {
     if (bulkChatsBusy) return;
+    chatSelectionAnchorRef.current = null;
     setConfirmBulkDeleteChats(false);
     setBulkPinChatsStatus('idle');
     setBulkDuplicateChatsStatus('idle');
@@ -1430,6 +1451,7 @@ export function Sidebar({
       }
       setBulkDeleteChatsStatus('done');
       setSelectedChatIds(new Set());
+      chatSelectionAnchorRef.current = null;
     } catch {
       setBulkDeleteChatsStatus('failed');
     }
@@ -1475,6 +1497,7 @@ export function Sidebar({
         result.duplicated < ids.length ? 'partial' : 'done',
       );
       setSelectedChatIds(new Set());
+      chatSelectionAnchorRef.current = null;
     } catch {
       setBulkDuplicateChatsStatus('failed');
     }
@@ -1484,6 +1507,7 @@ export function Sidebar({
     if (!onClearSessions || clearSessionsStatus === 'busy') return;
     setClearSessionsStatus('busy');
     setSelectedChatIds(new Set());
+    chatSelectionAnchorRef.current = null;
     setConfirmBulkDeleteChats(false);
     try {
       const cleared = await onClearSessions();
@@ -2605,7 +2629,17 @@ export function Sidebar({
                             aria-label={`Select chat: ${displayTitle}`}
                             checked={selectedChatIds.has(session.session_id)}
                             disabled={bulkChatsBusy}
-                            onChange={() => toggleChatSelected(session.session_id)}
+                            title={
+                              visibleChats.length > 1
+                                ? 'Select chat (shift-click to select a range)'
+                                : undefined
+                            }
+                            onChange={(event) =>
+                              toggleChatSelected(
+                                session.session_id,
+                                (event.nativeEvent as MouseEvent).shiftKey,
+                              )
+                            }
                             style={{ flexShrink: 0, cursor: 'pointer' }}
                           />
                         ) : null}
