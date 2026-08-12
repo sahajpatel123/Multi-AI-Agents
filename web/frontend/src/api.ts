@@ -981,6 +981,11 @@ export type BulkPinSessionsResult = {
   updated_ids: string[];
 };
 
+export type BulkDuplicateSessionsResult = {
+  duplicated: number;
+  sessions: SessionSummary[];
+};
+
 export async function deleteSessionsBulk(
   sessionIds: string[],
 ): Promise<BulkDeleteSessionsResult | null> {
@@ -1022,6 +1027,29 @@ export async function setSessionsPinBulk(
     return {
       updated: data.updated,
       updated_ids: data.updated_ids,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function duplicateSessionsBulk(
+  sessionIds: string[],
+): Promise<BulkDuplicateSessionsResult | null> {
+  try {
+    const response = await apiFetch('/api/sessions/bulk/duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_ids: sessionIds }),
+    });
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<Partial<BulkDuplicateSessionsResult>>(response);
+    if (!Array.isArray(data?.sessions) || typeof data?.duplicated !== 'number') {
+      return null;
+    }
+    return {
+      duplicated: data.duplicated,
+      sessions: data.sessions,
     };
   } catch {
     return null;

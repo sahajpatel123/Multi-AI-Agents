@@ -422,6 +422,100 @@ async def test_duplicate_404_for_missing_session(app_client, make_user):
     assert res.status_code == 404
 
 
+# ─── Bulk duplicate ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_bulk_duplicate_forks_only_requested_owned_sessions(
+    app_client, make_user
+):
+    """Bulk duplicate must fork exactly the requested owned sessions and
+    leave unselected, foreign, and missing sessions alone."""
+    alice = make_user(email="sess-bulk-dup-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-bulk-dup-b@test.com", tier=UserTier.PRO)
+    state_a = _seed_in_memory(alice.id, session_id="a-1", topics=["launch"])
+    state_a["session_title"] = "Launch review"
+    state_b = _seed_in_memory(alice.id, session_id="a-2", topics=["risk"])
+    state_b["session_title"] = "Risk review"
+    _seed_in_memory(alice.id, session_id="a-keep")
+    _seed_in_memory(bob.id, session_id="b-1")
+
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(alice),
+        json={"session_ids": ["a-1", "a-2", "b-1", "missing"]},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "duplicated"
+    assert body["duplicated"] == 2
+    assert len(body["sessions"]) == 2
+
+    dup_titles = {row["title"] for row in body["sessions"]}
+    assert dup_titles == {"Launch review", "Risk review"}
+    dup_ids = {row["session_id"] for row in body["sessions"]}
+    assert dup_ids.isdisjoint({"a-1", "a-2", "a-keep", "b-1"})
+    assert all(row["pinned"] is False for row in body["sessions"])
+
+    # The caller now sees originals plus the new forks; Bob's chat is untouched.
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    sids = {row["session_id"] for row in listing.json()["sessions"]}
+    assert sids == {"a-1", "a-2", "a-keep", *dup_ids}
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(bob))
+    assert {row["session_id"] for row in listing.json()["sessions"]} == {"b-1"}
+
+
+@pytest.mark.asyncio
+async def test_bulk_duplicate_deduplicates_and_accepts_empty_result(
+    app_client, make_user
+):
+    user = make_user(email="sess-bulk-dup-dedup@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine", topics=["fork"])
+
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(user),
+        json={"session_ids": ["mine", "mine", "ghost"]},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["duplicated"] == 1
+    assert len(body["sessions"]) == 1
+
+    # Only missing/foreign ids are a successful no-op, never an error.
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(user),
+        json={"session_ids": ["ghost"]},
+    )
+    assert res.status_code == 200
+    assert res.json()["duplicated"] == 0
+    assert res.json()["sessions"] == []
+
+
+@pytest.mark.asyncio
+async def test_bulk_duplicate_rejects_empty_or_overlong_id_lists(
+    app_client, make_user
+):
+    user = make_user(email="sess-bulk-dup-bounds@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(user),
+        json={"session_ids": []},
+    )
+    assert res.status_code == 422
+
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(user),
+        json={"session_ids": [f"x{i}" for i in range(101)]},
+    )
+    assert res.status_code == 422
+
+
 @pytest.mark.asyncio
 async def test_list_skips_malformed_state_without_session_data(app_client, make_user):
     """Listing must not 500 on a malformed state; it skips the broken row."""
@@ -863,6 +957,7 @@ async def test_session_endpoints_require_auth(app_client):
         ("GET", "/api/sessions"),
         ("PATCH", "/api/session/x"),
         ("POST", "/api/session/x/duplicate"),
+        ("POST", "/api/sessions/bulk/duplicate"),
         ("PATCH", "/api/session/x/pin"),
         ("DELETE", "/api/session/x"),
         ("DELETE", "/api/sessions"),

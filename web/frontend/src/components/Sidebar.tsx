@@ -28,7 +28,11 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
-import type { BulkPinSessionsResult, SessionSummary } from '../api';
+import type {
+  BulkDuplicateSessionsResult,
+  BulkPinSessionsResult,
+  SessionSummary,
+} from '../api';
 import { AgentDot } from './AgentDot';
 import { HighlightQuery } from './HighlightQuery';
 import { usePanel } from '../context/PanelContext';
@@ -170,6 +174,9 @@ interface SidebarProps {
     sessionIds: string[],
     pinned: boolean,
   ) => Promise<BulkPinSessionsResult | null> | BulkPinSessionsResult | null | void;
+  onBulkDuplicateSessions?: (
+    sessionIds: string[],
+  ) => Promise<BulkDuplicateSessionsResult | null> | BulkDuplicateSessionsResult | null | void;
   onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (
     sessionId: string,
@@ -215,6 +222,7 @@ export function Sidebar({
   onDeleteSession,
   onBulkDeleteSessions,
   onBulkPinSessions,
+  onBulkDuplicateSessions,
   onClearSessions,
   onRenameSession,
   onToggleSessionPin,
@@ -285,6 +293,9 @@ export function Sidebar({
     'idle' | 'busy' | 'done' | 'failed' | 'partial'
   >('idle');
   const [bulkPinChatsStatus, setBulkPinChatsStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed' | 'partial'
+  >('idle');
+  const [bulkDuplicateChatsStatus, setBulkDuplicateChatsStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed' | 'partial'
   >('idle');
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
@@ -369,9 +380,13 @@ export function Sidebar({
     [...selectedChatIds].every((id) =>
       recentSessions.some((session) => session.session_id === id && session.pinned === true),
     );
-  const canBulkManageChats = Boolean(onBulkDeleteSessions || onBulkPinSessions);
+  const canBulkManageChats = Boolean(
+    onBulkDeleteSessions || onBulkPinSessions || onBulkDuplicateSessions,
+  );
   const bulkChatsBusy =
-    bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy';
+    bulkDeleteChatsStatus === 'busy' ||
+    bulkPinChatsStatus === 'busy' ||
+    bulkDuplicateChatsStatus === 'busy';
   const bulkPinBusyTarget =
     bulkPinChatsStatus === 'busy' && bulkPinUnpinActionRef.current !== null
       ? bulkPinUnpinActionRef.current
@@ -1215,6 +1230,7 @@ export function Sidebar({
     if (bulkChatsBusy) return;
     setConfirmBulkDeleteChats(false);
     setBulkPinChatsStatus('idle');
+    setBulkDuplicateChatsStatus('idle');
     bulkPinUnpinActionRef.current = null;
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
@@ -1231,6 +1247,7 @@ export function Sidebar({
     if (bulkChatsBusy) return;
     setConfirmBulkDeleteChats(false);
     setBulkPinChatsStatus('idle');
+    setBulkDuplicateChatsStatus('idle');
     bulkPinUnpinActionRef.current = null;
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
@@ -1249,6 +1266,7 @@ export function Sidebar({
     if (bulkChatsBusy) return;
     setConfirmBulkDeleteChats(false);
     setBulkPinChatsStatus('idle');
+    setBulkDuplicateChatsStatus('idle');
     bulkPinUnpinActionRef.current = null;
     setSelectedChatIds(new Set());
   };
@@ -1298,6 +1316,26 @@ export function Sidebar({
       setBulkPinChatsStatus('failed');
     } finally {
       bulkPinUnpinActionRef.current = null;
+    }
+  };
+
+  const handleBulkDuplicateChats = async () => {
+    if (!onBulkDuplicateSessions || bulkDuplicateChatsStatus === 'busy') return;
+    const ids = [...selectedChatIds];
+    if (ids.length === 0) return;
+    setBulkDuplicateChatsStatus('busy');
+    try {
+      const result = await onBulkDuplicateSessions(ids);
+      if (!result) {
+        setBulkDuplicateChatsStatus('failed');
+        return;
+      }
+      setBulkDuplicateChatsStatus(
+        result.duplicated < ids.length ? 'partial' : 'done',
+      );
+      setSelectedChatIds(new Set());
+    } catch {
+      setBulkDuplicateChatsStatus('failed');
     }
   };
 
@@ -1849,6 +1887,27 @@ export function Sidebar({
                             : 'Pin'}
                       </button>
                     ) : null}
+                    {onBulkDuplicateSessions ? (
+                      <button
+                        type="button"
+                        aria-label={`Duplicate ${selectedChatIds.size} selected chats`}
+                        onClick={() => void handleBulkDuplicateChats()}
+                        disabled={bulkChatsBusy}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          borderRadius: 6,
+                          color: '#FFFFFF',
+                          background: '#5A8C6A',
+                          cursor: bulkChatsBusy ? 'default' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        {bulkDuplicateChatsStatus === 'busy'
+                          ? 'Duplicating…'
+                          : 'Duplicate'}
+                      </button>
+                    ) : null}
                     {onBulkDeleteSessions ? (
                       <button
                         type="button"
@@ -1986,6 +2045,31 @@ export function Sidebar({
                   Some selected chats could not be updated.
                 </p>
               ) : null}
+              {bulkDuplicateChatsStatus === 'failed' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Could not duplicate selected chats. Please try again.
+                </p>
+              ) : bulkDuplicateChatsStatus === 'partial' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Some selected chats could not be duplicated.
+                </p>
+              ) : null}
               {confirmClearSessions ? (
                 <div
                   role="dialog"
@@ -2088,6 +2172,8 @@ export function Sidebar({
                 bulkDeleteChatsStatus !== 'busy') ||
               (bulkPinChatsStatus !== 'idle' &&
                 bulkPinChatsStatus !== 'busy') ||
+              (bulkDuplicateChatsStatus !== 'idle' &&
+                bulkDuplicateChatsStatus !== 'busy') ||
               copyChatsStatus !== 'idle' ||
               downloadChatsStatus !== 'idle' ||
               downloadJsonChatsStatus !== 'idle' ||
@@ -2117,25 +2203,31 @@ export function Sidebar({
                           ? 'Selected chats updated'
                           : bulkPinChatsStatus === 'failed'
                             ? 'Could not update selected chats'
-                      : bulkDeleteChatsStatus === 'partial'
-                        ? 'Some selected chats could not be deleted'
-                        : bulkDeleteChatsStatus === 'done'
-                        ? 'Selected chats deleted'
-                        : bulkDeleteChatsStatus === 'failed'
-                          ? 'Could not delete selected chats'
-                          : downloadChatsStatus === 'done'
-                            ? 'Arena chats downloaded'
-                            : downloadChatsStatus === 'failed'
-                              ? 'Could not download Arena chats'
-                              : downloadJsonChatsStatus === 'done'
-                                ? 'Arena chats JSON downloaded'
-                                : downloadJsonChatsStatus === 'failed'
-                                  ? 'Could not download Arena chats JSON'
-                                  : downloadCsvChatsStatus === 'done'
-                                    ? 'Arena chats CSV downloaded'
-                                    : downloadCsvChatsStatus === 'failed'
-                                      ? 'Could not download Arena chats CSV'
-                                      : ''}
+                            : bulkDuplicateChatsStatus === 'partial'
+                              ? 'Some selected chats could not be duplicated'
+                              : bulkDuplicateChatsStatus === 'done'
+                                ? 'Selected chats duplicated'
+                                : bulkDuplicateChatsStatus === 'failed'
+                                  ? 'Could not duplicate selected chats'
+                                  : bulkDeleteChatsStatus === 'partial'
+                                    ? 'Some selected chats could not be deleted'
+                                    : bulkDeleteChatsStatus === 'done'
+                                      ? 'Selected chats deleted'
+                                      : bulkDeleteChatsStatus === 'failed'
+                                        ? 'Could not delete selected chats'
+                                        : downloadChatsStatus === 'done'
+                                          ? 'Arena chats downloaded'
+                                          : downloadChatsStatus === 'failed'
+                                            ? 'Could not download Arena chats'
+                                            : downloadJsonChatsStatus === 'done'
+                                              ? 'Arena chats JSON downloaded'
+                                              : downloadJsonChatsStatus === 'failed'
+                                                ? 'Could not download Arena chats JSON'
+                                                : downloadCsvChatsStatus === 'done'
+                                                  ? 'Arena chats CSV downloaded'
+                                                  : downloadCsvChatsStatus === 'failed'
+                                                    ? 'Could not download Arena chats CSV'
+                                                    : ''}
                 </div>
               ) : null}
               {isChatSearchActive && filteredChats.length === 0 ? (

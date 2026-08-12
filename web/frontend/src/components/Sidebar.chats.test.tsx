@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Sidebar } from './Sidebar';
 import type { SavedResponseItem } from '../types';
-import type { BulkPinSessionsResult, SessionSummary } from '../api';
+import type {
+  BulkDuplicateSessionsResult,
+  BulkPinSessionsResult,
+  SessionSummary,
+} from '../api';
 
 type MinimalSidebarTurn = {
   turn_id: string;
@@ -104,6 +108,11 @@ function renderSidebar(overrides?: {
     sessionIds: string[],
     pinned: boolean,
   ) => BulkPinSessionsResult | null | Promise<BulkPinSessionsResult | null>;
+  onBulkDuplicateSessions?:
+    | ((
+        sessionIds: string[],
+      ) => BulkDuplicateSessionsResult | null | Promise<BulkDuplicateSessionsResult | null>)
+    | null;
   onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (sessionId: string, title: string) => boolean | Promise<boolean>;
   onToggleSessionPin?: (sessionId: string, pinned: boolean) => boolean | Promise<boolean>;
@@ -116,6 +125,10 @@ function renderSidebar(overrides?: {
       ? vi.fn(() => 2)
       : (overrides.onBulkDeleteSessions ?? undefined);
   const onBulkPinSessions = overrides?.onBulkPinSessions ?? vi.fn();
+  const onBulkDuplicateSessions =
+    overrides?.onBulkDuplicateSessions === undefined
+      ? vi.fn(() => ({ duplicated: 0, sessions: [] }))
+      : (overrides.onBulkDuplicateSessions ?? undefined);
   const onClearSessions = overrides?.onClearSessions;
   const onRenameSession = overrides?.onRenameSession ?? vi.fn(() => true);
   const onToggleSessionPin = overrides?.onToggleSessionPin ?? vi.fn(() => true);
@@ -137,6 +150,7 @@ function renderSidebar(overrides?: {
       onDeleteSession={onDeleteSession}
       onBulkDeleteSessions={onBulkDeleteSessions}
       onBulkPinSessions={onBulkPinSessions}
+      onBulkDuplicateSessions={onBulkDuplicateSessions}
       onClearSessions={onClearSessions}
       onRenameSession={onRenameSession}
       onToggleSessionPin={onToggleSessionPin}
@@ -148,6 +162,7 @@ function renderSidebar(overrides?: {
     onDeleteSession,
     onBulkDeleteSessions,
     onBulkPinSessions,
+    onBulkDuplicateSessions,
     onClearSessions,
     onRenameSession,
     onToggleSessionPin,
@@ -170,6 +185,7 @@ function renderSidebar(overrides?: {
           onDeleteSession={onDeleteSession}
           onBulkDeleteSessions={onBulkDeleteSessions}
           onBulkPinSessions={onBulkPinSessions}
+          onBulkDuplicateSessions={onBulkDuplicateSessions}
           onClearSessions={onClearSessions}
           onRenameSession={onRenameSession}
           onToggleSessionPin={onToggleSessionPin}
@@ -667,6 +683,87 @@ describe('Sidebar recent chats', () => {
     );
     await waitFor(() =>
       expect(onBulkPinSessions).toHaveBeenCalledWith(['chat-1'], true),
+    );
+  });
+
+  it('duplicates selected chats from the selection toolbar', async () => {
+    const onBulkDuplicateSessions = vi.fn().mockResolvedValue({
+      duplicated: 2,
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          session_id: 'dup-1',
+        },
+        {
+          ...(sessions[1] as SessionSummary),
+          session_id: 'dup-2',
+        },
+      ],
+    });
+    renderSidebar({ onBulkDuplicateSessions });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Duplicate 2 selected chats' }),
+    );
+
+    await waitFor(() =>
+      expect(onBulkDuplicateSessions).toHaveBeenCalledWith(['chat-1', 'chat-2']),
+    );
+    await waitFor(() => {
+      const statuses = screen.getAllByRole('status');
+      expect(
+        statuses.some((status) =>
+          status.textContent?.includes('Selected chats duplicated'),
+        ),
+      ).toBe(true);
+    });
+    expect(screen.queryByText('2 chats selected')).toBeNull();
+  });
+
+  it('reports a partial bulk duplicate and clears the selection', async () => {
+    const onBulkDuplicateSessions = vi.fn().mockResolvedValue({
+      duplicated: 1,
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          session_id: 'dup-1',
+        },
+      ],
+    });
+    renderSidebar({ onBulkDuplicateSessions });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Duplicate 2 selected chats' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /some selected chats could not be duplicated/i,
+      ),
+    );
+    expect(screen.queryByText('2 chats selected')).toBeNull();
+  });
+
+  it('surfaces a failure when bulk duplicating selected chats fails', async () => {
+    renderSidebar({
+      onBulkDuplicateSessions: vi.fn().mockResolvedValue(null),
+    });
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Duplicate 1 selected chats' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /could not duplicate selected chats/i,
+      ),
     );
   });
 

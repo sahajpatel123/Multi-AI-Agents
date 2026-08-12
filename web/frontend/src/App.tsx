@@ -28,6 +28,7 @@ import {
   clearAllSessions,
   renameSession,
   duplicateSession,
+  duplicateSessionsBulk,
   setSessionPin,
   setSessionsPinBulk,
   saveMemory,
@@ -1161,6 +1162,24 @@ function App() {
     [],
   );
 
+  const handleBulkDuplicateSessions = useCallback(async (sessionIds: string[]) => {
+    if (sessionIds.length === 0) return null;
+    const result = await duplicateSessionsBulk(sessionIds);
+    if (!result) return null;
+    setRecentSessions((prev) => {
+      const existingIds = new Set(prev.map((session) => session.session_id));
+      const fresh = result.sessions.filter(
+        (session) => !existingIds.has(session.session_id),
+      );
+      return [...fresh, ...prev];
+    });
+    void track('recent_chats_bulk_duplicated', undefined, undefined, {
+      duplicated: result.duplicated,
+      requested: sessionIds.length,
+    });
+    return result;
+  }, []);
+
   const handleClearSessions = useCallback(async () => {
     const cleared = await clearAllSessions();
     if (cleared === null) return null;
@@ -1953,6 +1972,7 @@ function App() {
           }}
           onBulkDeleteSessions={handleBulkDeleteSessions}
           onBulkPinSessions={handleBulkPinSessions}
+          onBulkDuplicateSessions={handleBulkDuplicateSessions}
           onClearSessions={handleClearSessions}
           onRenameSession={handleRenameSession}
           onToggleSessionPin={handleToggleSessionPin}

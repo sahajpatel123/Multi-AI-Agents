@@ -62,6 +62,17 @@ class BulkPinSessionsRequest(BaseModel):
     pinned: bool
 
 
+class BulkDuplicateSessionsRequest(BaseModel):
+    """Body for forking a user-selected subset of live sessions."""
+
+    session_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Sessions to duplicate, capped so one request stays bounded.",
+    )
+
+
 # In-memory sessions are stored as raw dicts in MemoryManager._store.
 # Each entry has a `session_data` (SessionData) and we need to project
 # a small summary for the list endpoint so the response stays tiny.
@@ -278,6 +289,46 @@ async def duplicate_session(
         "status": "duplicated",
         "session_id": new_id,
         "session": _session_summary(new_id, duplicated_state),
+    }
+
+
+@router.post("/sessions/bulk/duplicate")
+async def duplicate_selected_sessions(
+    body: BulkDuplicateSessionsRequest,
+    user: UserResponse = Depends(get_current_user_required),
+) -> dict:
+    """Fork a caller-selected subset of live in-memory sessions.
+
+    Like bulk delete/pin, this touches only the ids supplied in the request.
+    Foreign and missing ids are skipped without revealing them, and the
+    response returns the freshly created session summaries so the UI can
+    surface the forks immediately.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="session_bulk_duplicate",
+        limit=20,
+        window_seconds=60,
+        message="Too many bulk session duplicates. Please slow down.",
+    )
+    memory = get_memory_manager()
+    store = getattr(memory, "short_term", None)
+    store = getattr(store, "_store", {}) if store is not None else {}
+
+    sessions: list[dict] = []
+    for sid in dict.fromkeys(body.session_ids):
+        new_id = memory.short_term.duplicate_session(sid, user_id=str(user.id))
+        if new_id is None:
+            continue
+        state = store.get(new_id)
+        if state is None:
+            continue
+        sessions.append(_session_summary(new_id, state))
+
+    return {
+        "status": "duplicated",
+        "duplicated": len(sessions),
+        "sessions": sessions,
     }
 
 
