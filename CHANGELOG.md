@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sidebar selected chats can be exported together as one combined full-session
+  Markdown transcript archive (indexed by chat title, with session provenance)
 - Sidebar resumable chat bulk copy: copy selected chats to the clipboard as Markdown
 - Sidebar resumable chat bulk delete: select individual chats or all visible,
   then remove them with one confirmed request
@@ -17,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Combined transcript export fetches selected sessions in bounded parallel
+  batches, keeps partial archives when individual chats fail, and sanitizes
+  chat titles so the Markdown archive stays well-formed
 - Sidebar selected-chat copy is hardened against overlapping in-flight copies,
   announces the busy state, and reports singular/plural counts correctly
 - Sidebar bulk chat delete reports partial deletions honestly and announces

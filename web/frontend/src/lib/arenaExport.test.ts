@@ -10,6 +10,7 @@ import {
   formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
   pickArenaWinner,
+  sanitizeArenaTranscriptTitle,
 } from './arenaExport';
 import type { PromptResponse, SessionTurn } from '../types';
 
@@ -737,6 +738,43 @@ describe('formatArenaTranscriptsExport', () => {
     expect(md).toContain('# Arena — selected chat transcripts');
     expect(md).toContain('**Chats:** 0');
     expect(md).toContain('_Shared from Arena_');
+  });
+
+  it('sanitizes chat titles so markdown headings stay well-formed', () => {
+    const md = formatArenaTranscriptsExport(
+      [
+        {
+          sessionId: 'chat-1',
+          title: '# Launch\n\nPlan',
+          turns: [turn],
+        },
+        {
+          sessionId: 'chat-2',
+          title: '###   Roadmap review',
+          turns: [turn],
+        },
+        {
+          sessionId: 'chat-3',
+          title: '###',
+          turns: [turn],
+        },
+      ],
+      (id) => ({ name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher' }),
+      { exportedAt: '2026-08-07T12:00:00.000Z' },
+    );
+
+    expect(md).toContain('## 1. Launch Plan');
+    expect(md).toContain('## 2. Roadmap review');
+    expect(md).toContain('## 3. chat-3');
+    expect(md).not.toContain('# Launch');
+  });
+
+  it('sanitizes newlines, repeated whitespace, and leading heading markers', () => {
+    expect(sanitizeArenaTranscriptTitle('#  My\n\nchat   title')).toBe(
+      'My chat title',
+    );
+    expect(sanitizeArenaTranscriptTitle('### plain title')).toBe('plain title');
+    expect(sanitizeArenaTranscriptTitle('  ')).toBe('');
   });
 });
 

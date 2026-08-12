@@ -23,6 +23,19 @@ export type ArenaTranscriptBundle = {
 };
 
 /**
+ * Make a user-controlled chat title safe for use as a Markdown heading.
+ * Newlines and repeated whitespace are collapsed so a title cannot inject
+ * extra blocks into the combined archive, and a leading ATX marker is
+ * stripped so the title renders as the section label it is.
+ */
+export function sanitizeArenaTranscriptTitle(raw: string): string {
+  return (raw || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^#{1,6}\s*/, '');
+}
+
+/**
  * Pick the winning scored take from an Arena response.
  * Prefers `is_winner`, then `winner_agent_id`, then highest score.
  */
@@ -218,7 +231,9 @@ export function formatArenaTranscriptsExport(
 
   chats.forEach((bundle, index) => {
     const title =
-      (bundle.title || '').trim() || bundle.sessionId || `Chat ${index + 1}`;
+      sanitizeArenaTranscriptTitle(bundle.title || '') ||
+      bundle.sessionId ||
+      `Chat ${index + 1}`;
     lines.push(`## ${index + 1}. ${title}`, '');
     const transcript = formatArenaTranscriptExport(
       bundle.turns,

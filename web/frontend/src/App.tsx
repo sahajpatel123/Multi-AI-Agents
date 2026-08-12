@@ -60,6 +60,7 @@ import {
 import { buildFollowUpContext } from './lib/followUpContext';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
 import { buildSessionTurnResponse } from './lib/arenaTurn';
+import { loadSessionTranscriptBundles } from './lib/arenaSessionArchive';
 import { isScrollNearBottom, shouldAutoScrollChat } from './lib/chatScroll';
 import { scrollBehavior } from './lib/motion';
 import {
@@ -1184,24 +1185,11 @@ function App() {
   const handleBulkExportChatTranscripts = useCallback(
     async (sessionIds: string[]) => {
       if (sessionIds.length === 0) return null;
-      const bundles: Array<{
-        sessionId: string;
-        title: string | null;
-        turns: SessionTurn[];
-      }> = [];
-      for (const sessionId of sessionIds) {
-        const session = await getSession(sessionId);
-        if (!session) continue;
-        const summary = recentSessions.find(
-          (candidate) => candidate.session_id === sessionId,
-        );
-        bundles.push({
-          sessionId: session.session_id,
-          title:
-            summary?.title || session.topics?.[0] || null,
-          turns: session.turns || [],
-        });
-      }
+      const bundles = await loadSessionTranscriptBundles(
+        sessionIds,
+        getSession,
+        recentSessions,
+      );
       if (bundles.length === 0) return null;
       const md = formatArenaTranscriptsExport(bundles, resolveArenaPersona);
       const ok = downloadMarkdownFile(md, 'arena-selected-chats-transcripts');
