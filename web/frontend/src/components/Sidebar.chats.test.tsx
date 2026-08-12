@@ -485,6 +485,70 @@ describe('Sidebar recent chats', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('filters chats to the pinned-only view', () => {
+    renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          pinned: true,
+          last_prompt: 'Pinned launch plan',
+        },
+        {
+          ...(sessions[1] as SessionSummary),
+          last_prompt: 'Unpinned draft',
+        },
+      ],
+    });
+
+    const filter = screen.getByRole('combobox', { name: 'Filter chats' });
+    expect(filter).toHaveValue('all');
+
+    fireEvent.change(filter, { target: { value: 'pinned' } });
+
+    const openButtons = screen.getAllByRole('button', { name: /Open session/ });
+    expect(openButtons).toHaveLength(1);
+    expect(openButtons[0]).toHaveAttribute(
+      'aria-label',
+      'Open session: Pinned launch plan',
+    );
+    expect(screen.getByText('1 / 2')).toBeInTheDocument();
+  });
+
+  it('hides the pinned filter when no chat is pinned', () => {
+    renderSidebar();
+    expect(
+      screen.queryByRole('combobox', { name: 'Filter chats' }),
+    ).toBeNull();
+  });
+
+  it('searches within the pinned-only view', () => {
+    renderSidebar({
+      sessions: [
+        {
+          ...(sessions[0] as SessionSummary),
+          pinned: true,
+          last_prompt: 'Q3 planning review',
+        },
+        {
+          ...(sessions[1] as SessionSummary),
+          pinned: true,
+          last_prompt: 'Marketing launch',
+        },
+      ],
+    });
+
+    const filter = screen.getByRole('combobox', { name: 'Filter chats' });
+    fireEvent.change(filter, { target: { value: 'pinned' } });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
+      target: { value: 'marketing' },
+    });
+
+    expect(
+      screen.getByRole('button', { name: /Open session: Marketing launch/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Q3 planning review/)).toBeNull();
+  });
+
   it('renames a chat inline through the callback', async () => {
     const { onRenameSession } = renderSidebar();
     fireEvent.click(screen.getAllByRole('button', { name: 'Rename session' })[0]);

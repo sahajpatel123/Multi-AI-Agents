@@ -81,6 +81,14 @@ import {
   type SidebarChatsSort,
 } from '../lib/sidebarChatsSort';
 import {
+  SIDEBAR_CHATS_PIN_ALL,
+  SIDEBAR_CHATS_PIN_FILTER_OPTIONS,
+  SIDEBAR_CHATS_PIN_ONLY,
+  filterChatsByPin,
+  sidebarChatsPinFilterLabel,
+  type SidebarChatsPinFilter,
+} from '../lib/sidebarChatsPinFilter';
+import {
   SIDEBAR_SAVED_MIND_ALL,
   collectSavedMindFilterOptions,
   filterSavedByMind,
@@ -215,6 +223,8 @@ export function Sidebar({
   const [savedSearchQuery, setSavedSearchQuery] = useState('');
   const [recentsSort, setRecentsSort] = useState<SidebarRecentsSort>('newest');
   const [chatsSort, setChatsSort] = useState<SidebarChatsSort>('newest');
+  const [chatsPinFilter, setChatsPinFilter] =
+    useState<SidebarChatsPinFilter>(SIDEBAR_CHATS_PIN_ALL);
   const [savedSort, setSavedSort] = useState<SidebarSavedSort>('newest');
   const [savedMindFilter, setSavedMindFilter] =
     useState<SidebarSavedMindFilter>(SIDEBAR_SAVED_MIND_ALL);
@@ -299,20 +309,32 @@ export function Sidebar({
     [turns, deletedTurnIds],
   );
 
+  const filteredByPinChats = useMemo(
+    () => filterChatsByPin(recentSessions, chatsPinFilter),
+    [recentSessions, chatsPinFilter],
+  );
   const sortedChats = useMemo(
-    () => sortSidebarChats(recentSessions, chatsSort),
-    [recentSessions, chatsSort],
+    () => sortSidebarChats(filteredByPinChats, chatsSort),
+    [filteredByPinChats, chatsSort],
   );
   const filteredChats = useMemo(
     () => filterSessionsBySearchQuery(sortedChats, chatSearchQuery),
     [sortedChats, chatSearchQuery],
   );
   const isChatSearchActive = chatSearchQuery.trim().length > 0;
+  const isChatFilterActive =
+    isChatSearchActive || chatsPinFilter !== SIDEBAR_CHATS_PIN_ALL;
   const visibleChats = isChatSearchActive
     ? filteredChats
-    : showAllChats
-      ? sortedChats
-      : sortedChats.slice(0, 5);
+    : isChatFilterActive
+      ? filteredChats
+      : showAllChats
+        ? sortedChats
+        : sortedChats.slice(0, 5);
+  const chatPinFilterUseful = useMemo(
+    () => recentSessions.some((session) => session.pinned === true),
+    [recentSessions],
+  );
 
   const filteredTurns = useMemo(() => {
     const byCategory = reversedTurns.filter(
@@ -603,6 +625,14 @@ export function Sidebar({
     if (recentSessions.length === 0) setConfirmClearSessions(false);
   }, [recentSessions.length]);
 
+  // Drop the pinned-only view when the last pinned chat is unpinned so the
+  // sidebar never strands the user on an empty view with no way to reach it.
+  useEffect(() => {
+    if (chatsPinFilter === SIDEBAR_CHATS_PIN_ONLY && !chatPinFilterUseful) {
+      setChatsPinFilter(SIDEBAR_CHATS_PIN_ALL);
+    }
+  }, [chatsPinFilter, chatPinFilterUseful]);
+
   useEffect(() => {
     if (recentItemCopyStatus === 'idle') return;
     const hold = motionDuration(recentItemCopyStatus === 'failed' ? 2800 : 2000);
@@ -849,6 +879,9 @@ export function Sidebar({
   const buildChatsFilterNote = () => {
     const q = chatSearchQuery.trim();
     const bits: string[] = [];
+    if (chatsPinFilter === SIDEBAR_CHATS_PIN_ONLY) {
+      bits.push(sidebarChatsPinFilterLabel(chatsPinFilter).toLowerCase());
+    }
     if (q) bits.push(`search “${q}”`);
     if (chatsSort !== 'newest') bits.push(`sort: ${sidebarChatsSortLabel(chatsSort)}`);
     return bits.length > 0 ? bits.join(' · ') : undefined;
@@ -1226,7 +1259,7 @@ export function Sidebar({
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 10, color: '#A0A39A' }}>
-                    {isChatSearchActive
+                    {isChatFilterActive
                       ? `${filteredChats.length} / ${recentSessions.length}`
                       : recentSessions.length}
                   </span>
@@ -1353,6 +1386,34 @@ export function Sidebar({
                   </option>
                 ))}
               </select>
+              {chatPinFilterUseful ? (
+                <select
+                  value={chatsPinFilter}
+                  onChange={(e) =>
+                    setChatsPinFilter(e.target.value as SidebarChatsPinFilter)
+                  }
+                  aria-label="Filter chats"
+                  title="Filter chats"
+                  style={{
+                    width: '100%',
+                    fontSize: 11,
+                    fontFamily: 'var(--vp-font-sans)',
+                    color: '#4A3728',
+                    background: '#0B0C0A',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 6,
+                    padding: '5px 8px',
+                    cursor: 'pointer',
+                    marginBottom: 8,
+                  }}
+                >
+                  {SIDEBAR_CHATS_PIN_FILTER_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
               {recentSessions.length > 0 ? (
                 <div
                   style={{
@@ -1790,7 +1851,7 @@ export function Sidebar({
                   })}
                 </div>
               )}
-              {!isChatSearchActive && recentSessions.length > 5 ? (
+              {!isChatFilterActive && recentSessions.length > 5 ? (
                 <button
                   type="button"
                   className="sidebar-text-link"

@@ -215,6 +215,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Sidebar Chats: sort chats by newest, oldest, title, or most turns',
       '[IMPROVED] Sidebar Chats: chats with missing activity or title stay at the end in every sort order',
       '[NEW] Sidebar Chats: duplicate any chat as a fresh, independent fork',
+      '[NEW] Sidebar Chats: filter to pinned-only chats with one click',
     ],
   },
   {
