@@ -50,6 +50,18 @@ class BulkDeleteSessionsRequest(BaseModel):
     )
 
 
+class BulkPinSessionsRequest(BaseModel):
+    """Body for pinning / unpinning a user-selected subset of live sessions."""
+
+    session_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Sessions to pin or unpin, capped to keep one request bounded.",
+    )
+    pinned: bool
+
+
 # In-memory sessions are stored as raw dicts in MemoryManager._store.
 # Each entry has a `session_data` (SessionData) and we need to project
 # a small summary for the list endpoint so the response stays tiny.
@@ -429,4 +441,42 @@ async def delete_selected_sessions(
         "status": "deleted",
         "deleted": len(deleted_ids),
         "deleted_ids": deleted_ids,
+    }
+
+
+@router.patch("/sessions/bulk/pin")
+async def set_selected_sessions_pin(
+    body: BulkPinSessionsRequest,
+    user: UserResponse = Depends(get_current_user_required),
+) -> dict:
+    """Pin or unpin a caller-selected subset of live in-memory sessions.
+
+    Like bulk delete, this touches only the ids supplied in the request.
+    Foreign and missing ids are skipped without revealing them, and the
+    response lists exactly which ids were updated so the UI can reconcile
+    stale rows without guessing.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="session_bulk_pin",
+        limit=60,
+        window_seconds=60,
+        message="Too many bulk session pin updates. Please slow down.",
+    )
+    memory = get_memory_manager()
+    store = getattr(memory, "short_term", None)
+    store = getattr(store, "_store", {}) if store is not None else {}
+
+    updated_ids: list[str] = []
+    for sid in dict.fromkeys(body.session_ids):
+        state = store.get(sid)
+        if state is None or not _is_owner(state, user.id):
+            continue
+        state["session_pinned"] = body.pinned
+        updated_ids.append(sid)
+
+    return {
+        "status": "pinned" if body.pinned else "unpinned",
+        "updated": len(updated_ids),
+        "updated_ids": updated_ids,
     }

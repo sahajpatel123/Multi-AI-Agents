@@ -727,6 +727,133 @@ async def test_delete_selected_clears_persona_integrity_history(
     assert "keep-me" in persona_integrity._session_history
 
 
+# ─── Bulk pin / unpin ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_bulk_pin_only_updates_requested_owned_sessions(
+    app_client, make_user
+):
+    """Bulk pin must flip exactly the requested owned sessions and leave
+    unselected, foreign, and missing sessions alone."""
+    alice = make_user(email="sess-bulk-pin-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-bulk-pin-b@test.com", tier=UserTier.PRO)
+    _seed_in_memory(alice.id, session_id="a-1")
+    _seed_in_memory(alice.id, session_id="a-2")
+    _seed_in_memory(alice.id, session_id="a-keep")
+    _seed_in_memory(bob.id, session_id="b-1")
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(alice),
+        json={
+            "session_ids": ["a-1", "a-2", "b-1", "missing"],
+            "pinned": True,
+        },
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "pinned",
+        "updated": 2,
+        "updated_ids": ["a-1", "a-2"],
+    }
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    by_id = {row["session_id"]: row for row in listing.json()["sessions"]}
+    assert by_id["a-1"]["pinned"] is True
+    assert by_id["a-2"]["pinned"] is True
+    assert by_id["a-keep"]["pinned"] is False
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(bob))
+    assert listing.json()["sessions"][0]["pinned"] is False
+
+
+@pytest.mark.asyncio
+async def test_bulk_unpin_clears_selected_flags(app_client, make_user):
+    user = make_user(email="sess-bulk-unpin@test.com", tier=UserTier.PRO)
+    state_a = _seed_in_memory(user.id, session_id="a-1")
+    state_b = _seed_in_memory(user.id, session_id="a-2")
+    state_keep = _seed_in_memory(user.id, session_id="keep")
+    state_a["session_pinned"] = True
+    state_b["session_pinned"] = True
+    state_keep["session_pinned"] = True
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": ["a-1", "a-2"], "pinned": False},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "unpinned",
+        "updated": 2,
+        "updated_ids": ["a-1", "a-2"],
+    }
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    by_id = {row["session_id"]: row for row in listing.json()["sessions"]}
+    assert by_id["a-1"]["pinned"] is False
+    assert by_id["a-2"]["pinned"] is False
+    assert by_id["keep"]["pinned"] is True
+
+
+@pytest.mark.asyncio
+async def test_bulk_pin_deduplicates_and_accepts_empty_result(
+    app_client, make_user
+):
+    user = make_user(email="sess-bulk-pin-dedup@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": ["mine", "mine", "ghost"], "pinned": True},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "pinned",
+        "updated": 1,
+        "updated_ids": ["mine"],
+    }
+
+    # Only missing/foreign ids are a successful no-op, never an error.
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": ["ghost"], "pinned": True},
+    )
+    assert res.status_code == 200
+    assert res.json()["updated"] == 0
+    assert res.json()["updated_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_bulk_pin_rejects_bad_lists_and_pinned_type(app_client, make_user):
+    user = make_user(email="sess-bulk-pin-bounds@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": [], "pinned": True},
+    )
+    assert res.status_code == 422
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": [f"x{i}" for i in range(101)], "pinned": True},
+    )
+    assert res.status_code == 422
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": ["mine"], "pinned": "not-a-boolean"},
+    )
+    assert res.status_code == 422
+
+
 # ─── Auth ───────────────────────────────────────────────────────────────────
 
 
@@ -740,6 +867,7 @@ async def test_session_endpoints_require_auth(app_client):
         ("DELETE", "/api/session/x"),
         ("DELETE", "/api/sessions"),
         ("DELETE", "/api/sessions/bulk"),
+        ("PATCH", "/api/sessions/bulk/pin"),
     ]:
         res = await app_client.request(method, path)
         assert res.status_code == 401, f"{method} {path} returned {res.status_code}"

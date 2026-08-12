@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
-import type { SessionSummary } from '../api';
+import type { BulkPinSessionsResult, SessionSummary } from '../api';
 import { AgentDot } from './AgentDot';
 import { HighlightQuery } from './HighlightQuery';
 import { usePanel } from '../context/PanelContext';
@@ -166,6 +166,10 @@ interface SidebarProps {
   onBulkDeleteSessions?: (
     sessionIds: string[],
   ) => Promise<number | null> | number | null | void;
+  onBulkPinSessions?: (
+    sessionIds: string[],
+    pinned: boolean,
+  ) => Promise<BulkPinSessionsResult | null> | BulkPinSessionsResult | null | void;
   onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (
     sessionId: string,
@@ -210,6 +214,7 @@ export function Sidebar({
   onSessionSelect,
   onDeleteSession,
   onBulkDeleteSessions,
+  onBulkPinSessions,
   onClearSessions,
   onRenameSession,
   onToggleSessionPin,
@@ -277,6 +282,9 @@ export function Sidebar({
   );
   const [confirmBulkDeleteChats, setConfirmBulkDeleteChats] = useState(false);
   const [bulkDeleteChatsStatus, setBulkDeleteChatsStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed' | 'partial'
+  >('idle');
+  const [bulkPinChatsStatus, setBulkPinChatsStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed' | 'partial'
   >('idle');
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
@@ -355,6 +363,11 @@ export function Sidebar({
   ).length;
   const allVisibleChatsSelected =
     visibleChats.length > 0 && selectedVisibleCount === visibleChats.length;
+  const allSelectedChatsPinned =
+    selectedChatIds.size > 0 &&
+    [...selectedChatIds].every((id) =>
+      recentSessions.some((session) => session.session_id === id && session.pinned === true),
+    );
 
   const filteredTurns = useMemo(() => {
     const byCategory = reversedTurns.filter(
@@ -669,6 +682,20 @@ export function Sidebar({
     );
     return () => window.clearTimeout(t);
   }, [bulkDeleteChatsStatus]);
+
+  useEffect(() => {
+    if (bulkPinChatsStatus === 'idle' || bulkPinChatsStatus === 'busy') return;
+    const hold = motionDuration(
+      bulkPinChatsStatus === 'failed' || bulkPinChatsStatus === 'partial'
+        ? 2800
+        : 2000,
+    );
+    const t = window.setTimeout(
+      () => setBulkPinChatsStatus('idle'),
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [bulkPinChatsStatus]);
 
   // Keep the stored filter in sync with reality: drop the pinned-only view
   // when the last pinned chat is unpinned and normalize any stale value.
@@ -1178,6 +1205,7 @@ export function Sidebar({
 
   const toggleChatSelected = (sessionId: string) => {
     setConfirmBulkDeleteChats(false);
+    setBulkPinChatsStatus('idle');
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
       if (next.has(sessionId)) {
@@ -1191,6 +1219,7 @@ export function Sidebar({
 
   const toggleAllVisibleChats = () => {
     setConfirmBulkDeleteChats(false);
+    setBulkPinChatsStatus('idle');
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
       for (const session of visibleChats) {
@@ -1206,6 +1235,7 @@ export function Sidebar({
 
   const clearChatSelection = () => {
     setConfirmBulkDeleteChats(false);
+    setBulkPinChatsStatus('idle');
     setSelectedChatIds(new Set());
   };
 
@@ -1229,6 +1259,28 @@ export function Sidebar({
       setSelectedChatIds(new Set());
     } catch {
       setBulkDeleteChatsStatus('failed');
+    }
+  };
+
+  const handleBulkPinChats = async () => {
+    if (!onBulkPinSessions || bulkPinChatsStatus === 'busy') return;
+    const ids = [...selectedChatIds];
+    if (ids.length === 0) return;
+    const pinned = !allSelectedChatsPinned;
+    setBulkPinChatsStatus('busy');
+    try {
+      const result = await onBulkPinSessions(ids, pinned);
+      if (!result) {
+        setBulkPinChatsStatus('failed');
+        return;
+      }
+      if (result.updated < ids.length) {
+        setBulkPinChatsStatus('partial');
+        return;
+      }
+      setBulkPinChatsStatus('done');
+    } catch {
+      setBulkPinChatsStatus('failed');
     }
   };
 
@@ -1737,7 +1789,7 @@ export function Sidebar({
                       type="button"
                       aria-label="Cancel chat selection"
                       onClick={clearChatSelection}
-                      disabled={bulkDeleteChatsStatus === 'busy'}
+                      disabled={bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'}
                       style={{
                         padding: '4px 8px',
                         fontSize: 10,
@@ -1745,7 +1797,9 @@ export function Sidebar({
                         color: '#A0A39A',
                         background: '#F0EBE3',
                         cursor:
-                          bulkDeleteChatsStatus === 'busy' ? 'default' : 'pointer',
+                          bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'
+                            ? 'default'
+                            : 'pointer',
                         border: 'none',
                       }}
                     >
@@ -1753,9 +1807,39 @@ export function Sidebar({
                     </button>
                     <button
                       type="button"
+                      aria-label={
+                        allSelectedChatsPinned
+                          ? `Unpin ${selectedChatIds.size} selected chats`
+                          : `Pin ${selectedChatIds.size} selected chats`
+                      }
+                      onClick={() => void handleBulkPinChats()}
+                      disabled={bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 10,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background: '#4A6FA5',
+                        cursor:
+                          bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'
+                            ? 'default'
+                            : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {bulkPinChatsStatus === 'busy'
+                        ? allSelectedChatsPinned
+                          ? 'Unpinning…'
+                          : 'Pinning…'
+                        : allSelectedChatsPinned
+                          ? 'Unpin'
+                          : 'Pin'}
+                    </button>
+                    <button
+                      type="button"
                       aria-label={`Delete ${selectedChatIds.size} selected chats`}
                       onClick={() => setConfirmBulkDeleteChats(true)}
-                      disabled={bulkDeleteChatsStatus === 'busy'}
+                      disabled={bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'}
                       style={{
                         padding: '4px 8px',
                         fontSize: 10,
@@ -1763,7 +1847,9 @@ export function Sidebar({
                         color: '#FFFFFF',
                         background: '#C0392B',
                         cursor:
-                          bulkDeleteChatsStatus === 'busy' ? 'default' : 'pointer',
+                          bulkDeleteChatsStatus === 'busy' || bulkPinChatsStatus === 'busy'
+                            ? 'default'
+                            : 'pointer',
                         border: 'none',
                       }}
                     >
@@ -1860,6 +1946,31 @@ export function Sidebar({
                 >
                   Some selected chats could not be deleted and are still
                   selected.
+                </p>
+              ) : null}
+              {bulkPinChatsStatus === 'failed' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Could not update selected chats. Please try again.
+                </p>
+              ) : bulkPinChatsStatus === 'partial' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Some selected chats could not be updated.
                 </p>
               ) : null}
               {confirmClearSessions ? (
@@ -1962,6 +2073,8 @@ export function Sidebar({
               ) : null}
               {(bulkDeleteChatsStatus !== 'idle' &&
                 bulkDeleteChatsStatus !== 'busy') ||
+              (bulkPinChatsStatus !== 'idle' &&
+                bulkPinChatsStatus !== 'busy') ||
               copyChatsStatus !== 'idle' ||
               downloadChatsStatus !== 'idle' ||
               downloadJsonChatsStatus !== 'idle' ||
@@ -1985,6 +2098,12 @@ export function Sidebar({
                     ? 'Arena chats copied to clipboard'
                     : copyChatsStatus === 'failed'
                       ? 'Could not copy Arena chats'
+                      : bulkPinChatsStatus === 'partial'
+                        ? 'Some selected chats could not be updated'
+                        : bulkPinChatsStatus === 'done'
+                          ? 'Selected chats updated'
+                          : bulkPinChatsStatus === 'failed'
+                            ? 'Could not update selected chats'
                       : bulkDeleteChatsStatus === 'partial'
                         ? 'Some selected chats could not be deleted'
                         : bulkDeleteChatsStatus === 'done'

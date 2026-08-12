@@ -976,6 +976,11 @@ export type BulkDeleteSessionsResult = {
   deleted_ids: string[];
 };
 
+export type BulkPinSessionsResult = {
+  updated: number;
+  updated_ids: string[];
+};
+
 export async function deleteSessionsBulk(
   sessionIds: string[],
 ): Promise<BulkDeleteSessionsResult | null> {
@@ -993,6 +998,30 @@ export async function deleteSessionsBulk(
     return {
       deleted: data.deleted,
       deleted_ids: data.deleted_ids,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function setSessionsPinBulk(
+  sessionIds: string[],
+  pinned: boolean,
+): Promise<BulkPinSessionsResult | null> {
+  try {
+    const response = await apiFetch('/api/sessions/bulk/pin', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_ids: sessionIds, pinned }),
+    });
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<Partial<BulkPinSessionsResult>>(response);
+    if (!Array.isArray(data?.updated_ids) || typeof data?.updated !== 'number') {
+      return null;
+    }
+    return {
+      updated: data.updated,
+      updated_ids: data.updated_ids,
     };
   } catch {
     return null;
