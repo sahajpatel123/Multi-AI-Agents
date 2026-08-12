@@ -127,6 +127,20 @@ describe('SessionCard', () => {
     expect(getByText(/5 msg/)).toBeInTheDocument();
   });
 
+  it('renders an arena-chat label when no winner agent is provided', () => {
+    const { getByText } = render(
+      <SessionCard
+        prompt="Resumable chat"
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+        messageCount={2}
+      />,
+    );
+    expect(getByText('Arena chat')).toBeInTheDocument();
+    expect(getByText(/2 msg/)).toBeInTheDocument();
+  });
+
   it('omits message count when zero', () => {
     const { queryByText } = render(
       <SessionCard

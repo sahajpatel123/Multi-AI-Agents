@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import pytest
 
 from arena.core.memory import get_memory_manager
-from arena.models.schemas import SessionData
+from arena.models.schemas import SessionData, SessionTurn, AgentResponse
 from arena.db_models import UserTier
 
 
@@ -143,6 +143,40 @@ async def test_list_row_includes_topic_and_turn_count(app_client, make_user):
     assert row["topics"] == ["ai", "ml"]
     assert row["primary_topic"] == "ai"
     assert row["turn_count"] == 0  # no turns seeded
+
+
+@pytest.mark.asyncio
+async def test_list_row_includes_last_prompt(app_client, make_user):
+    """The list row should carry the most recent prompt so the UI can show a
+    readable resume title instead of topic keywords alone."""
+    user = make_user(email="sess-last-prompt@test.com", tier=UserTier.PRO)
+    state = _seed_in_memory(user.id, session_id="s1", topics=["market"])
+    state["session_data"].turns = [
+        SessionTurn(
+            turn_id="turn-1",
+            prompt="Should we launch the market experiment now?",
+            agent_responses={
+                "agent_1": AgentResponse(
+                    agent_id="agent_1",
+                    agent_number=1,
+                    verdict="Yes, bounded experiment.",
+                    one_liner="Yes, bounded experiment.",
+                    confidence=82,
+                    key_assumption="The test stays small.",
+                    timestamp="2026-08-12T10:00:00Z",
+                )
+            },
+            winner_id="agent_1",
+            timestamp="2026-08-12T10:00:00Z",
+        )
+    ]
+
+    res = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert res.status_code == 200
+    row = res.json()["sessions"][0]
+    assert row["session_id"] == "s1"
+    assert row["last_prompt"] == "Should we launch the market experiment now?"
+    assert row["turn_count"] == 1
 
 
 # ─── Delete single ──────────────────────────────────────────────────────────

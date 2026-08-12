@@ -88,8 +88,8 @@ async def list_sessions(
     reappears under /api/memory/summaries instead. The two endpoints
     cover the full lifecycle: live chats here, persisted memory there.
 
-    Each row carries the bare minimum (id, topic, last_active) so the
-    list payload stays small even if a user has 50 active threads.
+    Each row carries the bare minimum (id, topic, last prompt, last_active)
+    so the list payload stays small even if a user has 50 active threads.
     """
     # 60/min/user — list walks in-memory store; cap hostile polling.
     enforce_user_rate_limit(
@@ -115,11 +115,13 @@ async def list_sessions(
         if session_data is None:
             continue
         topics = list(getattr(session_data, "topics", []) or [])
+        turns = list(getattr(session_data, "turns", []) or [])
         rows.append({
             "session_id": sid,
             "topics": topics,
             "primary_topic": topics[0] if topics else None,
-            "turn_count": len(getattr(session_data, "turns", []) or []),
+            "last_prompt": turns[-1].prompt if turns else None,
+            "turn_count": len(turns),
             "last_active": session_data.last_active.isoformat()
             if getattr(session_data, "last_active", None)
             else None,

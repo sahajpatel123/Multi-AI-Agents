@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { Button } from './Button';
 import { Icons } from './Icons';
+import { SessionCard } from './SessionCard';
 import {
   Ellipsis,
   Trophy,
@@ -27,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
+import type { SessionSummary } from '../api';
 import { AgentDot } from './AgentDot';
 import { HighlightQuery } from './HighlightQuery';
 import { usePanel } from '../context/PanelContext';
@@ -128,6 +130,11 @@ interface SidebarProps {
   ) => Promise<{ applied: number; pin_limit_reached: boolean }> | void;
   onDeleteSaved?: (item: SavedResponseItem) => Promise<void> | void;
   onBulkDeleteSaved?: (ids: number[]) => Promise<number> | void;
+  /** Live in-memory chats (resumable) surfaced above Recents. */
+  recentSessions?: SessionSummary[];
+  activeSessionId?: string | null;
+  onSessionSelect?: (sessionId: string) => void;
+  onDeleteSession?: (sessionId: string) => Promise<void> | void;
 }
 
 type FilterValue = 'all' | PromptCategory;
@@ -155,6 +162,10 @@ export function Sidebar({
   onBulkPinSaved,
   onDeleteSaved,
   onBulkDeleteSaved,
+  recentSessions = [],
+  activeSessionId = null,
+  onSessionSelect,
+  onDeleteSession,
 }: SidebarProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -205,6 +216,7 @@ export function Sidebar({
   const [customTitles, setCustomTitles] = useState<Record<string, string>>(() =>
     loadSidebarTurnTitles(),
   );
+  const [showAllChats, setShowAllChats] = useState(false);
   const [deletedTurnIds, setDeletedTurnIds] = useState<Set<string>>(new Set());
   const renameCancelledRef = useRef(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -226,6 +238,8 @@ export function Sidebar({
     () => [...turns].reverse().filter((turn) => !deletedTurnIds.has(turn.turn_id)),
     [turns, deletedTurnIds],
   );
+
+  const visibleChats = showAllChats ? recentSessions : recentSessions.slice(0, 5);
 
   const filteredTurns = useMemo(() => {
     const byCategory = reversedTurns.filter(
@@ -829,6 +843,65 @@ export function Sidebar({
               </div>
             )}
           </div>
+
+          {recentSessions.length > 0 ? (
+            <div style={{ margin: '1.2rem 0 0.6rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.12em',
+                    color: '#A0A39A',
+                    margin: 0,
+                  }}
+                >
+                  Chats
+                </p>
+                <span style={{ fontSize: 10, color: '#A0A39A' }}>{recentSessions.length}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {visibleChats.map((session) => (
+                  <SessionCard
+                    key={session.session_id}
+                    prompt={session.last_prompt || session.primary_topic || 'Untitled chat'}
+                    winnerAgentId=""
+                    timestamp={session.last_active || ''}
+                    isActive={session.session_id === activeSessionId}
+                    onClick={() => onSessionSelect?.(session.session_id)}
+                    onDelete={
+                      onDeleteSession
+                        ? () => {
+                            void onDeleteSession(session.session_id);
+                          }
+                        : undefined
+                    }
+                    messageCount={session.turn_count}
+                  />
+                ))}
+              </div>
+              {recentSessions.length > 5 ? (
+                <button
+                  type="button"
+                  className="sidebar-text-link"
+                  style={{ marginTop: 6, fontSize: 11 }}
+                  onClick={() => setShowAllChats((prev) => !prev)}
+                  aria-expanded={showAllChats}
+                >
+                  {showAllChats ? 'Show fewer chats' : `Show all ${recentSessions.length} chats`}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
           <div style={{ margin: '1.2rem 0 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>

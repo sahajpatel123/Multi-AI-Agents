@@ -22,6 +22,8 @@ import {
   streamPrompt,
   streamDiscuss,
   getSession,
+  listSessions,
+  deleteSession,
   saveMemory,
   getSavedResponses,
   saveResponse,
@@ -33,6 +35,7 @@ import {
   extractStreamingPreview,
   suggestFollowUps,
 } from './api';
+import type { SessionSummary } from './api';
 import { copyToClipboard } from './lib/clipboard';
 import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from './lib/downloadTextFile';
 import { safeLocalStorage } from './lib/safeStorage';
@@ -203,6 +206,7 @@ function App() {
   // Session management
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [activeTurnId, setActiveTurnId] = useState<string | null>(null);
+  const [recentSessions, setRecentSessions] = useState<SessionSummary[]>([]);
   const [savedItems, setSavedItems] = useState<SavedResponseItem[]>([]);
   const [saveSyncMessage, setSaveSyncMessage] = useState<string | null>(null);
   const [responsePreferences, setResponsePreferences] = useState<Record<string, ResponsePreference>>({});
@@ -275,6 +279,11 @@ function App() {
     });
   }, []);
 
+  const refreshRecentSessions = useCallback(async () => {
+    const sessions = await listSessions(50);
+    setRecentSessions(sessions);
+  }, []);
+
   // Session restore on mount
   useEffect(() => {
     const storedSessionId = safeLocalStorage.getItem('arena_session_id');
@@ -293,6 +302,13 @@ function App() {
         safeLocalStorage.removeItem('arena_session_id');
       });
   }, []);
+
+  // Keep the sidebar's live-chat list in sync with the in-memory session
+  // store. Sessions are process-local, so a refresh after each round and
+  // after New task is the honest snapshot of what can be resumed.
+  useEffect(() => {
+    void refreshRecentSessions();
+  }, [refreshRecentSessions]);
 
   // Abort in-flight SSE when leaving Arena (or remounting).
   useEffect(() => {
@@ -1036,7 +1052,75 @@ function App() {
     tokenBuffers.current = {};
     focusedTokenBuffer.current = '';
     setIsSidebarOpen(false);
-  }, [sessionData, user]);
+    void refreshRecentSessions();
+  }, [refreshRecentSessions, sessionData, user]);
+
+  const handleSessionSelect = async (sessionId: string) => {
+    const data = await getSession(sessionId);
+    if (!data || data.turns.length === 0) {
+      setSaveSyncMessage('Could not open that chat — it may have been cleared.');
+      return;
+    }
+
+    // Cancel any in-flight round before switching contexts, mirroring the
+    // reset behavior of New task so stale streams can't repopulate cards.
+    promptAbortRef.current?.abort();
+    discussAbortRef.current?.abort();
+    if (flushTimer.current) clearInterval(flushTimer.current);
+    if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
+
+    setPhase('idle');
+    setResponse(null);
+    setCurrentResponses(null);
+    setAnimateCurrentResponseBars(false);
+    setExpandedAgent(null);
+    setError(null);
+    setCurrentPrompt('');
+    setHasSubmittedPrompt(false);
+    setPresetPrompt('');
+    setPresetPromptNonce((prev) => prev + 1);
+    setDoneAgents(new Set());
+    setStreamPreviews({});
+    setViewMode('arena');
+    setChallengedAgent(null);
+    setDiscussAgent(null);
+    setFocusedAgentId(null);
+    setFocusedCardRect(null);
+    setIsFocusedExpanded(false);
+    setFocusedHistories({});
+    setFocusedStreamingText('');
+    setFocusedChatError(null);
+    setIsFocusedChatStreaming(false);
+    setHighlightedAgentId(null);
+    setPendingScrollTarget(null);
+    setActiveTurnId(null);
+    setFollowUpSuggestions([]);
+    lastRoundContextRef.current = undefined;
+    tokenBuffers.current = {};
+    focusedTokenBuffer.current = '';
+
+    safeLocalStorage.setItem('arena_session_id', data.session_id);
+    setSessionData(data);
+    const lastTurn = data.turns[data.turns.length - 1];
+    loadTurn(lastTurn);
+    setIsSidebarOpen(false);
+    void track('recent_chat_opened', undefined, sessionId);
+  };
+
+  const handleDeleteSession = useCallback(
+    async (sessionId: string) => {
+      const deleted = await deleteSession(sessionId);
+      if (!deleted) return;
+      setRecentSessions((prev) =>
+        prev.filter((session) => session.session_id !== sessionId),
+      );
+      if (sessionData?.session_id === sessionId) {
+        await handleNewChat();
+      }
+      void track('recent_chat_deleted', undefined, sessionId);
+    },
+    [handleNewChat, sessionData?.session_id],
+  );
 
   const handleSubmit = async (
     prompt: string,
@@ -1222,6 +1306,7 @@ function App() {
           setActiveTurnId(newTurn.turn_id);
           void refreshUser();
           void refreshTier();
+          void refreshRecentSessions();
         },
         onError: (data) => {
           if (abortController.signal.aborted) return;
@@ -1757,6 +1842,14 @@ function App() {
           onBulkPinSaved={handleBulkPinSaved}
           onDeleteSaved={handleDeleteSavedItem}
           onBulkDeleteSaved={handleBulkDeleteSaved}
+          recentSessions={recentSessions}
+          activeSessionId={sessionData?.session_id ?? null}
+          onSessionSelect={(sessionId) => {
+            void handleSessionSelect(sessionId);
+          }}
+          onDeleteSession={(sessionId) => {
+            void handleDeleteSession(sessionId);
+          }}
         />
       )}
 

@@ -920,6 +920,41 @@ export async function getSession(sessionId: string): Promise<SessionData | null>
   }
 }
 
+export interface SessionSummary {
+  session_id: string;
+  topics: string[];
+  primary_topic: string | null;
+  last_prompt: string | null;
+  turn_count: number;
+  last_active: string | null;
+}
+
+export async function listSessions(limit = 50): Promise<SessionSummary[]> {
+  try {
+    const response = await apiFetch(
+      `/api/sessions?limit=${encodeURIComponent(String(limit))}`,
+    );
+    if (!response.ok) {
+      return [];
+    }
+    const data = await parseJsonSafely<{ sessions: SessionSummary[] }>(response);
+    return data?.sessions ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteSession(sessionId: string): Promise<boolean> {
+  try {
+    const response = await apiFetch(`/api/session/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function healthCheck(): Promise<boolean> {
   try {
     const response = await apiFetch(`/api/health`);

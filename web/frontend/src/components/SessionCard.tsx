@@ -4,7 +4,8 @@ import { AgentDot } from './AgentDot';
 
 interface SessionCardProps {
   prompt: string;
-  winnerAgentId: string;
+  /** Winner agent slot id. Omit for session rows that predate a winner mapping. */
+  winnerAgentId?: string;
   timestamp: string;
   isActive: boolean;
   /** Optional delete affordance — visible on hover/focus so keyboard users can reach it. */
@@ -23,8 +24,8 @@ export function SessionCard({
   onDelete,
   messageCount,
 }: SessionCardProps) {
-  const winnerConfig = AGENTS[winnerAgentId];
-  const winnerName = winnerConfig?.name || 'Unknown mind';
+  const winnerConfig = AGENTS[winnerAgentId || ''];
+  const winnerName = winnerConfig?.name || 'Arena chat';
   const timeAgo = formatTimeAgo(timestamp);
   const promptPreview = prompt.trim() || 'Untitled session';
 
@@ -48,7 +49,7 @@ export function SessionCard({
         <p className="session-card__prompt">{promptPreview}</p>
         <div className="session-card__meta">
           <div className="session-card__winner">
-            {winnerConfig ? (
+            {winnerConfig && winnerAgentId ? (
               <AgentDot agentId={winnerAgentId} size={6} />
             ) : (
               <span className="session-card__dot-fallback" aria-hidden />
