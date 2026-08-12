@@ -946,34 +946,47 @@ function App() {
 
   /** Delete the current filtered set of saved takes (chunked at the API cap). */
   const handleBulkDeleteSaved = useCallback(async (ids: number[]) => {
-    const uniqueIds = [...new Set(ids.map(Number))];
+    const uniqueIds = [...new Set(ids.map(Number))].filter((id) =>
+      Number.isFinite(id),
+    );
     if (uniqueIds.length === 0) return 0;
     const deletedIds = new Set<number>();
-    try {
-      // The backend caps one bulk request at 50 ids; delete in chunks so the
-      // sidebar's "delete all shown" action stays safe for larger libraries.
-      for (let i = 0; i < uniqueIds.length; i += 50) {
-        const chunk = uniqueIds.slice(i, i + 50);
+    let firstError: unknown = null;
+    // The backend caps one bulk request at 50 ids; delete in chunks so the
+    // sidebar's "delete all shown" action stays safe for larger libraries.
+    for (let i = 0; i < uniqueIds.length; i += 50) {
+      const chunk = uniqueIds.slice(i, i + 50);
+      try {
         const result = await deleteSavedResponses(chunk);
-        if (result.deleted > 0) {
-          chunk.forEach((id) => {
-            deletedIds.add(id);
-          });
-        }
+        const deletedInChunk =
+          result.ids.length > 0
+            ? result.ids
+            : result.deleted > 0
+              ? chunk
+              : [];
+        deletedInChunk.forEach((id) => deletedIds.add(Number(id)));
+      } catch (err) {
+        if (firstError === null) firstError = err;
+        break;
       }
+    }
+    // Keep whatever chunks already succeeded even if a later chunk fails,
+    // so the sidebar doesn't keep showing takes that are gone from the server.
+    if (deletedIds.size > 0) {
       setSavedItems((current) =>
         current.filter((saved) => !deletedIds.has(Number(saved.id))),
       );
-      void track('saved_takes_bulk_deleted', undefined);
-      return deletedIds.size;
-    } catch (err) {
+    }
+    if (firstError !== null) {
       const detail =
-        err instanceof Error && err.message
-          ? err.message
+        firstError instanceof Error && firstError.message
+          ? firstError.message
           : "Couldn't delete shown takes — try again.";
       setSaveSyncMessage(detail);
-      throw err;
+      throw firstError;
     }
+    void track('saved_takes_bulk_deleted', undefined);
+    return deletedIds.size;
   }, []);
 
   const handleNewChat = useCallback(async () => {

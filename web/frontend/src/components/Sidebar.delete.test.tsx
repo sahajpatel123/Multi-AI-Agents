@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Sidebar } from './Sidebar';
 import type { SavedResponseItem } from '../types';
 
@@ -118,6 +118,18 @@ describe('Sidebar saved-take delete', () => {
 
     expect(onDeleteSaved).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /confirm delete the analyst take/i })).toBeNull();
+  });
+
+  it('surfaces a failure when a single delete rejects', async () => {
+    const onDeleteSaved = vi.fn().mockRejectedValue(new Error('nope'));
+    renderSidebar({ onDeleteSaved });
+
+    fireEvent.click(screen.getByRole('button', { name: /delete the analyst take/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm delete the analyst take/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/could not delete/i);
+    });
   });
 
   it('bulk-deletes the currently shown saved takes after confirmation', () => {

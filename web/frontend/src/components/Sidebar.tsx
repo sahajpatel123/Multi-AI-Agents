@@ -584,7 +584,6 @@ export function Sidebar({
     setDeleteSavedFailed(false);
     try {
       await onDeleteSaved(item);
-      void track('saved_take_deleted', undefined, item.agent_id);
     } catch {
       setDeleteSavedFailed(true);
     }
@@ -601,7 +600,6 @@ export function Sidebar({
     try {
       await onBulkDeleteSaved(ids);
       setBulkDeleteStatus('done');
-      void track('saved_takes_bulk_deleted');
     } catch {
       setBulkDeleteStatus('failed');
     }

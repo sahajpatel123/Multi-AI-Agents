@@ -184,6 +184,7 @@ describe('saved take API helpers', () => {
           status: 'deleted',
           requested: 2,
           deleted: 2,
+          ids: [7, 8],
         }),
         { status: 200 },
       ),
@@ -197,7 +198,12 @@ describe('saved take API helpers', () => {
         body: JSON.stringify({ ids: [7, 8] }),
       }),
     );
-    expect(result).toEqual({ status: 'deleted', requested: 2, deleted: 2 });
+    expect(result).toEqual({
+      status: 'deleted',
+      requested: 2,
+      deleted: 2,
+      ids: [7, 8],
+    });
   });
 
   it('reports a request failure for bulk delete', async () => {
@@ -206,5 +212,22 @@ describe('saved take API helpers', () => {
     );
 
     await expect(deleteSavedResponses([7])).rejects.toThrow('nope');
+  });
+
+  it('falls back to an empty id list when the backend omits ids', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: 'deleted',
+          requested: 1,
+          deleted: 1,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await deleteSavedResponses([7]);
+    expect(result.ids).toEqual([]);
+    expect(result.deleted).toBe(1);
   });
 });

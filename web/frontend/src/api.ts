@@ -476,6 +476,7 @@ export type SavedBulkDeleteResult = {
   status: 'deleted';
   requested: number;
   deleted: number;
+  ids: number[];
 };
 
 export async function deleteSavedResponses(
@@ -495,6 +496,11 @@ export async function deleteSavedResponses(
     status: 'deleted',
     requested: typeof body?.requested === 'number' ? body.requested : ids.length,
     deleted: typeof body?.deleted === 'number' ? body.deleted : 0,
+    ids: Array.isArray(body?.ids)
+      ? body.ids.filter(
+          (id): id is number => typeof id === 'number' && Number.isFinite(id),
+        )
+      : [],
   };
 }
 

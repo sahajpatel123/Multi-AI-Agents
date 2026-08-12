@@ -605,20 +605,30 @@ async def delete_saved_bulk(
     requested = len(unique_ids)
 
     # Scope by owner so we never delete another user's rows even if a UI
-    # bug hands us foreign ids.
-    deleted = (
-        db.query(SavedResponse)
+    # bug hands us foreign ids. Return the exact owned ids so the client can
+    # reconcile its local library when a mixed/partial request succeeds.
+    owned_ids = [
+        row_id
+        for (row_id,) in db.query(SavedResponse.id)
         .filter(
             SavedResponse.id.in_(unique_ids),
             SavedResponse.user_id == user.id,
         )
-        .delete(synchronize_session=False)
-    )
-    db.commit()
+        .all()
+    ]
+    deleted = 0
+    if owned_ids:
+        deleted = (
+            db.query(SavedResponse)
+            .filter(SavedResponse.id.in_(owned_ids))
+            .delete(synchronize_session=False)
+        )
+        db.commit()
     return {
         "status": "deleted",
         "requested": requested,
         "deleted": int(deleted or 0),
+        "ids": owned_ids,
     }
 
 
