@@ -86,6 +86,11 @@ import { useIsMobile } from './hooks/useIsMobile';
 import { arenaWorkInFlight } from './lib/busyNavigationGuard';
 import { titleForArenaBusy } from './lib/documentTitle';
 import { isBareSlashKey, shouldCaptureSlashFocus } from './lib/slashFocus';
+import {
+  isArenaCopyQuestionKey,
+  isArenaCopyWinnerKey,
+  isArenaDownloadWinnerKey,
+} from './lib/keyboardShortcuts';
 import { RecentPromptChips } from './components/RecentPromptChips';
 import { usePanel } from './context/PanelContext';
 import { useTier } from './context/TierContext';
@@ -720,6 +725,41 @@ function App() {
       setError('Could not copy the question. Try selecting it manually.');
     }
   }, [response]);
+
+  // Keyboard-first Arena exports: Shift+C / Shift+D / Shift+Q mirror the
+  // header export buttons once a round has finished. Form controls are
+  // skipped so normal Shift+letter typing is never swallowed.
+  useEffect(() => {
+    if (
+      (viewMode !== 'arena' && viewMode !== 'leaderboard') ||
+      phase !== 'done' ||
+      !response
+    ) {
+      return;
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      if (isArenaCopyWinnerKey(e)) {
+        e.preventDefault();
+        void handleExportWinner();
+      } else if (isArenaDownloadWinnerKey(e)) {
+        e.preventDefault();
+        handleDownloadWinner();
+      } else if (isArenaCopyQuestionKey(e)) {
+        e.preventDefault();
+        void handleCopyPrompt();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    handleCopyPrompt,
+    handleDownloadWinner,
+    handleExportWinner,
+    phase,
+    response,
+    viewMode,
+  ]);
 
   const handleLikeResponse = useCallback((scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;

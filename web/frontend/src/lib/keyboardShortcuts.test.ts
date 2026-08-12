@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isArenaCopyQuestionKey,
+  isArenaCopyWinnerKey,
+  isArenaDownloadWinnerKey,
   isBareQuestionHelpKey,
   shortcutsForSurface,
   shortcutsPanelTitle,
@@ -11,6 +14,21 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('arena').some(
         (s) => s.keys.includes('↑') && s.action.toLowerCase().includes('recent prompts'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + C' && s.action.toLowerCase().includes('winning take'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + D' && s.action.toLowerCase().includes('winning take'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + Q' && s.action.toLowerCase().includes('question'),
       ),
     ).toBe(true);
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
@@ -80,5 +98,25 @@ describe('keyboardShortcuts', () => {
     expect(isBareQuestionHelpKey({ key: '?' })).toBe(true);
     expect(isBareQuestionHelpKey({ key: '?', metaKey: true })).toBe(false);
     expect(isBareQuestionHelpKey({ key: '/' })).toBe(false);
+  });
+
+  it('detects Arena export shortcuts as bare Shift+letter keys', () => {
+    expect(isArenaCopyWinnerKey({ key: 'C', shiftKey: true })).toBe(true);
+    expect(isArenaCopyWinnerKey({ key: 'c', shiftKey: true })).toBe(true);
+    expect(isArenaCopyWinnerKey({ key: 'C' })).toBe(false);
+    expect(isArenaCopyWinnerKey({ key: 'C', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isArenaCopyWinnerKey({ key: 'D', shiftKey: true })).toBe(false);
+
+    expect(isArenaDownloadWinnerKey({ key: 'D', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadWinnerKey({ key: 'd', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadWinnerKey({ key: 'D' })).toBe(false);
+    expect(isArenaDownloadWinnerKey({ key: 'D', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isArenaDownloadWinnerKey({ key: 'C', shiftKey: true })).toBe(false);
+
+    expect(isArenaCopyQuestionKey({ key: 'Q', shiftKey: true })).toBe(true);
+    expect(isArenaCopyQuestionKey({ key: 'q', shiftKey: true })).toBe(true);
+    expect(isArenaCopyQuestionKey({ key: 'Q' })).toBe(false);
+    expect(isArenaCopyQuestionKey({ key: 'Q', shiftKey: true, altKey: true })).toBe(false);
+    expect(isArenaCopyQuestionKey({ key: 'C', shiftKey: true })).toBe(false);
   });
 });

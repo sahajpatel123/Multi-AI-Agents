@@ -19,6 +19,9 @@ const ARENA: ShortcutHint[] = [
   { keys: '/', action: 'Focus the Arena prompt' },
   { keys: 'Enter', action: 'Send your question' },
   { keys: '↑ / ↓', action: 'Cycle recent prompts in the compose box' },
+  { keys: 'Shift + C', action: 'Copy the winning take' },
+  { keys: 'Shift + D', action: 'Download the winning take' },
+  { keys: 'Shift + Q', action: 'Copy the question' },
   { keys: 'Esc', action: 'Close a focused mind' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
@@ -139,4 +142,41 @@ export function isBareQuestionHelpKey(event: {
   if (event.key !== '?') return false;
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
   return true;
+}
+
+export type ShortcutKeyEvent = {
+  key: string;
+  shiftKey?: boolean;
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+};
+
+/**
+ * True for a bare Shift+letter shortcut (no meta/ctrl/alt) so Arena can offer
+ * keyboard-first export actions without stealing the user's typing.
+ */
+function isBareShiftLetterKey(
+  event: ShortcutKeyEvent,
+  letter: 'c' | 'd' | 'q',
+): boolean {
+  if (event.key.toLowerCase() !== letter) return false;
+  if (!event.shiftKey) return false;
+  if (event.metaKey || event.ctrlKey || event.altKey) return false;
+  return true;
+}
+
+/** Shift+C — copy the winning Arena take to the clipboard. */
+export function isArenaCopyWinnerKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'c');
+}
+
+/** Shift+D — download the winning Arena take as a Markdown file. */
+export function isArenaDownloadWinnerKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'd');
+}
+
+/** Shift+Q — copy the question behind the current Arena round. */
+export function isArenaCopyQuestionKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'q');
 }
