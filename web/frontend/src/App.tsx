@@ -24,6 +24,7 @@ import {
   getSession,
   listSessions,
   deleteSession,
+  clearAllSessions,
   renameSession,
   saveMemory,
   getSavedResponses,
@@ -1110,6 +1111,17 @@ function App() {
     [handleNewChat, sessionData?.session_id],
   );
 
+  const handleClearSessions = useCallback(async () => {
+    const cleared = await clearAllSessions();
+    if (cleared === 0) return 0;
+    setRecentSessions([]);
+    if (sessionData?.session_id) {
+      await handleNewChat();
+    }
+    void track('recent_chats_cleared', undefined, undefined, { cleared });
+    return cleared;
+  }, [handleNewChat, sessionData?.session_id]);
+
   const handleRenameSession = useCallback(
     async (sessionId: string, title: string) => {
       const renamed = await renameSession(sessionId, title);
@@ -1853,6 +1865,7 @@ function App() {
           onDeleteSession={(sessionId) => {
             void handleDeleteSession(sessionId);
           }}
+          onClearSessions={handleClearSessions}
           onRenameSession={handleRenameSession}
         />
       )}

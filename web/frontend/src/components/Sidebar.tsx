@@ -141,6 +141,7 @@ interface SidebarProps {
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => Promise<void> | void;
+  onClearSessions?: () => Promise<number> | void;
   onRenameSession?: (
     sessionId: string,
     title: string,
@@ -176,6 +177,7 @@ export function Sidebar({
   activeSessionId = null,
   onSessionSelect,
   onDeleteSession,
+  onClearSessions,
   onRenameSession,
 }: SidebarProps) {
   const navigate = useNavigate();
@@ -222,6 +224,10 @@ export function Sidebar({
   const [recentItemCopyStatus, setRecentItemCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
+  const [confirmClearSessions, setConfirmClearSessions] = useState(false);
+  const [clearSessionsStatus, setClearSessionsStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed'
+  >('idle');
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -483,6 +489,20 @@ export function Sidebar({
     const t = window.setTimeout(() => setDownloadRecentsStatus('idle'), hold > 0 ? hold : 0);
     return () => window.clearTimeout(t);
   }, [downloadRecentsStatus]);
+
+  useEffect(() => {
+    if (clearSessionsStatus === 'idle' || clearSessionsStatus === 'busy') return;
+    const hold = motionDuration(clearSessionsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(
+      () => setClearSessionsStatus('idle'),
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [clearSessionsStatus]);
+
+  useEffect(() => {
+    if (recentSessions.length === 0) setConfirmClearSessions(false);
+  }, [recentSessions.length]);
 
   useEffect(() => {
     if (recentItemCopyStatus === 'idle') return;
@@ -870,6 +890,18 @@ export function Sidebar({
     }
   };
 
+  const handleClearSessions = async () => {
+    if (!onClearSessions || clearSessionsStatus === 'busy') return;
+    setClearSessionsStatus('busy');
+    try {
+      const cleared = await onClearSessions();
+      setClearSessionsStatus(cleared === 0 ? 'failed' : 'done');
+    } catch {
+      setClearSessionsStatus('failed');
+    }
+    setConfirmClearSessions(false);
+  };
+
   return (
     <>
       <div
@@ -964,11 +996,55 @@ export function Sidebar({
                 >
                   Chats
                 </p>
-                <span style={{ fontSize: 10, color: '#A0A39A' }}>
-                  {isChatSearchActive
-                    ? `${filteredChats.length} / ${recentSessions.length}`
-                    : recentSessions.length}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 10, color: '#A0A39A' }}>
+                    {isChatSearchActive
+                      ? `${filteredChats.length} / ${recentSessions.length}`
+                      : recentSessions.length}
+                  </span>
+                  {onClearSessions && recentSessions.length > 0 ? (
+                    <button
+                      type="button"
+                      title="Clear all resumable chats"
+                      aria-label={
+                        clearSessionsStatus === 'busy'
+                          ? 'Clearing all chats'
+                          : confirmClearSessions
+                            ? 'Confirm clear all chats'
+                            : `Clear ${recentSessions.length} chats`
+                      }
+                      disabled={clearSessionsStatus === 'busy'}
+                      onClick={() => {
+                        if (confirmClearSessions) {
+                          void handleClearSessions();
+                        } else {
+                          setConfirmClearSessions(true);
+                        }
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: confirmClearSessions ? '#FEF2F2' : 'none',
+                        border: confirmClearSessions
+                          ? '0.5px solid #C0392B'
+                          : '0.5px solid #E0D8D0',
+                        borderRadius: 5,
+                        cursor: clearSessionsStatus === 'busy' ? 'default' : 'pointer',
+                        color:
+                          clearSessionsStatus === 'failed'
+                            ? '#D85A30'
+                            : confirmClearSessions
+                              ? '#C0392B'
+                              : '#A0A39A',
+                        padding: 3,
+                        lineHeight: 0,
+                      }}
+                    >
+                      <Trash2 style={{ width: 11, height: 11 }} aria-hidden />
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <div style={{ position: 'relative', marginBottom: 8 }}>
                 <input
@@ -1025,6 +1101,78 @@ export function Sidebar({
                   </button>
                 ) : null}
               </div>
+              {confirmClearSessions ? (
+                <div
+                  role="dialog"
+                  aria-label="Clear all chats"
+                  style={{
+                    marginBottom: 8,
+                    padding: '8px 10px',
+                    background: '#FFF7F5',
+                    border: '0.5px solid #E3B7A7',
+                    borderRadius: 8,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: '0 0 8px',
+                      fontSize: 12,
+                      color: '#1A1714',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Clear all {recentSessions.length} resumable{' '}
+                    {recentSessions.length === 1 ? 'chat' : 'chats'}? This cannot
+                    be undone.
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClearSessions(false)}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 11,
+                        borderRadius: 6,
+                        color: '#A0A39A',
+                        background: '#F0EBE3',
+                        cursor: 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleClearSessions()}
+                      disabled={clearSessionsStatus === 'busy'}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 11,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background: '#C0392B',
+                        cursor: clearSessionsStatus === 'busy' ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {clearSessionsStatus === 'busy' ? 'Clearing…' : 'Clear all'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {clearSessionsStatus === 'failed' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Could not clear chats. Please try again.
+                </p>
+              ) : null}
               {isChatSearchActive && filteredChats.length === 0 ? (
                 <p
                   role="status"

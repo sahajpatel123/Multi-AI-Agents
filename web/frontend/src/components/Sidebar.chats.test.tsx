@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Sidebar } from './Sidebar';
 import type { SavedResponseItem } from '../types';
 import type { SessionSummary } from '../api';
@@ -88,10 +88,12 @@ function renderSidebar(overrides?: {
   activeSessionId?: string | null;
   onSessionSelect?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
+  onClearSessions?: () => Promise<number> | void;
   onRenameSession?: (sessionId: string, title: string) => boolean | Promise<boolean>;
 }) {
   const onSessionSelect = overrides?.onSessionSelect ?? vi.fn();
   const onDeleteSession = overrides?.onDeleteSession ?? vi.fn();
+  const onClearSessions = overrides?.onClearSessions;
   const onRenameSession = overrides?.onRenameSession ?? vi.fn(() => true);
   render(
     <Sidebar
@@ -108,10 +110,11 @@ function renderSidebar(overrides?: {
       activeSessionId={overrides?.activeSessionId ?? null}
       onSessionSelect={onSessionSelect}
       onDeleteSession={onDeleteSession}
+      onClearSessions={onClearSessions}
       onRenameSession={onRenameSession}
     />,
   );
-  return { onSessionSelect, onDeleteSession, onRenameSession };
+  return { onSessionSelect, onDeleteSession, onClearSessions, onRenameSession };
 }
 
 describe('Sidebar recent chats', () => {
@@ -259,6 +262,44 @@ describe('Sidebar recent chats', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Delete session' })[0]);
     expect(onDeleteSession).toHaveBeenCalledWith('chat-1');
     expect(onSessionSelect).not.toHaveBeenCalled();
+  });
+
+  it('clears all chats only after inline confirmation', async () => {
+    const onClearSessions = vi.fn().mockResolvedValue(2);
+    renderSidebar({ onClearSessions });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear 2 chats' }));
+    expect(onClearSessions).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole('dialog', { name: 'Clear all chats' });
+    expect(dialog).toHaveTextContent(/Clear all 2 resumable chats/);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear all' }));
+
+    await waitFor(() => expect(onClearSessions).toHaveBeenCalledTimes(1));
+  });
+
+  it('cancels clearing chats without touching the callback', () => {
+    const onClearSessions = vi.fn().mockResolvedValue(2);
+    renderSidebar({ onClearSessions });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear 2 chats' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onClearSessions).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Clear all chats' })).toBeNull();
+  });
+
+  it('surfaces a failure when clearing all chats returns zero', async () => {
+    const onClearSessions = vi.fn().mockResolvedValue(0);
+    renderSidebar({ onClearSessions });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear 2 chats' }));
+    const dialog = screen.getByRole('dialog', { name: 'Clear all chats' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear all' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/could not clear chats/i);
+    });
   });
 
   it('renames a chat inline through the callback', async () => {
