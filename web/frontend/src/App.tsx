@@ -51,6 +51,7 @@ import {
 } from './lib/arenaExport';
 import { buildFollowUpContext } from './lib/followUpContext';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
+import { buildSessionTurnResponse } from './lib/arenaTurn';
 import { isScrollNearBottom, shouldAutoScrollChat } from './lib/chatScroll';
 import { scrollBehavior } from './lib/motion';
 import {
@@ -293,7 +294,7 @@ function App() {
         if (data && data.turns.length > 0) {
           setSessionData(data);
           const lastTurn = data.turns[data.turns.length - 1];
-          loadTurn(lastTurn);
+          loadTurn(lastTurn, data.session_id);
         } else {
           safeLocalStorage.removeItem('arena_session_id');
         }
@@ -375,25 +376,11 @@ function App() {
     };
   }, [activeExamplePromptIndex, hasSubmittedPrompt, isExamplePromptHovered]);
 
-  const loadTurn = (turn: SessionTurn) => {
-    // Convert SessionTurn to PromptResponse format
-    const scoredResponses = Object.entries(turn.agent_responses).map(([agentId, response]) => ({
-      response,
-      score: agentId === turn.winner_id ? 100 : 75,
-      is_winner: agentId === turn.winner_id,
-    }));
-
-    const promptResponse: PromptResponse = {
-      session_id: sessionData?.session_id || safeLocalStorage.getItem('arena_session_id') || '',
-      prompt: turn.prompt,
-      prompt_category: turn.prompt_category || '',
-      winner: turn.agent_responses[turn.winner_id],
-      winner_agent_id: turn.winner_id,
-      all_responses: scoredResponses,
-      integrity: null,
-      timestamp: turn.timestamp,
-      tools_used: [],
-    };
+  const loadTurn = (turn: SessionTurn, sessionId: string) => {
+    // Convert SessionTurn to PromptResponse format. The session id is
+    // explicit so resuming a chat can never inherit a stale in-memory id
+    // from a previously loaded session.
+    const promptResponse = buildSessionTurnResponse(turn, sessionId);
 
     setResponse(promptResponse);
     setCurrentResponses(promptResponse);
@@ -434,9 +421,9 @@ function App() {
 
   const handleTurnClick = (turnId: string) => {
     const turn = sessionData?.turns.find((t) => t.turn_id === turnId);
-    if (turn) {
+    if (turn && sessionData) {
       setViewMode('arena');
-      loadTurn(turn);
+      loadTurn(turn, sessionData.session_id);
       setIsSidebarOpen(false);
     }
   };
@@ -865,8 +852,8 @@ function App() {
     }
 
     const turn = sessionData?.turns.find((entry) => entry.turn_id === item.turn_id);
-    if (turn) {
-      loadTurn(turn);
+    if (turn && sessionData) {
+      loadTurn(turn, sessionData.session_id);
       setExpandedAgent(item.agent_id);
     }
   }, [activeTurnId, sessionData]);
@@ -1102,7 +1089,7 @@ function App() {
     safeLocalStorage.setItem('arena_session_id', data.session_id);
     setSessionData(data);
     const lastTurn = data.turns[data.turns.length - 1];
-    loadTurn(lastTurn);
+    loadTurn(lastTurn, data.session_id);
     setIsSidebarOpen(false);
     void track('recent_chat_opened', undefined, sessionId);
   };
