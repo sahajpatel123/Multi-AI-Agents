@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { LayoutTemplate } from 'lucide-react';
+import { LayoutTemplate, Star } from 'lucide-react';
 import type { AgentTaskTemplate } from '../api';
 import { ConduraBadge } from './ConduraBadge';
 import { EmptyState } from './EmptyState';
@@ -40,13 +40,20 @@ import {
 import {
   clearRecentTemplateIds,
   loadRecentTemplateIds,
+  orderTemplatesByRecentIds,
   pickRecentTemplates,
   recordRecentTemplateId,
   templatesRecentUseful,
 } from '../lib/templatesRecent';
+import {
+  clearFavoriteTemplateIds,
+  loadFavoriteTemplateIds,
+  toggleFavoriteTemplateId,
+} from '../lib/templatesFavorites';
 import '../styles/templates-modal.css';
 
 const TAB_ORDER = [
+  'Favorites',
   'All',
   'Business',
   'Technical',
@@ -97,6 +104,7 @@ export function TemplatesModal({
   const [itemCopyKind, setItemCopyKind] = useState<'full' | 'prompt' | null>(null);
   const [itemCopyStatus, setItemCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [recentIds, setRecentIds] = useState<string[]>(() => loadRecentTemplateIds());
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => loadFavoriteTemplateIds());
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const copyTimerRef = useRef<number | null>(null);
@@ -114,9 +122,14 @@ export function TemplatesModal({
   }, [categories]);
 
   const tabTemplates = useMemo(() => {
+    if (activeTab === 'Favorites') {
+      if (!favoriteIds.length) return [];
+      const byId = new Set(favoriteIds);
+      return flatTemplates.filter((t) => t.id && byId.has(t.id));
+    }
     if (activeTab === 'All') return flatTemplates;
     return categories[activeTab] ?? [];
-  }, [activeTab, categories, flatTemplates]);
+  }, [activeTab, categories, flatTemplates, favoriteIds]);
 
   const visibleTemplates = useMemo(() => {
     const byAvailability = filterTemplatesByAvailability(tabTemplates, availabilityFilter);
@@ -130,6 +143,9 @@ export function TemplatesModal({
       t.id,
       t.default_expertise,
     ]);
+    if (activeTab === 'Favorites' && templatesSort === 'default' && favoriteIds.length) {
+      return orderTemplatesByRecentIds(searched, favoriteIds);
+    }
     return sortTemplates(searched, templatesSort, recentIds);
   }, [
     tabTemplates,
@@ -137,7 +153,9 @@ export function TemplatesModal({
     templatesSort,
     availabilityFilter,
     expertiseFilter,
+    favoriteIds,
     recentIds,
+    activeTab,
   ]);
 
   const recentStrip = useMemo(
@@ -200,6 +218,7 @@ export function TemplatesModal({
       setItemCopyId(null);
       setItemCopyKind(null);
       setRecentIds(loadRecentTemplateIds());
+      setFavoriteIds(loadFavoriteTemplateIds());
     }
   }, [open]);
 
@@ -222,7 +241,9 @@ export function TemplatesModal({
 
   const buildTemplatesMarkdown = useCallback(() => {
     const bits: string[] = [];
-    if (activeTab !== 'All') bits.push(`category ${activeTab}`);
+    if (activeTab !== 'All') {
+      bits.push(activeTab === 'Favorites' ? 'favorites' : `category ${activeTab}`);
+    }
     if (availabilityFilter !== 'all') {
       bits.push(`availability: ${templatesAvailabilityLabel(availabilityFilter)}`);
     }
@@ -577,19 +598,35 @@ export function TemplatesModal({
           aria-label="Template categories"
         >
           {TAB_ORDER.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab}
-              onClick={() => setActiveTab(tab)}
-              className={`templates-modal__tab${activeTab === tab ? ' templates-modal__tab--active' : ''}`}
-            >
-              {tab}
-            </button>
+            tab === 'Favorites' && favoriteIds.length === 0 && activeTab !== 'Favorites' ? null : (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                onClick={() => setActiveTab(tab)}
+                className={`templates-modal__tab${activeTab === tab ? ' templates-modal__tab--active' : ''}`}
+              >
+                {tab}
+              </button>
+            )
           ))}
         </div>
         <div className="templates-modal__body">
+          {activeTab === 'Favorites' && favoriteIds.length > 0 && catalogMode === 'list' ? (
+            <div className="templates-modal__favorites-head" aria-label="Favorited templates">
+              <div className="templates-modal__recent-head">
+                <div className="templates-modal__recent-label">Favorites</div>
+                <button
+                  type="button"
+                  className="templates-modal__text-btn"
+                  onClick={() => setFavoriteIds(clearFavoriteTemplateIds())}
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          ) : null}
           {showRecentStrip ? (
             <div className="templates-modal__recent" aria-label="Recently used templates">
               <div className="templates-modal__recent-head">
@@ -653,9 +690,17 @@ export function TemplatesModal({
           ) : catalogMode === 'empty' || visibleTemplates.length === 0 ? (
             <EmptyState
               variant={catalogMode === 'empty' ? 'default' : 'filter'}
-              title={catalogMode === 'empty' ? 'No templates yet' : 'No templates match'}
+              title={
+                activeTab === 'Favorites' && favoriteIds.length === 0
+                  ? 'No favorites yet'
+                  : catalogMode === 'empty'
+                    ? 'No templates yet'
+                    : 'No templates match'
+              }
               description={
-                catalogMode === 'empty'
+                activeTab === 'Favorites' && favoriteIds.length === 0
+                  ? 'Star any template and it will stay one click away in this tab.'
+                  : catalogMode === 'empty'
                   ? 'Templates will show up here when available. You can still write a custom research question.'
                   : searchQuery.trim() ||
                       availabilityFilter !== 'all' ||
@@ -675,19 +720,32 @@ export function TemplatesModal({
               }
               actions={
                 catalogMode === 'list' ? (
-                  <button
-                    type="button"
-                    className="arena-btn arena-btn--ghost arena-btn--md"
-                    onClick={() => {
-                      setSearchQuery('');
-                      setActiveTab('All');
-                      setAvailabilityFilter('all');
-                      setExpertiseFilter(TEMPLATES_EXPERTISE_ALL);
-                      searchRef.current?.focus();
-                    }}
-                  >
-                    Clear filters
-                  </button>
+                  activeTab === 'Favorites' && favoriteIds.length === 0 ? (
+                    <button
+                      type="button"
+                      className="arena-btn arena-btn--ghost arena-btn--md"
+                      onClick={() => {
+                        setActiveTab('All');
+                        searchRef.current?.focus();
+                      }}
+                    >
+                      Browse all templates
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="arena-btn arena-btn--ghost arena-btn--md"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setActiveTab('All');
+                        setAvailabilityFilter('all');
+                        setExpertiseFilter(TEMPLATES_EXPERTISE_ALL);
+                        searchRef.current?.focus();
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  )
                 ) : null
               }
             />
@@ -698,6 +756,7 @@ export function TemplatesModal({
                   itemCopyId === t.id && itemCopyKind === 'full' ? itemCopyStatus : 'idle';
                 const promptCopyState =
                   itemCopyId === t.id && itemCopyKind === 'prompt' ? itemCopyStatus : 'idle';
+                const isFavorite = favoriteIds.includes(t.id);
                 return (
                   <div
                     key={t.id}
@@ -732,6 +791,26 @@ export function TemplatesModal({
                       )}
                     </button>
                     <div className="templates-card__actions">
+                      <button
+                        type="button"
+                        onClick={() => setFavoriteIds(toggleFavoriteTemplateId(t.id)[0])}
+                        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                        aria-label={`${isFavorite ? 'Remove' : 'Favorite'} template ${t.title}`}
+                        aria-pressed={isFavorite}
+                        className={[
+                          'templates-card__star',
+                          isFavorite ? 'templates-card__star--active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
+                        <Star
+                          size={13}
+                          strokeWidth={isFavorite ? 2.4 : 1.8}
+                          fill={isFavorite ? 'currentColor' : 'none'}
+                          aria-hidden
+                        />
+                      </button>
                       <button
                         type="button"
                         onClick={(e) => {
