@@ -245,7 +245,7 @@ export function formatArenaTranscriptsExport(
   chats.forEach((bundle, index) => {
     const title =
       sanitizeArenaTranscriptTitle(bundle.title || '') ||
-      bundle.sessionId ||
+      sanitizeArenaTranscriptTitle(bundle.sessionId || '') ||
       `Chat ${index + 1}`;
     lines.push(`## ${index + 1}. ${title}`, '');
     const transcript = formatArenaTranscriptExport(

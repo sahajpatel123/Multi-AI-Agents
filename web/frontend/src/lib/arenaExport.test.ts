@@ -777,6 +777,17 @@ describe('formatArenaTranscriptsExport', () => {
     expect(sanitizeArenaTranscriptTitle('### plain title')).toBe('plain title');
     expect(sanitizeArenaTranscriptTitle('  ')).toBe('');
   });
+
+  it('sanitizes the session-id heading fallback for unusual ids', () => {
+    const md = formatArenaTranscriptsExport(
+      [{ sessionId: '# weird\n\nid', turns: [] }],
+      () => ({ name: 'The Analyst' }),
+      { exportedAt: '2026-08-07T12:00:00.000Z' },
+    );
+
+    expect(md).toContain('## 1. weird id');
+    expect(md).not.toContain('## 1. # weird');
+  });
 });
 
 describe('copyArenaTranscriptsToClipboard', () => {

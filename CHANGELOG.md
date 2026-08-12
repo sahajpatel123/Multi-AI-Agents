@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Combined transcript copy/export archives sanitize the session-id heading
+  fallback, so even unusual ids keep the Markdown well-formed
 - Combined transcript export fetches selected sessions in bounded parallel
   batches, keeps partial archives when individual chats fail, and sanitizes
   chat titles so the Markdown archive stays well-formed

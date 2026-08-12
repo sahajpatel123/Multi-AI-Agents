@@ -136,6 +136,9 @@ function renderSidebar(overrides?: {
   onBulkExportTranscripts?:
     | ((sessionIds: string[]) => number | null | Promise<number | null> | void)
     | null;
+  onBulkCopyTranscripts?:
+    | ((sessionIds: string[]) => number | null | Promise<number | null> | void)
+    | null;
   onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (sessionId: string, title: string) => boolean | Promise<boolean>;
   onToggleSessionPin?: (sessionId: string, pinned: boolean) => boolean | Promise<boolean>;
@@ -156,6 +159,10 @@ function renderSidebar(overrides?: {
     overrides?.onBulkExportTranscripts === undefined
       ? vi.fn(() => 2)
       : (overrides.onBulkExportTranscripts ?? undefined);
+  const onBulkCopyTranscripts =
+    overrides?.onBulkCopyTranscripts === undefined
+      ? vi.fn(() => 2)
+      : (overrides.onBulkCopyTranscripts ?? undefined);
   const onClearSessions = overrides?.onClearSessions;
   const onRenameSession = overrides?.onRenameSession ?? vi.fn(() => true);
   const onToggleSessionPin = overrides?.onToggleSessionPin ?? vi.fn(() => true);
@@ -179,6 +186,7 @@ function renderSidebar(overrides?: {
       onBulkPinSessions={onBulkPinSessions}
       onBulkDuplicateSessions={onBulkDuplicateSessions}
       onBulkExportTranscripts={onBulkExportTranscripts}
+      onBulkCopyTranscripts={onBulkCopyTranscripts}
       onClearSessions={onClearSessions}
       onRenameSession={onRenameSession}
       onToggleSessionPin={onToggleSessionPin}
@@ -192,6 +200,7 @@ function renderSidebar(overrides?: {
     onBulkPinSessions,
     onBulkDuplicateSessions,
     onBulkExportTranscripts,
+    onBulkCopyTranscripts,
     onClearSessions,
     onRenameSession,
     onToggleSessionPin,
@@ -216,6 +225,7 @@ function renderSidebar(overrides?: {
           onBulkPinSessions={onBulkPinSessions}
           onBulkDuplicateSessions={onBulkDuplicateSessions}
           onBulkExportTranscripts={onBulkExportTranscripts}
+          onBulkCopyTranscripts={onBulkCopyTranscripts}
           onClearSessions={onClearSessions}
           onRenameSession={onRenameSession}
           onToggleSessionPin={onToggleSessionPin}
@@ -913,6 +923,164 @@ describe('Sidebar recent chats', () => {
     expect(
       screen.queryByRole('button', {
         name: 'Export 1 selected chat as transcripts',
+      }),
+    ).toBeNull();
+  });
+
+  it('copies only the selected chats as full transcripts', async () => {
+    const onBulkCopyTranscripts = vi.fn(() => 1);
+    renderSidebar({ onBulkCopyTranscripts });
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy 1 selected chat as transcripts',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(onBulkCopyTranscripts).toHaveBeenCalledWith(['chat-1']),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Copied 1 selected chat as transcripts',
+        }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('surfaces a partial full-transcript copy honestly', async () => {
+    renderSidebar({
+      onBulkCopyTranscripts: vi.fn(() => Promise.resolve(1)),
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy 2 selected chats as transcripts',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Copied 1 of 2 selected chats as transcripts',
+        }),
+      ).toBeInTheDocument(),
+    );
+    const statuses = screen.getAllByRole('status');
+    expect(
+      statuses.some((status) =>
+        status.textContent?.includes(
+          'Some selected chat transcripts could not be copied',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('announces a failure when the full-transcript copy is blocked', async () => {
+    renderSidebar({ onBulkCopyTranscripts: vi.fn(() => null) });
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy 1 selected chat as transcripts',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Selected chat transcript copy failed',
+        }),
+      ).toBeInTheDocument(),
+    );
+    const statuses = screen.getAllByRole('status');
+    expect(
+      statuses.some((status) =>
+        status.textContent?.includes(
+          'Could not copy selected chat transcripts',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('hides the full-transcript copy control when no callback is provided', () => {
+    renderSidebar({ onBulkCopyTranscripts: null });
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    expect(
+      screen.queryByRole('button', {
+        name: 'Copy 1 selected chat as transcripts',
+      }),
+    ).toBeNull();
+  });
+
+  it('ignores a second full-transcript copy click while the first is in flight', async () => {
+    let resolveCopy: (count: number | null) => void = () => {};
+    const onBulkCopyTranscripts = vi.fn(
+      () =>
+        new Promise<number | null>((resolve) => {
+          resolveCopy = resolve;
+        }),
+    );
+    renderSidebar({ onBulkCopyTranscripts });
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy 1 selected chat as transcripts',
+      }),
+    );
+
+    const copyingButton = await screen.findByRole('button', {
+      name: 'Copying 1 selected chat transcript…',
+    });
+    expect(copyingButton).toBeDisabled();
+    fireEvent.click(copyingButton);
+
+    resolveCopy(1);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Copied 1 selected chat as transcripts',
+        }),
+      ).toBeInTheDocument(),
+    );
+    expect(onBulkCopyTranscripts).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps full-transcript copy feedback honest when the selection changes', async () => {
+    renderSidebar({ onBulkCopyTranscripts: vi.fn(() => 2) });
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy 2 selected chats as transcripts',
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Copied 2 selected chats as transcripts',
+        }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Copy 1 selected chat as transcripts',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', {
+        name: /Copied .* selected chat.* as transcripts/,
       }),
     ).toBeNull();
   });
