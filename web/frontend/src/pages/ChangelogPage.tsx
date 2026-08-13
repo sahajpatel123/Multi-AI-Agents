@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[IMPROVED] Agent: Shift+I CSV copy is stale-task-safe and clears its state when a new task starts or the page unmounts',
       '[NEW] Agent: copy the full research report as CSV (Shift+I)',
       '[NEW] Agent: download the full research report as CSV (Shift+K)',
       '[IMPROVED] Agent: Shift+K CSV download is stale-task-safe and rejects whitespace-only reports',

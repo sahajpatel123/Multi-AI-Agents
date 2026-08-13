@@ -2202,6 +2202,14 @@ export function AgentPage() {
     }
     setCopyingReportJson(false);
     setCopyReportJsonFeedback('idle');
+    copyReportCsvRunIdRef.current += 1;
+    copyReportCsvInFlightRef.current = false;
+    if (copyReportCsvFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportCsvFeedbackTimerRef.current);
+      copyReportCsvFeedbackTimerRef.current = null;
+    }
+    setCopyingReportCsv(false);
+    setCopyReportCsvFeedback('idle');
     setUserRating(null);
     setRatingResult(null);
     setRatingSubmitBusy(false);
@@ -2814,6 +2822,11 @@ export function AgentPage() {
       copyReportJsonInFlightRef.current = false;
       if (copyReportJsonFeedbackTimerRef.current != null) {
         window.clearTimeout(copyReportJsonFeedbackTimerRef.current);
+      }
+      copyReportCsvRunIdRef.current += 1;
+      copyReportCsvInFlightRef.current = false;
+      if (copyReportCsvFeedbackTimerRef.current != null) {
+        window.clearTimeout(copyReportCsvFeedbackTimerRef.current);
       }
       exportReportRunIdRef.current += 1;
       exportMdInFlightRef.current = false;

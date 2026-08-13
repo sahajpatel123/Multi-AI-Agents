@@ -124,6 +124,19 @@ describe('Agent task CSV export frontend API helper', () => {
     );
   });
 
+  it('rejects BOM-only or whitespace-only CSV bodies for clipboard copy', async () => {
+    vi.mocked(apiFetchModule.apiFetch)
+      .mockResolvedValueOnce(new Response('\uFEFF', { status: 200 }))
+      .mockResolvedValueOnce(new Response(' \r\n\t', { status: 200 }));
+
+    await expect(fetchAgentTaskCsvText('task-123')).rejects.toThrow(
+      'Empty report returned by the server',
+    );
+    await expect(fetchAgentTaskCsvText('task-123')).rejects.toThrow(
+      'Empty report returned by the server',
+    );
+  });
+
   it('surfaces request IDs when CSV text fetch fails', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(
