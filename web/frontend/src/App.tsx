@@ -97,6 +97,7 @@ import {
   isArenaCopyQuestionKey,
   isArenaCopyTranscriptMarkdownKey,
   isArenaCopyTranscriptJsonKey,
+  isArenaDownloadTranscriptKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
@@ -972,6 +973,9 @@ function App() {
       } else if (isArenaCopyTranscriptMarkdownKey(e)) {
         e.preventDefault();
         void handleCopyTranscript();
+      } else if (isArenaDownloadTranscriptKey(e)) {
+        e.preventDefault();
+        handleDownloadTranscript();
       } else if (isArenaCopyTranscriptJsonKey(e)) {
         e.preventDefault();
         void handleCopyTranscriptJson();
@@ -986,6 +990,7 @@ function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [
     handleCopyPrompt,
+    handleDownloadTranscript,
     handleCopyTranscriptJson,
     handleDownloadWinner,
     handleExportWinner,
@@ -2528,7 +2533,8 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => handleDownloadTranscript()}
-                    title="Download the full session as a markdown transcript"
+                    aria-keyshortcuts="Shift+T"
+                    title="Download the full session as a markdown transcript (Shift+T)"
                     style={{ fontSize: 12 }}
                   >
                     {transcriptDownloaded ? 'Transcript saved' : 'Download transcript'}

@@ -4,6 +4,7 @@ import {
   isArenaCopyTranscriptMarkdownKey,
   isArenaCopyTranscriptJsonKey,
   isArenaCopyWinnerKey,
+  isArenaDownloadTranscriptKey,
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
   isArenaReRunRoundKey,
@@ -49,6 +50,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('arena').some(
         (s) => s.keys === 'Shift + E' && s.action.toLowerCase().includes('markdown'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + T' && s.action.toLowerCase().includes('download'),
       ),
     ).toBe(true);
     expect(
@@ -223,6 +229,12 @@ describe('keyboardShortcuts', () => {
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'E' })).toBe(false);
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'E', shiftKey: true, altKey: true })).toBe(false);
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'K', shiftKey: true })).toBe(false);
+
+    expect(isArenaDownloadTranscriptKey({ key: 'T', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadTranscriptKey({ key: 't', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadTranscriptKey({ key: 'T' })).toBe(false);
+    expect(isArenaDownloadTranscriptKey({ key: 'T', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isArenaDownloadTranscriptKey({ key: 'E', shiftKey: true })).toBe(false);
   });
 
   it('ignores OS auto-repeat so holding a key cannot spam exports', () => {
@@ -235,6 +247,7 @@ describe('keyboardShortcuts', () => {
     expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'E', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyTranscriptJsonKey({ key: 'K', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaDownloadTranscriptKey({ key: 'T', shiftKey: true, repeat: true })).toBe(false);
 
     expect(isArenaCopyWinnerKey({ key: 'C', shiftKey: true })).toBe(true);
     expect(isArenaDownloadWinnerKey({ key: 'D', shiftKey: true })).toBe(true);
@@ -244,6 +257,7 @@ describe('keyboardShortcuts', () => {
     expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true })).toBe(true);
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'E', shiftKey: true })).toBe(true);
     expect(isArenaCopyTranscriptJsonKey({ key: 'K', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadTranscriptKey({ key: 'T', shiftKey: true })).toBe(true);
   });
 
   it('detects Agent result shortcuts as bare Shift+letter keys', () => {
