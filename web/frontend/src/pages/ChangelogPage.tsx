@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Arena: copy the full session transcript as markdown (Shift+E)',
       '[NEW] Arena: copy the full session transcript as JSON (Shift+K)',
       '[NEW] Agent templates: star favorites — pin go-to research tasks in a dedicated Favorites tab',
       '[NEW] Arena recent prompts: expand to see every stored prompt on this device',

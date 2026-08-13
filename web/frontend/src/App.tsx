@@ -634,8 +634,22 @@ function App() {
         }, 1800);
         void track('arena_copy_transcript');
       } else {
+        if (transcriptCopyFeedbackTimer.current) {
+          clearTimeout(transcriptCopyFeedbackTimer.current);
+          transcriptCopyFeedbackTimer.current = null;
+        }
+        setTranscriptCopied(false);
+        setTranscriptJsonCopied(false);
         setError('Could not copy the transcript. Try again or download it instead.');
       }
+    } catch {
+      if (transcriptCopyFeedbackTimer.current) {
+        clearTimeout(transcriptCopyFeedbackTimer.current);
+        transcriptCopyFeedbackTimer.current = null;
+      }
+      setTranscriptCopied(false);
+      setTranscriptJsonCopied(false);
+      setError('Could not copy the transcript. Try again or download it instead.');
     } finally {
       transcriptCopyInFlightRef.current = false;
       setTranscriptCopying(false);
@@ -913,9 +927,10 @@ function App() {
     }, 1800);
   }, [activeTurnId, canUseFeature, handleSaveResponse, response, savedItems]);
 
-  // Keyboard-first Arena exports: Shift+C / Shift+D / Shift+S / Shift+Q mirror
-  // the header action buttons once a round has finished. Form controls are
-  // skipped so normal Shift+letter typing is never swallowed.
+  // Keyboard-first Arena actions: Shift+C / Shift+D / Shift+S / Shift+Q /
+  // Shift+E / Shift+K / Shift+R mirror the header action buttons once a round
+  // has finished. Form controls are skipped so normal Shift+letter typing is
+  // never swallowed.
   useEffect(() => {
     if (
       (viewMode !== 'arena' && viewMode !== 'leaderboard') ||
@@ -2451,6 +2466,7 @@ function App() {
                     onClick={() => void handleCopyTranscript()}
                     disabled={transcriptCopying}
                     aria-busy={transcriptCopying}
+                    aria-keyshortcuts="Shift+E"
                     title="Copy the full session as a markdown transcript (Shift+E)"
                     style={{ fontSize: 12 }}
                   >
