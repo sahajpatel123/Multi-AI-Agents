@@ -35,6 +35,7 @@ const ARENA: ShortcutHint[] = [
 const AGENT: ShortcutHint[] = [
   { keys: '/', action: 'Focus research compose or follow-up' },
   { keys: 'Enter', action: 'Run task or send follow-up' },
+  { keys: 'Shift + N', action: 'Start a fresh Agent task' },
   { keys: 'Shift + C', action: 'Copy the completed answer as markdown' },
   { keys: 'Shift + D', action: 'Download the answer as a markdown file' },
   { keys: 'Shift + J', action: 'Download the full report as JSON' },
@@ -238,4 +239,9 @@ export function isAgentDownloadAnswerKey(event: ShortcutKeyEvent): boolean {
 /** Shift+J — download the full Agent research report as JSON. */
 export function isAgentDownloadJsonKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'j');
+}
+
+/** Shift+N — reset Agent Mode to a fresh, empty task. */
+export function isAgentNewTaskKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'n');
 }

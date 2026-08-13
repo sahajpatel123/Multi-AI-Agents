@@ -83,6 +83,7 @@ import {
   isAgentCopyAnswerKey,
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
+  isAgentNewTaskKey,
 } from '../lib/keyboardShortcuts';
 import {
   isAriaModalOpen,
@@ -2273,6 +2274,23 @@ export function AgentPage() {
     result?.task_id,
   ]);
 
+  // Shift+N starts a fresh Agent task from anywhere on the page, mirroring the
+  // sidebar's New task button without needing the sidebar open. Form controls
+  // are skipped so Shift+letter typing is never swallowed, and open dialogs
+  // keep ownership of their keystrokes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isAriaModalOpen()) return;
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      if (!isAgentNewTaskKey(e)) return;
+      e.preventDefault();
+      resetRun();
+      window.setTimeout(() => idleTaskInputRef.current?.focus(), 0);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [resetRun]);
+
   const answerSentences = useMemo((): AnswerSentenceView[] => {
     if (parsedAnswer?.sentences?.length) {
       return parsedAnswer.sentences.map((s) => ({
@@ -3699,6 +3717,8 @@ export function AgentPage() {
           <button
             type="button"
             onClick={resetRun}
+            title="Start a fresh task (Shift+N)"
+            aria-keyshortcuts="Shift+N"
             style={{
               margin: '12px 16px',
               width: 'calc(100% - 32px)',

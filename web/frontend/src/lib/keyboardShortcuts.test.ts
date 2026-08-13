@@ -12,6 +12,7 @@ import {
   isAgentCopyAnswerKey,
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
+  isAgentNewTaskKey,
   isBareQuestionHelpKey,
   shortcutsForSurface,
   shortcutsPanelTitle,
@@ -94,6 +95,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('agent').some(
         (s) => s.keys === 'Shift + J' && s.action.toLowerCase().includes('json'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('agent').some(
+        (s) => s.keys === 'Shift + N' && s.action.toLowerCase().includes('fresh'),
       ),
     ).toBe(true);
     expect(
@@ -259,8 +265,15 @@ describe('keyboardShortcuts', () => {
     expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true, altKey: true })).toBe(false);
     expect(isAgentDownloadJsonKey({ key: 'D', shiftKey: true })).toBe(false);
 
+    expect(isAgentNewTaskKey({ key: 'N', shiftKey: true })).toBe(true);
+    expect(isAgentNewTaskKey({ key: 'n', shiftKey: true })).toBe(true);
+    expect(isAgentNewTaskKey({ key: 'N' })).toBe(false);
+    expect(isAgentNewTaskKey({ key: 'N', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isAgentNewTaskKey({ key: 'D', shiftKey: true })).toBe(false);
+
     expect(isAgentCopyAnswerKey({ key: 'C', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadAnswerKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
+    expect(isAgentNewTaskKey({ key: 'N', shiftKey: true, repeat: true })).toBe(false);
   });
 });
