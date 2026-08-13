@@ -1610,6 +1610,15 @@ export async function exportAgentTaskCsv(taskId: string): Promise<Blob> {
   return response.blob();
 }
 
+export async function fetchAgentTaskCsvText(taskId: string): Promise<string> {
+  const response = await fetchAgentTaskCsvResponse(taskId);
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty report returned by the server', response));
+  }
+  return text;
+}
+
 async function fetchAgentTaskJsonResponse(taskId: string): Promise<Response> {
   const response = await apiFetch(
     `/api/agent/tasks/${encodeURIComponent(taskId)}/export.json`,

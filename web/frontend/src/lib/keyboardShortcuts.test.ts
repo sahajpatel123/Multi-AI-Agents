@@ -19,6 +19,7 @@ import {
   isArenaSaveWinnerKey,
   isArenaVerifyWinnerKey,
   isAgentCopyAnswerKey,
+  isAgentCopyReportCsvKey,
   isAgentCopyReportKey,
   isAgentCopyReportJsonKey,
   isAgentDownloadAnswerKey,
@@ -163,6 +164,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('agent').some(
         (s) => s.keys === 'Shift + K' && s.action.toLowerCase().includes('csv'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('agent').some(
+        (s) => s.keys === 'Shift + I' && s.action.toLowerCase().includes('csv'),
       ),
     ).toBe(true);
     expect(
@@ -429,6 +435,13 @@ describe('keyboardShortcuts', () => {
     expect(isAgentDownloadReportCsvKey({ key: 'K', shiftKey: true, ctrlKey: true })).toBe(false);
     expect(isAgentDownloadReportCsvKey({ key: 'J', shiftKey: true })).toBe(false);
 
+    expect(isAgentCopyReportCsvKey({ key: 'I', shiftKey: true })).toBe(true);
+    expect(isAgentCopyReportCsvKey({ key: 'i', shiftKey: true })).toBe(true);
+    expect(isAgentCopyReportCsvKey({ key: 'I' })).toBe(false);
+    expect(isAgentCopyReportCsvKey({ key: 'I', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isAgentCopyReportCsvKey({ key: 'I', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isAgentCopyReportCsvKey({ key: 'J', shiftKey: true })).toBe(false);
+
     expect(isAgentCopyReportKey({ key: 'P', shiftKey: true })).toBe(true);
     expect(isAgentCopyReportKey({ key: 'p', shiftKey: true })).toBe(true);
     expect(isAgentCopyReportKey({ key: 'P' })).toBe(false);
@@ -456,6 +469,7 @@ describe('keyboardShortcuts', () => {
     expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadReportMarkdownKey({ key: 'L', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadReportCsvKey({ key: 'K', shiftKey: true, repeat: true })).toBe(false);
+    expect(isAgentCopyReportCsvKey({ key: 'I', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentCopyReportKey({ key: 'P', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentCopyReportJsonKey({ key: 'O', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentNewTaskKey({ key: 'N', shiftKey: true, repeat: true })).toBe(false);

@@ -26,6 +26,7 @@ import {
   exportAgentTaskMarkdown,
   exportAgentTaskJson,
   exportOrchestrationPdf,
+  fetchAgentTaskCsvText,
   fetchAgentTaskJsonText,
   fetchAgentTaskMarkdownText,
   getDiscoverRooms,
@@ -84,6 +85,7 @@ import {
 } from '../lib/agentHistoryRow';
 import {
   isAgentCopyAnswerKey,
+  isAgentCopyReportCsvKey,
   isAgentCopyReportKey,
   isAgentCopyReportJsonKey,
   isAgentDownloadAnswerKey,
@@ -113,7 +115,7 @@ import {
   charBudgetTone,
   clampToMax,
 } from '../lib/charBudget';
-import { copyToClipboard } from '../lib/clipboard';
+import { copyCsvToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
   downloadBlobFile,
   downloadMarkdownFile,
@@ -973,6 +975,11 @@ export function AgentPage() {
   const copyReportJsonInFlightRef = useRef(false);
   const copyReportJsonRunIdRef = useRef(0);
   const copyReportJsonFeedbackTimerRef = useRef<number | null>(null);
+  const [copyingReportCsv, setCopyingReportCsv] = useState(false);
+  const [copyReportCsvFeedback, setCopyReportCsvFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copyReportCsvInFlightRef = useRef(false);
+  const copyReportCsvRunIdRef = useRef(0);
+  const copyReportCsvFeedbackTimerRef = useRef<number | null>(null);
   const pendingRoomHandledRef = useRef<string | null>(null);
 
   const closeTemplatesModal = useCallback(() => {
@@ -2463,8 +2470,50 @@ export function AgentPage() {
     }
   }, [result?.status, result?.task_id]);
 
+  const handleCopyTaskCsv = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || copyReportCsvInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++copyReportCsvRunIdRef.current;
+    copyReportCsvInFlightRef.current = true;
+    setCopyingReportCsv(true);
+    setCopyReportCsvFeedback('idle');
+    if (copyReportCsvFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportCsvFeedbackTimerRef.current);
+      copyReportCsvFeedbackTimerRef.current = null;
+    }
+    try {
+      const csv = await fetchAgentTaskCsvText(taskId);
+      if (copyReportCsvRunIdRef.current !== runId) return;
+      const ok = await copyCsvToClipboard(csv);
+      if (copyReportCsvRunIdRef.current !== runId) return;
+      setCopyReportCsvFeedback(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy the research report. Try the Report .csv download instead.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyReportCsvFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportCsvFeedback('idle');
+        copyReportCsvFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      if (copyReportCsvRunIdRef.current !== runId) return;
+      setCopyReportCsvFeedback('failed');
+      setError(e instanceof Error ? e.message : 'Could not copy the research report.');
+      const hold = motionDuration(2800);
+      copyReportCsvFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportCsvFeedback('idle');
+        copyReportCsvFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (copyReportCsvRunIdRef.current === runId) {
+        copyReportCsvInFlightRef.current = false;
+        setCopyingReportCsv(false);
+      }
+    }
+  }, [result?.status, result?.task_id]);
+
   // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
-  // Shift+J / Shift+K / Shift+L / Shift+O / Shift+P mirror the result
+  // Shift+I / Shift+J / Shift+K / Shift+L / Shift+O / Shift+P mirror the result
   // toolbar buttons.
   // Form controls are skipped so normal Shift+letter typing is never swallowed.
   useEffect(() => {
@@ -2495,6 +2544,9 @@ export function AgentPage() {
       } else if (isAgentCopyReportJsonKey(e)) {
         e.preventDefault();
         void handleCopyTaskJson();
+      } else if (isAgentCopyReportCsvKey(e)) {
+        e.preventDefault();
+        void handleCopyTaskCsv();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -2504,6 +2556,7 @@ export function AgentPage() {
     handleDownloadAnswer,
     handleCopyTaskMarkdown,
     handleCopyTaskJson,
+    handleCopyTaskCsv,
     handleExportTaskJson,
     handleExportTaskMarkdown,
     handleExportTaskCsv,
@@ -9363,6 +9416,27 @@ export function AgentPage() {
                             : copyReportJsonFeedback === 'failed'
                               ? 'Copy failed'
                               : 'Copy .json'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={copyingReportCsv ? undefined : Icons.copy(14)}
+                        loading={copyingReportCsv}
+                        disabled={copyingReportCsv}
+                        title="Copy the full research report as CSV (Shift+I)"
+                        aria-keyshortcuts="Shift+I"
+                        onClick={() => void handleCopyTaskCsv()}
+                      >
+                        {copyingReportCsv
+                          ? 'Copying…'
+                          : copyReportCsvFeedback === 'copied'
+                            ? 'Copied!'
+                            : copyReportCsvFeedback === 'failed'
+                              ? 'Copy failed'
+                              : 'Copy .csv'}
                       </Button>
                     ) : null}
                     {result.task_id ? (
