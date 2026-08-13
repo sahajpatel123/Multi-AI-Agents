@@ -23,6 +23,7 @@ const ARENA: ShortcutHint[] = [
   { keys: 'Shift + C', action: 'Copy the winning take' },
   { keys: 'Shift + A', action: 'Copy all four takes' },
   { keys: 'Shift + D', action: 'Download the winning take' },
+  { keys: 'Shift + W', action: 'Download the full round as CSV' },
   { keys: 'Shift + S', action: 'Save or unsave the winning take' },
   { keys: 'Shift + V', action: 'Verify the winning take in Agent Mode' },
   { keys: 'Shift + Q', action: 'Copy the question' },
@@ -196,7 +197,8 @@ function isBareShiftLetterKey(
     | 'u'
     | 'i'
     | 'p'
-    | 'o',
+    | 'o'
+    | 'w',
 ): boolean {
   if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
@@ -273,6 +275,11 @@ export function isArenaDownloadTranscriptJsonKey(event: ShortcutKeyEvent): boole
 /** Shift+U — download the full Arena session transcript as CSV. */
 export function isArenaDownloadTranscriptCsvKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'u');
+}
+
+/** Shift+W — download the current Arena round (all takes) as CSV. */
+export function isArenaDownloadRoundCsvKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'w');
 }
 
 /** Shift+C — copy a completed Agent answer to the clipboard as markdown. */

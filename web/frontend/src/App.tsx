@@ -104,6 +104,7 @@ import {
   isArenaDownloadTranscriptKey,
   isArenaDownloadTranscriptJsonKey,
   isArenaDownloadTranscriptCsvKey,
+  isArenaDownloadRoundCsvKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
@@ -1119,6 +1120,9 @@ function App() {
       } else if (isArenaDownloadWinnerKey(e)) {
         e.preventDefault();
         handleDownloadWinner();
+      } else if (isArenaDownloadRoundCsvKey(e)) {
+        e.preventDefault();
+        handleDownloadArenaCsv();
       } else if (isArenaSaveWinnerKey(e)) {
         e.preventDefault();
         handleSaveWinner();
@@ -1163,6 +1167,7 @@ function App() {
     handleDownloadTranscript,
     handleDownloadTranscriptJson,
     handleDownloadTranscriptCsv,
+    handleDownloadArenaCsv,
     handleCopyTranscriptJson,
     handleCopyTranscriptCsv,
     handleDownloadWinner,
@@ -2682,7 +2687,8 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => handleDownloadArenaCsv()}
-                    title="Download the full round as a CSV file"
+                    aria-keyshortcuts="Shift+W"
+                    title="Download the full round as a CSV file (Shift+W)"
                     style={{ fontSize: 12 }}
                   >
                     {arenaCsvDownloaded ? 'Saved CSV' : 'Download .csv'}

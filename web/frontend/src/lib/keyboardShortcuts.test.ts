@@ -9,6 +9,7 @@ import {
   isArenaDownloadTranscriptKey,
   isArenaDownloadTranscriptCsvKey,
   isArenaDownloadTranscriptJsonKey,
+  isArenaDownloadRoundCsvKey,
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
   isArenaReRunRoundKey,
@@ -46,6 +47,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('arena').some(
         (s) => s.keys === 'Shift + D' && s.action.toLowerCase().includes('winning take'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + W' && s.action.toLowerCase().includes('csv'),
       ),
     ).toBe(true);
     expect(
@@ -295,6 +301,12 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadTranscriptCsvKey({ key: 'U' })).toBe(false);
     expect(isArenaDownloadTranscriptCsvKey({ key: 'U', shiftKey: true, ctrlKey: true })).toBe(false);
     expect(isArenaDownloadTranscriptCsvKey({ key: 'Y', shiftKey: true })).toBe(false);
+
+    expect(isArenaDownloadRoundCsvKey({ key: 'W', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadRoundCsvKey({ key: 'w', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadRoundCsvKey({ key: 'W' })).toBe(false);
+    expect(isArenaDownloadRoundCsvKey({ key: 'W', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isArenaDownloadRoundCsvKey({ key: 'U', shiftKey: true })).toBe(false);
   });
 
   it('ignores OS auto-repeat so holding a key cannot spam exports', () => {
@@ -312,6 +324,7 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadTranscriptKey({ key: 'T', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaDownloadTranscriptJsonKey({ key: 'Y', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaDownloadTranscriptCsvKey({ key: 'U', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaDownloadRoundCsvKey({ key: 'W', shiftKey: true, repeat: true })).toBe(false);
 
     expect(isArenaCopyWinnerKey({ key: 'C', shiftKey: true })).toBe(true);
     expect(isArenaCopyAllTakesKey({ key: 'A', shiftKey: true })).toBe(true);
@@ -326,6 +339,7 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadTranscriptKey({ key: 'T', shiftKey: true })).toBe(true);
     expect(isArenaDownloadTranscriptJsonKey({ key: 'Y', shiftKey: true })).toBe(true);
     expect(isArenaDownloadTranscriptCsvKey({ key: 'U', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadRoundCsvKey({ key: 'W', shiftKey: true })).toBe(true);
   });
 
   it('detects Agent result shortcuts as bare Shift+letter keys', () => {
