@@ -1571,7 +1571,11 @@ export async function exportAgentTaskMarkdown(taskId: string): Promise<Blob> {
 
 export async function fetchAgentTaskMarkdownText(taskId: string): Promise<string> {
   const response = await fetchAgentTaskMarkdownResponse(taskId);
-  return response.text();
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty report returned by the server', response));
+  }
+  return text;
 }
 
 export async function exportAgentTaskJson(taskId: string): Promise<Blob> {

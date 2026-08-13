@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchAgentTaskMarkdownText } from './api';
+import { exportAgentTaskMarkdown, fetchAgentTaskMarkdownText } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -38,6 +38,38 @@ describe('Agent task Markdown text export frontend API helper', () => {
       '/api/agent/tasks/a%2Fb%3Fc/export.md',
       {},
     );
+  });
+
+  it('rejects an empty report body so the UI never reports a successful copy', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('', { status: 200 }),
+    );
+
+    await expect(fetchAgentTaskMarkdownText('task-123')).rejects.toThrow(
+      'Empty report returned by the server',
+    );
+  });
+
+  it('rejects a whitespace-only report body with the request id', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(' \n\t ', {
+        status: 200,
+        headers: { 'x-request-id': 'req-empty-report' },
+      }),
+    );
+
+    await expect(fetchAgentTaskMarkdownText('task-123')).rejects.toThrow(
+      'Empty report returned by the server (Request ID: req-empty-report)',
+    );
+  });
+
+  it('keeps the blob download path working through the shared response helper', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('# Report', { status: 200 }),
+    );
+
+    const blob = await exportAgentTaskMarkdown('task-123');
+    expect(blob.size).toBe('# Report'.length);
   });
 
   it('surfaces request IDs on failure', async () => {

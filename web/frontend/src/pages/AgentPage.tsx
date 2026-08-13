@@ -954,6 +954,7 @@ export function AgentPage() {
   const [copyingReport, setCopyingReport] = useState(false);
   const [copyReportFeedback, setCopyReportFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const copyReportInFlightRef = useRef(false);
+  const copyReportRunIdRef = useRef(0);
   const copyReportFeedbackTimerRef = useRef<number | null>(null);
   const pendingRoomHandledRef = useRef<string | null>(null);
 
@@ -2123,6 +2124,14 @@ export function AgentPage() {
     setExportingJson(false);
     setCopyAnswerFeedback('idle');
     setDownloadAnswerFeedback('idle');
+    copyReportRunIdRef.current += 1;
+    copyReportInFlightRef.current = false;
+    if (copyReportFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportFeedbackTimerRef.current);
+      copyReportFeedbackTimerRef.current = null;
+    }
+    setCopyingReport(false);
+    setCopyReportFeedback('idle');
     setUserRating(null);
     setRatingResult(null);
     setRatingSubmitBusy(false);
@@ -2308,7 +2317,9 @@ export function AgentPage() {
   }, [completedAnswerMarkdown, result?.original_task, result?.task, result?.task_id, task]);
 
   const handleCopyTaskMarkdown = useCallback(async () => {
-    if (!result?.task_id || copyReportInFlightRef.current) return;
+    if (!result?.task_id || result.status !== 'complete' || copyReportInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++copyReportRunIdRef.current;
     copyReportInFlightRef.current = true;
     setCopyingReport(true);
     setCopyReportFeedback('idle');
@@ -2317,8 +2328,10 @@ export function AgentPage() {
       copyReportFeedbackTimerRef.current = null;
     }
     try {
-      const markdown = await fetchAgentTaskMarkdownText(result.task_id);
+      const markdown = await fetchAgentTaskMarkdownText(taskId);
+      if (copyReportRunIdRef.current !== runId) return;
       const ok = await copyToClipboard(markdown);
+      if (copyReportRunIdRef.current !== runId) return;
       setCopyReportFeedback(ok ? 'copied' : 'failed');
       if (!ok) {
         setError('Could not copy the research report. Try the Report .md download instead.');
@@ -2329,6 +2342,7 @@ export function AgentPage() {
         copyReportFeedbackTimerRef.current = null;
       }, hold > 0 ? hold : 0);
     } catch (e) {
+      if (copyReportRunIdRef.current !== runId) return;
       setCopyReportFeedback('failed');
       setError(e instanceof Error ? e.message : 'Could not copy the research report.');
       const hold = motionDuration(2800);
@@ -2337,10 +2351,12 @@ export function AgentPage() {
         copyReportFeedbackTimerRef.current = null;
       }, hold > 0 ? hold : 0);
     } finally {
-      copyReportInFlightRef.current = false;
-      setCopyingReport(false);
+      if (copyReportRunIdRef.current === runId) {
+        copyReportInFlightRef.current = false;
+        setCopyingReport(false);
+      }
     }
-  }, [result?.task_id]);
+  }, [result?.status, result?.task_id]);
 
   // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
   // Shift+J / Shift+P mirror the result toolbar buttons. Form controls are skipped so
@@ -2618,6 +2634,8 @@ export function AgentPage() {
       if (roomsDownloadTimerRef.current != null) {
         window.clearTimeout(roomsDownloadTimerRef.current);
       }
+      copyReportRunIdRef.current += 1;
+      copyReportInFlightRef.current = false;
       if (copyReportFeedbackTimerRef.current != null) {
         window.clearTimeout(copyReportFeedbackTimerRef.current);
       }
