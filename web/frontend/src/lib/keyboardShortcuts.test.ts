@@ -11,6 +11,7 @@ import {
   isArenaDownloadTranscriptCsvKey,
   isArenaDownloadTranscriptJsonKey,
   isArenaDownloadRoundCsvKey,
+  isArenaDownloadRoundMarkdownKey,
   isArenaDownloadRoundJsonKey,
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
@@ -54,6 +55,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('arena').some(
         (s) => s.keys === 'Shift + W' && s.action.toLowerCase().includes('csv'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + G' && s.action.toLowerCase().includes('markdown'),
       ),
     ).toBe(true);
     expect(
@@ -319,6 +325,12 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadRoundCsvKey({ key: 'W' })).toBe(false);
     expect(isArenaDownloadRoundCsvKey({ key: 'W', shiftKey: true, metaKey: true })).toBe(false);
     expect(isArenaDownloadRoundCsvKey({ key: 'U', shiftKey: true })).toBe(false);
+
+    expect(isArenaDownloadRoundMarkdownKey({ key: 'G', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadRoundMarkdownKey({ key: 'g', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadRoundMarkdownKey({ key: 'G' })).toBe(false);
+    expect(isArenaDownloadRoundMarkdownKey({ key: 'G', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isArenaDownloadRoundMarkdownKey({ key: 'W', shiftKey: true })).toBe(false);
   });
 
   it('detects Arena full-round JSON shortcuts as bare Shift+letter keys', () => {

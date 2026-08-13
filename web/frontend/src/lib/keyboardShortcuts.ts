@@ -24,6 +24,7 @@ const ARENA: ShortcutHint[] = [
   { keys: 'Shift + A', action: 'Copy all four takes' },
   { keys: 'Shift + D', action: 'Download the winning take' },
   { keys: 'Shift + W', action: 'Download the full round as CSV' },
+  { keys: 'Shift + G', action: 'Download the full round as markdown' },
   { keys: 'Shift + O', action: 'Copy the full round as JSON' },
   { keys: 'Shift + J', action: 'Download the full round as JSON' },
   { keys: 'Shift + S', action: 'Save or unsave the winning take' },
@@ -200,7 +201,8 @@ function isBareShiftLetterKey(
     | 'i'
     | 'p'
     | 'o'
-    | 'w',
+    | 'w'
+    | 'g',
 ): boolean {
   if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
@@ -282,6 +284,11 @@ export function isArenaDownloadTranscriptCsvKey(event: ShortcutKeyEvent): boolea
 /** Shift+W — download the current Arena round (all takes) as CSV. */
 export function isArenaDownloadRoundCsvKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'w');
+}
+
+/** Shift+G — download the current Arena round (all takes) as markdown. */
+export function isArenaDownloadRoundMarkdownKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'g');
 }
 
 /** Shift+O — copy the current Arena round (all takes) as JSON. */

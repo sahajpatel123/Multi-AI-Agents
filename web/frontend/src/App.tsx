@@ -106,6 +106,7 @@ import {
   isArenaDownloadTranscriptJsonKey,
   isArenaDownloadTranscriptCsvKey,
   isArenaDownloadRoundCsvKey,
+  isArenaDownloadRoundMarkdownKey,
   isArenaDownloadRoundJsonKey,
   isArenaCopyRoundJsonKey,
   isArenaCopyWinnerKey,
@@ -1212,6 +1213,9 @@ function App() {
       } else if (isArenaDownloadRoundCsvKey(e)) {
         e.preventDefault();
         handleDownloadArenaCsv();
+      } else if (isArenaDownloadRoundMarkdownKey(e)) {
+        e.preventDefault();
+        handleDownloadAllTakes();
       } else if (isArenaSaveWinnerKey(e)) {
         e.preventDefault();
         handleSaveWinner();
@@ -1257,6 +1261,7 @@ function App() {
     handleDownloadTranscriptJson,
     handleDownloadTranscriptCsv,
     handleDownloadArenaCsv,
+    handleDownloadAllTakes,
     handleDownloadArenaJson,
     handleCopyArenaJson,
     handleCopyTranscriptJson,
@@ -2762,7 +2767,8 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => handleDownloadAllTakes()}
-                    title="Download all four takes as a markdown file"
+                    aria-keyshortcuts="Shift+G"
+                    title="Download all four takes as a markdown file (Shift+G)"
                     style={{ fontSize: 12 }}
                   >
                     {exportDownloaded ? 'Downloaded' : 'Download .md'}
