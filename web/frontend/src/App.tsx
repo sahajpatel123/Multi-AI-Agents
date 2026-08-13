@@ -56,6 +56,7 @@ import {
   formatArenaJsonExport,
   copyArenaTranscriptToClipboard,
   copyArenaTranscriptJsonToClipboard,
+  copyArenaTranscriptCsvToClipboard,
   copyArenaTranscriptsToClipboard,
   formatArenaTranscriptsExport,
   formatArenaTranscriptsJsonExport,
@@ -97,6 +98,7 @@ import {
   isArenaCopyQuestionKey,
   isArenaCopyTranscriptMarkdownKey,
   isArenaCopyTranscriptJsonKey,
+  isArenaCopyTranscriptCsvKey,
   isArenaDownloadTranscriptKey,
   isArenaDownloadTranscriptJsonKey,
   isArenaDownloadTranscriptCsvKey,
@@ -159,6 +161,7 @@ function App() {
   const [transcriptDownloaded, setTranscriptDownloaded] = useState(false);
   const [transcriptCopied, setTranscriptCopied] = useState(false);
   const [transcriptJsonCopied, setTranscriptJsonCopied] = useState(false);
+  const [transcriptCsvCopied, setTranscriptCsvCopied] = useState(false);
   const [transcriptCopying, setTranscriptCopying] = useState(false);
   const [transcriptCsvDownloaded, setTranscriptCsvDownloaded] = useState(false);
   const [transcriptJsonDownloaded, setTranscriptJsonDownloaded] = useState(false);
@@ -661,6 +664,7 @@ function App() {
       });
       if (ok) {
         setTranscriptJsonCopied(false);
+        setTranscriptCsvCopied(false);
         setTranscriptCopied(true);
         if (transcriptCopyFeedbackTimer.current) {
           clearTimeout(transcriptCopyFeedbackTimer.current);
@@ -705,6 +709,7 @@ function App() {
       });
       if (ok) {
         setTranscriptCopied(false);
+        setTranscriptCsvCopied(false);
         setTranscriptJsonCopied(true);
         if (transcriptCopyFeedbackTimer.current) {
           clearTimeout(transcriptCopyFeedbackTimer.current);
@@ -719,6 +724,39 @@ function App() {
       }
     } catch {
       setError('Could not copy the transcript JSON. Try again or download it instead.');
+    } finally {
+      transcriptCopyInFlightRef.current = false;
+      setTranscriptCopying(false);
+    }
+  }, [resolveArenaPersona, sessionData]);
+
+  const handleCopyTranscriptCsv = useCallback(async () => {
+    if (transcriptCopyInFlightRef.current) return;
+    const turns = sessionData?.turns;
+    if (!turns || !turns.length) return;
+    transcriptCopyInFlightRef.current = true;
+    setTranscriptCopying(true);
+    try {
+      const ok = await copyArenaTranscriptCsvToClipboard(turns, resolveArenaPersona);
+      if (ok) {
+        setTranscriptCopied(false);
+        setTranscriptJsonCopied(false);
+        setTranscriptCsvCopied(true);
+        if (transcriptCopyFeedbackTimer.current) {
+          clearTimeout(transcriptCopyFeedbackTimer.current);
+        }
+        transcriptCopyFeedbackTimer.current = window.setTimeout(() => {
+          setTranscriptCsvCopied(false);
+          transcriptCopyFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_copy_transcript_csv');
+      } else {
+        setTranscriptCsvCopied(false);
+        setError('Could not copy the transcript CSV. Try again or download it instead.');
+      }
+    } catch {
+      setTranscriptCsvCopied(false);
+      setError('Could not copy the transcript CSV. Try again or download it instead.');
     } finally {
       transcriptCopyInFlightRef.current = false;
       setTranscriptCopying(false);
@@ -1013,7 +1051,7 @@ function App() {
   }, [activeTurnId, canUseFeature, handleSaveResponse, response, savedItems]);
 
   // Keyboard-first Arena actions: Shift+C / Shift+D / Shift+S / Shift+V /
-  // Shift+Q / Shift+E / Shift+K / Shift+R / Shift+U mirror the header action
+  // Shift+Q / Shift+E / Shift+K / Shift+R / Shift+U / Shift+I mirror the header action
   // buttons once a round has finished. Form controls are skipped so normal
   // Shift+letter typing is never swallowed.
   useEffect(() => {
@@ -1059,6 +1097,9 @@ function App() {
       } else if (isArenaCopyTranscriptJsonKey(e)) {
         e.preventDefault();
         void handleCopyTranscriptJson();
+      } else if (isArenaCopyTranscriptCsvKey(e)) {
+        e.preventDefault();
+        void handleCopyTranscriptCsv();
       } else if (isArenaDownloadTranscriptCsvKey(e)) {
         e.preventDefault();
         handleDownloadTranscriptCsv();
@@ -1077,6 +1118,7 @@ function App() {
     handleDownloadTranscriptJson,
     handleDownloadTranscriptCsv,
     handleCopyTranscriptJson,
+    handleCopyTranscriptCsv,
     handleDownloadWinner,
     handleExportWinner,
     handleCopyTranscript,
@@ -2651,6 +2693,22 @@ function App() {
                     style={{ fontSize: 12 }}
                   >
                     {transcriptJsonDownloaded ? 'JSON saved' : 'Transcript .json'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => void handleCopyTranscriptCsv()}
+                    disabled={transcriptCopying}
+                    aria-busy={transcriptCopying}
+                    aria-keyshortcuts="Shift+I"
+                    title="Copy the full session as a CSV spreadsheet (Shift+I)"
+                    style={{ fontSize: 12 }}
+                  >
+                    {transcriptCopying
+                      ? 'Copying…'
+                      : transcriptCsvCopied
+                        ? 'Transcript CSV copied'
+                        : 'Copy transcript CSV'}
                   </button>
                   <button
                     type="button"

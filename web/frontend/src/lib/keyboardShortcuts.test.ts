@@ -3,6 +3,7 @@ import {
   isArenaCopyQuestionKey,
   isArenaCopyTranscriptMarkdownKey,
   isArenaCopyTranscriptJsonKey,
+  isArenaCopyTranscriptCsvKey,
   isArenaCopyWinnerKey,
   isArenaDownloadTranscriptKey,
   isArenaDownloadTranscriptCsvKey,
@@ -67,6 +68,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('arena').some(
         (s) => s.keys === 'Shift + U' && s.action.toLowerCase().includes('csv'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + I' && s.action.toLowerCase().includes('csv'),
       ),
     ).toBe(true);
     expect(
@@ -242,6 +248,12 @@ describe('keyboardShortcuts', () => {
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'E', shiftKey: true, altKey: true })).toBe(false);
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'K', shiftKey: true })).toBe(false);
 
+    expect(isArenaCopyTranscriptCsvKey({ key: 'I', shiftKey: true })).toBe(true);
+    expect(isArenaCopyTranscriptCsvKey({ key: 'i', shiftKey: true })).toBe(true);
+    expect(isArenaCopyTranscriptCsvKey({ key: 'I' })).toBe(false);
+    expect(isArenaCopyTranscriptCsvKey({ key: 'I', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isArenaCopyTranscriptCsvKey({ key: 'U', shiftKey: true })).toBe(false);
+
     expect(isArenaDownloadTranscriptKey({ key: 'T', shiftKey: true })).toBe(true);
     expect(isArenaDownloadTranscriptKey({ key: 't', shiftKey: true })).toBe(true);
     expect(isArenaDownloadTranscriptKey({ key: 'T' })).toBe(false);
@@ -271,6 +283,7 @@ describe('keyboardShortcuts', () => {
     expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'E', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyTranscriptJsonKey({ key: 'K', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaCopyTranscriptCsvKey({ key: 'I', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaDownloadTranscriptKey({ key: 'T', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaDownloadTranscriptJsonKey({ key: 'Y', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaDownloadTranscriptCsvKey({ key: 'U', shiftKey: true, repeat: true })).toBe(false);
@@ -283,6 +296,7 @@ describe('keyboardShortcuts', () => {
     expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true })).toBe(true);
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'E', shiftKey: true })).toBe(true);
     expect(isArenaCopyTranscriptJsonKey({ key: 'K', shiftKey: true })).toBe(true);
+    expect(isArenaCopyTranscriptCsvKey({ key: 'I', shiftKey: true })).toBe(true);
     expect(isArenaDownloadTranscriptKey({ key: 'T', shiftKey: true })).toBe(true);
     expect(isArenaDownloadTranscriptJsonKey({ key: 'Y', shiftKey: true })).toBe(true);
     expect(isArenaDownloadTranscriptCsvKey({ key: 'U', shiftKey: true })).toBe(true);
