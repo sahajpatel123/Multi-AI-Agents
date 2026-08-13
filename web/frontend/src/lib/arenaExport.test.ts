@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildArenaCsvDownload,
   buildArenaJsonDownload,
+  buildArenaMarkdownDownload,
   buildArenaTranscriptMarkdownDownload,
   buildArenaTranscriptJsonDownload,
   buildArenaTranscriptCsvDownload,
@@ -84,6 +85,36 @@ describe('formatArenaExport', () => {
     );
     expect(md).toContain('(no prompt)');
   });
+
+  it('degrades gracefully when all_responses is missing or not an array', () => {
+    const missing = formatArenaExport(
+      { ...sample, all_responses: undefined } as unknown as PromptResponse,
+      () => ({ name: 'X' }),
+    );
+    expect(missing).toContain('_No agent takes recorded for this round._');
+
+    const nonArray = formatArenaExport(
+      { ...sample, all_responses: { bad: true } } as unknown as PromptResponse,
+      () => ({ name: 'X' }),
+    );
+    expect(nonArray).toContain('_No agent takes recorded for this round._');
+  });
+
+  it('skips malformed takes without crashing', () => {
+    const malformed: PromptResponse = {
+      ...sample,
+      all_responses: [
+        { is_winner: true, score: 80, response: undefined } as unknown as ScoredAgent,
+        ...sample.all_responses,
+      ],
+    };
+    const md = formatArenaExport(malformed, (id) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    }));
+    expect(md).not.toContain('unknown');
+    expect(md).toContain('The Analyst');
+    expect(md).toContain('The Philosopher');
+  });
 });
 
 describe('copyArenaComparisonToClipboard', () => {
@@ -115,7 +146,61 @@ describe('copyArenaComparisonToClipboard', () => {
         () => ({ name: 'X' }),
       ),
     ).toBe(false);
+    expect(
+      await copyArenaComparisonToClipboard(
+        { ...sample, all_responses: [{ response: undefined }] } as unknown as PromptResponse,
+        () => ({ name: 'X' }),
+      ),
+    ).toBe(false);
     expect(writeText).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildArenaMarkdownDownload', () => {
+  it('builds markdown content with a prompt-derived stem', () => {
+    const resolvePersona = (id: string) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    });
+    const download = buildArenaMarkdownDownload(sample, resolvePersona);
+    expect(download).not.toBeNull();
+    expect(download?.stem).toBe('arena-should-we-ship-this-week');
+    expect(download?.content).toBe(formatArenaExport(sample, resolvePersona));
+    expect(download?.content).toContain('Ship the smallest honest slice.');
+    expect(download?.content.endsWith('\n')).toBe(true);
+  });
+
+  it('returns null when there is no finished round to download', () => {
+    expect(buildArenaMarkdownDownload(undefined, () => ({ name: 'The Analyst' }))).toBeNull();
+    expect(
+      buildArenaMarkdownDownload(
+        { ...sample, all_responses: [] },
+        () => ({ name: 'The Analyst' }),
+      ),
+    ).toBeNull();
+    expect(
+      buildArenaMarkdownDownload(
+        { ...sample, all_responses: { bad: true } } as unknown as PromptResponse,
+        () => ({ name: 'The Analyst' }),
+      ),
+    ).toBeNull();
+    expect(
+      buildArenaMarkdownDownload(
+        { ...sample, all_responses: [{ response: undefined }] } as unknown as PromptResponse,
+        () => ({ name: 'The Analyst' }),
+      ),
+    ).toBeNull();
+  });
+
+  it('sanitizes the prompt stem and falls back to a generic round name', () => {
+    const download = buildArenaMarkdownDownload(
+      { ...sample, prompt: '../../a<b>c:defghijklmnop' },
+      () => ({ name: 'The Analyst' }),
+    );
+    expect(download?.stem).toBe('arena-a-b-c-defghijklmnop');
+    expect(
+      buildArenaMarkdownDownload({ ...sample, prompt: '' }, () => ({ name: 'The Analyst' }))
+        ?.stem,
+    ).toBe('arena-round');
   });
 });
 

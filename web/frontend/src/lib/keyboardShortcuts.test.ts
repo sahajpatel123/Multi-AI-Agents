@@ -362,6 +362,7 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadTranscriptJsonKey({ key: 'Y', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaDownloadTranscriptCsvKey({ key: 'U', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaDownloadRoundCsvKey({ key: 'W', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaDownloadRoundMarkdownKey({ key: 'G', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyRoundJsonKey({ key: 'O', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaDownloadRoundJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
 
@@ -379,6 +380,7 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadTranscriptJsonKey({ key: 'Y', shiftKey: true })).toBe(true);
     expect(isArenaDownloadTranscriptCsvKey({ key: 'U', shiftKey: true })).toBe(true);
     expect(isArenaDownloadRoundCsvKey({ key: 'W', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadRoundMarkdownKey({ key: 'G', shiftKey: true })).toBe(true);
     expect(isArenaCopyRoundJsonKey({ key: 'O', shiftKey: true })).toBe(true);
     expect(isArenaDownloadRoundJsonKey({ key: 'J', shiftKey: true })).toBe(true);
   });

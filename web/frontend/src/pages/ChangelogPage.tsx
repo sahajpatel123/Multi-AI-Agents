@@ -30,6 +30,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Arena: Shift+U transcript CSV opens cleanly in Excel (UTF-8 BOM + CRLF), neutralizes formulas hidden behind whitespace, and is duplicate-safe',
       '[NEW] Arena: download the full round as CSV (Shift+W)',
       '[NEW] Arena: download the full round as markdown (Shift+G)',
+      '[IMPROVED] Arena: Shift+G markdown download refuses empty or malformed rounds, sanitizes filenames, and is duplicate-safe',
       '[IMPROVED] Arena: Shift+W round CSV opens cleanly in Excel (UTF-8 BOM + CRLF), is duplicate-safe, and refuses empty rounds',
       '[NEW] Arena: copy the full round as JSON with Shift+O and download it as a file with Shift+J',
       '[IMPROVED] Arena: Shift+O/Shift+J round JSON stays valid even with missing or malformed takes, and copy/download refuse non-array rounds',

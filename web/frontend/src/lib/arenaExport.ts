@@ -74,13 +74,27 @@ export function sanitizeArenaTranscriptTitle(raw: string): string {
 }
 
 /**
+ * True when a round entry has enough shape to render or rank as a take.
+ * Shared by winner selection and the Markdown/JSON round exports so a
+ * malformed backend payload can never crash a client-side export.
+ */
+function isArenaScoredTake(row: unknown): row is ScoredAgent {
+  const scored = row as ScoredAgent | null | undefined;
+  return Boolean(
+    scored &&
+      scored.response &&
+      typeof scored.response.agent_id === 'string' &&
+      scored.response.agent_id.length > 0,
+  );
+}
+
+/**
  * Pick the winning scored take from an Arena response.
  * Prefers `is_winner`, then `winner_agent_id`, then highest score.
  */
 export function pickArenaWinner(response: PromptResponse): ScoredAgent | null {
   const rows = (Array.isArray(response.all_responses) ? response.all_responses : []).filter(
-    (r): r is ScoredAgent =>
-      Boolean(r && r.response && typeof r.response.agent_id === 'string'),
+    isArenaScoredTake,
   );
   if (!rows.length) return null;
   const flagged = rows.find((r) => r.is_winner);
@@ -543,11 +557,17 @@ export function formatArenaExport(
   lines.push(`**Question:** ${(response.prompt || '').trim() || '(no prompt)'}`);
   lines.push('');
 
-  const sorted = [...response.all_responses].sort((a, b) => {
+  const rows = (Array.isArray(response.all_responses) ? response.all_responses : []).filter(
+    isArenaScoredTake,
+  );
+  const sorted = [...rows].sort((a, b) => {
     if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
-    return b.score - a.score;
+    return (b.score ?? -Infinity) - (a.score ?? -Infinity);
   });
 
+  if (!rows.length) {
+    lines.push('_No agent takes recorded for this round._', '');
+  }
   for (const scored of sorted) {
     lines.push(formatAgentBlock(scored, resolvePersona(scored.response.agent_id)));
     lines.push('');
@@ -557,6 +577,12 @@ export function formatArenaExport(
   lines.push('_Shared from Arena_');
   return lines.join('\n').trim() + '\n';
 }
+
+export type ArenaMarkdownDownload = {
+  content: string;
+  /** Safe filename stem; the download helper appends the date and extension. */
+  stem: string;
+};
 
 /**
  * Copy the full Arena comparison (all four takes) to the clipboard. Returns
@@ -568,13 +594,7 @@ export async function copyArenaComparisonToClipboard(
   response: PromptResponse | null | undefined,
   resolvePersona: (agentId: string) => ArenaExportPersona,
 ): Promise<boolean> {
-  if (
-    !response ||
-    !Array.isArray(response.all_responses) ||
-    response.all_responses.length === 0
-  ) {
-    return false;
-  }
+  if (!hasArenaRoundTakes(response)) return false;
   const md = formatArenaExport(response, resolvePersona);
   if (!md.trim()) return false;
   return copyToClipboard(md);
@@ -637,16 +657,39 @@ export type ArenaJsonDownload = {
 };
 
 /**
- * True when a round has at least one stored take. Copy/download helpers use
- * this shared guard so empty or non-array round payloads are refused once
- * instead of duplicating the check with subtle drift.
+ * True when a round has at least one well-formed stored take. Copy/download
+ * helpers use this shared guard so empty, non-array, or all-malformed round
+ * payloads are refused once instead of duplicating the check with drift.
  */
 function hasArenaRoundTakes(
   response: PromptResponse | null | undefined,
 ): response is PromptResponse {
   return Boolean(
-    response && Array.isArray(response.all_responses) && response.all_responses.length > 0,
+    response &&
+      Array.isArray(response.all_responses) &&
+      response.all_responses.some(isArenaScoredTake),
   );
+}
+
+/**
+ * Build the markdown payload and filename stem for a full Arena round download
+ * (Shift+G). Returns null when there is no finished round to export so callers
+ * can surface feedback instead of saving an empty archive, and sanitizes the
+ * prompt so it can never leak path separators or control characters into the
+ * downloaded filename.
+ */
+export function buildArenaMarkdownDownload(
+  response: PromptResponse | null | undefined,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+): ArenaMarkdownDownload | null {
+  if (!hasArenaRoundTakes(response)) return null;
+  const safePrompt = sanitizeDownloadFilename(response.prompt || '', 'round')
+    .slice(0, 48)
+    .replace(/-+$/g, '');
+  return {
+    content: formatArenaExport(response, resolvePersona),
+    stem: `arena-${safePrompt || 'round'}`,
+  };
 }
 
 /**
@@ -895,8 +938,11 @@ export function buildArenaTranscriptCsvDownload(
   };
 }
 
-function formatAgentBlock(scored: ScoredAgent, persona: ArenaExportPersona): string {
-  const name = persona.name || scored.response.agent_id;
+function formatAgentBlock(
+  scored: ScoredAgent,
+  persona: ArenaExportPersona | null | undefined,
+): string {
+  const name = persona?.name || scored.response.agent_id;
   const badge = scored.is_winner ? ' · winner' : '';
   const score =
     typeof scored.score === 'number' && Number.isFinite(scored.score)

@@ -53,9 +53,9 @@ import {
   buildArenaTranscriptCsvDownload,
   buildArenaCsvDownload,
   buildArenaJsonDownload,
+  buildArenaMarkdownDownload,
   copyArenaComparisonToClipboard,
   copyArenaJsonToClipboard,
-  formatArenaExport,
   copyArenaTranscriptToClipboard,
   copyArenaTranscriptJsonToClipboard,
   copyArenaTranscriptCsvToClipboard,
@@ -333,6 +333,9 @@ function App() {
   /** Guards Shift+J / header clicks so a full-round JSON download can never double-fire. */
   const arenaJsonDownloadInFlightRef = useRef(false);
   const arenaJsonDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Guards Shift+G / header clicks so a full-round markdown download can never double-fire. */
+  const exportDownloadInFlightRef = useRef(false);
+  const exportDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Guards Shift+O / header clicks so a full-round JSON copy can never double-fire. */
   const arenaJsonCopyInFlightRef = useRef(false);
   const arenaJsonCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -569,11 +572,6 @@ function App() {
     [getPersonaForAgentId],
   );
 
-  const buildArenaComparisonMarkdown = useCallback(() => {
-    if (!response) return null;
-    return formatArenaExport(response, resolveArenaPersona);
-  }, [resolveArenaPersona, response]);
-
   const buildArenaWinnerMarkdown = useCallback(() => {
     if (!response) return null;
     return formatArenaWinnerExport(response, resolveArenaPersona);
@@ -648,18 +646,42 @@ function App() {
   }, [buildArenaWinnerMarkdown, resolveArenaPersona, response?.prompt, response?.winner_agent_id]);
 
   const handleDownloadAllTakes = useCallback(() => {
-    const md = buildArenaComparisonMarkdown();
-    if (!md) return;
-    const stem = `arena-${(response?.prompt || 'comparison').slice(0, 48)}`;
-    const ok = downloadMarkdownFile(md, stem);
-    if (ok) {
-      setExportDownloaded(true);
-      window.setTimeout(() => setExportDownloaded(false), 1800);
-      void track('arena_download_all');
-    } else {
-      setError('Could not download the comparison. Try Copy all takes instead.');
+    if (exportDownloadInFlightRef.current) return;
+    const download = buildArenaMarkdownDownload(response, resolveArenaPersona);
+    if (!download) {
+      if (exportDownloadFeedbackTimer.current) {
+        clearTimeout(exportDownloadFeedbackTimer.current);
+        exportDownloadFeedbackTimer.current = null;
+      }
+      setExportDownloaded(false);
+      setError('Could not download the comparison. Wait for the round to finish or copy all takes instead.');
+      return;
     }
-  }, [buildArenaComparisonMarkdown, response?.prompt]);
+    exportDownloadInFlightRef.current = true;
+    try {
+      const ok = downloadMarkdownFile(download.content, download.stem);
+      if (ok) {
+        if (exportDownloadFeedbackTimer.current) {
+          clearTimeout(exportDownloadFeedbackTimer.current);
+          exportDownloadFeedbackTimer.current = null;
+        }
+        setExportDownloaded(true);
+        exportDownloadFeedbackTimer.current = window.setTimeout(() => {
+          setExportDownloaded(false);
+          exportDownloadFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_download_all');
+      } else {
+        setExportDownloaded(false);
+        setError('Could not download the comparison. Try Copy all takes instead.');
+      }
+    } catch {
+      setExportDownloaded(false);
+      setError('Could not download the comparison. Try Copy all takes instead.');
+    } finally {
+      exportDownloadInFlightRef.current = false;
+    }
+  }, [resolveArenaPersona, response]);
 
   const handleDownloadTranscript = useCallback(() => {
     if (transcriptDownloadInFlightRef.current) return;
