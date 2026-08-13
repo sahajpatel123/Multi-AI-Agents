@@ -23,6 +23,7 @@ const ARENA: ShortcutHint[] = [
   { keys: 'Shift + D', action: 'Download the winning take' },
   { keys: 'Shift + S', action: 'Save or unsave the winning take' },
   { keys: 'Shift + Q', action: 'Copy the question' },
+  { keys: 'Shift + R', action: 'Re-run the round' },
   { keys: 'Esc', action: 'Close a focused mind' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
@@ -161,7 +162,7 @@ export type ShortcutKeyEvent = {
  */
 function isBareShiftLetterKey(
   event: ShortcutKeyEvent,
-  letter: 'c' | 'd' | 'q' | 's',
+  letter: 'c' | 'd' | 'q' | 's' | 'r',
 ): boolean {
   if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
@@ -188,4 +189,9 @@ export function isArenaCopyQuestionKey(event: ShortcutKeyEvent): boolean {
 /** Shift+S — save or unsave the winning Arena take in the saved-takes library. */
 export function isArenaSaveWinnerKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 's');
+}
+
+/** Shift+R — replay the last completed Arena round with the same prompt. */
+export function isArenaReRunRoundKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'r');
 }

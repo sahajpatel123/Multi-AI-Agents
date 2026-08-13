@@ -91,6 +91,7 @@ import {
   isArenaCopyQuestionKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
+  isArenaReRunRoundKey,
   isArenaSaveWinnerKey,
 } from './lib/keyboardShortcuts';
 import { RecentPromptChips } from './components/RecentPromptChips';
@@ -285,6 +286,8 @@ function App() {
   const lastRoundContextRef = useRef<PromptContextItem[] | undefined>(undefined);
   /** Prevents a double-click from starting two re-run rounds in the same tick. */
   const rerunInFlightRef = useRef(false);
+  /** Routes Shift+R to the re-run handler defined later in the component. */
+  const reRunRoundRequestRef = useRef<(() => void) | null>(null);
   /** Prevents overlapping transcript copy attempts and stale copied feedback. */
   const transcriptCopyInFlightRef = useRef(false);
   const transcriptCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -894,6 +897,9 @@ function App() {
       } else if (isArenaCopyQuestionKey(e)) {
         e.preventDefault();
         void handleCopyPrompt();
+      } else if (isArenaReRunRoundKey(e)) {
+        e.preventDefault();
+        reRunRoundRequestRef.current?.();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -2008,6 +2014,7 @@ function App() {
       rerunInFlightRef.current = false;
     });
   };
+  reRunRoundRequestRef.current = handleReRunRound;
 
   const handleExamplePromptClick = (prompt: string) => {
     setPresetPrompt(prompt);

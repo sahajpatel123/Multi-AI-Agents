@@ -3,6 +3,7 @@ import {
   isArenaCopyQuestionKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
+  isArenaReRunRoundKey,
   isArenaSaveWinnerKey,
   isBareQuestionHelpKey,
   shortcutsForSurface,
@@ -130,6 +131,12 @@ describe('keyboardShortcuts', () => {
     expect(isArenaSaveWinnerKey({ key: 'S' })).toBe(false);
     expect(isArenaSaveWinnerKey({ key: 'S', shiftKey: true, ctrlKey: true })).toBe(false);
     expect(isArenaSaveWinnerKey({ key: 'C', shiftKey: true })).toBe(false);
+
+    expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true })).toBe(true);
+    expect(isArenaReRunRoundKey({ key: 'r', shiftKey: true })).toBe(true);
+    expect(isArenaReRunRoundKey({ key: 'R' })).toBe(false);
+    expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isArenaReRunRoundKey({ key: 'C', shiftKey: true })).toBe(false);
   });
 
   it('ignores OS auto-repeat so holding a key cannot spam exports', () => {
@@ -138,10 +145,12 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadWinnerKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyQuestionKey({ key: 'Q', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaSaveWinnerKey({ key: 'S', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true, repeat: true })).toBe(false);
 
     expect(isArenaCopyWinnerKey({ key: 'C', shiftKey: true })).toBe(true);
     expect(isArenaDownloadWinnerKey({ key: 'D', shiftKey: true })).toBe(true);
     expect(isArenaCopyQuestionKey({ key: 'Q', shiftKey: true })).toBe(true);
     expect(isArenaSaveWinnerKey({ key: 'S', shiftKey: true })).toBe(true);
+    expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true })).toBe(true);
   });
 });
