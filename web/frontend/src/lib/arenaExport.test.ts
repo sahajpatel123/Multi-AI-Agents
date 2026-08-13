@@ -755,6 +755,14 @@ describe('buildArenaTranscriptJsonDownload', () => {
     expect(parsed.exchanges[0].prompt).toBe('Should we ship this week?');
   });
 
+  it('keeps download content byte-for-byte identical to the copy formatter', () => {
+    const opts = { exportedAt: '2026-08-07T12:00:00.000Z', sessionId: 'sess123' };
+    const download = buildArenaTranscriptJsonDownload(turns, () => ({ name: 'The Analyst' }), opts);
+    expect(download?.content).toBe(
+      formatArenaTranscriptJsonExport(turns, () => ({ name: 'The Analyst' }), opts),
+    );
+  });
+
   it('returns null when there is no transcript to download', () => {
     expect(
       buildArenaTranscriptJsonDownload(undefined, () => ({ name: 'The Analyst' })),

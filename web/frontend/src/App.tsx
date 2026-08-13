@@ -307,6 +307,9 @@ function App() {
   /** Guards Shift+T / header clicks so a transcript download can never double-fire. */
   const transcriptDownloadInFlightRef = useRef(false);
   const transcriptDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Guards Shift+Y / header clicks so a JSON transcript download can never double-fire. */
+  const transcriptJsonDownloadInFlightRef = useRef(false);
+  const transcriptJsonDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Owns the Shift+V verify-winner action so the key handler can live before its callback. */
   const verifyWinnerRequestRef = useRef<((winner: ScoredAgent) => void) | null>(null);
   /** Guards Shift+V / card clicks so a verify request can never double-fire. */
@@ -720,24 +723,45 @@ function App() {
   }, [resolveArenaPersona, sessionData]);
 
   const handleDownloadTranscriptJson = useCallback(() => {
+    if (transcriptJsonDownloadInFlightRef.current) return;
     const download = buildArenaTranscriptJsonDownload(sessionData?.turns, resolveArenaPersona, {
       sessionId: sessionData?.session_id,
     });
     if (!download) {
+      if (transcriptJsonDownloadFeedbackTimer.current) {
+        clearTimeout(transcriptJsonDownloadFeedbackTimer.current);
+        transcriptJsonDownloadFeedbackTimer.current = null;
+      }
       setTranscriptJsonDownloaded(false);
       setError('Could not download the transcript JSON. Try again or copy the latest take instead.');
       return;
     }
-    const ok = downloadTextFile(download.content, {
-      filename: `${withDownloadDate(download.stem)}.json`,
-      mimeType: 'application/json;charset=utf-8',
-    });
-    if (ok) {
-      setTranscriptJsonDownloaded(true);
-      window.setTimeout(() => setTranscriptJsonDownloaded(false), 1800);
-      void track('arena_download_transcript_json');
-    } else {
+    transcriptJsonDownloadInFlightRef.current = true;
+    try {
+      const ok = downloadTextFile(download.content, {
+        filename: `${withDownloadDate(download.stem)}.json`,
+        mimeType: 'application/json;charset=utf-8',
+      });
+      if (ok) {
+        if (transcriptJsonDownloadFeedbackTimer.current) {
+          clearTimeout(transcriptJsonDownloadFeedbackTimer.current);
+          transcriptJsonDownloadFeedbackTimer.current = null;
+        }
+        setTranscriptJsonDownloaded(true);
+        transcriptJsonDownloadFeedbackTimer.current = window.setTimeout(() => {
+          setTranscriptJsonDownloaded(false);
+          transcriptJsonDownloadFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_download_transcript_json');
+      } else {
+        setTranscriptJsonDownloaded(false);
+        setError('Could not download the transcript JSON. Try again or copy the latest take instead.');
+      }
+    } catch {
+      setTranscriptJsonDownloaded(false);
       setError('Could not download the transcript JSON. Try again or copy the latest take instead.');
+    } finally {
+      transcriptJsonDownloadInFlightRef.current = false;
     }
   }, [resolveArenaPersona, sessionData]);
 
