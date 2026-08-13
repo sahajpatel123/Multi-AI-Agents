@@ -2172,8 +2172,11 @@ export function AgentPage() {
     setExportingPdf(false);
     setExportingMd(false);
     setExportingJson(false);
+    setExportingCsv(false);
     exportReportRunIdRef.current += 1;
     exportMdInFlightRef.current = false;
+    exportCsvRunIdRef.current += 1;
+    exportCsvInFlightRef.current = false;
     setCopyAnswerFeedback('idle');
     setDownloadAnswerFeedback('idle');
     copyReportRunIdRef.current += 1;
@@ -2761,6 +2764,8 @@ export function AgentPage() {
       }
       exportReportRunIdRef.current += 1;
       exportMdInFlightRef.current = false;
+      exportCsvRunIdRef.current += 1;
+      exportCsvInFlightRef.current = false;
     };
   }, []);
 
