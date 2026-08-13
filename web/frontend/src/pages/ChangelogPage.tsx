@@ -23,6 +23,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Arena: Shift+T transcript download is duplicate-safe and handles empty sessions or odd session ids gracefully',
       '[NEW] Arena: download the full session transcript as JSON (Shift+Y)',
       '[IMPROVED] Arena: Shift+Y transcript JSON download is duplicate-safe, handles empty sessions gracefully, and stays byte-for-byte in sync with copy',
+      '[NEW] Arena: download the full session transcript as CSV (Shift+U)',
       '[NEW] Arena: copy the full session transcript as JSON (Shift+K)',
       '[NEW] Agent templates: star favorites — pin go-to research tasks in a dedicated Favorites tab',
       '[NEW] Arena recent prompts: expand to see every stored prompt on this device',

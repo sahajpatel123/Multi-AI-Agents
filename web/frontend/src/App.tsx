@@ -99,6 +99,7 @@ import {
   isArenaCopyTranscriptJsonKey,
   isArenaDownloadTranscriptKey,
   isArenaDownloadTranscriptJsonKey,
+  isArenaDownloadTranscriptCsvKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
@@ -985,9 +986,9 @@ function App() {
   }, [activeTurnId, canUseFeature, handleSaveResponse, response, savedItems]);
 
   // Keyboard-first Arena actions: Shift+C / Shift+D / Shift+S / Shift+V /
-  // Shift+Q / Shift+E / Shift+K / Shift+R mirror the header action buttons
-  // once a round has finished. Form controls are skipped so normal Shift+letter
-  // typing is never swallowed.
+  // Shift+Q / Shift+E / Shift+K / Shift+R / Shift+U mirror the header action
+  // buttons once a round has finished. Form controls are skipped so normal
+  // Shift+letter typing is never swallowed.
   useEffect(() => {
     if (
       (viewMode !== 'arena' && viewMode !== 'leaderboard') ||
@@ -1031,6 +1032,9 @@ function App() {
       } else if (isArenaCopyTranscriptJsonKey(e)) {
         e.preventDefault();
         void handleCopyTranscriptJson();
+      } else if (isArenaDownloadTranscriptCsvKey(e)) {
+        e.preventDefault();
+        handleDownloadTranscriptCsv();
       } else if (isArenaReRunRoundKey(e) && !focusedAgentId) {
         // Re-running while a focused mind is open would silently discard that
         // thread; the other shortcuts are non-destructive, so only guard this one.
@@ -1044,6 +1048,7 @@ function App() {
     handleCopyPrompt,
     handleDownloadTranscript,
     handleDownloadTranscriptJson,
+    handleDownloadTranscriptCsv,
     handleCopyTranscriptJson,
     handleDownloadWinner,
     handleExportWinner,
@@ -2621,7 +2626,8 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => handleDownloadTranscriptCsv()}
-                    title="Download the full session as a CSV spreadsheet"
+                    aria-keyshortcuts="Shift+U"
+                    title="Download the full session as a CSV spreadsheet (Shift+U)"
                     style={{ fontSize: 12 }}
                   >
                     {transcriptCsvDownloaded ? 'CSV saved' : 'Transcript .csv'}

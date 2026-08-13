@@ -29,6 +29,7 @@ const ARENA: ShortcutHint[] = [
   { keys: 'Shift + T', action: 'Download the full session transcript as markdown' },
   { keys: 'Shift + K', action: 'Copy the full session transcript as JSON' },
   { keys: 'Shift + Y', action: 'Download the full session transcript as JSON' },
+  { keys: 'Shift + U', action: 'Download the full session transcript as CSV' },
   { keys: 'Shift + R', action: 'Re-run the round' },
   { keys: 'Esc', action: 'Close a focused mind' },
   { keys: '?', action: 'Toggle this shortcuts list' },
@@ -174,7 +175,7 @@ export type ShortcutKeyEvent = {
  */
 function isBareShiftLetterKey(
   event: ShortcutKeyEvent,
-  letter: 'c' | 'd' | 'q' | 's' | 'r' | 'j' | 'k' | 'e' | 'n' | 'v' | 't' | 'y',
+  letter: 'c' | 'd' | 'q' | 's' | 'r' | 'j' | 'k' | 'e' | 'n' | 'v' | 't' | 'y' | 'u',
 ): boolean {
   if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
@@ -236,6 +237,11 @@ export function isArenaDownloadTranscriptKey(event: ShortcutKeyEvent): boolean {
 /** Shift+Y — download the full Arena session transcript as JSON. */
 export function isArenaDownloadTranscriptJsonKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'y');
+}
+
+/** Shift+U — download the full Arena session transcript as CSV. */
+export function isArenaDownloadTranscriptCsvKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'u');
 }
 
 /** Shift+C — copy a completed Agent answer to the clipboard as markdown. */
