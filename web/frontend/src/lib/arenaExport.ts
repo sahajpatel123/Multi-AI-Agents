@@ -649,12 +649,17 @@ function toCsvCell(value: string | number | boolean | null | undefined): string 
 
 /**
  * CSV export for a full Arena round (one row per take).
+ * The file starts with a UTF-8 BOM so Excel detects Unicode, and rows use CRLF
+ * line endings per RFC 4180, matching the transcript/watchlist CSV exports.
+ * Malformed rounds (no `all_responses` array) degrade to a header-only file
+ * rather than crashing the download.
  */
 export function formatArenaCsvExport(
   response: PromptResponse,
   resolvePersona: (agentId: string) => ArenaExportPersona,
 ): string {
-  const sorted = [...response.all_responses].sort((a, b) => {
+  const takes = Array.isArray(response.all_responses) ? response.all_responses : [];
+  const sorted = [...takes].sort((a, b) => {
     if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
     return b.score - a.score;
   });
@@ -688,7 +693,40 @@ export function formatArenaCsvExport(
         .join(','),
     );
   }
-  return lines.join('\n') + '\n';
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
+}
+
+export type ArenaCsvDownload = {
+  content: string;
+  /** Safe filename stem; the download helper appends the date and extension. */
+  stem: string;
+};
+
+/**
+ * Build the CSV payload and filename stem for a full Arena round download
+ * (Shift+W). Returns null when there is no finished round to export so callers
+ * can surface feedback instead of saving an empty spreadsheet, and sanitizes
+ * the prompt so it can never leak path separators or control characters into
+ * the downloaded filename.
+ */
+export function buildArenaCsvDownload(
+  response: PromptResponse | null | undefined,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+): ArenaCsvDownload | null {
+  if (
+    !response ||
+    !Array.isArray(response.all_responses) ||
+    response.all_responses.length === 0
+  ) {
+    return null;
+  }
+  const safePrompt = sanitizeDownloadFilename(response.prompt || '', 'round')
+    .slice(0, 48)
+    .replace(/-+$/g, '');
+  return {
+    content: formatArenaCsvExport(response, resolvePersona),
+    stem: `arena-${safePrompt || 'round'}`,
+  };
 }
 
 /**

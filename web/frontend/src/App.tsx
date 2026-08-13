@@ -51,9 +51,9 @@ import {
   buildArenaTranscriptMarkdownDownload,
   buildArenaTranscriptJsonDownload,
   buildArenaTranscriptCsvDownload,
+  buildArenaCsvDownload,
   copyArenaComparisonToClipboard,
   formatArenaExport,
-  formatArenaCsvExport,
   formatArenaJsonExport,
   copyArenaTranscriptToClipboard,
   copyArenaTranscriptJsonToClipboard,
@@ -323,6 +323,9 @@ function App() {
   const transcriptJsonDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transcriptCsvDownloadInFlightRef = useRef(false);
   const transcriptCsvDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Guards Shift+W / header clicks so a full-round CSV download can never double-fire. */
+  const arenaCsvDownloadInFlightRef = useRef(false);
+  const arenaCsvDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Owns the Shift+V verify-winner action so the key handler can live before its callback. */
   const verifyWinnerRequestRef = useRef<((winner: ScoredAgent) => void) | null>(null);
   /** Guards Shift+V / card clicks so a verify request can never double-fire. */
@@ -911,19 +914,43 @@ function App() {
   }, [resolveArenaPersona, response]);
 
   const handleDownloadArenaCsv = useCallback(() => {
-    if (!response) return;
-    const csv = formatArenaCsvExport(response, resolveArenaPersona);
-    const stem = `arena-${(response.prompt || 'round').slice(0, 48)}`;
-    const ok = downloadTextFile(csv, {
-      filename: `${withDownloadDate(stem)}.csv`,
-      mimeType: 'text/csv;charset=utf-8',
-    });
-    if (ok) {
-      setArenaCsvDownloaded(true);
-      window.setTimeout(() => setArenaCsvDownloaded(false), 1800);
-      void track('arena_download_csv');
-    } else {
+    if (arenaCsvDownloadInFlightRef.current) return;
+    const download = buildArenaCsvDownload(response, resolveArenaPersona);
+    if (!download) {
+      if (arenaCsvDownloadFeedbackTimer.current) {
+        clearTimeout(arenaCsvDownloadFeedbackTimer.current);
+        arenaCsvDownloadFeedbackTimer.current = null;
+      }
+      setArenaCsvDownloaded(false);
+      setError('Could not download the CSV. Wait for the round to finish or copy all takes instead.');
+      return;
+    }
+    arenaCsvDownloadInFlightRef.current = true;
+    try {
+      const ok = downloadTextFile(download.content, {
+        filename: `${withDownloadDate(download.stem)}.csv`,
+        mimeType: 'text/csv;charset=utf-8',
+      });
+      if (ok) {
+        if (arenaCsvDownloadFeedbackTimer.current) {
+          clearTimeout(arenaCsvDownloadFeedbackTimer.current);
+          arenaCsvDownloadFeedbackTimer.current = null;
+        }
+        setArenaCsvDownloaded(true);
+        arenaCsvDownloadFeedbackTimer.current = window.setTimeout(() => {
+          setArenaCsvDownloaded(false);
+          arenaCsvDownloadFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_download_csv');
+      } else {
+        setArenaCsvDownloaded(false);
+        setError('Could not download the CSV. Try Copy all takes instead.');
+      }
+    } catch {
+      setArenaCsvDownloaded(false);
       setError('Could not download the CSV. Try Copy all takes instead.');
+    } finally {
+      arenaCsvDownloadInFlightRef.current = false;
     }
   }, [resolveArenaPersona, response]);
 
@@ -2184,6 +2211,7 @@ function App() {
     if (transcriptDownloadFeedbackTimer.current) clearTimeout(transcriptDownloadFeedbackTimer.current);
     if (transcriptJsonDownloadFeedbackTimer.current) clearTimeout(transcriptJsonDownloadFeedbackTimer.current);
     if (transcriptCsvDownloadFeedbackTimer.current) clearTimeout(transcriptCsvDownloadFeedbackTimer.current);
+    if (arenaCsvDownloadFeedbackTimer.current) clearTimeout(arenaCsvDownloadFeedbackTimer.current);
     if (winnerSaveFeedbackTimer.current) clearTimeout(winnerSaveFeedbackTimer.current);
   }, []);
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildArenaCsvDownload,
   buildArenaTranscriptMarkdownDownload,
   buildArenaTranscriptJsonDownload,
   buildArenaTranscriptCsvDownload,
@@ -328,7 +329,24 @@ describe('formatArenaCsvExport', () => {
     expect(csv.indexOf('"The Analyst"')).toBeLessThan(csv.indexOf('"The Philosopher"'));
     expect(csv).toContain('"yes"');
     expect(csv).toContain('"quality bar is fixed"');
-    expect(csv.endsWith('\n')).toBe(true);
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv.endsWith('\r\n')).toBe(true);
+  });
+
+  it('uses CRLF row endings and a UTF-8 BOM for Excel compatibility', () => {
+    const csv = formatArenaCsvExport(sample, () => ({ name: 'The Analyst' }));
+    expect(csv).toContain('"agentName","prompt"');
+    expect(csv).toMatch(/"agentName","prompt"[^\n]*\r\n"The Analyst"/);
+    expect(csv.includes('\r\n')).toBe(true);
+    expect(csv.includes('\n\r')).toBe(false);
+  });
+
+  it('degrades gracefully when all_responses is missing or empty', () => {
+    const malformed = { ...sample, all_responses: undefined } as unknown as PromptResponse;
+    const csv = formatArenaCsvExport(malformed, () => ({ name: 'The Analyst' }));
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv.trim().split(/\r?\n/)).toHaveLength(1);
+    expect(csv).toContain('"agentName"');
   });
 
   it('neutralizes spreadsheet formula injection in every cell', () => {
@@ -352,6 +370,41 @@ describe('formatArenaCsvExport', () => {
     expect(csv).toContain('"\'@cmd|/c calc"');
     expect(csv).toContain('"\'-2+3"');
     expect(csv).not.toContain('"=HYPERLINK');
+  });
+});
+
+describe('buildArenaCsvDownload', () => {
+  it('builds CSV content with a prompt-derived stem', () => {
+    const download = buildArenaCsvDownload(sample, (id) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    }));
+    expect(download).not.toBeNull();
+    expect(download?.stem).toBe('arena-should-we-ship-this-week');
+    expect(download?.content.startsWith('\uFEFF')).toBe(true);
+    expect(download?.content.endsWith('\r\n')).toBe(true);
+    expect(download?.content).toContain('"Should we ship this week?"');
+    expect(download?.content).toContain('"The Analyst"');
+  });
+
+  it('returns null when there is no finished round to download', () => {
+    expect(buildArenaCsvDownload(undefined, () => ({ name: 'The Analyst' }))).toBeNull();
+    expect(
+      buildArenaCsvDownload(
+        { ...sample, all_responses: [] },
+        () => ({ name: 'The Analyst' }),
+      ),
+    ).toBeNull();
+  });
+
+  it('sanitizes the prompt stem and falls back to a generic round name', () => {
+    const download = buildArenaCsvDownload(
+      { ...sample, prompt: '../../a<b>c:defghijklmnop' },
+      () => ({ name: 'The Analyst' }),
+    );
+    expect(download?.stem).toBe('arena-a-b-c-defghijklmnop');
+    expect(
+      buildArenaCsvDownload({ ...sample, prompt: '' }, () => ({ name: 'The Analyst' }))?.stem,
+    ).toBe('arena-round');
   });
 });
 
