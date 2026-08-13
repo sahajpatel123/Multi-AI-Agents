@@ -1604,6 +1604,11 @@ export async function fetchAgentTaskJsonText(taskId: string): Promise<string> {
   if (!text.trim()) {
     throw new Error(withRequestId('Empty report returned by the server', response));
   }
+  try {
+    JSON.parse(text);
+  } catch {
+    throw new Error(withRequestId('Invalid JSON report returned by the server', response));
+  }
   return text;
 }
 
