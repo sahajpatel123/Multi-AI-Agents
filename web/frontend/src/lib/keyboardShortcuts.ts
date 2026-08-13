@@ -23,6 +23,7 @@ const ARENA: ShortcutHint[] = [
   { keys: 'Shift + C', action: 'Copy the winning take' },
   { keys: 'Shift + D', action: 'Download the winning take' },
   { keys: 'Shift + S', action: 'Save or unsave the winning take' },
+  { keys: 'Shift + V', action: 'Verify the winning take in Agent Mode' },
   { keys: 'Shift + Q', action: 'Copy the question' },
   { keys: 'Shift + E', action: 'Copy the full session transcript as markdown' },
   { keys: 'Shift + K', action: 'Copy the full session transcript as JSON' },
@@ -170,7 +171,7 @@ export type ShortcutKeyEvent = {
  */
 function isBareShiftLetterKey(
   event: ShortcutKeyEvent,
-  letter: 'c' | 'd' | 'q' | 's' | 'r' | 'j' | 'k' | 'e' | 'n',
+  letter: 'c' | 'd' | 'q' | 's' | 'r' | 'j' | 'k' | 'e' | 'n' | 'v',
 ): boolean {
   if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
@@ -197,6 +198,11 @@ export function isArenaCopyQuestionKey(event: ShortcutKeyEvent): boolean {
 /** Shift+S — save or unsave the winning Arena take in the saved-takes library. */
 export function isArenaSaveWinnerKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 's');
+}
+
+/** Shift+V — send the winning Arena take into Agent Mode for deeper verification. */
+export function isArenaVerifyWinnerKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'v');
 }
 
 /** Shift+R — replay the last completed Arena round with the same prompt. */

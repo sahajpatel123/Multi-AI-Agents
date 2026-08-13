@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Arena: verify the winning take in Agent Mode with Shift+V',
       '[NEW] Arena: start a fresh task from anywhere with Shift+N',
       '[NEW] Arena: copy the full session transcript as markdown (Shift+E)',
       '[NEW] Arena: copy the full session transcript as JSON (Shift+K)',

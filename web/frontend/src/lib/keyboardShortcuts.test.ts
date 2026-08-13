@@ -8,6 +8,7 @@ import {
   isArenaNewTaskKey,
   isArenaReRunRoundKey,
   isArenaSaveWinnerKey,
+  isArenaVerifyWinnerKey,
   isAgentCopyAnswerKey,
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
@@ -52,6 +53,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('arena').some(
         (s) => s.keys === 'Shift + S' && s.action.toLowerCase().includes('winning take'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + V' && s.action.toLowerCase().includes('agent mode'),
       ),
     ).toBe(true);
     expect(
@@ -188,6 +194,12 @@ describe('keyboardShortcuts', () => {
     expect(isArenaSaveWinnerKey({ key: 'S', shiftKey: true, ctrlKey: true })).toBe(false);
     expect(isArenaSaveWinnerKey({ key: 'C', shiftKey: true })).toBe(false);
 
+    expect(isArenaVerifyWinnerKey({ key: 'V', shiftKey: true })).toBe(true);
+    expect(isArenaVerifyWinnerKey({ key: 'v', shiftKey: true })).toBe(true);
+    expect(isArenaVerifyWinnerKey({ key: 'V' })).toBe(false);
+    expect(isArenaVerifyWinnerKey({ key: 'V', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isArenaVerifyWinnerKey({ key: 'C', shiftKey: true })).toBe(false);
+
     expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true })).toBe(true);
     expect(isArenaReRunRoundKey({ key: 'r', shiftKey: true })).toBe(true);
     expect(isArenaReRunRoundKey({ key: 'R' })).toBe(false);
@@ -213,6 +225,7 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadWinnerKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyQuestionKey({ key: 'Q', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaSaveWinnerKey({ key: 'S', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaVerifyWinnerKey({ key: 'V', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'E', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyTranscriptJsonKey({ key: 'K', shiftKey: true, repeat: true })).toBe(false);
@@ -221,6 +234,7 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadWinnerKey({ key: 'D', shiftKey: true })).toBe(true);
     expect(isArenaCopyQuestionKey({ key: 'Q', shiftKey: true })).toBe(true);
     expect(isArenaSaveWinnerKey({ key: 'S', shiftKey: true })).toBe(true);
+    expect(isArenaVerifyWinnerKey({ key: 'V', shiftKey: true })).toBe(true);
     expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true })).toBe(true);
     expect(isArenaCopyTranscriptMarkdownKey({ key: 'E', shiftKey: true })).toBe(true);
     expect(isArenaCopyTranscriptJsonKey({ key: 'K', shiftKey: true })).toBe(true);

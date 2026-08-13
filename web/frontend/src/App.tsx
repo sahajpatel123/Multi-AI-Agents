@@ -101,6 +101,7 @@ import {
   isArenaNewTaskKey,
   isArenaReRunRoundKey,
   isArenaSaveWinnerKey,
+  isArenaVerifyWinnerKey,
 } from './lib/keyboardShortcuts';
 import { RecentPromptChips } from './components/RecentPromptChips';
 import { usePanel } from './context/PanelContext';
@@ -300,6 +301,8 @@ function App() {
   /** Prevents overlapping transcript copy attempts and stale copied feedback. */
   const transcriptCopyInFlightRef = useRef(false);
   const transcriptCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Owns the Shift+V verify-winner action so the key handler can live before its callback. */
+  const verifyWinnerRequestRef = useRef<((winner: ScoredAgent) => void) | null>(null);
   /** Owns the save-winner button feedback so rapid toggles can't leave stale timers. */
   const winnerSaveFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -928,10 +931,10 @@ function App() {
     }, 1800);
   }, [activeTurnId, canUseFeature, handleSaveResponse, response, savedItems]);
 
-  // Keyboard-first Arena actions: Shift+C / Shift+D / Shift+S / Shift+Q /
-  // Shift+E / Shift+K / Shift+R mirror the header action buttons once a round
-  // has finished. Form controls are skipped so normal Shift+letter typing is
-  // never swallowed.
+  // Keyboard-first Arena actions: Shift+C / Shift+D / Shift+S / Shift+V /
+  // Shift+Q / Shift+E / Shift+K / Shift+R mirror the header action buttons
+  // once a round has finished. Form controls are skipped so normal Shift+letter
+  // typing is never swallowed.
   useEffect(() => {
     if (
       (viewMode !== 'arena' && viewMode !== 'leaderboard') ||
@@ -954,6 +957,12 @@ function App() {
       } else if (isArenaSaveWinnerKey(e)) {
         e.preventDefault();
         handleSaveWinner();
+      } else if (isArenaVerifyWinnerKey(e)) {
+        e.preventDefault();
+        const winner = pickArenaWinner(response);
+        if (winner) {
+          verifyWinnerRequestRef.current?.(winner);
+        }
       } else if (isArenaCopyQuestionKey(e)) {
         e.preventDefault();
         void handleCopyPrompt();
@@ -1019,6 +1028,7 @@ function App() {
     },
     [canUseFeature, currentPrompt, getPersonaForAgentId, navigate, response?.prompt, showPlusUpgrade],
   );
+  verifyWinnerRequestRef.current = handleVerifyWinnerInAgent;
 
   const handleSavedItemClick = useCallback((item: SavedResponseItem) => {
     setViewMode('arena');
