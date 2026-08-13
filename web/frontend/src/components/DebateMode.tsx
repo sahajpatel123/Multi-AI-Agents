@@ -45,7 +45,16 @@ import {
   formatDebateInterjectionCopy,
   formatDebateReactionCopy,
 } from '../lib/threadExport';
-import { isBareEndKey, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import {
+  isBareEndKey,
+  isBareSlashKey,
+  isAriaModalOpen,
+  shouldCaptureSlashFocus,
+} from '../lib/slashFocus';
+import {
+  isThreadCopyMarkdownKey,
+  isThreadDownloadMarkdownKey,
+} from '../lib/keyboardShortcuts';
 
 interface DebateModeProps {
   originalPrompt: string;
@@ -202,6 +211,9 @@ export function DebateMode({
     setDownloadFeedback(ok ? 'done' : 'failed');
   };
 
+  /** Latest thread export handlers so the key listener never goes stale. */
+  const threadActionsRef = useRef({ copy: handleCopyDebate, download: handleDownloadDebate });
+
   const copyDebatePiece = async (key: string, text: string) => {
     if (!text.trim()) {
       setPieceCopyKey(key);
@@ -323,6 +335,30 @@ export function DebateMode({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [phase, jumpToLatest, onExit]);
+
+  // Shift+C / Shift+D mirror the header copy/download buttons: the full
+  // debate transcript as markdown. Form controls keep their Shift+letter
+  // typing and open dialogs keep ownership of their keystrokes.
+  useEffect(() => {
+    threadActionsRef.current = { copy: handleCopyDebate, download: handleDownloadDebate };
+  });
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isAriaModalOpen()) return;
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      if (phase === 'streaming' || rounds.length === 0) return;
+      if (isThreadCopyMarkdownKey(e)) {
+        e.preventDefault();
+        void threadActionsRef.current.copy();
+      } else if (isThreadDownloadMarkdownKey(e)) {
+        e.preventDefault();
+        threadActionsRef.current.download();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [phase, rounds.length]);
 
   // Follow the live end of the thread only while the reader is stuck to bottom.
   useEffect(() => {
@@ -803,8 +839,9 @@ export function DebateMode({
             title={
               rounds.length === 0
                 ? 'Start a debate round to copy the transcript'
-                : 'Copy debate transcript as markdown'
+                : 'Copy debate transcript as markdown (Shift+C)'
             }
+            aria-keyshortcuts="Shift+C"
             style={{
               fontSize: 12,
               color:
@@ -838,8 +875,9 @@ export function DebateMode({
             title={
               rounds.length === 0
                 ? 'Start a debate round to download the transcript'
-                : 'Download debate transcript as markdown'
+                : 'Download debate transcript as markdown (Shift+D)'
             }
+            aria-keyshortcuts="Shift+D"
             style={{
               fontSize: 12,
               color:

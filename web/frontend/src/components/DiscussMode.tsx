@@ -24,7 +24,16 @@ import { isScrollNearBottom, shouldAutoScrollChat } from '../lib/chatScroll';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatDiscussExport, formatDiscussMessageCopy } from '../lib/threadExport';
-import { isBareEndKey, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import {
+  isBareEndKey,
+  isBareSlashKey,
+  isAriaModalOpen,
+  shouldCaptureSlashFocus,
+} from '../lib/slashFocus';
+import {
+  isThreadCopyMarkdownKey,
+  isThreadDownloadMarkdownKey,
+} from '../lib/keyboardShortcuts';
 
 interface DiscussModeProps {
   originalPrompt: string;
@@ -144,6 +153,9 @@ export function DiscussMode({
     const ok = downloadMarkdownFile(md, stem);
     setDownloadFeedback(ok ? 'done' : 'failed');
   };
+
+  /** Latest thread export handlers so the key listener never goes stale. */
+  const threadActionsRef = useRef({ copy: handleCopyThread, download: handleDownloadThread });
 
   const copyMessage = async (
     key: string,
@@ -289,6 +301,30 @@ export function DiscussMode({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [isStreaming, jumpToLatest, onExit]);
+
+  // Shift+C / Shift+D mirror the header copy/download buttons: the full
+  // 1-on-1 thread as markdown. Form controls keep their Shift+letter typing
+  // and open dialogs keep ownership of their keystrokes.
+  useEffect(() => {
+    threadActionsRef.current = { copy: handleCopyThread, download: handleDownloadThread };
+  });
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isAriaModalOpen()) return;
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      if (isStreaming) return;
+      if (isThreadCopyMarkdownKey(e)) {
+        e.preventDefault();
+        void threadActionsRef.current.copy();
+      } else if (isThreadDownloadMarkdownKey(e)) {
+        e.preventDefault();
+        threadActionsRef.current.download();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isStreaming]);
 
   useEffect(() => {
     return () => {
@@ -520,7 +556,8 @@ export function DiscussMode({
                 void handleCopyThread();
               }}
               disabled={isStreaming}
-              title="Copy conversation as markdown"
+              title="Copy conversation as markdown (Shift+C)"
+              aria-keyshortcuts="Shift+C"
               style={{
                 marginLeft: 4,
                 fontSize: 12,
@@ -549,7 +586,8 @@ export function DiscussMode({
               type="button"
               onClick={() => handleDownloadThread()}
               disabled={isStreaming}
-              title="Download conversation as markdown"
+              title="Download conversation as markdown (Shift+D)"
+              aria-keyshortcuts="Shift+D"
               style={{
                 fontSize: 12,
                 color:

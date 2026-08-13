@@ -28,6 +28,8 @@ import {
   isAgentDownloadReportMarkdownKey,
   isAgentNewTaskKey,
   isBareQuestionHelpKey,
+  isThreadCopyMarkdownKey,
+  isThreadDownloadMarkdownKey,
   shortcutsForSurface,
   shortcutsPanelTitle,
 } from './keyboardShortcuts';
@@ -138,6 +140,26 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('discuss').some(
         (s) => s.keys === 'Shift + N' && s.action.toLowerCase().includes('new arena task'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('discuss').some(
+        (s) => s.keys === 'Shift + C' && s.action.toLowerCase().includes('1-on-1'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('discuss').some(
+        (s) => s.keys === 'Shift + D' && s.action.toLowerCase().includes('download'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('debate').some(
+        (s) => s.keys === 'Shift + C' && s.action.toLowerCase().includes('debate transcript'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('debate').some(
+        (s) => s.keys === 'Shift + D' && s.action.toLowerCase().includes('debate transcript'),
       ),
     ).toBe(true);
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
@@ -473,5 +495,25 @@ describe('keyboardShortcuts', () => {
     expect(isAgentCopyReportKey({ key: 'P', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentCopyReportJsonKey({ key: 'O', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentNewTaskKey({ key: 'N', shiftKey: true, repeat: true })).toBe(false);
+  });
+
+  it('detects Discuss/Debate thread export shortcuts as bare Shift+letter keys', () => {
+    expect(isThreadCopyMarkdownKey({ key: 'C', shiftKey: true })).toBe(true);
+    expect(isThreadCopyMarkdownKey({ key: 'c', shiftKey: true })).toBe(true);
+    expect(isThreadCopyMarkdownKey({ key: 'C' })).toBe(false);
+    expect(isThreadCopyMarkdownKey({ key: 'C', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isThreadCopyMarkdownKey({ key: 'C', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isThreadCopyMarkdownKey({ key: 'C', shiftKey: true, altKey: true })).toBe(false);
+    expect(isThreadCopyMarkdownKey({ key: 'C', shiftKey: true, repeat: true })).toBe(false);
+    expect(isThreadCopyMarkdownKey({ key: 'D', shiftKey: true })).toBe(false);
+
+    expect(isThreadDownloadMarkdownKey({ key: 'D', shiftKey: true })).toBe(true);
+    expect(isThreadDownloadMarkdownKey({ key: 'd', shiftKey: true })).toBe(true);
+    expect(isThreadDownloadMarkdownKey({ key: 'D' })).toBe(false);
+    expect(isThreadDownloadMarkdownKey({ key: 'D', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isThreadDownloadMarkdownKey({ key: 'D', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isThreadDownloadMarkdownKey({ key: 'D', shiftKey: true, altKey: true })).toBe(false);
+    expect(isThreadDownloadMarkdownKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
+    expect(isThreadDownloadMarkdownKey({ key: 'C', shiftKey: true })).toBe(false);
   });
 });

@@ -15,6 +15,8 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Debate: copy the full debate transcript as markdown with Shift+C and download it as a file with Shift+D',
+      '[NEW] Discuss: copy the full 1-on-1 thread as markdown with Shift+C and download it as a file with Shift+D',
       '[IMPROVED] Agent: Shift+I CSV copy is stale-task-safe and clears its state when a new task starts or the page unmounts',
       '[NEW] Agent: copy the full research report as CSV (Shift+I)',
       '[NEW] Agent: download the full research report as CSV (Shift+K)',

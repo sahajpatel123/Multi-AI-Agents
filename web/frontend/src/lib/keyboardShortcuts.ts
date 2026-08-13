@@ -61,6 +61,8 @@ const DISCUSS: ShortcutHint[] = [
   { keys: '/', action: 'Focus the discuss message box' },
   { keys: 'Enter', action: 'Send message' },
   { keys: 'End', action: 'Jump to latest message' },
+  { keys: 'Shift + C', action: 'Copy the full 1-on-1 thread as markdown' },
+  { keys: 'Shift + D', action: 'Download the full 1-on-1 thread as markdown' },
   { keys: 'Shift + N', action: 'Start a new Arena task' },
   { keys: 'Esc', action: 'Back to Arena' },
   { keys: '?', action: 'Toggle this shortcuts list' },
@@ -70,6 +72,8 @@ const DEBATE: ShortcutHint[] = [
   { keys: '/', action: 'Focus debate interjection' },
   { keys: 'Enter', action: 'Send interjection' },
   { keys: 'End', action: 'Jump to latest in the thread' },
+  { keys: 'Shift + C', action: 'Copy the full debate transcript as markdown' },
+  { keys: 'Shift + D', action: 'Download the full debate transcript as markdown' },
   { keys: 'Shift + N', action: 'Start a new Arena task' },
   { keys: 'Esc', action: 'Back to Arena' },
   { keys: '?', action: 'Toggle this shortcuts list' },
@@ -303,6 +307,24 @@ export function isArenaCopyRoundJsonKey(event: ShortcutKeyEvent): boolean {
 /** Shift+J — download the current Arena round (all takes) as JSON. */
 export function isArenaDownloadRoundJsonKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'j');
+}
+
+/**
+ * Shift+C — copy the full 1-on-1 Discuss thread (or Debate transcript) as
+ * markdown. Same letter as Arena's "copy the winner" and Agent's "copy the
+ * answer" so C consistently means "copy the primary content".
+ */
+export function isThreadCopyMarkdownKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'c');
+}
+
+/**
+ * Shift+D — download the full 1-on-1 Discuss thread (or Debate transcript)
+ * as a markdown file. Same letter as Arena's "download the winner" and
+ * Agent's "download the answer" so D consistently means "download it".
+ */
+export function isThreadDownloadMarkdownKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'd');
 }
 
 /** Shift+C — copy a completed Agent answer to the clipboard as markdown. */
