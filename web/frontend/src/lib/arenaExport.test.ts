@@ -24,7 +24,7 @@ import {
   pickArenaWinner,
   sanitizeArenaTranscriptTitle,
 } from './arenaExport';
-import type { PromptResponse, SessionTurn } from '../types';
+import type { PromptResponse, ScoredAgent, SessionTurn } from '../types';
 
 const sample: PromptResponse = {
   session_id: 's1',
@@ -144,6 +144,17 @@ describe('pickArenaWinner', () => {
 
   it('returns null for empty responses', () => {
     expect(pickArenaWinner({ ...sample, all_responses: [] })).toBeNull();
+  });
+
+  it('returns null for non-array or response-less payloads', () => {
+    expect(
+      pickArenaWinner({ ...sample, all_responses: { bad: true } } as unknown as PromptResponse),
+    ).toBeNull();
+    const responseLess = {
+      ...sample,
+      all_responses: [{ is_winner: true, score: 80, response: undefined }],
+    } as unknown as PromptResponse;
+    expect(pickArenaWinner(responseLess)).toBeNull();
   });
 });
 
@@ -320,6 +331,53 @@ describe('formatArenaJsonExport', () => {
     expect(parsed.prompt).toBe('(no prompt)');
     expect(parsed.takes).toHaveLength(2);
   });
+
+  it('degrades gracefully when all_responses is missing or not an array', () => {
+    const missing = { ...sample, all_responses: undefined } as unknown as PromptResponse;
+    const missingParsed = JSON.parse(
+      formatArenaJsonExport(missing, () => ({ name: 'X' }), {
+        exportedAt: '2026-08-07T00:00:00.000Z',
+      }),
+    );
+    expect(missingParsed.takes).toEqual([]);
+    expect(missingParsed.winner_agent_id).toBe('agent_1');
+
+    const nonArray = { ...sample, all_responses: { bad: true } } as unknown as PromptResponse;
+    const nonArrayParsed = JSON.parse(
+      formatArenaJsonExport(nonArray, () => ({ name: 'X' }), {
+        exportedAt: '2026-08-07T00:00:00.000Z',
+      }),
+    );
+    expect(nonArrayParsed.takes).toEqual([]);
+  });
+
+  it('survives a malformed take without a response object', () => {
+    const malformed: PromptResponse = {
+      ...sample,
+      all_responses: [
+        { is_winner: true, score: 80, response: undefined } as unknown as ScoredAgent,
+        ...sample.all_responses,
+      ],
+    };
+    const parsed = JSON.parse(
+      formatArenaJsonExport(malformed, (id) => ({ name: id }), {
+        exportedAt: '2026-08-07T00:00:00.000Z',
+      }),
+    );
+    expect(parsed.takes).toHaveLength(3);
+    expect(
+      parsed.takes.find((take: { agent_id: string }) => take.agent_id === 'unknown'),
+    ).toMatchObject({
+      agent_id: 'unknown',
+      agent_name: 'unknown',
+      is_winner: true,
+      score: 80,
+      confidence: null,
+      one_liner: null,
+      verdict: null,
+      key_assumption: null,
+    });
+  });
 });
 
 describe('buildArenaJsonDownload', () => {
@@ -349,6 +407,29 @@ describe('buildArenaJsonDownload', () => {
         () => ({ name: 'The Analyst' }),
       ),
     ).toBeNull();
+    expect(
+      buildArenaJsonDownload(
+        { ...sample, all_responses: { bad: true } } as unknown as PromptResponse,
+        () => ({ name: 'The Analyst' }),
+      ),
+    ).toBeNull();
+  });
+
+  it('stays valid when a take is missing its response object', () => {
+    const malformed: PromptResponse = {
+      ...sample,
+      all_responses: [
+        { is_winner: true, score: 80, response: undefined } as unknown as ScoredAgent,
+        ...sample.all_responses,
+      ],
+    };
+    const download = buildArenaJsonDownload(malformed, (id) => ({ name: id }));
+    expect(download).not.toBeNull();
+    const parsed = JSON.parse(download!.content);
+    expect(parsed.takes).toHaveLength(3);
+    expect(
+      parsed.takes.find((take: { agent_id: string }) => take.agent_id === 'unknown'),
+    ).toBeDefined();
   });
 
   it('sanitizes the prompt stem and falls back to a generic round name', () => {
@@ -378,7 +459,14 @@ describe('copyArenaJsonToClipboard', () => {
     const ok = await copyArenaJsonToClipboard(sample, resolvePersona);
 
     expect(ok).toBe(true);
-    expect(writeText).toHaveBeenCalledWith(formatArenaJsonExport(sample, resolvePersona));
+    const expected = JSON.parse(
+      formatArenaJsonExport(sample, resolvePersona, {
+        exportedAt: '2026-08-07T00:00:00.000Z',
+      }),
+    );
+    const copied = JSON.parse(writeText.mock.calls[0][0]);
+    expect(copied.exported_at).toEqual(expect.any(String));
+    expect({ ...copied, exported_at: expected.exported_at }).toEqual(expected);
   });
 
   it('returns false without touching the clipboard when there is no finished round', async () => {
@@ -389,6 +477,12 @@ describe('copyArenaJsonToClipboard', () => {
     expect(
       await copyArenaJsonToClipboard(
         { ...sample, all_responses: [] },
+        () => ({ name: 'X' }),
+      ),
+    ).toBe(false);
+    expect(
+      await copyArenaJsonToClipboard(
+        { ...sample, all_responses: { bad: true } } as unknown as PromptResponse,
         () => ({ name: 'X' }),
       ),
     ).toBe(false);

@@ -78,7 +78,10 @@ export function sanitizeArenaTranscriptTitle(raw: string): string {
  * Prefers `is_winner`, then `winner_agent_id`, then highest score.
  */
 export function pickArenaWinner(response: PromptResponse): ScoredAgent | null {
-  const rows = response.all_responses || [];
+  const rows = (Array.isArray(response.all_responses) ? response.all_responses : []).filter(
+    (r): r is ScoredAgent =>
+      Boolean(r && r.response && typeof r.response.agent_id === 'string'),
+  );
   if (!rows.length) return null;
   const flagged = rows.find((r) => r.is_winner);
   if (flagged) return flagged;
@@ -86,7 +89,7 @@ export function pickArenaWinner(response: PromptResponse): ScoredAgent | null {
     ? rows.find((r) => r.response.agent_id === response.winner_agent_id)
     : null;
   if (byId) return byId;
-  return [...rows].sort((a, b) => b.score - a.score)[0] ?? null;
+  return [...rows].sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity))[0] ?? null;
 }
 
 /**
@@ -586,9 +589,10 @@ export function formatArenaJsonExport(
   opts?: { exportedAt?: string },
 ): string {
   const winner = pickArenaWinner(response);
-  const sorted = [...response.all_responses].sort((a, b) => {
+  const rows = Array.isArray(response.all_responses) ? response.all_responses : [];
+  const sorted = [...rows].sort((a, b) => {
     if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
-    return b.score - a.score;
+    return (b.score ?? -Infinity) - (a.score ?? -Infinity);
   });
   const data = {
     exported_from: 'arena',
@@ -601,23 +605,24 @@ export function formatArenaJsonExport(
     timestamp: response.timestamp || '',
     integrity: response.integrity || null,
     takes: sorted.map((scored) => {
-      const persona = resolvePersona(scored.response.agent_id);
+      const agentId = scored.response?.agent_id || 'unknown';
+      const persona = resolvePersona(agentId);
       return {
-        agent_id: scored.response.agent_id,
-        agent_name: persona.name || scored.response.agent_id,
-        is_winner: scored.is_winner,
+        agent_id: agentId,
+        agent_name: persona?.name || agentId,
+        is_winner: Boolean(scored.is_winner),
         score:
           typeof scored.score === 'number' && Number.isFinite(scored.score)
             ? scored.score
             : null,
         confidence:
-          typeof scored.response.confidence === 'number' &&
+          typeof scored.response?.confidence === 'number' &&
           Number.isFinite(scored.response.confidence)
             ? scored.response.confidence
             : null,
-        one_liner: (scored.response.one_liner || '').trim() || null,
-        verdict: (scored.response.verdict || '').trim() || null,
-        key_assumption: (scored.response.key_assumption || '').trim() || null,
+        one_liner: (scored.response?.one_liner || '').trim() || null,
+        verdict: (scored.response?.verdict || '').trim() || null,
+        key_assumption: (scored.response?.key_assumption || '').trim() || null,
         contradiction: scored.contradiction || null,
       };
     }),
@@ -632,6 +637,19 @@ export type ArenaJsonDownload = {
 };
 
 /**
+ * True when a round has at least one stored take. Copy/download helpers use
+ * this shared guard so empty or non-array round payloads are refused once
+ * instead of duplicating the check with subtle drift.
+ */
+function hasArenaRoundTakes(
+  response: PromptResponse | null | undefined,
+): response is PromptResponse {
+  return Boolean(
+    response && Array.isArray(response.all_responses) && response.all_responses.length > 0,
+  );
+}
+
+/**
  * Build the JSON payload and filename stem for a full Arena round download
  * (Shift+J). Returns null when there is no finished round to export so callers
  * can surface feedback instead of saving an empty archive, and sanitizes the
@@ -642,13 +660,7 @@ export function buildArenaJsonDownload(
   response: PromptResponse | null | undefined,
   resolvePersona: (agentId: string) => ArenaExportPersona,
 ): ArenaJsonDownload | null {
-  if (
-    !response ||
-    !Array.isArray(response.all_responses) ||
-    response.all_responses.length === 0
-  ) {
-    return null;
-  }
+  if (!hasArenaRoundTakes(response)) return null;
   const safePrompt = sanitizeDownloadFilename(response.prompt || '', 'round')
     .slice(0, 48)
     .replace(/-+$/g, '');
@@ -667,13 +679,7 @@ export async function copyArenaJsonToClipboard(
   response: PromptResponse | null | undefined,
   resolvePersona: (agentId: string) => ArenaExportPersona,
 ): Promise<boolean> {
-  if (
-    !response ||
-    !Array.isArray(response.all_responses) ||
-    response.all_responses.length === 0
-  ) {
-    return false;
-  }
+  if (!hasArenaRoundTakes(response)) return false;
   const json = formatArenaJsonExport(response, resolvePersona);
   if (!json.trim()) return false;
   return copyToClipboard(json);
