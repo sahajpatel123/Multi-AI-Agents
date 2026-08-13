@@ -400,8 +400,60 @@ describe('WatchlistPage', () => {
     );
 
     expect(navigateMock).toHaveBeenCalledWith('/app', {
-      state: { agentStressPrompt: 'How is the Indian IPO market evolving?' },
+      state: {
+        agentStressPrompt: 'How is the Indian IPO market evolving?',
+        fromWatchlist: true,
+      },
     });
+  });
+
+  it('trims whitespace around a watched question before handing it to Arena', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [
+        {
+          ...baseItem,
+          id: 'item-padded',
+          question: '  How will AI shape hiring?  ',
+        },
+      ],
+      active_count: 0,
+      active_cap: 10,
+      total: 1,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('How will AI shape hiring?')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByTitle('Open this watched question in Arena for fresh four-mind takes'),
+    );
+
+    expect(navigateMock).toHaveBeenCalledWith('/app', {
+      state: {
+        agentStressPrompt: 'How will AI shape hiring?',
+        fromWatchlist: true,
+      },
+    });
+  });
+
+  it('does not open Arena when the watched question is blank', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [{ ...baseItem, id: 'item-blank', question: '   ' }],
+      active_count: 0,
+      active_cap: 10,
+      total: 1,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/Run 3 times/)).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByTitle('Open this watched question in Arena for fresh four-mind takes'),
+    );
+
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it('duplicates a watch as a paused copy through the duplicate endpoint', async () => {

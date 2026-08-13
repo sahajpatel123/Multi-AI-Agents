@@ -222,6 +222,7 @@ function App() {
     presetPrompt ? 1 : 0,
   );
   const [stressFromAgentBanner, setStressFromAgentBanner] = useState(false);
+  const [watchlistFreshTakesBanner, setWatchlistFreshTakesBanner] = useState(false);
   const [verifyingWinnerAgentId, setVerifyingWinnerAgentId] = useState<string | null>(null);
   const [crossPollinateSourceTaskId, setCrossPollinateSourceTaskId] = useState<string | null>(null);
   const [crossPollinateIntelScore, setCrossPollinateIntelScore] = useState<number | null>(null);
@@ -231,6 +232,7 @@ function App() {
     const st = location.state as {
       agentStressPrompt?: string;
       fromAgent?: boolean;
+      fromWatchlist?: boolean;
       crossPollinateSource?: string;
       crossPollinateIntelScore?: number | null;
     } | null | undefined;
@@ -238,6 +240,7 @@ function App() {
     if (typeof prompt === 'string' && prompt.trim()) {
       setPresetPrompt(prompt.trim());
       setPresetPromptNonce((n) => n + 1);
+      setWatchlistFreshTakesBanner(Boolean(st?.fromWatchlist));
       if (st?.crossPollinateSource) {
         setCrossPollinateSourceTaskId(st.crossPollinateSource);
         const score = st.crossPollinateIntelScore;
@@ -248,6 +251,8 @@ function App() {
         setStressFromAgentBanner(false);
       } else if (st?.fromAgent) {
         setStressFromAgentBanner(true);
+      } else {
+        setStressFromAgentBanner(false);
       }
       navigate(location.pathname, { replace: true, state: {} });
     }
@@ -3147,6 +3152,50 @@ function App() {
                       cursor: 'pointer',
                       fontSize: 16,
                       color: '#A0A39A',
+                      lineHeight: 1,
+                      padding: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+
+              {watchlistFreshTakesBanner && phase === 'idle' && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    background: 'rgba(156, 191, 138, 0.10)',
+                    borderRadius: 12,
+                    padding: '10px 14px',
+                    marginBottom: '1rem',
+                    maxWidth: 600,
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                    fontSize: 13,
+                    color: '#9CBF8A',
+                    textAlign: 'center',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <span style={{ flex: 1, minWidth: 0, lineHeight: 1.45 }}>
+                    Fresh takes from your watchlist — 4 minds will answer this →
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Dismiss watchlist takes notice"
+                    onClick={() => setWatchlistFreshTakesBanner(false)}
+                    style={{
+                      flexShrink: 0,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      color: '#9CBF8A',
                       lineHeight: 1,
                       padding: 0,
                     }}
