@@ -1672,7 +1672,7 @@ export function AgentPage() {
     if (t.length < 10 || isRunning) return;
     if (selectedTemplate && !allTemplateSlotsFilled) return;
     activeTaskIdRef.current = null;
-    runGenerationRef.current += 1;
+    const generation = ++runGenerationRef.current;
     setError(null);
     setBridgeMeta(null);
     if (isMobile) setSidebarOpen(false);
@@ -1722,6 +1722,13 @@ export function AgentPage() {
       if (!startData.task_id) {
         throw new Error('No task ID received');
       }
+      if (runGenerationRef.current !== generation) {
+        // The user started a fresh task (or pressed Stop) while the task was
+        // being created. Abandon the client poll and ask the backend to cancel
+        // the just-created pipeline so no orphaned run keeps spending tokens.
+        void cancelAgentTask(startData.task_id).catch(() => {});
+        return;
+      }
       // Pipeline accepted a real task — draft is safely delivered.
       clearPromptDraft(AGENT_TASK_DRAFT_KEY);
       await pollAgentTaskUntilDone(startData.task_id);
@@ -1729,6 +1736,7 @@ export function AgentPage() {
       setAttachments([]);
       setActiveMcpSources([]);
     } catch (e) {
+      if (runGenerationRef.current !== generation) return;
       if (e instanceof LocalExecutionRequiredError) {
         setConduraCtaTitle(e.detail.title || 'This needs your machine');
         setConduraCtaMessage(e.detail.message);
@@ -1765,7 +1773,7 @@ export function AgentPage() {
     const qs = multiTasks.slice(0, activeTaskCount).map((t) => t.trim());
     if (qs.length !== activeTaskCount || qs.some((q) => q.length < 10) || isRunning) return;
     activeTaskIdRef.current = null;
-    runGenerationRef.current += 1;
+    const generation = ++runGenerationRef.current;
     try {
       sessionStorage.removeItem('pending_room_slug');
       sessionStorage.removeItem('pending_room_name');
@@ -1787,8 +1795,16 @@ export function AgentPage() {
         expertise_level: expertiseLevelForRun,
         expertise_domain: expertiseDomainForRun,
       });
+      if (runGenerationRef.current !== generation) {
+        // A fresh task or Stop superseded this orchestration while it was
+        // being created. Cancel it best-effort so the backend doesn't keep
+        // running child pipelines for an abandoned UI.
+        void cancelAgentOrchestration(orchestration_id).catch(() => {});
+        return;
+      }
       setOrchActiveId(orchestration_id);
     } catch (e) {
+      if (runGenerationRef.current !== generation) return;
       setError(e instanceof ApiError ? e.message : 'Orchestration failed');
       setIsRunning(false);
       setOrchActiveId(null);
@@ -2009,7 +2025,7 @@ export function AgentPage() {
       return;
     }
     activeTaskIdRef.current = null;
-    runGenerationRef.current += 1;
+    const generation = ++runGenerationRef.current;
     // Clear only after we know we'll send; restore on failure so the draft isn't lost.
     setFollowUp('');
     setIsRunning(true);
@@ -2017,21 +2033,31 @@ export function AgentPage() {
     setRefinementError(null);
     try {
       await refineAgentAnswer(result.task_id, msg);
+      if (runGenerationRef.current !== generation) {
+        // A fresh task (or Stop) superseded this refinement while the request
+        // was in flight. Cancel the newly-refined pipeline best-effort so the
+        // backend doesn't keep spending tokens on a task the user abandoned.
+        void cancelAgentTask(result.task_id).catch(() => {});
+        return;
+      }
       clearPromptDraft(agentFollowUpDraftKey(result.task_id));
       await pollAgentTaskUntilDone(result.task_id);
     } catch (err) {
+      if (runGenerationRef.current !== generation) return;
       setFollowUp(msg);
       setRefinementError(
         err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Refinement failed.',
       );
       followUpInputRef.current?.focus();
     } finally {
-      setIsRunning(false);
-      setIsRefining(false);
+      if (runGenerationRef.current === generation) {
+        setIsRunning(false);
+        setIsRefining(false);
+      }
     }
   };
 
-  const resetRun = () => {
+  const resetRun = useCallback(() => {
     try {
       sessionStorage.removeItem('pending_room_slug');
       sessionStorage.removeItem('pending_room_name');
@@ -2039,6 +2065,7 @@ export function AgentPage() {
       /* ignore */
     }
     pendingRoomHandledRef.current = null;
+    setCrossPollinateBusy(false);
     setOpenMenuTaskId(null);
     setConfirmDeleteTaskId(null);
     setEditingTaskId(null);
@@ -2068,6 +2095,7 @@ export function AgentPage() {
     setTemplatesClosing(false);
     setTaskAnswerFeedback(undefined);
     setFeedbackEditMode(false);
+    setAnswerFeedbackSubmitBusy(false);
     setPendingVerdict(null);
     setPendingNote('');
     setOrchActiveId(null);
@@ -2075,11 +2103,42 @@ export function AgentPage() {
     setOrchResult(null);
     setOrchExpandedIdx(null);
     setMultiMode(false);
+    setMultiTasks(['', '', '', '']);
+    setActiveTaskCount(2);
     setWatchlisted(false);
     setShowScheduler(false);
     setWatchlistPickHours(24);
+    setAttachments([]);
+    setActiveMcpSources([]);
+    setAttachMenuOpen(false);
+    setUploadErr(null);
+    setExportingPdf(false);
+    setExportingMd(false);
+    setExportingJson(false);
+    setCopyAnswerFeedback('idle');
+    setDownloadAnswerFeedback('idle');
+    setUserRating(null);
+    setRatingResult(null);
+    setRatingSubmitBusy(false);
+    setLiveToggleBusy(false);
+    setLiveUpdatesPanelOpen(false);
+    setSuggIdx(0);
     if (isMobile) setSidebarOpen(false);
-  };
+  }, [isMobile, setSearchParams]);
+
+  /**
+   * New task from the sidebar or Shift+N: stop any active Agent work first
+   * (client poll plus the backend pipeline), then clear the page to a fresh,
+   * empty compose box. Mirrors Arena's New task, which aborts in-flight SSE
+   * before resetting the UI.
+   */
+  const startFreshAgentTask = useCallback(() => {
+    if (isRunning || isRefining || isChallengingAnswer) {
+      handleStopAgentWork();
+    }
+    resetRun();
+    window.setTimeout(() => idleTaskInputRef.current?.focus(), 0);
+  }, [handleStopAgentWork, isChallengingAnswer, isRefining, isRunning, resetRun]);
 
   const runAgainWithSameQuestion = () => {
     const q = (result?.original_task || result?.task || '').trim();
@@ -2284,12 +2343,11 @@ export function AgentPage() {
       if (!shouldCaptureSlashFocus(e.target)) return;
       if (!isAgentNewTaskKey(e)) return;
       e.preventDefault();
-      resetRun();
-      window.setTimeout(() => idleTaskInputRef.current?.focus(), 0);
+      startFreshAgentTask();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [resetRun]);
+  }, [startFreshAgentTask]);
 
   const answerSentences = useMemo((): AnswerSentenceView[] => {
     if (parsedAnswer?.sentences?.length) {
@@ -3716,7 +3774,7 @@ export function AgentPage() {
           </div>
           <button
             type="button"
-            onClick={resetRun}
+            onClick={startFreshAgentTask}
             title="Start a fresh task (Shift+N)"
             aria-keyshortcuts="Shift+N"
             style={{
