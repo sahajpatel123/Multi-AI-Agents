@@ -27,6 +27,7 @@ const ARENA: ShortcutHint[] = [
   { keys: 'Shift + G', action: 'Download the full round as markdown' },
   { keys: 'Shift + O', action: 'Copy the full round as JSON' },
   { keys: 'Shift + J', action: 'Download the full round as JSON' },
+  { keys: 'Shift + F', action: 'Copy a public link to the full round' },
   { keys: 'Shift + S', action: 'Save or unsave the winning take' },
   { keys: 'Shift + V', action: 'Verify the winning take in Agent Mode' },
   { keys: 'Shift + Q', action: 'Copy the question' },
@@ -214,7 +215,8 @@ function isBareShiftLetterKey(
     | 'o'
     | 'w'
     | 'g'
-    | 'l',
+    | 'l'
+    | 'f',
 ): boolean {
   if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
@@ -311,6 +313,11 @@ export function isArenaCopyRoundJsonKey(event: ShortcutKeyEvent): boolean {
 /** Shift+J — download the current Arena round (all takes) as JSON. */
 export function isArenaDownloadRoundJsonKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'j');
+}
+
+/** Shift+F — copy a public link to the full Arena round. */
+export function isArenaShareRoundKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'f');
 }
 
 /**

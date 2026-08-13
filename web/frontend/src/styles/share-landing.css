@@ -135,6 +135,11 @@
 }
 
 /* Take card */
+.share-round {
+  display: grid;
+  gap: 16px;
+}
+
 .share-take {
   --take-color: #c4956a;
   background: linear-gradient(180deg, #fffdfb 0%, #faf7f4 100%);
@@ -164,6 +169,15 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 1.05rem;
+}
+
+.share-take__score {
+  margin: 0 0 0.9rem;
+  color: #7b6a5f;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .share-take__dot {

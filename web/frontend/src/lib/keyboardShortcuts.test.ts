@@ -17,6 +17,7 @@ import {
   isArenaNewTaskKey,
   isArenaReRunRoundKey,
   isArenaSaveWinnerKey,
+  isArenaShareRoundKey,
   isArenaVerifyWinnerKey,
   isAgentCopyAnswerKey,
   isAgentCopyReportCsvKey,
@@ -77,6 +78,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('arena').some(
         (s) => s.keys === 'Shift + J' && s.action.toLowerCase().includes('json'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + F' && s.action.toLowerCase().includes('public link'),
       ),
     ).toBe(true);
     expect(
@@ -345,6 +351,12 @@ describe('keyboardShortcuts', () => {
     expect(isArenaReRunRoundKey({ key: 'R' })).toBe(false);
     expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true, metaKey: true })).toBe(false);
     expect(isArenaReRunRoundKey({ key: 'C', shiftKey: true })).toBe(false);
+
+    expect(isArenaShareRoundKey({ key: 'F', shiftKey: true })).toBe(true);
+    expect(isArenaShareRoundKey({ key: 'f', shiftKey: true })).toBe(true);
+    expect(isArenaShareRoundKey({ key: 'F' })).toBe(false);
+    expect(isArenaShareRoundKey({ key: 'F', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isArenaShareRoundKey({ key: 'C', shiftKey: true })).toBe(false);
 
     expect(isArenaCopyTranscriptJsonKey({ key: 'K', shiftKey: true })).toBe(true);
     expect(isArenaCopyTranscriptJsonKey({ key: 'k', shiftKey: true })).toBe(true);

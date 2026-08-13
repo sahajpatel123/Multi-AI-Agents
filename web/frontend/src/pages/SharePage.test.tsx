@@ -51,4 +51,25 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /copy take/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
   });
+
+  it('renders a shared round with all takes from round query params', () => {
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&winner=philosopher' +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.') +
+      '&t1=' +
+      encodeURIComponent('philosopher|87|Enough is when desire ends.');
+    renderShare(qs);
+    expect(screen.getByText('Four minds.')).toBeInTheDocument();
+    expect(screen.getByText('Should we ship today?')).toBeInTheDocument();
+    expect(screen.getByText('The Analyst')).toBeInTheDocument();
+    expect(screen.getByText('Ship the smallest honest slice.')).toBeInTheDocument();
+    expect(screen.getByText('The Philosopher')).toBeInTheDocument();
+    expect(screen.getByText('Enough is when desire ends.')).toBeInTheDocument();
+    expect(screen.getAllByText(/Arena take/i).length).toBeGreaterThan(0);
+    expect(screen.getByText('Arena winner')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy round/i })).toBeInTheDocument();
+  });
 });

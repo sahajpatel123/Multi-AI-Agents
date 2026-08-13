@@ -68,6 +68,7 @@ import {
 } from './lib/arenaExport';
 import { buildFollowUpContext } from './lib/followUpContext';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
+import { buildRoundShareUrl } from './lib/roundShare';
 import { buildSessionTurnResponse } from './lib/arenaTurn';
 import { loadSessionTranscriptBundles } from './lib/arenaSessionArchive';
 import {
@@ -114,6 +115,7 @@ import {
   isArenaNewTaskKey,
   isArenaReRunRoundKey,
   isArenaSaveWinnerKey,
+  isArenaShareRoundKey,
   isArenaVerifyWinnerKey,
 } from './lib/keyboardShortcuts';
 import { RecentPromptChips } from './components/RecentPromptChips';
@@ -174,6 +176,7 @@ function App() {
   const [transcriptCsvDownloaded, setTranscriptCsvDownloaded] = useState(false);
   const [transcriptJsonDownloaded, setTranscriptJsonDownloaded] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [roundShareCopied, setRoundShareCopied] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
   const [winnerDownloaded, setWinnerDownloaded] = useState(false);
   const [winnerSaveFeedback, setWinnerSaveFeedback] = useState<'saved' | 'removed' | null>(null);
@@ -339,6 +342,9 @@ function App() {
   /** Guards Shift+O / header clicks so a full-round JSON copy can never double-fire. */
   const arenaJsonCopyInFlightRef = useRef(false);
   const arenaJsonCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Guards Shift+F / header clicks so a round link copy can never double-fire. */
+  const roundShareInFlightRef = useRef(false);
+  const roundShareFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Owns the Shift+V verify-winner action so the key handler can live before its callback. */
   const verifyWinnerRequestRef = useRef<((winner: ScoredAgent) => void) | null>(null);
   /** Guards Shift+V / card clicks so a verify request can never double-fire. */
@@ -1063,6 +1069,50 @@ function App() {
     }
   }, [response]);
 
+  const handleShareRound = useCallback(async () => {
+    if (!response) return;
+    if (roundShareInFlightRef.current) return;
+    const takes = (response.all_responses || [])
+      .map((scoredAgent) => ({
+        agentId: scoredAgent.response.agent_id,
+        oneLiner: scoredAgent.response.one_liner || scoredAgent.response.verdict,
+        score: scoredAgent.score,
+      }))
+      .filter((take) => take.agentId || take.oneLiner);
+    if (!takes.length) {
+      setError('This round has no takes to share yet. Wait for the round to finish.');
+      return;
+    }
+
+    roundShareInFlightRef.current = true;
+    try {
+      const url = buildRoundShareUrl({
+        prompt: response.prompt || currentPrompt,
+        winnerAgentId: response.winner_agent_id,
+        takes,
+      });
+      const ok = await copyToClipboard(url);
+      if (ok) {
+        if (roundShareFeedbackTimer.current) {
+          clearTimeout(roundShareFeedbackTimer.current);
+          roundShareFeedbackTimer.current = null;
+        }
+        setRoundShareCopied(true);
+        roundShareFeedbackTimer.current = window.setTimeout(() => {
+          setRoundShareCopied(false);
+          roundShareFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_share_round');
+      } else {
+        setError('Could not copy the round link. Try selecting the address manually.');
+      }
+    } catch {
+      setError('Could not copy the round link. Try again or select the address manually.');
+    } finally {
+      roundShareInFlightRef.current = false;
+    }
+  }, [currentPrompt, response]);
+
   const handleLikeResponse = useCallback((scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
     const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
@@ -1232,6 +1282,9 @@ function App() {
       } else if (isArenaCopyRoundJsonKey(e)) {
         e.preventDefault();
         void handleCopyArenaJson();
+      } else if (isArenaShareRoundKey(e)) {
+        e.preventDefault();
+        void handleShareRound();
       } else if (isArenaDownloadRoundCsvKey(e)) {
         e.preventDefault();
         handleDownloadArenaCsv();
@@ -1292,6 +1345,7 @@ function App() {
     handleExportWinner,
     handleExportAllTakes,
     handleCopyTranscript,
+    handleShareRound,
     handleSaveWinner,
     focusedAgentId,
     phase,
@@ -2299,6 +2353,7 @@ function App() {
     if (currentResponseBarTimer.current) clearTimeout(currentResponseBarTimer.current);
     if (transcriptCopyFeedbackTimer.current) clearTimeout(transcriptCopyFeedbackTimer.current);
     if (exportCopyFeedbackTimer.current) clearTimeout(exportCopyFeedbackTimer.current);
+    if (roundShareFeedbackTimer.current) clearTimeout(roundShareFeedbackTimer.current);
     if (transcriptDownloadFeedbackTimer.current) clearTimeout(transcriptDownloadFeedbackTimer.current);
     if (transcriptJsonDownloadFeedbackTimer.current) clearTimeout(transcriptJsonDownloadFeedbackTimer.current);
     if (transcriptCsvDownloadFeedbackTimer.current) clearTimeout(transcriptCsvDownloadFeedbackTimer.current);
@@ -2784,6 +2839,18 @@ function App() {
                     style={{ fontSize: 12 }}
                   >
                     {arenaJsonCopied ? 'JSON copied' : 'Copy JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => {
+                      void handleShareRound();
+                    }}
+                    aria-keyshortcuts="Shift+F"
+                    title="Copy a public link to the full round (Shift+F)"
+                    style={{ fontSize: 12 }}
+                  >
+                    {roundShareCopied ? 'Round link copied' : 'Share round'}
                   </button>
                   <button
                     type="button"

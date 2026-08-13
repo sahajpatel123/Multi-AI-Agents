@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arena full rounds can be shared as a public link (Shift+F or the header
+  "Share round" action), landing on a compact all-takes page with scores and
+  the winner flagged
 - Arena full-session transcripts can be copied as structured JSON (Shift+K),
   matching the existing Markdown transcript copy with byte-for-byte parity
   between the copy and download formatters
