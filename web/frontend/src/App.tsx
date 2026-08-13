@@ -87,7 +87,11 @@ import { useBusyNavigationGuard } from './hooks/useBusyNavigationGuard';
 import { useIsMobile } from './hooks/useIsMobile';
 import { arenaWorkInFlight } from './lib/busyNavigationGuard';
 import { titleForArenaBusy } from './lib/documentTitle';
-import { isBareSlashKey, shouldCaptureSlashFocus } from './lib/slashFocus';
+import {
+  isAriaModalOpen,
+  isBareSlashKey,
+  shouldCaptureSlashFocus,
+} from './lib/slashFocus';
 import {
   isArenaCopyQuestionKey,
   isArenaCopyTranscriptJsonKey,
@@ -642,6 +646,7 @@ function App() {
     const turns = sessionData?.turns;
     if (!turns || !turns.length) return;
     transcriptCopyInFlightRef.current = true;
+    setTranscriptCopying(true);
     try {
       const ok = await copyArenaTranscriptJsonToClipboard(turns, resolveArenaPersona, {
         sessionId: sessionData?.session_id,
@@ -660,8 +665,11 @@ function App() {
       } else {
         setError('Could not copy the transcript JSON. Try again or download it instead.');
       }
+    } catch {
+      setError('Could not copy the transcript JSON. Try again or download it instead.');
     } finally {
       transcriptCopyInFlightRef.current = false;
+      setTranscriptCopying(false);
     }
   }, [resolveArenaPersona, sessionData]);
 
@@ -916,6 +924,9 @@ function App() {
       return;
     }
     const onKey = (e: KeyboardEvent) => {
+      // Never export through an open dialog (shortcut help, profile, upgrade,
+      // etc.) — the modal owns the keystroke.
+      if (isAriaModalOpen()) return;
       if (!shouldCaptureSlashFocus(e.target)) return;
       if (isArenaCopyWinnerKey(e)) {
         e.preventDefault();
@@ -2457,10 +2468,16 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => void handleCopyTranscriptJson()}
+                    disabled={transcriptCopying}
+                    aria-busy={transcriptCopying}
                     title="Copy the full session as structured JSON (Shift+K)"
                     style={{ fontSize: 12 }}
                   >
-                    {transcriptJsonCopied ? 'Transcript JSON copied' : 'Copy transcript JSON'}
+                    {transcriptCopying
+                      ? 'Copying…'
+                      : transcriptJsonCopied
+                        ? 'Transcript JSON copied'
+                        : 'Copy transcript JSON'}
                   </button>
                   <button
                     type="button"
