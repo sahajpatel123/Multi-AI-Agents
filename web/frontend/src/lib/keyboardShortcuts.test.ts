@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isArenaCopyAllTakesKey,
+  isArenaCopyRoundJsonKey,
   isArenaCopyQuestionKey,
   isArenaCopyTranscriptMarkdownKey,
   isArenaCopyTranscriptJsonKey,
@@ -10,6 +11,7 @@ import {
   isArenaDownloadTranscriptCsvKey,
   isArenaDownloadTranscriptJsonKey,
   isArenaDownloadRoundCsvKey,
+  isArenaDownloadRoundJsonKey,
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
   isArenaReRunRoundKey,
@@ -52,6 +54,16 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('arena').some(
         (s) => s.keys === 'Shift + W' && s.action.toLowerCase().includes('csv'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + O' && s.action.toLowerCase().includes('json'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + J' && s.action.toLowerCase().includes('json'),
       ),
     ).toBe(true);
     expect(
@@ -309,6 +321,19 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadRoundCsvKey({ key: 'U', shiftKey: true })).toBe(false);
   });
 
+  it('detects Arena full-round JSON shortcuts as bare Shift+letter keys', () => {
+    expect(isArenaCopyRoundJsonKey({ key: 'O', shiftKey: true })).toBe(true);
+    expect(isArenaCopyRoundJsonKey({ key: 'o', shiftKey: true })).toBe(true);
+    expect(isArenaCopyRoundJsonKey({ key: 'O' })).toBe(false);
+    expect(isArenaCopyRoundJsonKey({ key: 'O', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isArenaCopyRoundJsonKey({ key: 'J', shiftKey: true })).toBe(false);
+    expect(isArenaDownloadRoundJsonKey({ key: 'J', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadRoundJsonKey({ key: 'j', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadRoundJsonKey({ key: 'J' })).toBe(false);
+    expect(isArenaDownloadRoundJsonKey({ key: 'J', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isArenaDownloadRoundJsonKey({ key: 'O', shiftKey: true })).toBe(false);
+  });
+
   it('ignores OS auto-repeat so holding a key cannot spam exports', () => {
     expect(isArenaCopyWinnerKey({ key: 'C', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyWinnerKey({ key: 'c', shiftKey: true, repeat: true })).toBe(false);
@@ -325,6 +350,8 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadTranscriptJsonKey({ key: 'Y', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaDownloadTranscriptCsvKey({ key: 'U', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaDownloadRoundCsvKey({ key: 'W', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaCopyRoundJsonKey({ key: 'O', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaDownloadRoundJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
 
     expect(isArenaCopyWinnerKey({ key: 'C', shiftKey: true })).toBe(true);
     expect(isArenaCopyAllTakesKey({ key: 'A', shiftKey: true })).toBe(true);
@@ -340,6 +367,8 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadTranscriptJsonKey({ key: 'Y', shiftKey: true })).toBe(true);
     expect(isArenaDownloadTranscriptCsvKey({ key: 'U', shiftKey: true })).toBe(true);
     expect(isArenaDownloadRoundCsvKey({ key: 'W', shiftKey: true })).toBe(true);
+    expect(isArenaCopyRoundJsonKey({ key: 'O', shiftKey: true })).toBe(true);
+    expect(isArenaDownloadRoundJsonKey({ key: 'J', shiftKey: true })).toBe(true);
   });
 
   it('detects Agent result shortcuts as bare Shift+letter keys', () => {

@@ -24,6 +24,8 @@ const ARENA: ShortcutHint[] = [
   { keys: 'Shift + A', action: 'Copy all four takes' },
   { keys: 'Shift + D', action: 'Download the winning take' },
   { keys: 'Shift + W', action: 'Download the full round as CSV' },
+  { keys: 'Shift + O', action: 'Copy the full round as JSON' },
+  { keys: 'Shift + J', action: 'Download the full round as JSON' },
   { keys: 'Shift + S', action: 'Save or unsave the winning take' },
   { keys: 'Shift + V', action: 'Verify the winning take in Agent Mode' },
   { keys: 'Shift + Q', action: 'Copy the question' },
@@ -280,6 +282,16 @@ export function isArenaDownloadTranscriptCsvKey(event: ShortcutKeyEvent): boolea
 /** Shift+W — download the current Arena round (all takes) as CSV. */
 export function isArenaDownloadRoundCsvKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'w');
+}
+
+/** Shift+O — copy the current Arena round (all takes) as JSON. */
+export function isArenaCopyRoundJsonKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'o');
+}
+
+/** Shift+J — download the current Arena round (all takes) as JSON. */
+export function isArenaDownloadRoundJsonKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'j');
 }
 
 /** Shift+C — copy a completed Agent answer to the clipboard as markdown. */

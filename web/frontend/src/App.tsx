@@ -52,9 +52,10 @@ import {
   buildArenaTranscriptJsonDownload,
   buildArenaTranscriptCsvDownload,
   buildArenaCsvDownload,
+  buildArenaJsonDownload,
   copyArenaComparisonToClipboard,
+  copyArenaJsonToClipboard,
   formatArenaExport,
-  formatArenaJsonExport,
   copyArenaTranscriptToClipboard,
   copyArenaTranscriptJsonToClipboard,
   copyArenaTranscriptCsvToClipboard,
@@ -105,6 +106,8 @@ import {
   isArenaDownloadTranscriptJsonKey,
   isArenaDownloadTranscriptCsvKey,
   isArenaDownloadRoundCsvKey,
+  isArenaDownloadRoundJsonKey,
+  isArenaCopyRoundJsonKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
@@ -326,6 +329,12 @@ function App() {
   /** Guards Shift+W / header clicks so a full-round CSV download can never double-fire. */
   const arenaCsvDownloadInFlightRef = useRef(false);
   const arenaCsvDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Guards Shift+J / header clicks so a full-round JSON download can never double-fire. */
+  const arenaJsonDownloadInFlightRef = useRef(false);
+  const arenaJsonDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Guards Shift+O / header clicks so a full-round JSON copy can never double-fire. */
+  const arenaJsonCopyInFlightRef = useRef(false);
+  const arenaJsonCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Owns the Shift+V verify-winner action so the key handler can live before its callback. */
   const verifyWinnerRequestRef = useRef<((winner: ScoredAgent) => void) | null>(null);
   /** Guards Shift+V / card clicks so a verify request can never double-fire. */
@@ -897,19 +906,43 @@ function App() {
   }, [resolveArenaPersona, sessionData]);
 
   const handleDownloadArenaJson = useCallback(() => {
-    if (!response) return;
-    const json = formatArenaJsonExport(response, resolveArenaPersona);
-    const stem = `arena-${(response.prompt || 'round').slice(0, 48)}`;
-    const ok = downloadTextFile(json, {
-      filename: `${withDownloadDate(stem)}.json`,
-      mimeType: 'application/json;charset=utf-8',
-    });
-    if (ok) {
-      setArenaJsonDownloaded(true);
-      window.setTimeout(() => setArenaJsonDownloaded(false), 1800);
-      void track('arena_download_json');
-    } else {
+    if (arenaJsonDownloadInFlightRef.current) return;
+    const download = buildArenaJsonDownload(response, resolveArenaPersona);
+    if (!download) {
+      if (arenaJsonDownloadFeedbackTimer.current) {
+        clearTimeout(arenaJsonDownloadFeedbackTimer.current);
+        arenaJsonDownloadFeedbackTimer.current = null;
+      }
+      setArenaJsonDownloaded(false);
+      setError('Could not download the JSON. Wait for the round to finish or copy all takes instead.');
+      return;
+    }
+    arenaJsonDownloadInFlightRef.current = true;
+    try {
+      const ok = downloadTextFile(download.content, {
+        filename: `${withDownloadDate(download.stem)}.json`,
+        mimeType: 'application/json;charset=utf-8',
+      });
+      if (ok) {
+        if (arenaJsonDownloadFeedbackTimer.current) {
+          clearTimeout(arenaJsonDownloadFeedbackTimer.current);
+          arenaJsonDownloadFeedbackTimer.current = null;
+        }
+        setArenaJsonDownloaded(true);
+        arenaJsonDownloadFeedbackTimer.current = window.setTimeout(() => {
+          setArenaJsonDownloaded(false);
+          arenaJsonDownloadFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_download_json');
+      } else {
+        setArenaJsonDownloaded(false);
+        setError('Could not download the JSON. Try Copy all takes instead.');
+      }
+    } catch {
+      setArenaJsonDownloaded(false);
       setError('Could not download the JSON. Try Copy all takes instead.');
+    } finally {
+      arenaJsonDownloadInFlightRef.current = false;
     }
   }, [resolveArenaPersona, response]);
 
@@ -955,15 +988,38 @@ function App() {
   }, [resolveArenaPersona, response]);
 
   const handleCopyArenaJson = useCallback(async () => {
-    if (!response) return;
-    const json = formatArenaJsonExport(response, resolveArenaPersona);
-    const ok = await copyToClipboard(json);
-    if (ok) {
-      setArenaJsonCopied(true);
-      window.setTimeout(() => setArenaJsonCopied(false), 1800);
-      void track('arena_copy_json');
-    } else {
+    if (arenaJsonCopyInFlightRef.current) return;
+    arenaJsonCopyInFlightRef.current = true;
+    try {
+      const ok = await copyArenaJsonToClipboard(response, resolveArenaPersona);
+      if (ok) {
+        if (arenaJsonCopyFeedbackTimer.current) {
+          clearTimeout(arenaJsonCopyFeedbackTimer.current);
+          arenaJsonCopyFeedbackTimer.current = null;
+        }
+        setArenaJsonCopied(true);
+        arenaJsonCopyFeedbackTimer.current = window.setTimeout(() => {
+          setArenaJsonCopied(false);
+          arenaJsonCopyFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_copy_json');
+      } else {
+        if (arenaJsonCopyFeedbackTimer.current) {
+          clearTimeout(arenaJsonCopyFeedbackTimer.current);
+          arenaJsonCopyFeedbackTimer.current = null;
+        }
+        setArenaJsonCopied(false);
+        setError('Could not copy the JSON. Wait for the round to finish or copy all takes instead.');
+      }
+    } catch {
+      if (arenaJsonCopyFeedbackTimer.current) {
+        clearTimeout(arenaJsonCopyFeedbackTimer.current);
+        arenaJsonCopyFeedbackTimer.current = null;
+      }
+      setArenaJsonCopied(false);
       setError('Could not copy the JSON. Try Copy all takes instead.');
+    } finally {
+      arenaJsonCopyInFlightRef.current = false;
     }
   }, [resolveArenaPersona, response]);
 
@@ -1122,9 +1178,9 @@ function App() {
   }, [activeTurnId, canUseFeature, handleSaveResponse, response, savedItems]);
 
   // Keyboard-first Arena actions: Shift+C / Shift+D / Shift+S / Shift+V /
-  // Shift+Q / Shift+E / Shift+K / Shift+R / Shift+U / Shift+I mirror the header action
-  // buttons once a round has finished. Form controls are skipped so normal
-  // Shift+letter typing is never swallowed.
+  // Shift+Q / Shift+E / Shift+K / Shift+R / Shift+U / Shift+I / Shift+O /
+  // Shift+J mirror the header action buttons once a round has finished. Form
+  // controls are skipped so normal Shift+letter typing is never swallowed.
   useEffect(() => {
     if (
       (viewMode !== 'arena' && viewMode !== 'leaderboard') ||
@@ -1147,6 +1203,12 @@ function App() {
       } else if (isArenaDownloadWinnerKey(e)) {
         e.preventDefault();
         handleDownloadWinner();
+      } else if (isArenaDownloadRoundJsonKey(e)) {
+        e.preventDefault();
+        handleDownloadArenaJson();
+      } else if (isArenaCopyRoundJsonKey(e)) {
+        e.preventDefault();
+        void handleCopyArenaJson();
       } else if (isArenaDownloadRoundCsvKey(e)) {
         e.preventDefault();
         handleDownloadArenaCsv();
@@ -1195,6 +1257,8 @@ function App() {
     handleDownloadTranscriptJson,
     handleDownloadTranscriptCsv,
     handleDownloadArenaCsv,
+    handleDownloadArenaJson,
+    handleCopyArenaJson,
     handleCopyTranscriptJson,
     handleCopyTranscriptCsv,
     handleDownloadWinner,
@@ -2688,7 +2752,8 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => void handleCopyArenaJson()}
-                    title="Copy the full round as JSON"
+                    aria-keyshortcuts="Shift+O"
+                    title="Copy the full round as JSON (Shift+O)"
                     style={{ fontSize: 12 }}
                   >
                     {arenaJsonCopied ? 'JSON copied' : 'Copy JSON'}
@@ -2706,7 +2771,8 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => handleDownloadArenaJson()}
-                    title="Download the full round as a JSON file"
+                    aria-keyshortcuts="Shift+J"
+                    title="Download the full round as a JSON file (Shift+J)"
                     style={{ fontSize: 12 }}
                   >
                     {arenaJsonDownloaded ? 'Saved JSON' : 'Download .json'}

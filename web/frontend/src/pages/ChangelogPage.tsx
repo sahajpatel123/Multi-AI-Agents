@@ -30,6 +30,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Arena: Shift+U transcript CSV opens cleanly in Excel (UTF-8 BOM + CRLF), neutralizes formulas hidden behind whitespace, and is duplicate-safe',
       '[NEW] Arena: download the full round as CSV (Shift+W)',
       '[IMPROVED] Arena: Shift+W round CSV opens cleanly in Excel (UTF-8 BOM + CRLF), is duplicate-safe, and refuses empty rounds',
+      '[NEW] Arena: copy the full round as JSON with Shift+O and download it as a file with Shift+J',
       '[NEW] Arena: copy the full session transcript as CSV (Shift+I)',
       '[IMPROVED] Arena: Shift+I CSV copy writes real text/csv clipboard data with a plain-text fallback, skips empty sessions, and clears stale copy feedback on failure',
       '[NEW] Arena: copy the full session transcript as JSON (Shift+K)',

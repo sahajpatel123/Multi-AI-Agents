@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildArenaCsvDownload,
+  buildArenaJsonDownload,
   buildArenaTranscriptMarkdownDownload,
   buildArenaTranscriptJsonDownload,
   buildArenaTranscriptCsvDownload,
   buildArenaVerifyBridgePayload,
   copyArenaComparisonToClipboard,
+  copyArenaJsonToClipboard,
   copyArenaTranscriptToClipboard,
   copyArenaTranscriptJsonToClipboard,
   copyArenaTranscriptCsvToClipboard,
@@ -317,6 +319,80 @@ describe('formatArenaJsonExport', () => {
     const parsed = JSON.parse(json);
     expect(parsed.prompt).toBe('(no prompt)');
     expect(parsed.takes).toHaveLength(2);
+  });
+});
+
+describe('buildArenaJsonDownload', () => {
+  it('builds JSON content with a prompt-derived stem', () => {
+    const resolvePersona = (id: string) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    });
+    const download = buildArenaJsonDownload(sample, resolvePersona);
+    expect(download).not.toBeNull();
+    expect(download?.stem).toBe('arena-should-we-ship-this-week');
+    const parsed = JSON.parse(download!.content);
+    expect(parsed.winner_agent_id).toBe('agent_1');
+    expect(parsed.takes).toHaveLength(2);
+    expect(parsed.takes[0]).toMatchObject({
+      agent_name: 'The Analyst',
+      is_winner: true,
+      score: 91,
+    });
+    expect(download?.content.endsWith('\n')).toBe(true);
+  });
+
+  it('returns null when there is no finished round to download', () => {
+    expect(buildArenaJsonDownload(undefined, () => ({ name: 'The Analyst' }))).toBeNull();
+    expect(
+      buildArenaJsonDownload(
+        { ...sample, all_responses: [] },
+        () => ({ name: 'The Analyst' }),
+      ),
+    ).toBeNull();
+  });
+
+  it('sanitizes the prompt stem and falls back to a generic round name', () => {
+    const download = buildArenaJsonDownload(
+      { ...sample, prompt: '../../a<b>c:defghijklmnop' },
+      () => ({ name: 'The Analyst' }),
+    );
+    expect(download?.stem).toBe('arena-a-b-c-defghijklmnop');
+    expect(
+      buildArenaJsonDownload({ ...sample, prompt: '' }, () => ({ name: 'The Analyst' }))?.stem,
+    ).toBe('arena-round');
+  });
+});
+
+describe('copyArenaJsonToClipboard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('copies the full round as JSON through the clipboard helper', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const resolvePersona = (id: string) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    });
+
+    const ok = await copyArenaJsonToClipboard(sample, resolvePersona);
+
+    expect(ok).toBe(true);
+    expect(writeText).toHaveBeenCalledWith(formatArenaJsonExport(sample, resolvePersona));
+  });
+
+  it('returns false without touching the clipboard when there is no finished round', async () => {
+    const writeText = vi.fn();
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+
+    expect(await copyArenaJsonToClipboard(null, () => ({ name: 'X' }))).toBe(false);
+    expect(
+      await copyArenaJsonToClipboard(
+        { ...sample, all_responses: [] },
+        () => ({ name: 'X' }),
+      ),
+    ).toBe(false);
+    expect(writeText).not.toHaveBeenCalled();
   });
 });
 

@@ -625,6 +625,60 @@ export function formatArenaJsonExport(
   return JSON.stringify(data, null, 2) + '\n';
 }
 
+export type ArenaJsonDownload = {
+  content: string;
+  /** Safe filename stem; the download helper appends the date and extension. */
+  stem: string;
+};
+
+/**
+ * Build the JSON payload and filename stem for a full Arena round download
+ * (Shift+J). Returns null when there is no finished round to export so callers
+ * can surface feedback instead of saving an empty archive, and sanitizes the
+ * prompt so it can never leak path separators or control characters into the
+ * downloaded filename.
+ */
+export function buildArenaJsonDownload(
+  response: PromptResponse | null | undefined,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+): ArenaJsonDownload | null {
+  if (
+    !response ||
+    !Array.isArray(response.all_responses) ||
+    response.all_responses.length === 0
+  ) {
+    return null;
+  }
+  const safePrompt = sanitizeDownloadFilename(response.prompt || '', 'round')
+    .slice(0, 48)
+    .replace(/-+$/g, '');
+  return {
+    content: formatArenaJsonExport(response, resolvePersona),
+    stem: `arena-${safePrompt || 'round'}`,
+  };
+}
+
+/**
+ * Copy a full Arena round (all takes, winner, scores) to the clipboard as
+ * JSON. Returns false when there is no finished round to copy so callers can
+ * surface feedback instead of silently no-oping.
+ */
+export async function copyArenaJsonToClipboard(
+  response: PromptResponse | null | undefined,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+): Promise<boolean> {
+  if (
+    !response ||
+    !Array.isArray(response.all_responses) ||
+    response.all_responses.length === 0
+  ) {
+    return false;
+  }
+  const json = formatArenaJsonExport(response, resolvePersona);
+  if (!json.trim()) return false;
+  return copyToClipboard(json);
+}
+
 /**
  * Characters that, when they appear as the first significant character of a CSV cell,
  * cause Excel / Google Sheets / LibreOffice to evaluate the cell as a
