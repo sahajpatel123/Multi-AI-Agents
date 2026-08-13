@@ -21,6 +21,7 @@ const ARENA: ShortcutHint[] = [
   { keys: '↑ / ↓', action: 'Cycle recent prompts in the compose box' },
   { keys: 'Shift + N', action: 'Start a new Arena task' },
   { keys: 'Shift + C', action: 'Copy the winning take' },
+  { keys: 'Shift + A', action: 'Copy all four takes' },
   { keys: 'Shift + D', action: 'Download the winning take' },
   { keys: 'Shift + S', action: 'Save or unsave the winning take' },
   { keys: 'Shift + V', action: 'Verify the winning take in Agent Mode' },
@@ -176,7 +177,7 @@ export type ShortcutKeyEvent = {
  */
 function isBareShiftLetterKey(
   event: ShortcutKeyEvent,
-  letter: 'c' | 'd' | 'q' | 's' | 'r' | 'j' | 'k' | 'e' | 'n' | 'v' | 't' | 'y' | 'u' | 'i',
+  letter: 'a' | 'c' | 'd' | 'q' | 's' | 'r' | 'j' | 'k' | 'e' | 'n' | 'v' | 't' | 'y' | 'u' | 'i',
 ): boolean {
   if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
@@ -188,6 +189,11 @@ function isBareShiftLetterKey(
 /** Shift+C — copy the winning Arena take to the clipboard. */
 export function isArenaCopyWinnerKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'c');
+}
+
+/** Shift+A — copy all four Arena takes to the clipboard. */
+export function isArenaCopyAllTakesKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'a');
 }
 
 /** Shift+D — download the winning Arena take as a Markdown file. */

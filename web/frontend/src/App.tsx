@@ -95,6 +95,7 @@ import {
   shouldCaptureSlashFocus,
 } from './lib/slashFocus';
 import {
+  isArenaCopyAllTakesKey,
   isArenaCopyQuestionKey,
   isArenaCopyTranscriptMarkdownKey,
   isArenaCopyTranscriptJsonKey,
@@ -1082,6 +1083,9 @@ function App() {
       if (isArenaCopyWinnerKey(e)) {
         e.preventDefault();
         void handleExportWinner();
+      } else if (isArenaCopyAllTakesKey(e)) {
+        e.preventDefault();
+        void handleExportAllTakes();
       } else if (isArenaDownloadWinnerKey(e)) {
         e.preventDefault();
         handleDownloadWinner();
@@ -1133,6 +1137,7 @@ function App() {
     handleCopyTranscriptCsv,
     handleDownloadWinner,
     handleExportWinner,
+    handleExportAllTakes,
     handleCopyTranscript,
     handleSaveWinner,
     focusedAgentId,
@@ -2603,7 +2608,8 @@ function App() {
                     onClick={() => {
                       void handleExportAllTakes();
                     }}
-                    title="Copy all four takes as markdown"
+                    aria-keyshortcuts="Shift+A"
+                    title="Copy all four takes as markdown (Shift+A)"
                     style={{ fontSize: 12 }}
                   >
                     {exportCopied ? 'Copied comparison' : 'Copy all takes'}
