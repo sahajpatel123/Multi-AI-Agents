@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Shared Arena handoff clears any previously staged question when a share
+  link carries no prompt, so opening Arena from a prompt-less or expired
+  share landing can never prefill an older question
 - Shared round links harden long prompts with an expand/collapse control on
   the public page, reject malformed round-only URLs instead of falling back
   to a single-take card, and stay inside the 2000-character URL budget even

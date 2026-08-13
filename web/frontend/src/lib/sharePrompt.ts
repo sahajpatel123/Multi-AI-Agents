@@ -30,10 +30,17 @@ export function sanitizeSharedPrompt(
   return raw.replace(/\u0000/g, '').trim().slice(0, max);
 }
 
-/** Stage a shared question for the next Arena mount. Empty values no-op. */
+/**
+ * Stage a shared question for the next Arena mount. Empty values clear any
+ * previously staged question so a prompt-less or expired share landing can
+ * never leave a stale handoff behind for the next Arena visit.
+ */
 export function saveSharedArenaPrompt(prompt: string): void {
   const clean = sanitizeSharedPrompt(prompt);
-  if (!clean) return;
+  if (!clean) {
+    clearSharedArenaPrompt();
+    return;
+  }
   safeSessionStorage.setItem(SHARED_PROMPT_STORAGE_KEY, clean);
 }
 

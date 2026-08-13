@@ -166,4 +166,17 @@ describe('SharePage', () => {
     expect(sessionStorage.getItem(SHARED_PROMPT_STORAGE_KEY)).toBeNull();
     expect(navigateMock).toHaveBeenCalledWith('/signin');
   });
+
+  it('clears a stale staged prompt when opening Arena from a prompt-less share', () => {
+    sessionStorage.setItem(SHARED_PROMPT_STORAGE_KEY, 'Older question');
+    const qs =
+      '?agent=agent_1&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /try this in arena/i }));
+    expect(sessionStorage.getItem(SHARED_PROMPT_STORAGE_KEY)).toBeNull();
+    expect(setRedirectIntentMock).toHaveBeenCalledWith('/app');
+    expect(navigateMock).toHaveBeenCalledWith('/signin');
+  });
 });

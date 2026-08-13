@@ -36,6 +36,13 @@ describe('sharePrompt', () => {
     expect(sessionStorage.getItem(SHARED_PROMPT_STORAGE_KEY)).toBeNull();
   });
 
+  it('clears a previously staged prompt when an empty prompt is saved', () => {
+    saveSharedArenaPrompt('Older question from a previous share');
+    saveSharedArenaPrompt('');
+    expect(sessionStorage.getItem(SHARED_PROMPT_STORAGE_KEY)).toBeNull();
+    expect(readSharedArenaPrompt()).toBe('');
+  });
+
   it('clear removes the staged question', () => {
     saveSharedArenaPrompt('A question');
     clearSharedArenaPrompt();
