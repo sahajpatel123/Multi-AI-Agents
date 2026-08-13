@@ -1677,6 +1677,19 @@ export function WatchlistPage() {
                           Latest result →
                         </button>
                       ) : null}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate('/app', {
+                            state: { agentStressPrompt: item.question.trim() },
+                          })
+                        }
+                        title="Open this watched question in Arena for fresh four-mind takes"
+                        aria-label={`Ask in Arena: ${item.question.slice(0, 80) || 'watched question'}`}
+                        className="watchlist-link watchlist-link--accent"
+                      >
+                        Ask in Arena →
+                      </button>
                       {item.run_count > 0 ? (
                         <button
                           type="button"

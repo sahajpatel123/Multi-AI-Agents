@@ -387,6 +387,23 @@ describe('WatchlistPage', () => {
     expect(screen.getByText(/Run 4 times/)).toBeInTheDocument();
   });
 
+  it('opens a watched question in Arena for fresh four-mind takes', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Ask in Arena: How is the Indian IPO market evolving?',
+      }),
+    );
+
+    expect(navigateMock).toHaveBeenCalledWith('/app', {
+      state: { agentStressPrompt: 'How is the Indian IPO market evolving?' },
+    });
+  });
+
   it('duplicates a watch as a paused copy through the duplicate endpoint', async () => {
     renderPage();
     await waitFor(() => {
