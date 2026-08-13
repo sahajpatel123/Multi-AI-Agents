@@ -1,5 +1,6 @@
 import type { PromptResponse, ScoredAgent, SessionTurn } from '../types';
 import { copyToClipboard } from './clipboard';
+import { sanitizeDownloadFilename } from './downloadTextFile';
 
 export type ArenaExportPersona = {
   name: string;
@@ -229,6 +230,35 @@ export function formatArenaTranscriptExport(
 
   lines.push('---', '_Shared from Arena_');
   return lines.join('\n').trim() + '\n';
+}
+
+export type ArenaTranscriptMarkdownDownload = {
+  content: string;
+  /** Safe filename stem; the download helper appends the date and extension. */
+  stem: string;
+};
+
+/**
+ * Build the markdown payload and filename stem for the Arena session
+ * transcript download (Shift+T). Returns null when there is nothing to export
+ * so callers can surface an error instead of saving an empty archive, and
+ * sanitizes/truncates the session id so it can never leak path separators or
+ * control characters into the downloaded filename.
+ */
+export function buildArenaTranscriptMarkdownDownload(
+  turns: SessionTurn[] | null | undefined,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: ArenaTranscriptOptions,
+): ArenaTranscriptMarkdownDownload | null {
+  const exchanges = Array.isArray(turns) ? turns : [];
+  if (!exchanges.length) return null;
+  const safeSession = sanitizeDownloadFilename(opts?.sessionId || '', 'session')
+    .slice(0, 12)
+    .replace(/-+$/g, '');
+  return {
+    content: formatArenaTranscriptExport(exchanges, resolvePersona, opts),
+    stem: `arena-transcript-${safeSession || 'session'}`,
+  };
 }
 
 /**

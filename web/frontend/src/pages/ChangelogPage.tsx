@@ -20,6 +20,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Arena: start a fresh task from anywhere with Shift+N',
       '[NEW] Arena: copy the full session transcript as markdown (Shift+E)',
       '[NEW] Arena: download the full session transcript as markdown (Shift+T)',
+      '[IMPROVED] Arena: Shift+T transcript download is duplicate-safe and handles empty sessions or odd session ids gracefully',
       '[NEW] Arena: copy the full session transcript as JSON (Shift+K)',
       '[NEW] Agent templates: star favorites — pin go-to research tasks in a dedicated Favorites tab',
       '[NEW] Arena recent prompts: expand to see every stored prompt on this device',

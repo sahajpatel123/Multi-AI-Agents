@@ -48,13 +48,13 @@ import { copyToClipboard } from './lib/clipboard';
 import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from './lib/downloadTextFile';
 import { safeLocalStorage } from './lib/safeStorage';
 import {
+  buildArenaTranscriptMarkdownDownload,
   formatArenaExport,
   formatArenaCsvExport,
   formatArenaJsonExport,
   copyArenaTranscriptToClipboard,
   copyArenaTranscriptJsonToClipboard,
   copyArenaTranscriptsToClipboard,
-  formatArenaTranscriptExport,
   formatArenaTranscriptsExport,
   formatArenaTranscriptsJsonExport,
   formatArenaTranscriptCsvExport,
@@ -303,6 +303,9 @@ function App() {
   /** Prevents overlapping transcript copy attempts and stale copied feedback. */
   const transcriptCopyInFlightRef = useRef(false);
   const transcriptCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Guards Shift+T / header clicks so a transcript download can never double-fire. */
+  const transcriptDownloadInFlightRef = useRef(false);
+  const transcriptDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Owns the Shift+V verify-winner action so the key handler can live before its callback. */
   const verifyWinnerRequestRef = useRef<((winner: ScoredAgent) => void) | null>(null);
   /** Guards Shift+V / card clicks so a verify request can never double-fire. */
@@ -604,19 +607,38 @@ function App() {
   }, [buildArenaComparisonMarkdown, response?.prompt]);
 
   const handleDownloadTranscript = useCallback(() => {
-    const turns = sessionData?.turns;
-    if (!turns || !turns.length) return;
-    const md = formatArenaTranscriptExport(turns, resolveArenaPersona, {
+    if (transcriptDownloadInFlightRef.current) return;
+    const download = buildArenaTranscriptMarkdownDownload(sessionData?.turns, resolveArenaPersona, {
       sessionId: sessionData?.session_id,
     });
-    const stem = `arena-transcript-${(sessionData?.session_id || 'session').slice(0, 12)}`;
-    const ok = downloadMarkdownFile(md, stem);
-    if (ok) {
-      setTranscriptDownloaded(true);
-      window.setTimeout(() => setTranscriptDownloaded(false), 1800);
-      void track('arena_download_transcript');
-    } else {
+    if (!download) {
+      setTranscriptDownloaded(false);
       setError('Could not download the transcript. Try again or copy the latest take instead.');
+      return;
+    }
+    transcriptDownloadInFlightRef.current = true;
+    try {
+      const ok = downloadMarkdownFile(download.content, download.stem);
+      if (ok) {
+        if (transcriptDownloadFeedbackTimer.current) {
+          clearTimeout(transcriptDownloadFeedbackTimer.current);
+          transcriptDownloadFeedbackTimer.current = null;
+        }
+        setTranscriptDownloaded(true);
+        transcriptDownloadFeedbackTimer.current = window.setTimeout(() => {
+          setTranscriptDownloaded(false);
+          transcriptDownloadFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_download_transcript');
+      } else {
+        setTranscriptDownloaded(false);
+        setError('Could not download the transcript. Try again or copy the latest take instead.');
+      }
+    } catch {
+      setTranscriptDownloaded(false);
+      setError('Could not download the transcript. Try again or copy the latest take instead.');
+    } finally {
+      transcriptDownloadInFlightRef.current = false;
     }
   }, [resolveArenaPersona, sessionData]);
 
