@@ -590,7 +590,7 @@ export function formatArenaJsonExport(
 }
 
 /**
- * Characters that, when they appear as the first character of a CSV cell,
+ * Characters that, when they appear as the first significant character of a CSV cell,
  * cause Excel / Google Sheets / LibreOffice to evaluate the cell as a
  * formula. OWASP CSV Injection guidance: prefix any cell that begins with
  * one of these with a single quote to neutralize the formula (CWE-1236).
@@ -603,8 +603,11 @@ const CSV_FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
 
 function toCsvCell(value: string | number | boolean | null | undefined): string {
   const raw = value == null ? '' : String(value);
-  const safe =
-    raw && CSV_FORMULA_PREFIXES.includes(raw[0]) ? `'${raw}` : raw;
+  // Check the first significant character so a formula trigger hidden behind
+  // leading whitespace still gets neutralized (spreadsheets often ignore
+  // leading whitespace before deciding whether a cell is a formula).
+  const firstSignificant = raw.trimStart()[0] || '';
+  const safe = CSV_FORMULA_PREFIXES.includes(firstSignificant) ? `'${raw}` : raw;
   return `"${safe.replace(/"/g, '""')}"`;
 }
 
@@ -658,7 +661,9 @@ export function formatArenaCsvExport(
  * each row so spreadsheets can filter, pivot, and chart without joins.
  * Mirrors the Markdown/JSON transcripts: winner-first ordering per exchange,
  * stale winner ids dropped, and every cell quoted/escaped for CSV consumers.
- * Multiline prompts and verdicts are preserved inside quoted cells.
+ * Multiline prompts and verdicts are preserved inside quoted cells. The file
+ * starts with a UTF-8 BOM so Excel detects Unicode, and rows use CRLF line
+ * endings per RFC 4180, matching watchlist/agent-history CSV exports.
  */
 export function formatArenaTranscriptCsvExport(
   turns: SessionTurn[],
@@ -724,7 +729,36 @@ export function formatArenaTranscriptCsvExport(
     }
   });
 
-  return lines.join('\n') + '\n';
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
+}
+
+export type ArenaTranscriptCsvDownload = {
+  content: string;
+  /** Safe filename stem; the download helper appends the date and extension. */
+  stem: string;
+};
+
+/**
+ * Build the CSV payload and filename stem for the Arena session transcript
+ * download (Shift+U). Returns null when there is nothing to export so callers
+ * can surface an error instead of saving an empty spreadsheet, and sanitizes/
+ * truncates the session id so it can never leak path separators or control
+ * characters into the downloaded filename.
+ */
+export function buildArenaTranscriptCsvDownload(
+  turns: SessionTurn[] | null | undefined,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: ArenaTranscriptOptions,
+): ArenaTranscriptCsvDownload | null {
+  const exchanges = Array.isArray(turns) ? turns : [];
+  if (!exchanges.length) return null;
+  const safeSession = sanitizeDownloadFilename(opts?.sessionId || '', 'session')
+    .slice(0, 12)
+    .replace(/-+$/g, '');
+  return {
+    content: formatArenaTranscriptCsvExport(exchanges, resolvePersona),
+    stem: `arena-transcript-${safeSession || 'session'}`,
+  };
 }
 
 function formatAgentBlock(scored: ScoredAgent, persona: ArenaExportPersona): string {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildArenaTranscriptMarkdownDownload,
   buildArenaTranscriptJsonDownload,
+  buildArenaTranscriptCsvDownload,
   buildArenaVerifyBridgePayload,
   copyArenaTranscriptToClipboard,
   copyArenaTranscriptJsonToClipboard,
@@ -381,7 +382,7 @@ describe('formatArenaTranscriptCsvExport', () => {
     const csv = formatArenaTranscriptCsvExport(turns, (id) => ({
       name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
     }));
-    const rows = csv.trim().split('\n');
+    const rows = csv.trim().split(/\r?\n/);
     expect(rows[0]).toBe(
       '"exchange","turnId","timestamp","prompt","promptCategory","winnerAgentId","agentId","agentName","isWinner","confidence","oneLiner","verdict","keyAssumption","agentTimestamp"',
     );
@@ -390,7 +391,16 @@ describe('formatArenaTranscriptCsvExport', () => {
     expect(rows[2]).toContain('"agent_2","The Philosopher","no"');
     expect(rows[3]).toContain('"2","t2","2026-08-07T10:05:00Z","Who owns the launch checklist?","task","agent_2","agent_2","The Philosopher","yes"');
     expect(rows[4]).toContain('"agent_1","The Analyst","no"');
-    expect(csv.endsWith('\n')).toBe(true);
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv.endsWith('\r\n')).toBe(true);
+  });
+
+  it('uses CRLF row endings and a UTF-8 BOM for Excel compatibility', () => {
+    const csv = formatArenaTranscriptCsvExport(turns, () => ({ name: 'The Analyst' }));
+    expect(csv).toContain('"exchange","turnId"');
+    expect(csv).toMatch(/"exchange","turnId"[^\n]*\r\n"1"/);
+    expect(csv.includes('\r\n')).toBe(true);
+    expect(csv.includes('\n\r')).toBe(false);
   });
 
   it('quotes and escapes commas, quotes, and multiline cells', () => {
@@ -424,7 +434,7 @@ describe('formatArenaTranscriptCsvExport', () => {
 
   it('returns only the header for an empty session', () => {
     const csv = formatArenaTranscriptCsvExport([], () => ({ name: 'The Analyst' }));
-    expect(csv.trim().split('\n')).toHaveLength(1);
+    expect(csv.trim().split(/\r?\n/)).toHaveLength(1);
     expect(csv).toContain('"exchange"');
   });
 
@@ -458,7 +468,7 @@ describe('formatArenaTranscriptCsvExport', () => {
       ],
       () => ({ name: 'The Analyst' }),
     );
-    const rows = csv.trim().split('\n');
+    const rows = csv.trim().split(/\r?\n/);
     expect(rows).toHaveLength(2);
     expect(rows[1]).toContain('"2","t5"');
     expect(rows[1]).toContain('"The Analyst","no"');
@@ -467,7 +477,7 @@ describe('formatArenaTranscriptCsvExport', () => {
 
   it('falls back to agent ids when no persona name resolves', () => {
     const csv = formatArenaTranscriptCsvExport(turns, () => ({ name: '' }));
-    const rows = csv.trim().split('\n');
+    const rows = csv.trim().split(/\r?\n/);
     expect(rows[1]).toContain('"agent_1","agent_1"');
   });
 
@@ -502,6 +512,39 @@ describe('formatArenaTranscriptCsvExport', () => {
     expect(csv).toContain('"\'=cmd|/c calc"');
     expect(csv).toContain('"\'=The Analyst"');
     expect(csv).not.toContain('"-HYPERLINK');
+  });
+
+  it('neutralizes formula triggers hidden behind leading whitespace', () => {
+    const csv = formatArenaTranscriptCsvExport(
+      [
+        {
+          turn_id: '  =1+1',
+          prompt: '  =1+1',
+          prompt_category: '',
+          winner_id: 'agent_1',
+          timestamp: '',
+          agent_responses: {
+            agent_1: {
+              agent_id: 'agent_1',
+              agent_number: 1,
+              one_liner: '\t@SUM(A1:A9)',
+              verdict: ' +2+3',
+              confidence: 0.8,
+              key_assumption: '',
+              timestamp: '',
+            },
+          },
+        },
+      ],
+      () => ({ name: 'The Analyst' }),
+    );
+    // Text cells are trimmed before export, so the neutralized value has no
+    // leading whitespace; untrimmed technical fields keep theirs.
+    expect(csv).toContain('"\'  =1+1"');
+    expect(csv).toContain('"\'=1+1"');
+    expect(csv).toContain('"\'@SUM(A1:A9)"');
+    expect(csv).toContain('"\'+2+3"');
+    expect(csv).not.toContain('"  =1+1"');
   });
 });
 
@@ -783,6 +826,63 @@ describe('buildArenaTranscriptJsonDownload', () => {
 
   it('falls back to a generic session stem when the id is missing', () => {
     const download = buildArenaTranscriptJsonDownload(turns, () => ({ name: 'The Analyst' }));
+    expect(download?.stem).toBe('arena-transcript-session');
+  });
+});
+
+describe('buildArenaTranscriptCsvDownload', () => {
+  const turns: SessionTurn[] = [
+    {
+      turn_id: 't1',
+      prompt: 'Should we ship this week?',
+      prompt_category: 'question',
+      winner_id: 'agent_1',
+      timestamp: '2026-08-07T10:00:00Z',
+      agent_responses: {
+        agent_1: {
+          agent_id: 'agent_1',
+          agent_number: 1,
+          one_liner: 'Ship the smallest honest slice.',
+          verdict: 'Ship a thin vertical that de-risks the week.',
+          confidence: 0.9,
+          key_assumption: 'quality bar is fixed',
+          timestamp: '2026-08-07T10:00:00Z',
+        },
+      },
+    },
+  ];
+
+  it('builds CSV content with a safe session-based stem', () => {
+    const download = buildArenaTranscriptCsvDownload(turns, () => ({ name: 'The Analyst' }), {
+      sessionId: 'sess123',
+    });
+    expect(download).not.toBeNull();
+    expect(download?.stem).toBe('arena-transcript-sess123');
+    expect(download?.content.startsWith('\uFEFF')).toBe(true);
+    expect(download?.content).toContain('"Should we ship this week?"');
+    expect(download?.content).toContain('"Ship the smallest honest slice."');
+  });
+
+  it('returns null when there is no transcript to download', () => {
+    expect(
+      buildArenaTranscriptCsvDownload(undefined, () => ({ name: 'The Analyst' })),
+    ).toBeNull();
+    expect(
+      buildArenaTranscriptCsvDownload([], () => ({ name: 'The Analyst' })),
+    ).toBeNull();
+  });
+
+  it('sanitizes and truncates session ids used in the filename stem', () => {
+    const download = buildArenaTranscriptCsvDownload(
+      turns,
+      () => ({ name: 'The Analyst' }),
+      { sessionId: '../../a<b>c:defghijklmnop' },
+    );
+    expect(download?.stem).toBe('arena-transcript-a-b-c-defghi');
+  });
+
+  it('falls back to a generic session stem when the id is missing', () => {
+    const download = buildArenaTranscriptCsvDownload(turns, () => ({ name: 'The Analyst' }));
     expect(download?.stem).toBe('arena-transcript-session');
   });
 });

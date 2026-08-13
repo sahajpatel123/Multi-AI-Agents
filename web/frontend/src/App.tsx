@@ -50,6 +50,7 @@ import { safeLocalStorage } from './lib/safeStorage';
 import {
   buildArenaTranscriptMarkdownDownload,
   buildArenaTranscriptJsonDownload,
+  buildArenaTranscriptCsvDownload,
   formatArenaExport,
   formatArenaCsvExport,
   formatArenaJsonExport,
@@ -58,7 +59,6 @@ import {
   copyArenaTranscriptsToClipboard,
   formatArenaTranscriptsExport,
   formatArenaTranscriptsJsonExport,
-  formatArenaTranscriptCsvExport,
   formatArenaWinnerExport,
   buildArenaVerifyBridgePayload,
   pickArenaWinner,
@@ -311,6 +311,8 @@ function App() {
   /** Guards Shift+Y / header clicks so a JSON transcript download can never double-fire. */
   const transcriptJsonDownloadInFlightRef = useRef(false);
   const transcriptJsonDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transcriptCsvDownloadInFlightRef = useRef(false);
+  const transcriptCsvDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Owns the Shift+V verify-winner action so the key handler can live before its callback. */
   const verifyWinnerRequestRef = useRef<((winner: ScoredAgent) => void) | null>(null);
   /** Guards Shift+V / card clicks so a verify request can never double-fire. */
@@ -767,20 +769,45 @@ function App() {
   }, [resolveArenaPersona, sessionData]);
 
   const handleDownloadTranscriptCsv = useCallback(() => {
-    const turns = sessionData?.turns;
-    if (!turns || !turns.length) return;
-    const csv = formatArenaTranscriptCsvExport(turns, resolveArenaPersona);
-    const stem = `arena-transcript-${(sessionData?.session_id || 'session').slice(0, 12)}`;
-    const ok = downloadTextFile(csv, {
-      filename: `${withDownloadDate(stem)}.csv`,
-      mimeType: 'text/csv;charset=utf-8',
+    if (transcriptCsvDownloadInFlightRef.current) return;
+    const download = buildArenaTranscriptCsvDownload(sessionData?.turns, resolveArenaPersona, {
+      sessionId: sessionData?.session_id,
     });
-    if (ok) {
-      setTranscriptCsvDownloaded(true);
-      window.setTimeout(() => setTranscriptCsvDownloaded(false), 1800);
-      void track('arena_download_transcript_csv');
-    } else {
+    if (!download) {
+      if (transcriptCsvDownloadFeedbackTimer.current) {
+        clearTimeout(transcriptCsvDownloadFeedbackTimer.current);
+        transcriptCsvDownloadFeedbackTimer.current = null;
+      }
+      setTranscriptCsvDownloaded(false);
       setError('Could not download the transcript CSV. Try again or copy the latest take instead.');
+      return;
+    }
+    transcriptCsvDownloadInFlightRef.current = true;
+    try {
+      const ok = downloadTextFile(download.content, {
+        filename: `${withDownloadDate(download.stem)}.csv`,
+        mimeType: 'text/csv;charset=utf-8',
+      });
+      if (ok) {
+        if (transcriptCsvDownloadFeedbackTimer.current) {
+          clearTimeout(transcriptCsvDownloadFeedbackTimer.current);
+          transcriptCsvDownloadFeedbackTimer.current = null;
+        }
+        setTranscriptCsvDownloaded(true);
+        transcriptCsvDownloadFeedbackTimer.current = window.setTimeout(() => {
+          setTranscriptCsvDownloaded(false);
+          transcriptCsvDownloadFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_download_transcript_csv');
+      } else {
+        setTranscriptCsvDownloaded(false);
+        setError('Could not download the transcript CSV. Try again or copy the latest take instead.');
+      }
+    } catch {
+      setTranscriptCsvDownloaded(false);
+      setError('Could not download the transcript CSV. Try again or copy the latest take instead.');
+    } finally {
+      transcriptCsvDownloadInFlightRef.current = false;
     }
   }, [resolveArenaPersona, sessionData]);
 
@@ -2059,6 +2086,9 @@ function App() {
     if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
     if (currentResponseBarTimer.current) clearTimeout(currentResponseBarTimer.current);
     if (transcriptCopyFeedbackTimer.current) clearTimeout(transcriptCopyFeedbackTimer.current);
+    if (transcriptDownloadFeedbackTimer.current) clearTimeout(transcriptDownloadFeedbackTimer.current);
+    if (transcriptJsonDownloadFeedbackTimer.current) clearTimeout(transcriptJsonDownloadFeedbackTimer.current);
+    if (transcriptCsvDownloadFeedbackTimer.current) clearTimeout(transcriptCsvDownloadFeedbackTimer.current);
     if (winnerSaveFeedbackTimer.current) clearTimeout(winnerSaveFeedbackTimer.current);
   }, []);
 
