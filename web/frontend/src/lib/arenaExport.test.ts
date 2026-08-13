@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildArenaVerifyBridgePayload,
   copyArenaTranscriptToClipboard,
   copyArenaTranscriptJsonToClipboard,
   copyArenaTranscriptsToClipboard,
@@ -102,6 +103,71 @@ describe('pickArenaWinner', () => {
 
   it('returns null for empty responses', () => {
     expect(pickArenaWinner({ ...sample, all_responses: [] })).toBeNull();
+  });
+});
+
+describe('buildArenaVerifyBridgePayload', () => {
+  it('uses the winning one-liner and normalizes question and persona', () => {
+    const winner = sample.all_responses.find((r) => r.is_winner)!;
+    const payload = buildArenaVerifyBridgePayload(winner, '  Should we ship this week?  ', '  The Analyst  ');
+    expect(payload).not.toBeNull();
+    expect(payload?.answer).toBe('Ship the smallest honest slice.');
+    expect(payload?.question).toBe('Should we ship this week?');
+    expect(payload?.personaName).toBe('The Analyst');
+    expect(payload?.score).toBe(91);
+  });
+
+  it('falls back to the full verdict when the one-liner is empty', () => {
+    const winner = sample.all_responses.find((r) => r.is_winner)!;
+    const payload = buildArenaVerifyBridgePayload(
+      {
+        ...winner,
+        response: { ...winner.response, one_liner: '   ' },
+      },
+      'Question?',
+      '',
+    );
+    expect(payload?.answer).toBe(winner.response.verdict);
+    expect(payload?.personaName).toBe('Arena winner');
+  });
+
+  it('returns null when both answer fields are empty', () => {
+    const winner = sample.all_responses.find((r) => r.is_winner)!;
+    expect(
+      buildArenaVerifyBridgePayload(
+        {
+          ...winner,
+          response: { ...winner.response, one_liner: '', verdict: '' },
+        },
+        'Question?',
+        'The Analyst',
+      ),
+    ).toBeNull();
+  });
+
+  it('caps bridge text at the backend limits and defaults a missing question', () => {
+    const winner = sample.all_responses.find((r) => r.is_winner)!;
+    const payload = buildArenaVerifyBridgePayload(
+      {
+        ...winner,
+        response: { ...winner.response, one_liner: 'x'.repeat(2500) },
+      },
+      ' '.repeat(2500),
+      'y'.repeat(150),
+    );
+    expect(payload?.answer).toHaveLength(2000);
+    expect(payload?.question).toBe('Arena discussion');
+    expect(payload?.personaName).toHaveLength(100);
+  });
+
+  it('coerces a non-finite score to zero', () => {
+    const winner = sample.all_responses.find((r) => r.is_winner)!;
+    const payload = buildArenaVerifyBridgePayload(
+      { ...winner, score: Number.NaN },
+      'Question?',
+      'The Analyst',
+    );
+    expect(payload?.score).toBe(0);
   });
 });
 

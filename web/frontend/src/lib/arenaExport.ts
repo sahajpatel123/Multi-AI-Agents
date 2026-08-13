@@ -23,6 +23,43 @@ export type ArenaTranscriptBundle = {
 };
 
 /**
+ * Payload built before handing the winning Arena take to Agent Mode. The
+ * backend caps both text fields at 2000 chars, so the frontend trims to the
+ * same bound instead of letting an oversized verdict produce a 422.
+ */
+export type ArenaVerifyBridgePayload = {
+  answer: string;
+  question: string;
+  personaName: string;
+  score: number;
+};
+
+const MAX_VERIFY_TEXT_LENGTH = 2000;
+const MAX_VERIFY_PERSONA_LENGTH = 100;
+
+/**
+ * Build a safe Agent Mode bridge payload from a winning Arena take. Falls
+ * back from the one-liner to the full verdict, rejects completely empty takes,
+ * and normalizes question/persona/score so the backend contract is never
+ * surprised by missing or malformed values.
+ */
+export function buildArenaVerifyBridgePayload(
+  scoredAgent: ScoredAgent,
+  question: string,
+  personaName: string,
+): ArenaVerifyBridgePayload | null {
+  const oneLiner = (scoredAgent.response.one_liner || '').trim();
+  const answer = oneLiner || (scoredAgent.response.verdict || '').trim();
+  if (!answer) return null;
+  return {
+    answer: answer.slice(0, MAX_VERIFY_TEXT_LENGTH),
+    question: (question || '').trim().slice(0, MAX_VERIFY_TEXT_LENGTH) || 'Arena discussion',
+    personaName: (personaName || 'Arena winner').trim().slice(0, MAX_VERIFY_PERSONA_LENGTH),
+    score: Number.isFinite(scoredAgent.score) ? scoredAgent.score : 0,
+  };
+}
+
+/**
  * Make a user-controlled chat title safe for use as a Markdown heading.
  * Newlines and repeated whitespace are collapsed so a title cannot inject
  * extra blocks into the combined archive, and a leading ATX marker is

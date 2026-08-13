@@ -60,6 +60,7 @@ import {
   formatArenaTranscriptCsvExport,
   formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
+  buildArenaVerifyBridgePayload,
   pickArenaWinner,
 } from './lib/arenaExport';
 import { buildFollowUpContext } from './lib/followUpContext';
@@ -303,6 +304,8 @@ function App() {
   const transcriptCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Owns the Shift+V verify-winner action so the key handler can live before its callback. */
   const verifyWinnerRequestRef = useRef<((winner: ScoredAgent) => void) | null>(null);
+  /** Guards Shift+V / card clicks so a verify request can never double-fire. */
+  const verifyWinnerInFlightRef = useRef(false);
   /** Owns the save-winner button feedback so rapid toggles can't leave stale timers. */
   const winnerSaveFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1000,20 +1003,37 @@ function App() {
         showPlusUpgrade('Agent verification requires a Pro subscription.');
         return;
       }
+      if (verifyWinnerInFlightRef.current) return;
       const aid = scoredAgent.response.agent_id;
       const persona = getPersonaForAgentId(aid);
-      const personaName = persona?.name || AGENTS[aid].name;
-      const answer = scoredAgent.response.one_liner?.trim() || '';
-      const question = (response?.prompt || currentPrompt).trim() || 'Arena discussion';
+      const personaName = persona?.name || AGENTS[aid]?.name || 'Arena winner';
+      const payload = buildArenaVerifyBridgePayload(
+        scoredAgent,
+        response?.prompt || currentPrompt,
+        personaName,
+      );
+      if (!payload) {
+        setError('The winning take is empty, so there is nothing to verify yet.');
+        return;
+      }
+      verifyWinnerInFlightRef.current = true;
       setVerifyingWinnerAgentId(aid);
       setError(null);
       try {
-        const data = await verifyArenaAnswerInAgent(answer, question, personaName, scoredAgent.score);
+        const data = await verifyArenaAnswerInAgent(
+          payload.answer,
+          payload.question,
+          payload.personaName,
+          payload.score,
+        );
+        void track('arena_verify_winner', persona?.id, aid, {
+          arena_score: payload.score,
+        });
         navigate('/agent', {
           state: {
             bridgeTaskId: data.task_id,
             bridgeMode: true,
-            originalQuestion: question,
+            originalQuestion: payload.question,
           },
         });
       } catch (e) {
@@ -1023,6 +1043,7 @@ function App() {
             : 'Could not start Agent verification. Try again in a moment.',
         );
       } finally {
+        verifyWinnerInFlightRef.current = false;
         setVerifyingWinnerAgentId(null);
       }
     },

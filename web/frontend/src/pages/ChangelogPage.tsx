@@ -16,6 +16,7 @@ const CHANGELOG_ENTRIES = [
     },
     items: [
       '[NEW] Arena: verify the winning take in Agent Mode with Shift+V',
+      '[IMPROVED] Arena: Shift+V verification is duplicate-safe and handles empty or oversized takes gracefully',
       '[NEW] Arena: start a fresh task from anywhere with Shift+N',
       '[NEW] Arena: copy the full session transcript as markdown (Shift+E)',
       '[NEW] Arena: copy the full session transcript as JSON (Shift+K)',
