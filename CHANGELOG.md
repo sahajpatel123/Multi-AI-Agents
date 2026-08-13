@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Shared round links harden long prompts with an expand/collapse control on
+  the public page, reject malformed round-only URLs instead of falling back
+  to a single-take card, and stay inside the 2000-character URL budget even
+  when prompts or takes contain multi-byte text
 - Arena round header distinguishes "Winner downloaded" from the save-winner
   action, and save/unsave feedback resets cleanly between rounds
 - Sidebar "Clear chat selection" now empties the whole selection even when a

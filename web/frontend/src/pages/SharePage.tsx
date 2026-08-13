@@ -88,9 +88,10 @@ export function SharePage() {
   const response = sanitizeParam(params.get('response'));
   const agent = useMemo(() => resolveAgent(agentId), [agentId]);
   const round = useMemo(() => parseRoundShareUrl(params), [params]);
-  const isRound = round !== null && round.takes.length > 0;
+  const roundRequested = params.get('round') === '1';
+  const isRound = round !== null;
 
-  const hasContent = Boolean(response || prompt || (round && round.takes.length > 0));
+  const hasContent = roundRequested ? Boolean(round) : Boolean(response || prompt);
   const displayPrompt = isRound && round ? round.prompt : prompt;
 
   // Prefer mind name (then prompt) in the tab so shared links are scannable in multitasking.
@@ -115,7 +116,7 @@ export function SharePage() {
 
   useEffect(() => {
     setPromptExpanded(false);
-  }, [prompt]);
+  }, [displayPrompt]);
 
   useEffect(() => {
     if (!copied) return;
@@ -292,6 +293,15 @@ export function SharePage() {
                         >
                           {round.prompt}
                         </p>
+                        {isCollapsiblePrompt(round.prompt) ? (
+                          <button
+                            type="button"
+                            className="share-take__expand"
+                            onClick={() => setPromptExpanded((v) => !v)}
+                          >
+                            {promptExpanded ? 'Show less' : 'Show full question'}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </article>

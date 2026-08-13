@@ -4,8 +4,8 @@
  * A round link points at the existing public `/share` landing with
  * `round=1` plus up to four compact take parameters (`t0`…`t3`). The
  * payload is intentionally a summary: the question and each take's
- * one-liner/score, capped so links stay comfortably inside SharePage's
- * 2000-character URL budget even on mobile share sheets.
+ * one-liner/score, capped so the full encoded URL stays comfortably inside
+ * the shared 2000-character budget even on mobile share sheets.
  */
 
 export type RoundShareTake = {
@@ -32,6 +32,8 @@ export const ROUND_SHARE_MAX_AGENT_LEN = 64;
 export const ROUND_SHARE_MAX_TAKE_LEN = 220;
 export const ROUND_SHARE_MAX_PROMPT_LEN = 500;
 export const ROUND_SHARE_MAX_TAKES = 4;
+/** Total encoded URL budget, matching the share sheet guidance for /share. */
+export const ROUND_SHARE_MAX_URL_LEN = 2000;
 
 function clip(value: string, max: number): string {
   // Strip embedded NUL bytes — they break URL parsers downstream.
@@ -39,10 +41,10 @@ function clip(value: string, max: number): string {
   return (value || '').replace(/\u0000/g, '').slice(0, max).trim();
 }
 
-function encodeTake(take: RoundShareTake): string {
+function encodeTake(take: RoundShareTake, takeLen: number): string {
   const agentId = clip(take.agentId, ROUND_SHARE_MAX_AGENT_LEN);
   const score = Number.isFinite(take.score) ? Math.max(0, Math.min(100, Math.round(take.score ?? 0))) : '';
-  const oneLiner = clip(take.oneLiner, ROUND_SHARE_MAX_TAKE_LEN);
+  const oneLiner = clip(take.oneLiner, takeLen);
   return [agentId, String(score), oneLiner].join('|');
 }
 
@@ -55,29 +57,67 @@ function decodeScore(raw: string): number | undefined {
 
 /**
  * Build a public `/share` URL for a full round. The question is clipped to
- * 500 chars and each take to 220 chars so the complete link stays short.
+ * 500 chars and each take to 220 chars by default, then progressively
+ * shortened (by take length, take count, then prompt length) when the
+ * encoded URL would exceed the share budget — multi-byte text expands
+ * several times over once URL-encoded, so raw character caps alone are not
+ * enough.
  */
 export function buildRoundShareUrl(input: RoundShareInput): string {
   const origin = (input.origin || (typeof window !== 'undefined' ? window.location.origin : '')).replace(
     /\/$/,
     '',
   );
-  const params = new URLSearchParams();
-  params.set('round', '1');
-  params.set('prompt', clip(input.prompt, ROUND_SHARE_MAX_PROMPT_LEN));
-  if (input.winnerAgentId) {
-    params.set('winner', clip(input.winnerAgentId, ROUND_SHARE_MAX_AGENT_LEN));
+
+  const build = (promptLen: number, takeLen: number, maxTakes: number): string => {
+    const params = new URLSearchParams();
+    params.set('round', '1');
+    params.set('prompt', clip(input.prompt, promptLen));
+    if (input.winnerAgentId) {
+      params.set('winner', clip(input.winnerAgentId, ROUND_SHARE_MAX_AGENT_LEN));
+    }
+    input.takes
+      .filter(
+        (take) =>
+          clip(take.agentId, ROUND_SHARE_MAX_AGENT_LEN) ||
+          clip(take.oneLiner, takeLen),
+      )
+      .slice(0, maxTakes)
+      .forEach((take, index) => {
+        params.set(`t${index}`, encodeTake(take, takeLen));
+      });
+    return `${origin}/share?${params.toString()}`;
+  };
+
+  let promptLen = ROUND_SHARE_MAX_PROMPT_LEN;
+  let takeLen = ROUND_SHARE_MAX_TAKE_LEN;
+  let maxTakes = ROUND_SHARE_MAX_TAKES;
+  let url = build(promptLen, takeLen, maxTakes);
+
+  for (let guard = 0; guard < 64 && url.length > ROUND_SHARE_MAX_URL_LEN; guard += 1) {
+    if (takeLen > 80) {
+      takeLen = Math.max(80, Math.floor(takeLen * 0.7));
+    } else if (maxTakes > 1) {
+      maxTakes -= 1;
+    } else if (promptLen > 160) {
+      promptLen = Math.max(160, Math.floor(promptLen * 0.7));
+    } else if (takeLen > 0) {
+      takeLen = 0;
+    } else if (promptLen > 0) {
+      promptLen = 0;
+    } else {
+      break;
+    }
+    url = build(promptLen, takeLen, maxTakes);
   }
-  input.takes.slice(0, ROUND_SHARE_MAX_TAKES).forEach((take, index) => {
-    params.set(`t${index}`, encodeTake(take));
-  });
-  return `${origin}/share?${params.toString()}`;
+
+  return url;
 }
 
 /**
  * Parse the round payload from SharePage's query params. Returns null when
- * the link is not a round link or carries no usable takes/prompt, so the
- * existing single-take landing is never confused with an empty round.
+ * the link is not a round link or carries no usable takes, so the existing
+ * single-take landing is never confused with an empty or malformed round.
  */
 export function parseRoundShareUrl(params: URLSearchParams): RoundShareData | null {
   if (params.get('round') !== '1') return null;
@@ -106,7 +146,7 @@ export function parseRoundShareUrl(params: URLSearchParams): RoundShareData | nu
     });
   }
 
-  if (!takes.length && !prompt) return null;
+  if (!takes.length) return null;
   return {
     prompt,
     winnerAgentId: winnerAgentId || undefined,

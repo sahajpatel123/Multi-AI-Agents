@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { SharePage } from './SharePage';
 
@@ -71,5 +71,31 @@ describe('SharePage', () => {
     expect(screen.getAllByText(/Arena take/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Arena winner')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy round/i })).toBeInTheDocument();
+  });
+
+  it('expands and collapses a long shared round prompt', () => {
+    const longPrompt = 'p'.repeat(200);
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent(longPrompt) +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.');
+    renderShare(qs);
+
+    const promptText = screen.getByText(longPrompt);
+    expect(promptText.className).toContain('is-clamped');
+
+    fireEvent.click(screen.getByRole('button', { name: /show full question/i }));
+    expect(promptText.className).not.toContain('is-clamped');
+
+    fireEvent.click(screen.getByRole('button', { name: /show less/i }));
+    expect(promptText.className).toContain('is-clamped');
+  });
+
+  it('shows the empty state instead of a single-take card for a malformed round link', () => {
+    renderShare('?round=1&prompt=' + encodeURIComponent('Question only, no takes'));
+    expect(screen.getByText(/share link is empty or expired/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /copy take/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /copy round/i })).not.toBeInTheDocument();
   });
 });
