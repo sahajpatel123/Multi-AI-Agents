@@ -69,6 +69,7 @@ import {
 import { buildFollowUpContext } from './lib/followUpContext';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
 import { buildRoundShareUrl } from './lib/roundShare';
+import { clearSharedArenaPrompt, readSharedArenaPrompt } from './lib/sharePrompt';
 import { buildSessionTurnResponse } from './lib/arenaTurn';
 import { loadSessionTranscriptBundles } from './lib/arenaSessionArchive';
 import {
@@ -213,8 +214,13 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [hasSubmittedPrompt, setHasSubmittedPrompt] = useState(false);
-  const [presetPrompt, setPresetPrompt] = useState('');
-  const [presetPromptNonce, setPresetPromptNonce] = useState(0);
+  // A question handed off from a shared round/take landing pre-fills the
+  // compose box on mount (read-only here; consumed after mount so a later
+  // reload cannot re-apply it).
+  const [presetPrompt, setPresetPrompt] = useState<string>(() => readSharedArenaPrompt());
+  const [presetPromptNonce, setPresetPromptNonce] = useState<number>(() =>
+    presetPrompt ? 1 : 0,
+  );
   const [stressFromAgentBanner, setStressFromAgentBanner] = useState(false);
   const [verifyingWinnerAgentId, setVerifyingWinnerAgentId] = useState<string | null>(null);
   const [crossPollinateSourceTaskId, setCrossPollinateSourceTaskId] = useState<string | null>(null);
@@ -246,6 +252,14 @@ function App() {
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate]);
+
+  // Consume a question handed off from a shared round/take landing. The
+  // preset is read during the initial render so the compose box can win
+  // over a stale draft; this effect only clears the handoff afterwards.
+  useEffect(() => {
+    clearSharedArenaPrompt();
+  }, []);
+
   const [showPromptChips, setShowPromptChips] = useState(false);
   const [activeExamplePromptIndex, setActiveExamplePromptIndex] = useState(0);
   const [isExamplePromptHovered, setIsExamplePromptHovered] = useState(false);

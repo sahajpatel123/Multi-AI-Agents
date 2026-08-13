@@ -24,6 +24,7 @@ import {
   invokeNativeShare,
 } from '../lib/shareUrl';
 import { formatRoundShareText, parseRoundShareUrl } from '../lib/roundShare';
+import { saveSharedArenaPrompt } from '../lib/sharePrompt';
 import '../styles/share-landing.css';
 
 const MAX_PARAM_LEN = 2000;
@@ -125,6 +126,10 @@ export function SharePage() {
   }, [copied]);
 
   const goTry = () => {
+    // Hand the shared question to the next Arena mount so "Try this in
+    // Arena" lands with the prompt already in the compose box. The handoff
+    // is a no-op for empty/expired share links.
+    saveSharedArenaPrompt(isRound ? (round?.prompt || '') : prompt);
     if (isAuthenticated) {
       navigate('/app');
       return;

@@ -110,6 +110,8 @@ export function PromptInput({
   const resetHistoryState = useCallback(() => {
     historyStateRef.current = createPromptHistoryState();
   }, []);
+  /** True once the preset effect has run, so a mount-time preset can beat a stale draft. */
+  const presetAppliedRef = useRef(false);
   const budgetId = useId();
 
   const activePlaceholder = placeholder ?? CYCLING_PLACEHOLDERS[placeholderIndex];
@@ -146,6 +148,7 @@ export function PromptInput({
 
   useEffect(() => {
     if (presetPromptNonce === undefined) return;
+    presetAppliedRef.current = true;
     resetHistoryState();
     setPrompt(presetPrompt || '');
     requestAnimationFrame(() => {
@@ -163,6 +166,11 @@ export function PromptInput({
     if (!draftKey) return;
     if (draftRestoreDoneRef.current) return;
     draftRestoreDoneRef.current = true;
+    if (presetAppliedRef.current && (presetPrompt || '').trim()) {
+      // A shared/preset question arrived before mount finished; it wins over
+      // a stale draft so deep-linked questions are never silently replaced.
+      return;
+    }
     const stored = loadPromptDraft(draftKey);
     if (!stored) return;
     resetHistoryState();

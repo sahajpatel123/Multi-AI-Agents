@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Shared Arena round/take landings now hand the question to Arena: "Try this
+  in Arena" (and "Open Arena" for signed-in visitors) opens the compose box
+  with the shared prompt already filled in
 - Arena full rounds can be shared as a public link (Shift+F or the header
   "Share round" action), landing on a compact all-takes page with scores and
   the winner flagged

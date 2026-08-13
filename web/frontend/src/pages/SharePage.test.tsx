@@ -1,15 +1,31 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { SharePage } from './SharePage';
+import { useAuth } from '../hooks/useAuth';
+import { SHARED_PROMPT_STORAGE_KEY } from '../lib/sharePrompt';
+
+const { navigateMock, setRedirectIntentMock } = vi.hoisted(() => ({
+  navigateMock: vi.fn(),
+  setRedirectIntentMock: vi.fn(),
+}));
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return { ...actual, useNavigate: () => navigateMock };
+});
+
+vi.mock('../utils/redirectIntent', () => ({
+  setRedirectIntent: (path: string) => setRedirectIntentMock(path),
+}));
 
 vi.mock('../hooks/useAuth', () => ({
-  useAuth: () => ({
+  useAuth: vi.fn(() => ({
     isAuthenticated: false,
     user: null,
     loading: false,
     isLoading: false,
-  }),
+  })),
 }));
 
 vi.mock('../components/Navbar', () => ({
@@ -31,6 +47,18 @@ function renderShare(search: string) {
 }
 
 describe('SharePage', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    navigateMock.mockClear();
+    setRedirectIntentMock.mockClear();
+    vi.mocked(useAuth).mockImplementation(() => ({
+      isAuthenticated: false,
+      user: null,
+      loading: false,
+      isLoading: false,
+    }));
+  });
+
   it('shows empty state when params are missing', () => {
     renderShare('');
     expect(screen.getByText(/share link is empty or expired/i)).toBeInTheDocument();
@@ -97,5 +125,45 @@ describe('SharePage', () => {
     expect(screen.getByText(/share link is empty or expired/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /copy take/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /copy round/i })).not.toBeInTheDocument();
+  });
+
+  it('hands the shared round question to Arena for an authenticated visitor', () => {
+    vi.mocked(useAuth).mockReturnValue({
+      isAuthenticated: true,
+      user: null,
+      loading: false,
+      isLoading: false,
+    });
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /open arena/i }));
+    expect(sessionStorage.getItem(SHARED_PROMPT_STORAGE_KEY)).toBe('Should we ship today?');
+    expect(navigateMock).toHaveBeenCalledWith('/app');
+  });
+
+  it('stages the shared take question and sends guests through sign-in', () => {
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /try this in arena/i }));
+    expect(sessionStorage.getItem(SHARED_PROMPT_STORAGE_KEY)).toBe('Should I ship today?');
+    expect(setRedirectIntentMock).toHaveBeenCalledWith('/app');
+    expect(navigateMock).toHaveBeenCalledWith('/signin');
+  });
+
+  it('does not stage a prompt from an empty share link', () => {
+    renderShare('');
+    fireEvent.click(screen.getByRole('button', { name: /try arena/i }));
+    expect(sessionStorage.getItem(SHARED_PROMPT_STORAGE_KEY)).toBeNull();
+    expect(navigateMock).toHaveBeenCalledWith('/signin');
   });
 });

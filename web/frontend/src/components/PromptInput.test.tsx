@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { improvePrompt } from '../api';
+import { savePromptDraft } from '../lib/promptDraft';
 import { PromptInput } from './PromptInput';
 
 vi.mock('../api', () => ({
@@ -10,6 +11,14 @@ vi.mock('../api', () => ({
 const mockedImprovePrompt = vi.mocked(improvePrompt);
 
 describe('PromptInput', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
   it('calls onSubmit with the typed prompt when the form is submitted', () => {
     const onSubmit = vi.fn();
     render(<PromptInput onSubmit={onSubmit} isLoading={false} />);
@@ -117,6 +126,34 @@ describe('PromptInput', () => {
       />,
     );
     expect(textarea.value).toBe('Second preset');
+  });
+
+  it('lets a mount-time preset win over a stored draft', () => {
+    savePromptDraft('arena_prompt_draft:v1', 'stale draft');
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        draftKey="arena_prompt_draft:v1"
+        presetPrompt="Shared question?"
+        presetPromptNonce={1}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('Shared question?');
+  });
+
+  it('still restores a stored draft when no preset arrives at mount', () => {
+    savePromptDraft('arena_prompt_draft:v1', 'stored draft');
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        draftKey="arena_prompt_draft:v1"
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('stored draft');
   });
 
   it('hides the polish control when polishEnabled is not set', () => {
