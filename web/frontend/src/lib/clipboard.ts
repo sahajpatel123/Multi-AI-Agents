@@ -44,3 +44,35 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
 }
+
+/**
+ * Copy CSV text to the clipboard as a real `text/csv` payload when the
+ * browser supports ClipboardItem, so spreadsheet apps can parse pasted
+ * transcript rows instead of receiving one plain-text blob. Also advertises
+ * a `text/plain` representation for regular editors, and falls back to the
+ * generic text helper when the structured clipboard path is unavailable or
+ * rejected.
+ */
+export async function copyCsvToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+
+  try {
+    if (
+      typeof ClipboardItem !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      navigator.clipboard?.write
+    ) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/csv': new Blob([text], { type: 'text/csv;charset=utf-8' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        }),
+      ]);
+      return true;
+    }
+  } catch {
+    /* fall through to the generic text copy path */
+  }
+
+  return copyToClipboard(text);
+}

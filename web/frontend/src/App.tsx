@@ -752,10 +752,22 @@ function App() {
         void track('arena_copy_transcript_csv');
       } else {
         setTranscriptCsvCopied(false);
+        if (transcriptCopyFeedbackTimer.current) {
+          clearTimeout(transcriptCopyFeedbackTimer.current);
+          transcriptCopyFeedbackTimer.current = null;
+        }
+        setTranscriptCopied(false);
+        setTranscriptJsonCopied(false);
         setError('Could not copy the transcript CSV. Try again or download it instead.');
       }
     } catch {
       setTranscriptCsvCopied(false);
+      if (transcriptCopyFeedbackTimer.current) {
+        clearTimeout(transcriptCopyFeedbackTimer.current);
+        transcriptCopyFeedbackTimer.current = null;
+      }
+      setTranscriptCopied(false);
+      setTranscriptJsonCopied(false);
       setError('Could not copy the transcript CSV. Try again or download it instead.');
     } finally {
       transcriptCopyInFlightRef.current = false;

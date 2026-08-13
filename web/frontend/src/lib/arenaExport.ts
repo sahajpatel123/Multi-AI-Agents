@@ -1,5 +1,5 @@
 import type { PromptResponse, ScoredAgent, SessionTurn } from '../types';
-import { copyToClipboard } from './clipboard';
+import { copyCsvToClipboard, copyToClipboard } from './clipboard';
 import { sanitizeDownloadFilename } from './downloadTextFile';
 
 export type ArenaExportPersona = {
@@ -325,7 +325,9 @@ export async function copyArenaTranscriptCsvToClipboard(
   turns: SessionTurn[],
   resolvePersona: (agentId: string) => ArenaExportPersona,
 ): Promise<boolean> {
-  return copyToClipboard(formatArenaTranscriptCsvExport(turns, resolvePersona));
+  const exchanges = Array.isArray(turns) ? turns : [];
+  if (!exchanges.length) return false;
+  return copyCsvToClipboard(formatArenaTranscriptCsvExport(exchanges, resolvePersona));
 }
 
 /**
