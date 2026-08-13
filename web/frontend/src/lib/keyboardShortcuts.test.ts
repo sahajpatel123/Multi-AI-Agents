@@ -16,6 +16,7 @@ import {
   isArenaVerifyWinnerKey,
   isAgentCopyAnswerKey,
   isAgentCopyReportKey,
+  isAgentCopyReportJsonKey,
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
   isAgentNewTaskKey,
@@ -131,6 +132,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('agent').some(
         (s) => s.keys === 'Shift + P' && s.action.toLowerCase().includes('research report'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('agent').some(
+        (s) => s.keys === 'Shift + O' && s.action.toLowerCase().includes('json'),
       ),
     ).toBe(true);
     expect(
@@ -348,6 +354,13 @@ describe('keyboardShortcuts', () => {
     expect(isAgentCopyReportKey({ key: 'P', shiftKey: true, ctrlKey: true })).toBe(false);
     expect(isAgentCopyReportKey({ key: 'J', shiftKey: true })).toBe(false);
 
+    expect(isAgentCopyReportJsonKey({ key: 'O', shiftKey: true })).toBe(true);
+    expect(isAgentCopyReportJsonKey({ key: 'o', shiftKey: true })).toBe(true);
+    expect(isAgentCopyReportJsonKey({ key: 'O' })).toBe(false);
+    expect(isAgentCopyReportJsonKey({ key: 'O', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isAgentCopyReportJsonKey({ key: 'O', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isAgentCopyReportJsonKey({ key: 'J', shiftKey: true })).toBe(false);
+
     expect(isAgentNewTaskKey({ key: 'N', shiftKey: true })).toBe(true);
     expect(isAgentNewTaskKey({ key: 'n', shiftKey: true })).toBe(true);
     expect(isAgentNewTaskKey({ key: 'N' })).toBe(false);
@@ -360,6 +373,7 @@ describe('keyboardShortcuts', () => {
     expect(isAgentDownloadAnswerKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentCopyReportKey({ key: 'P', shiftKey: true, repeat: true })).toBe(false);
+    expect(isAgentCopyReportJsonKey({ key: 'O', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentNewTaskKey({ key: 'N', shiftKey: true, repeat: true })).toBe(false);
   });
 });

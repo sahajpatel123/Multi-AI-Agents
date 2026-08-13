@@ -25,6 +25,7 @@ import {
   exportAgentTaskMarkdown,
   exportAgentTaskJson,
   exportOrchestrationPdf,
+  fetchAgentTaskJsonText,
   fetchAgentTaskMarkdownText,
   getDiscoverRooms,
   getAgentHistory,
@@ -83,6 +84,7 @@ import {
 import {
   isAgentCopyAnswerKey,
   isAgentCopyReportKey,
+  isAgentCopyReportJsonKey,
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
   isAgentNewTaskKey,
@@ -956,6 +958,11 @@ export function AgentPage() {
   const copyReportInFlightRef = useRef(false);
   const copyReportRunIdRef = useRef(0);
   const copyReportFeedbackTimerRef = useRef<number | null>(null);
+  const [copyingReportJson, setCopyingReportJson] = useState(false);
+  const [copyReportJsonFeedback, setCopyReportJsonFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copyReportJsonInFlightRef = useRef(false);
+  const copyReportJsonRunIdRef = useRef(0);
+  const copyReportJsonFeedbackTimerRef = useRef<number | null>(null);
   const pendingRoomHandledRef = useRef<string | null>(null);
 
   const closeTemplatesModal = useCallback(() => {
@@ -2132,6 +2139,14 @@ export function AgentPage() {
     }
     setCopyingReport(false);
     setCopyReportFeedback('idle');
+    copyReportJsonRunIdRef.current += 1;
+    copyReportJsonInFlightRef.current = false;
+    if (copyReportJsonFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportJsonFeedbackTimerRef.current);
+      copyReportJsonFeedbackTimerRef.current = null;
+    }
+    setCopyingReportJson(false);
+    setCopyReportJsonFeedback('idle');
     setUserRating(null);
     setRatingResult(null);
     setRatingSubmitBusy(false);
@@ -2358,9 +2373,51 @@ export function AgentPage() {
     }
   }, [result?.status, result?.task_id]);
 
+  const handleCopyTaskJson = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || copyReportJsonInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++copyReportJsonRunIdRef.current;
+    copyReportJsonInFlightRef.current = true;
+    setCopyingReportJson(true);
+    setCopyReportJsonFeedback('idle');
+    if (copyReportJsonFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportJsonFeedbackTimerRef.current);
+      copyReportJsonFeedbackTimerRef.current = null;
+    }
+    try {
+      const json = await fetchAgentTaskJsonText(taskId);
+      if (copyReportJsonRunIdRef.current !== runId) return;
+      const ok = await copyToClipboard(json);
+      if (copyReportJsonRunIdRef.current !== runId) return;
+      setCopyReportJsonFeedback(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy the research report. Try the Report .json download instead.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyReportJsonFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportJsonFeedback('idle');
+        copyReportJsonFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      if (copyReportJsonRunIdRef.current !== runId) return;
+      setCopyReportJsonFeedback('failed');
+      setError(e instanceof Error ? e.message : 'Could not copy the research report.');
+      const hold = motionDuration(2800);
+      copyReportJsonFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportJsonFeedback('idle');
+        copyReportJsonFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (copyReportJsonRunIdRef.current === runId) {
+        copyReportJsonInFlightRef.current = false;
+        setCopyingReportJson(false);
+      }
+    }
+  }, [result?.status, result?.task_id]);
+
   // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
-  // Shift+J / Shift+P mirror the result toolbar buttons. Form controls are skipped so
-  // normal Shift+letter typing is never swallowed.
+  // Shift+J / Shift+O / Shift+P mirror the result toolbar buttons. Form
+  // controls are skipped so normal Shift+letter typing is never swallowed.
   useEffect(() => {
     if (result?.status !== 'complete' || !result?.task_id || isRunning) return;
     const onKey = (e: KeyboardEvent) => {
@@ -2380,6 +2437,9 @@ export function AgentPage() {
       } else if (isAgentCopyReportKey(e)) {
         e.preventDefault();
         void handleCopyTaskMarkdown();
+      } else if (isAgentCopyReportJsonKey(e)) {
+        e.preventDefault();
+        void handleCopyTaskJson();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -2388,6 +2448,7 @@ export function AgentPage() {
     handleCopyAnswer,
     handleDownloadAnswer,
     handleCopyTaskMarkdown,
+    handleCopyTaskJson,
     handleExportTaskJson,
     isRunning,
     result?.status,
@@ -2638,6 +2699,11 @@ export function AgentPage() {
       copyReportInFlightRef.current = false;
       if (copyReportFeedbackTimerRef.current != null) {
         window.clearTimeout(copyReportFeedbackTimerRef.current);
+      }
+      copyReportJsonRunIdRef.current += 1;
+      copyReportJsonInFlightRef.current = false;
+      if (copyReportJsonFeedbackTimerRef.current != null) {
+        window.clearTimeout(copyReportJsonFeedbackTimerRef.current);
       }
     };
   }, []);
@@ -9199,6 +9265,27 @@ export function AgentPage() {
                             : copyReportFeedback === 'failed'
                               ? 'Copy failed'
                               : 'Copy report'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={copyingReportJson ? undefined : Icons.copy(14)}
+                        loading={copyingReportJson}
+                        disabled={copyingReportJson}
+                        title="Copy the full research report as machine-readable JSON (Shift+O)"
+                        aria-keyshortcuts="Shift+O"
+                        onClick={() => void handleCopyTaskJson()}
+                      >
+                        {copyingReportJson
+                          ? 'Copying…'
+                          : copyReportJsonFeedback === 'copied'
+                            ? 'Copied!'
+                            : copyReportJsonFeedback === 'failed'
+                              ? 'Copy failed'
+                              : 'Copy .json'}
                       </Button>
                     ) : null}
                     {result.task_id ? (

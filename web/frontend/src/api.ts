@@ -1578,7 +1578,7 @@ export async function fetchAgentTaskMarkdownText(taskId: string): Promise<string
   return text;
 }
 
-export async function exportAgentTaskJson(taskId: string): Promise<Blob> {
+async function fetchAgentTaskJsonResponse(taskId: string): Promise<Response> {
   const response = await apiFetch(
     `/api/agent/tasks/${encodeURIComponent(taskId)}/export.json`,
   );
@@ -1590,7 +1590,21 @@ export async function exportAgentTaskJson(taskId: string): Promise<Blob> {
       err,
     );
   }
+  return response;
+}
+
+export async function exportAgentTaskJson(taskId: string): Promise<Blob> {
+  const response = await fetchAgentTaskJsonResponse(taskId);
   return response.blob();
+}
+
+export async function fetchAgentTaskJsonText(taskId: string): Promise<string> {
+  const response = await fetchAgentTaskJsonResponse(taskId);
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty report returned by the server', response));
+  }
+  return text;
 }
 
 export async function postAgentOrchestrate(body: {
