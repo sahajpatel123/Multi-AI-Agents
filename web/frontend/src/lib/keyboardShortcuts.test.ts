@@ -5,6 +5,9 @@ import {
   isArenaDownloadWinnerKey,
   isArenaReRunRoundKey,
   isArenaSaveWinnerKey,
+  isAgentCopyAnswerKey,
+  isAgentDownloadAnswerKey,
+  isAgentDownloadJsonKey,
   isBareQuestionHelpKey,
   shortcutsForSurface,
   shortcutsPanelTitle,
@@ -44,6 +47,21 @@ describe('keyboardShortcuts', () => {
       ),
     ).toBe(true);
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
+    expect(
+      shortcutsForSurface('agent').some(
+        (s) => s.keys === 'Shift + C' && s.action.toLowerCase().includes('answer'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('agent').some(
+        (s) => s.keys === 'Shift + D' && s.action.toLowerCase().includes('markdown'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('agent').some(
+        (s) => s.keys === 'Shift + J' && s.action.toLowerCase().includes('json'),
+      ),
+    ).toBe(true);
     expect(
       shortcutsForSurface('agent').some(
         (s) => s.keys === 'Esc' && s.action.toLowerCase().includes('rename'),
@@ -157,5 +175,29 @@ describe('keyboardShortcuts', () => {
     expect(isArenaCopyQuestionKey({ key: 'Q', shiftKey: true })).toBe(true);
     expect(isArenaSaveWinnerKey({ key: 'S', shiftKey: true })).toBe(true);
     expect(isArenaReRunRoundKey({ key: 'R', shiftKey: true })).toBe(true);
+  });
+
+  it('detects Agent result shortcuts as bare Shift+letter keys', () => {
+    expect(isAgentCopyAnswerKey({ key: 'C', shiftKey: true })).toBe(true);
+    expect(isAgentCopyAnswerKey({ key: 'c', shiftKey: true })).toBe(true);
+    expect(isAgentCopyAnswerKey({ key: 'C' })).toBe(false);
+    expect(isAgentCopyAnswerKey({ key: 'C', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isAgentCopyAnswerKey({ key: 'D', shiftKey: true })).toBe(false);
+
+    expect(isAgentDownloadAnswerKey({ key: 'D', shiftKey: true })).toBe(true);
+    expect(isAgentDownloadAnswerKey({ key: 'd', shiftKey: true })).toBe(true);
+    expect(isAgentDownloadAnswerKey({ key: 'D' })).toBe(false);
+    expect(isAgentDownloadAnswerKey({ key: 'D', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isAgentDownloadAnswerKey({ key: 'J', shiftKey: true })).toBe(false);
+
+    expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true })).toBe(true);
+    expect(isAgentDownloadJsonKey({ key: 'j', shiftKey: true })).toBe(true);
+    expect(isAgentDownloadJsonKey({ key: 'J' })).toBe(false);
+    expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true, altKey: true })).toBe(false);
+    expect(isAgentDownloadJsonKey({ key: 'D', shiftKey: true })).toBe(false);
+
+    expect(isAgentCopyAnswerKey({ key: 'C', shiftKey: true, repeat: true })).toBe(false);
+    expect(isAgentDownloadAnswerKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
+    expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
   });
 });

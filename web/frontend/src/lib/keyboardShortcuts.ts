@@ -31,6 +31,9 @@ const ARENA: ShortcutHint[] = [
 const AGENT: ShortcutHint[] = [
   { keys: '/', action: 'Focus research compose or follow-up' },
   { keys: 'Enter', action: 'Run task or send follow-up' },
+  { keys: 'Shift + C', action: 'Copy the completed answer as markdown' },
+  { keys: 'Shift + D', action: 'Download the answer as a markdown file' },
+  { keys: 'Shift + J', action: 'Download the full report as JSON' },
   { keys: 'Esc', action: 'Close attach menu, cadence picker, or rename' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
@@ -162,7 +165,7 @@ export type ShortcutKeyEvent = {
  */
 function isBareShiftLetterKey(
   event: ShortcutKeyEvent,
-  letter: 'c' | 'd' | 'q' | 's' | 'r',
+  letter: 'c' | 'd' | 'q' | 's' | 'r' | 'j',
 ): boolean {
   if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
@@ -194,4 +197,19 @@ export function isArenaSaveWinnerKey(event: ShortcutKeyEvent): boolean {
 /** Shift+R — replay the last completed Arena round with the same prompt. */
 export function isArenaReRunRoundKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'r');
+}
+
+/** Shift+C — copy a completed Agent answer to the clipboard as markdown. */
+export function isAgentCopyAnswerKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'c');
+}
+
+/** Shift+D — download a completed Agent answer as a markdown file. */
+export function isAgentDownloadAnswerKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'd');
+}
+
+/** Shift+J — download the full Agent research report as JSON. */
+export function isAgentDownloadJsonKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'j');
 }

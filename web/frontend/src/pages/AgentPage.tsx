@@ -79,6 +79,11 @@ import {
   historyItemRerunText,
   historyRowTimeTitle,
 } from '../lib/agentHistoryRow';
+import {
+  isAgentCopyAnswerKey,
+  isAgentDownloadAnswerKey,
+  isAgentDownloadJsonKey,
+} from '../lib/keyboardShortcuts';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { User } from '../types';
 // setRedirectIntent is unused but kept for future use
@@ -1908,7 +1913,7 @@ export function AgentPage() {
     }
   };
 
-  const handleExportTaskJson = async () => {
+  const handleExportTaskJson = useCallback(async () => {
     if (!result?.task_id || exportingJson) return;
     setExportingJson(true);
     try {
@@ -1923,7 +1928,7 @@ export function AgentPage() {
     } finally {
       setExportingJson(false);
     }
-  };
+  }, [exportingJson, result?.task_id]);
 
   const handleExportOrchestrationPdf = async () => {
     const oid = orchResult?.orchestration?.id as string | undefined;
@@ -2195,6 +2200,71 @@ export function AgentPage() {
     () => plainTextFromFinalAnswer(result?.final_answer, parsedAnswer),
     [result?.final_answer, parsedAnswer],
   );
+
+  const completedAnswerMarkdown = useMemo(
+    () =>
+      formatAgentAnswerExport({
+        question: result?.original_task || result?.task || task || '',
+        answer: plainAnswerText || result?.final_answer || '',
+        taskId: result?.task_id,
+      }),
+    [
+      plainAnswerText,
+      result?.final_answer,
+      result?.original_task,
+      result?.task,
+      result?.task_id,
+      task,
+    ],
+  );
+
+  const handleCopyAnswer = useCallback(() => {
+    if (!result?.task_id) return;
+    void copyToClipboard(completedAnswerMarkdown).then((ok) => {
+      setCopyAnswerFeedback(ok ? 'copied' : 'failed');
+      const hold = motionDuration(ok ? 2000 : 2800);
+      window.setTimeout(() => setCopyAnswerFeedback('idle'), hold > 0 ? hold : 0);
+    });
+  }, [completedAnswerMarkdown, result?.task_id]);
+
+  const handleDownloadAnswer = useCallback(() => {
+    if (!result?.task_id) return;
+    const question = result?.original_task || result?.task || task || '';
+    const stem = `agent-${(question || result.task_id).slice(0, 48)}`;
+    const ok = downloadMarkdownFile(completedAnswerMarkdown, stem);
+    setDownloadAnswerFeedback(ok ? 'done' : 'failed');
+    const hold = motionDuration(ok ? 2000 : 2800);
+    window.setTimeout(() => setDownloadAnswerFeedback('idle'), hold > 0 ? hold : 0);
+  }, [completedAnswerMarkdown, result?.original_task, result?.task, result?.task_id, task]);
+
+  // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
+  // Shift+J mirror the result toolbar buttons. Form controls are skipped so
+  // normal Shift+letter typing is never swallowed.
+  useEffect(() => {
+    if (result?.status !== 'complete' || !result?.task_id || isRunning) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      if (isAgentCopyAnswerKey(e)) {
+        e.preventDefault();
+        handleCopyAnswer();
+      } else if (isAgentDownloadAnswerKey(e)) {
+        e.preventDefault();
+        handleDownloadAnswer();
+      } else if (isAgentDownloadJsonKey(e)) {
+        e.preventDefault();
+        void handleExportTaskJson();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    handleCopyAnswer,
+    handleDownloadAnswer,
+    handleExportTaskJson,
+    isRunning,
+    result?.status,
+    result?.task_id,
+  ]);
 
   const answerSentences = useMemo((): AnswerSentenceView[] => {
     if (parsedAnswer?.sentences?.length) {
@@ -8907,25 +8977,7 @@ export function AgentPage() {
                       size="sm"
                       icon={Icons.copy(14)}
                       title="Copy answer as markdown (question + answer)"
-                      onClick={() => {
-                        const md = formatAgentAnswerExport({
-                          question:
-                            result.original_task ||
-                            result.task ||
-                            task ||
-                            '',
-                          answer: plainAnswerText || result.final_answer || '',
-                          taskId: result.task_id,
-                        });
-                        void copyToClipboard(md).then((ok) => {
-                          setCopyAnswerFeedback(ok ? 'copied' : 'failed');
-                          const hold = motionDuration(ok ? 2000 : 2800);
-                          window.setTimeout(
-                            () => setCopyAnswerFeedback('idle'),
-                            hold > 0 ? hold : 0,
-                          );
-                        });
-                      }}
+                      onClick={() => handleCopyAnswer()}
                     >
                       {copyAnswerFeedback === 'copied'
                         ? 'Copied!'
@@ -8939,23 +8991,7 @@ export function AgentPage() {
                       size="sm"
                       icon={Icons.download(14)}
                       title="Download answer as a markdown file"
-                      onClick={() => {
-                        const question =
-                          result.original_task || result.task || task || '';
-                        const md = formatAgentAnswerExport({
-                          question,
-                          answer: plainAnswerText || result.final_answer || '',
-                          taskId: result.task_id,
-                        });
-                        const stem = `agent-${(question || result.task_id || 'answer').slice(0, 48)}`;
-                        const ok = downloadMarkdownFile(md, stem);
-                        setDownloadAnswerFeedback(ok ? 'done' : 'failed');
-                        const hold = motionDuration(ok ? 2000 : 2800);
-                        window.setTimeout(
-                          () => setDownloadAnswerFeedback('idle'),
-                          hold > 0 ? hold : 0,
-                        );
-                      }}
+                      onClick={() => handleDownloadAnswer()}
                     >
                       {downloadAnswerFeedback === 'done'
                         ? 'Downloaded'

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Agent Mode completed results can be copied (Shift+C) or downloaded as
+  Markdown (Shift+D), and the full report can be downloaded as JSON (Shift+J)
 - Arena winner take can be saved to or removed from the saved-takes library
   with a new round-header "Save winner" action or the Shift+S shortcut
 - Sidebar "Select all" now stages every matching chat in one click (count is
