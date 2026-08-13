@@ -63,6 +63,8 @@ const DISCUSS: ShortcutHint[] = [
   { keys: 'End', action: 'Jump to latest message' },
   { keys: 'Shift + C', action: 'Copy the full 1-on-1 thread as markdown' },
   { keys: 'Shift + D', action: 'Download the full 1-on-1 thread as markdown' },
+  { keys: 'Shift + O', action: 'Copy the full 1-on-1 thread as JSON' },
+  { keys: 'Shift + J', action: 'Download the full 1-on-1 thread as JSON' },
   { keys: 'Shift + N', action: 'Start a new Arena task' },
   { keys: 'Esc', action: 'Back to Arena' },
   { keys: '?', action: 'Toggle this shortcuts list' },
@@ -74,6 +76,8 @@ const DEBATE: ShortcutHint[] = [
   { keys: 'End', action: 'Jump to latest in the thread' },
   { keys: 'Shift + C', action: 'Copy the full debate transcript as markdown' },
   { keys: 'Shift + D', action: 'Download the full debate transcript as markdown' },
+  { keys: 'Shift + O', action: 'Copy the full debate transcript as JSON' },
+  { keys: 'Shift + J', action: 'Download the full debate transcript as JSON' },
   { keys: 'Shift + N', action: 'Start a new Arena task' },
   { keys: 'Esc', action: 'Back to Arena' },
   { keys: '?', action: 'Toggle this shortcuts list' },
@@ -325,6 +329,24 @@ export function isThreadCopyMarkdownKey(event: ShortcutKeyEvent): boolean {
  */
 export function isThreadDownloadMarkdownKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'd');
+}
+
+/**
+ * Shift+O — copy the full 1-on-1 Discuss thread (or Debate transcript) as
+ * JSON. Same letter as Arena's "copy the round as JSON" and Agent's "copy the
+ * report as JSON" so O consistently means "copy the structured export".
+ */
+export function isThreadCopyJsonKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'o');
+}
+
+/**
+ * Shift+J — download the full 1-on-1 Discuss thread (or Debate transcript)
+ * as a JSON file. Same letter as Arena's "download the round as JSON" and
+ * Agent's "download the report as JSON".
+ */
+export function isThreadDownloadJsonKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'j');
 }
 
 /** Shift+C — copy a completed Agent answer to the clipboard as markdown. */

@@ -22,8 +22,16 @@ import { titleForArenaBusy } from '../lib/documentTitle';
 import { motionDuration, prefersReducedMotion, scrollBehavior } from '../lib/motion';
 import { isScrollNearBottom, shouldAutoScrollChat } from '../lib/chatScroll';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
-import { formatDiscussExport, formatDiscussMessageCopy } from '../lib/threadExport';
+import {
+  downloadMarkdownFile,
+  downloadTextFile,
+  withDownloadDate,
+} from '../lib/downloadTextFile';
+import {
+  formatDiscussExport,
+  formatDiscussJsonExport,
+  formatDiscussMessageCopy,
+} from '../lib/threadExport';
 import {
   isBareEndKey,
   isBareSlashKey,
@@ -33,6 +41,8 @@ import {
 import {
   isThreadCopyMarkdownKey,
   isThreadDownloadMarkdownKey,
+  isThreadCopyJsonKey,
+  isThreadDownloadJsonKey,
 } from '../lib/keyboardShortcuts';
 
 interface DiscussModeProps {
@@ -76,6 +86,8 @@ export function DiscussMode({
   const [error, setError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [copyJsonFeedback, setCopyJsonFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadJsonFeedback, setDownloadJsonFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Which message key last copied: 'seed' | `msg-${i}` | null */
   const [msgCopyKey, setMsgCopyKey] = useState<string | null>(null);
   const [msgCopyStatus, setMsgCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -93,6 +105,8 @@ export function DiscussMode({
   const mountedRef = useRef(true);
   const copyThreadInFlightRef = useRef(false);
   const downloadThreadInFlightRef = useRef(false);
+  const copyThreadJsonInFlightRef = useRef(false);
+  const downloadThreadJsonInFlightRef = useRef(false);
 
   const currentHistory = histories[activeAgent.response.agent_id] || [];
   const discussBusy = discussWorkInFlight(isStreaming);
@@ -112,6 +126,18 @@ export function DiscussMode({
   }, [downloadFeedback]);
 
   useEffect(() => {
+    if (copyJsonFeedback === 'idle') return;
+    const t = window.setTimeout(() => setCopyJsonFeedback('idle'), 1600);
+    return () => window.clearTimeout(t);
+  }, [copyJsonFeedback]);
+
+  useEffect(() => {
+    if (downloadJsonFeedback === 'idle') return;
+    const t = window.setTimeout(() => setDownloadJsonFeedback('idle'), 1600);
+    return () => window.clearTimeout(t);
+  }, [downloadJsonFeedback]);
+
+  useEffect(() => {
     if (msgCopyStatus === 'idle') return;
     const hold = motionDuration(msgCopyStatus === 'copied' ? 1600 : 2400);
     const t = window.setTimeout(() => {
@@ -129,6 +155,8 @@ export function DiscussMode({
     // stale "Copied/Downloaded" label never bleeds into the new thread.
     setCopyFeedback('idle');
     setDownloadFeedback('idle');
+    setCopyJsonFeedback('idle');
+    setDownloadJsonFeedback('idle');
   }, [activeAgent.response.agent_id]);
 
   useEffect(() => {
@@ -137,10 +165,12 @@ export function DiscussMode({
       mountedRef.current = false;
       copyThreadInFlightRef.current = false;
       downloadThreadInFlightRef.current = false;
+      copyThreadJsonInFlightRef.current = false;
+      downloadThreadJsonInFlightRef.current = false;
     };
   }, []);
 
-  const buildThreadMarkdown = () => {
+  const buildThreadMessages = () => {
     const seed: DiscussChatMessage[] =
       currentHistory.length > 0
         ? currentHistory
@@ -151,12 +181,23 @@ export function DiscussMode({
               timestamp: new Date().toISOString(),
             },
           ];
+    return seed.map((m) => ({ role: m.role, content: m.content }));
+  };
+
+  const buildThreadMarkdown = () => {
     return formatDiscussExport({
       agentName: agentConfig.name,
       originalPrompt,
-      messages: seed.map((m) => ({ role: m.role, content: m.content })),
+      messages: buildThreadMessages(),
     });
   };
+
+  const buildThreadJson = () =>
+    formatDiscussJsonExport({
+      agentName: agentConfig.name,
+      originalPrompt,
+      messages: buildThreadMessages(),
+    });
 
   /** Whether the thread has any real body to export (seed take or messages). */
   const threadHasContent = () => {
@@ -200,8 +241,48 @@ export function DiscussMode({
     }
   };
 
+  const handleCopyThreadJson = async () => {
+    if (copyThreadJsonInFlightRef.current) return;
+    if (!threadHasContent()) {
+      setCopyJsonFeedback('failed');
+      return;
+    }
+    copyThreadJsonInFlightRef.current = true;
+    try {
+      const ok = await copyToClipboard(buildThreadJson());
+      if (mountedRef.current) setCopyJsonFeedback(ok ? 'copied' : 'failed');
+    } finally {
+      copyThreadJsonInFlightRef.current = false;
+    }
+  };
+
+  const handleDownloadThreadJson = () => {
+    if (downloadThreadJsonInFlightRef.current) return;
+    if (!threadHasContent()) {
+      setDownloadJsonFeedback('failed');
+      return;
+    }
+    downloadThreadJsonInFlightRef.current = true;
+    try {
+      const json = buildThreadJson();
+      const stem = `discuss-${agentConfig.name || 'thread'}`;
+      const ok = downloadTextFile(json, {
+        filename: `${withDownloadDate(stem)}.json`,
+        mimeType: 'application/json;charset=utf-8',
+      });
+      if (mountedRef.current) setDownloadJsonFeedback(ok ? 'done' : 'failed');
+    } finally {
+      downloadThreadJsonInFlightRef.current = false;
+    }
+  };
+
   /** Latest thread export handlers so the key listener never goes stale. */
-  const threadActionsRef = useRef({ copy: handleCopyThread, download: handleDownloadThread });
+  const threadActionsRef = useRef({
+    copy: handleCopyThread,
+    download: handleDownloadThread,
+    copyJson: handleCopyThreadJson,
+    downloadJson: handleDownloadThreadJson,
+  });
 
   const copyMessage = async (
     key: string,
@@ -348,11 +429,17 @@ export function DiscussMode({
     return () => window.removeEventListener('keydown', onKey);
   }, [isStreaming, jumpToLatest, onExit]);
 
-  // Shift+C / Shift+D mirror the header copy/download buttons: the full
-  // 1-on-1 thread as markdown. Form controls keep their Shift+letter typing
-  // and open dialogs keep ownership of their keystrokes.
+  // Shift+C / Shift+D mirror the markdown header buttons, and Shift+O /
+  // Shift+J mirror the JSON header buttons: the full 1-on-1 thread.
+  // Form controls keep their Shift+letter typing and open dialogs keep
+  // ownership of their keystrokes.
   useEffect(() => {
-    threadActionsRef.current = { copy: handleCopyThread, download: handleDownloadThread };
+    threadActionsRef.current = {
+      copy: handleCopyThread,
+      download: handleDownloadThread,
+      copyJson: handleCopyThreadJson,
+      downloadJson: handleDownloadThreadJson,
+    };
   });
 
   useEffect(() => {
@@ -366,6 +453,12 @@ export function DiscussMode({
       } else if (isThreadDownloadMarkdownKey(e)) {
         e.preventDefault();
         threadActionsRef.current.download();
+      } else if (isThreadCopyJsonKey(e)) {
+        e.preventDefault();
+        void threadActionsRef.current.copyJson();
+      } else if (isThreadDownloadJsonKey(e)) {
+        e.preventDefault();
+        threadActionsRef.current.downloadJson();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -657,15 +750,77 @@ export function DiscussMode({
                   ? 'Download failed'
                   : 'Download .md'}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleCopyThreadJson();
+              }}
+              disabled={isStreaming}
+              title="Copy conversation as JSON (Shift+O)"
+              aria-keyshortcuts="Shift+O"
+              style={{
+                fontSize: 12,
+                color:
+                  copyJsonFeedback === 'failed'
+                    ? '#993C1D'
+                    : copyJsonFeedback === 'copied'
+                      ? '#5A8C6A'
+                      : '#F0B84E',
+                background: 'none',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: 999,
+                padding: '4px 10px',
+                cursor: isStreaming ? 'not-allowed' : 'pointer',
+                opacity: isStreaming ? 0.5 : 1,
+                fontFamily: 'var(--vp-font-sans)',
+              }}
+            >
+              {copyJsonFeedback === 'copied'
+                ? 'Copied'
+                : copyJsonFeedback === 'failed'
+                  ? 'Copy failed'
+                  : 'Copy .json'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDownloadThreadJson()}
+              disabled={isStreaming}
+              title="Download conversation as JSON (Shift+J)"
+              aria-keyshortcuts="Shift+J"
+              style={{
+                fontSize: 12,
+                color:
+                  downloadJsonFeedback === 'failed'
+                    ? '#993C1D'
+                    : downloadJsonFeedback === 'done'
+                      ? '#5A8C6A'
+                      : '#F0B84E',
+                background: 'none',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: 999,
+                padding: '4px 10px',
+                cursor: isStreaming ? 'not-allowed' : 'pointer',
+                opacity: isStreaming ? 0.5 : 1,
+                fontFamily: 'var(--vp-font-sans)',
+              }}
+            >
+              {downloadJsonFeedback === 'done'
+                ? 'Downloaded'
+                : downloadJsonFeedback === 'failed'
+                  ? 'Download failed'
+                  : 'Download .json'}
+            </button>
           </div>
         </div>
         {copyFeedback === 'failed' ||
         downloadFeedback === 'failed' ||
+        copyJsonFeedback === 'failed' ||
+        downloadJsonFeedback === 'failed' ||
         msgCopyStatus === 'failed' ? (
           <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: '0 0 8px' }}>
             {msgCopyStatus === 'failed'
               ? 'Could not copy that message — try again or select text manually.'
-              : copyFeedback === 'failed'
+              : copyFeedback === 'failed' || copyJsonFeedback === 'failed'
                 ? 'Could not copy — try again or select text manually.'
                 : 'Could not download — try Copy thread instead.'}
           </p>

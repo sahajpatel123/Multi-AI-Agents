@@ -30,6 +30,8 @@ import {
   isBareQuestionHelpKey,
   isThreadCopyMarkdownKey,
   isThreadDownloadMarkdownKey,
+  isThreadCopyJsonKey,
+  isThreadDownloadJsonKey,
   shortcutsForSurface,
   shortcutsPanelTitle,
 } from './keyboardShortcuts';
@@ -160,6 +162,26 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('debate').some(
         (s) => s.keys === 'Shift + D' && s.action.toLowerCase().includes('debate transcript'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('discuss').some(
+        (s) => s.keys === 'Shift + O' && s.action.toLowerCase().includes('json'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('discuss').some(
+        (s) => s.keys === 'Shift + J' && s.action.toLowerCase().includes('json'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('debate').some(
+        (s) => s.keys === 'Shift + O' && s.action.toLowerCase().includes('json'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('debate').some(
+        (s) => s.keys === 'Shift + J' && s.action.toLowerCase().includes('json'),
       ),
     ).toBe(true);
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
@@ -384,6 +406,25 @@ describe('keyboardShortcuts', () => {
     expect(isArenaDownloadRoundJsonKey({ key: 'J' })).toBe(false);
     expect(isArenaDownloadRoundJsonKey({ key: 'J', shiftKey: true, metaKey: true })).toBe(false);
     expect(isArenaDownloadRoundJsonKey({ key: 'O', shiftKey: true })).toBe(false);
+  });
+
+  it('detects Discuss/Debate thread JSON shortcuts as bare Shift+letter keys', () => {
+    expect(isThreadCopyJsonKey({ key: 'O', shiftKey: true })).toBe(true);
+    expect(isThreadCopyJsonKey({ key: 'o', shiftKey: true })).toBe(true);
+    expect(isThreadCopyJsonKey({ key: 'O' })).toBe(false);
+    expect(isThreadCopyJsonKey({ key: 'O', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isThreadCopyJsonKey({ key: 'J', shiftKey: true })).toBe(false);
+
+    expect(isThreadDownloadJsonKey({ key: 'J', shiftKey: true })).toBe(true);
+    expect(isThreadDownloadJsonKey({ key: 'j', shiftKey: true })).toBe(true);
+    expect(isThreadDownloadJsonKey({ key: 'J' })).toBe(false);
+    expect(isThreadDownloadJsonKey({ key: 'J', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isThreadDownloadJsonKey({ key: 'O', shiftKey: true })).toBe(false);
+
+    expect(isThreadCopyJsonKey({ key: 'O', shiftKey: true, repeat: true })).toBe(false);
+    expect(isThreadDownloadJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
+    expect(isThreadCopyMarkdownKey({ key: 'O', shiftKey: true })).toBe(false);
+    expect(isThreadDownloadMarkdownKey({ key: 'J', shiftKey: true })).toBe(false);
   });
 
   it('ignores OS auto-repeat so holding a key cannot spam exports', () => {

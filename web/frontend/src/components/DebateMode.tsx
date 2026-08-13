@@ -38,10 +38,15 @@ import { titleForArenaBusy } from '../lib/documentTitle';
 import { motionDuration, prefersReducedMotion, scrollBehavior } from '../lib/motion';
 import { isScrollNearBottom, shouldAutoScrollChat } from '../lib/chatScroll';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import {
+  downloadMarkdownFile,
+  downloadTextFile,
+  withDownloadDate,
+} from '../lib/downloadTextFile';
 import {
   formatDebateChallengedCopy,
   formatDebateExport,
+  formatDebateJsonExport,
   formatDebateInterjectionCopy,
   formatDebateReactionCopy,
 } from '../lib/threadExport';
@@ -54,6 +59,8 @@ import {
 import {
   isThreadCopyMarkdownKey,
   isThreadDownloadMarkdownKey,
+  isThreadCopyJsonKey,
+  isThreadDownloadJsonKey,
 } from '../lib/keyboardShortcuts';
 
 interface DebateModeProps {
@@ -131,12 +138,16 @@ export function DebateMode({
   const mountedRef = useRef(true);
   const copyDebateInFlightRef = useRef(false);
   const downloadDebateInFlightRef = useRef(false);
+  const copyDebateJsonInFlightRef = useRef(false);
+  const downloadDebateJsonInFlightRef = useRef(false);
 
   const [interjection, setInterjection] = useState('');
   /** After round 3, user may unlock one bonus follow-up round (max 4). */
   const [followUpUnlocked, setFollowUpUnlocked] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [copyJsonFeedback, setCopyJsonFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadJsonFeedback, setDownloadJsonFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Which debate piece last copied: 'challenged' | `r{n}-you` | `r{n}-{agentId}` */
   const [pieceCopyKey, setPieceCopyKey] = useState<string | null>(null);
   const [pieceCopyStatus, setPieceCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -164,6 +175,18 @@ export function DebateMode({
   }, [downloadFeedback]);
 
   useEffect(() => {
+    if (copyJsonFeedback === 'idle') return;
+    const t = window.setTimeout(() => setCopyJsonFeedback('idle'), 1600);
+    return () => window.clearTimeout(t);
+  }, [copyJsonFeedback]);
+
+  useEffect(() => {
+    if (downloadJsonFeedback === 'idle') return;
+    const t = window.setTimeout(() => setDownloadJsonFeedback('idle'), 1600);
+    return () => window.clearTimeout(t);
+  }, [downloadJsonFeedback]);
+
+  useEffect(() => {
     if (pieceCopyStatus === 'idle') return;
     const hold = motionDuration(pieceCopyStatus === 'copied' ? 1600 : 2400);
     const t = window.setTimeout(() => {
@@ -186,6 +209,8 @@ export function DebateMode({
       mountedRef.current = false;
       copyDebateInFlightRef.current = false;
       downloadDebateInFlightRef.current = false;
+      copyDebateJsonInFlightRef.current = false;
+      downloadDebateJsonInFlightRef.current = false;
     };
   }, []);
 
@@ -195,20 +220,32 @@ export function DebateMode({
     (id) => id !== challengedAgent.response.agent_id
   );
 
+  const buildDebateExportRound = (round: DebateRound) => ({
+    roundNumber: round.roundNumber,
+    userInterjection: round.userInterjection,
+    reactions: round.reactions.map((r) => ({
+      agentName: getAgentDisplay(r.agent_id).name,
+      content: r.content,
+      stance: r.stance,
+    })),
+  });
+
   const buildDebateMarkdown = () =>
     formatDebateExport({
       originalPrompt,
       challengedAgentName: challengedConfig.name,
       challengedOneLiner: challengedAgent.response.one_liner,
-      rounds: rounds.map((round) => ({
-        roundNumber: round.roundNumber,
-        userInterjection: round.userInterjection,
-        reactions: round.reactions.map((r) => ({
-          agentName: getAgentDisplay(r.agent_id).name,
-          content: r.content,
-          stance: r.stance,
-        })),
-      })),
+      rounds: rounds.map(buildDebateExportRound),
+    });
+
+  const buildDebateJson = () =>
+    formatDebateJsonExport({
+      originalPrompt,
+      challengedAgentName: challengedConfig.name,
+      challengedOneLiner: challengedAgent.response.one_liner,
+      challengedVerdict: challengedAgent.response.verdict,
+      challengedKeyAssumption: challengedAgent.response.key_assumption,
+      rounds: rounds.map(buildDebateExportRound),
     });
 
   const handleCopyDebate = async () => {
@@ -235,8 +272,48 @@ export function DebateMode({
     }
   };
 
+  const handleCopyDebateJson = async () => {
+    if (copyDebateJsonInFlightRef.current) return;
+    if (rounds.length === 0) {
+      setCopyJsonFeedback('failed');
+      return;
+    }
+    copyDebateJsonInFlightRef.current = true;
+    try {
+      const ok = await copyToClipboard(buildDebateJson());
+      if (mountedRef.current) setCopyJsonFeedback(ok ? 'copied' : 'failed');
+    } finally {
+      copyDebateJsonInFlightRef.current = false;
+    }
+  };
+
+  const handleDownloadDebateJson = () => {
+    if (downloadDebateJsonInFlightRef.current) return;
+    if (rounds.length === 0) {
+      setDownloadJsonFeedback('failed');
+      return;
+    }
+    downloadDebateJsonInFlightRef.current = true;
+    try {
+      const json = buildDebateJson();
+      const stem = `debate-${challengedConfig.name || 'transcript'}`;
+      const ok = downloadTextFile(json, {
+        filename: `${withDownloadDate(stem)}.json`,
+        mimeType: 'application/json;charset=utf-8',
+      });
+      if (mountedRef.current) setDownloadJsonFeedback(ok ? 'done' : 'failed');
+    } finally {
+      downloadDebateJsonInFlightRef.current = false;
+    }
+  };
+
   /** Latest thread export handlers so the key listener never goes stale. */
-  const threadActionsRef = useRef({ copy: handleCopyDebate, download: handleDownloadDebate });
+  const threadActionsRef = useRef({
+    copy: handleCopyDebate,
+    download: handleDownloadDebate,
+    copyJson: handleCopyDebateJson,
+    downloadJson: handleDownloadDebateJson,
+  });
 
   const copyDebatePiece = async (key: string, text: string) => {
     if (!text.trim()) {
@@ -360,11 +437,17 @@ export function DebateMode({
     return () => window.removeEventListener('keydown', onKey);
   }, [phase, jumpToLatest, onExit]);
 
-  // Shift+C / Shift+D mirror the header copy/download buttons: the full
-  // debate transcript as markdown. Form controls keep their Shift+letter
-  // typing and open dialogs keep ownership of their keystrokes.
+  // Shift+C / Shift+D mirror the markdown header buttons, and Shift+O /
+  // Shift+J mirror the JSON header buttons: the full debate transcript.
+  // Form controls keep their Shift+letter typing and open dialogs keep
+  // ownership of their keystrokes.
   useEffect(() => {
-    threadActionsRef.current = { copy: handleCopyDebate, download: handleDownloadDebate };
+    threadActionsRef.current = {
+      copy: handleCopyDebate,
+      download: handleDownloadDebate,
+      copyJson: handleCopyDebateJson,
+      downloadJson: handleDownloadDebateJson,
+    };
   });
 
   useEffect(() => {
@@ -378,6 +461,12 @@ export function DebateMode({
       } else if (isThreadDownloadMarkdownKey(e)) {
         e.preventDefault();
         threadActionsRef.current.download();
+      } else if (isThreadCopyJsonKey(e)) {
+        e.preventDefault();
+        void threadActionsRef.current.copyJson();
+      } else if (isThreadDownloadJsonKey(e)) {
+        e.preventDefault();
+        threadActionsRef.current.downloadJson();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -927,6 +1016,80 @@ export function DebateMode({
               : downloadFeedback === 'failed'
                 ? 'Download failed'
                 : 'Download .md'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void handleCopyDebateJson();
+            }}
+            disabled={phase === 'streaming' || rounds.length === 0}
+            title={
+              rounds.length === 0
+                ? 'Start a debate round to copy the transcript'
+                : 'Copy debate transcript as JSON (Shift+O)'
+            }
+            aria-keyshortcuts="Shift+O"
+            style={{
+              fontSize: 12,
+              color:
+                copyJsonFeedback === 'failed'
+                  ? '#993C1D'
+                  : copyJsonFeedback === 'copied'
+                    ? '#5A8C6A'
+                    : phase === 'streaming' || rounds.length === 0
+                      ? '#A0A39A'
+                      : '#F0B84E',
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 999,
+              padding: '4px 10px',
+              cursor:
+                phase === 'streaming' || rounds.length === 0 ? 'not-allowed' : 'pointer',
+              fontFamily: 'var(--vp-font-sans)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {copyJsonFeedback === 'copied'
+              ? 'Copied'
+              : copyJsonFeedback === 'failed'
+                ? 'Copy failed'
+                : 'Copy .json'}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDownloadDebateJson()}
+            disabled={phase === 'streaming' || rounds.length === 0}
+            title={
+              rounds.length === 0
+                ? 'Start a debate round to download the transcript'
+                : 'Download debate transcript as JSON (Shift+J)'
+            }
+            aria-keyshortcuts="Shift+J"
+            style={{
+              fontSize: 12,
+              color:
+                downloadJsonFeedback === 'failed'
+                  ? '#993C1D'
+                  : downloadJsonFeedback === 'done'
+                    ? '#5A8C6A'
+                    : phase === 'streaming' || rounds.length === 0
+                      ? '#A0A39A'
+                      : '#F0B84E',
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 999,
+              padding: '4px 10px',
+              cursor:
+                phase === 'streaming' || rounds.length === 0 ? 'not-allowed' : 'pointer',
+              fontFamily: 'var(--vp-font-sans)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {downloadJsonFeedback === 'done'
+              ? 'Downloaded'
+              : downloadJsonFeedback === 'failed'
+                ? 'Download failed'
+                : 'Download .json'}
           </button>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '96px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>

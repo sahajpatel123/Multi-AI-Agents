@@ -152,6 +152,8 @@ describe('DebateMode thread shortcuts (Shift+C / Shift+D)', () => {
     expect(screen.getByRole('button', { name: 'Download .md' })).toBeDisabled();
     fireEvent.keyDown(window, { key: 'C', shiftKey: true });
     fireEvent.keyDown(window, { key: 'D', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'J', shiftKey: true });
     expect(writeText).not.toHaveBeenCalled();
   });
 
@@ -188,7 +190,45 @@ describe('DebateMode thread shortcuts (Shift+C / Shift+D)', () => {
     expect(anchor.download).toMatch(/^debate-.*\.md$/);
   });
 
-  it('ignores Shift+C/D while a round is streaming', async () => {
+  it('copies the full transcript as JSON with Shift+O', async () => {
+    const writeText = installClipboard();
+    await completeFirstRound();
+
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const json = writeText.mock.calls[0][0] as string;
+    const data = JSON.parse(json) as {
+      export_type: string;
+      question: string;
+      challenged_agent_name: string;
+      round_count: number;
+    };
+    expect(data.export_type).toBe('debate_transcript');
+    expect(data.question).toBe('Should we ship today?');
+    expect(data.challenged_agent_name).toBe('The Analyst');
+    expect(data.round_count).toBe(1);
+  });
+
+  it('downloads the full transcript as JSON with Shift+J', async () => {
+    const clickSpy = vi.fn();
+    const originalCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') {
+        const el = originalCreate('a') as HTMLAnchorElement;
+        el.click = clickSpy;
+        return el;
+      }
+      return originalCreate(tag);
+    });
+    await completeFirstRound();
+
+    fireEvent.keyDown(window, { key: 'j', shiftKey: true });
+    await waitFor(() => expect(clickSpy).toHaveBeenCalled());
+    const anchor = clickSpy.mock.instances[0] as HTMLAnchorElement;
+    expect(anchor.download).toMatch(/^debate-.*\.json$/);
+  });
+
+  it('ignores thread export shortcuts while a round is streaming', async () => {
     const writeText = installClipboard();
     streamDebateRoundMock.mockImplementation(() => new Promise<void>(() => {}));
     renderDebate();
@@ -199,6 +239,8 @@ describe('DebateMode thread shortcuts (Shift+C / Shift+D)', () => {
     );
     fireEvent.keyDown(window, { key: 'C', shiftKey: true });
     fireEvent.keyDown(window, { key: 'D', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'J', shiftKey: true });
     expect(writeText).not.toHaveBeenCalled();
   });
 
@@ -209,6 +251,8 @@ describe('DebateMode thread shortcuts (Shift+C / Shift+D)', () => {
     const input = screen.getByRole('textbox') as HTMLInputElement;
     fireEvent.keyDown(input, { key: 'C', shiftKey: true });
     fireEvent.keyDown(input, { key: 'D', shiftKey: true });
+    fireEvent.keyDown(input, { key: 'O', shiftKey: true });
+    fireEvent.keyDown(input, { key: 'J', shiftKey: true });
     expect(writeText).not.toHaveBeenCalled();
   });
 
@@ -222,6 +266,8 @@ describe('DebateMode thread shortcuts (Shift+C / Shift+D)', () => {
     document.body.appendChild(dialog);
     fireEvent.keyDown(window, { key: 'C', shiftKey: true });
     fireEvent.keyDown(window, { key: 'D', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'J', shiftKey: true });
     expect(writeText).not.toHaveBeenCalled();
   });
 });

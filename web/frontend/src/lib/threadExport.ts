@@ -251,3 +251,99 @@ export function formatDebateChallengedCopy(opts: {
 
   return lines.join('\n').trim() + '\n';
 }
+
+/**
+ * Structured JSON export of a 1-on-1 Discuss thread. Preserves message
+ * bodies verbatim (trimmed) so the archive can be re-imported or diffed,
+ * and skips null/whitespace-only entries exactly like the markdown export.
+ *
+ * Deterministic except for the optional exported-at timestamp: pass
+ * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
+ * the current UTC ISO timestamp.
+ */
+export function formatDiscussJsonExport(opts: {
+  agentName: string;
+  originalPrompt: string;
+  messages: ThreadMessage[];
+  exportedAt?: string;
+}): string {
+  const agentName = (opts.agentName || 'Arena mind').trim() || 'Arena mind';
+  const question = (opts.originalPrompt || '').trim() || '(no prompt)';
+  const messages = (opts.messages || [])
+    .filter((m): m is ThreadMessage => Boolean(m))
+    .map((m) => ({
+      role: m.role === 'user' ? 'user' : 'agent',
+      content: (m.content || '').trim() || null,
+    }))
+    .filter((m) => m.content !== null);
+  const data = {
+    exported_from: 'arena',
+    export_type: 'discuss_thread',
+    format_version: 1,
+    exported_at: opts.exportedAt || new Date().toISOString(),
+    agent_name: agentName,
+    original_prompt: question,
+    message_count: messages.length,
+    messages,
+  };
+  return JSON.stringify(data, null, 2) + '\n';
+}
+
+/**
+ * Structured JSON export of a multi-round Debate colosseum. Mirrors the
+ * markdown transcript but keeps every field machine-readable, including the
+ * challenged take's verdict and key assumption. Malformed rounds/reactions
+ * are normalized (never NaN/undefined), matching the markdown exporter.
+ *
+ * Deterministic except for the optional exported-at timestamp: pass
+ * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
+ * the current UTC ISO timestamp.
+ */
+export function formatDebateJsonExport(opts: {
+  originalPrompt: string;
+  challengedAgentName: string;
+  challengedOneLiner?: string;
+  challengedVerdict?: string;
+  challengedKeyAssumption?: string;
+  rounds: DebateExportRound[];
+  exportedAt?: string;
+}): string {
+  const challenged =
+    (opts.challengedAgentName || 'Challenged mind').trim() || 'Challenged mind';
+  const question = (opts.originalPrompt || '').trim() || '(no prompt)';
+  const rounds = (opts.rounds || [])
+    .filter((round): round is DebateExportRound => Boolean(round))
+    .map((round, index) => {
+      const roundNumber =
+        Number.isFinite(round.roundNumber) && round.roundNumber > 0
+          ? round.roundNumber
+          : index + 1;
+      const reactions = (round.reactions || [])
+        .filter((r): r is DebateExportRound['reactions'][number] => Boolean(r))
+        .map((r) => ({
+          agent_name: (r.agentName || 'Mind').trim() || 'Mind',
+          stance: (r.stance || '').trim() || null,
+          content: (r.content || '').trim() || null,
+        }));
+      return {
+        round_number: roundNumber,
+        user_interjection: (round.userInterjection || '').trim() || null,
+        reaction_count: reactions.length,
+        reactions,
+      };
+    });
+  const data = {
+    exported_from: 'arena',
+    export_type: 'debate_transcript',
+    format_version: 1,
+    exported_at: opts.exportedAt || new Date().toISOString(),
+    question,
+    challenged_agent_name: challenged,
+    challenged_one_liner: (opts.challengedOneLiner || '').trim() || null,
+    challenged_verdict: (opts.challengedVerdict || '').trim() || null,
+    challenged_key_assumption: (opts.challengedKeyAssumption || '').trim() || null,
+    round_count: rounds.length,
+    rounds,
+  };
+  return JSON.stringify(data, null, 2) + '\n';
+}

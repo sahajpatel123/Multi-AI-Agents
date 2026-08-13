@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   formatDebateChallengedCopy,
   formatDebateExport,
+  formatDebateJsonExport,
   formatDebateInterjectionCopy,
   formatDebateReactionCopy,
   formatDiscussExport,
+  formatDiscussJsonExport,
   formatDiscussMessageCopy,
   type DebateExportRound,
   type ThreadMessage,
@@ -207,5 +209,119 @@ describe('formatDebateChallengedCopy', () => {
       oneLiner: 'Ship it.',
     });
     expect(md).toContain('Ship it.');
+  });
+});
+
+describe('formatDiscussJsonExport', () => {
+  it('returns a machine-readable thread with trimmed messages', () => {
+    const json = formatDiscussJsonExport({
+      agentName: 'The Analyst',
+      originalPrompt: 'Should I ship today?',
+      messages: [
+        { role: 'user', content: '  What is the risk?  ' },
+        { role: 'agent', content: 'Ship the smallest honest slice.' },
+        { role: 'agent', content: '   ' },
+      ],
+      exportedAt: '2026-08-13T00:00:00.000Z',
+    });
+    const data = JSON.parse(json) as Record<string, unknown>;
+    expect(data.export_type).toBe('discuss_thread');
+    expect(data.exported_at).toBe('2026-08-13T00:00:00.000Z');
+    expect(data.agent_name).toBe('The Analyst');
+    expect(data.original_prompt).toBe('Should I ship today?');
+    expect(data.message_count).toBe(2);
+    expect((data.messages as Array<{ role: string; content: string }>)[0]).toEqual({
+      role: 'user',
+      content: 'What is the risk?',
+    });
+  });
+
+  it('normalizes blank names/prompts and empty histories', () => {
+    const data = JSON.parse(
+      formatDiscussJsonExport({
+        agentName: '  ',
+        originalPrompt: '   ',
+        messages: [null as unknown as ThreadMessage],
+        exportedAt: '2026-08-13T00:00:00.000Z',
+      }),
+    ) as { agent_name: string; original_prompt: string; message_count: number };
+    expect(data.agent_name).toBe('Arena mind');
+    expect(data.original_prompt).toBe('(no prompt)');
+    expect(data.message_count).toBe(0);
+  });
+});
+
+describe('formatDebateJsonExport', () => {
+  it('exports challenged take and rounds as structured data', () => {
+    const json = formatDebateJsonExport({
+      originalPrompt: 'Is this fair?',
+      challengedAgentName: 'The Pragmatist',
+      challengedOneLiner: 'Ship it.',
+      challengedVerdict: 'The smallest honest slice is enough.',
+      challengedKeyAssumption: 'Users want speed over polish.',
+      rounds: [
+        {
+          roundNumber: 1,
+          userInterjection: 'But latency?',
+          reactions: [
+            { agentName: 'The Analyst', content: 'Measure first.', stance: 'pushback' },
+          ],
+        },
+      ],
+      exportedAt: '2026-08-13T00:00:00.000Z',
+    });
+    const data = JSON.parse(json) as Record<string, unknown>;
+    expect(data.export_type).toBe('debate_transcript');
+    expect(data.exported_at).toBe('2026-08-13T00:00:00.000Z');
+    expect(data.question).toBe('Is this fair?');
+    expect(data.challenged_agent_name).toBe('The Pragmatist');
+    expect(data.challenged_verdict).toBe('The smallest honest slice is enough.');
+    expect(data.round_count).toBe(1);
+    const round = (data.rounds as Array<Record<string, unknown>>)[0];
+    expect(round.round_number).toBe(1);
+    expect(round.user_interjection).toBe('But latency?');
+    expect(round.reaction_count).toBe(1);
+    expect((round.reactions as Array<Record<string, unknown>>)[0]).toEqual({
+      agent_name: 'The Analyst',
+      stance: 'pushback',
+      content: 'Measure first.',
+    });
+  });
+
+  it('normalizes malformed rounds and keeps blank reactions as null', () => {
+    const data = JSON.parse(
+      formatDebateJsonExport({
+        originalPrompt: 'Q',
+        challengedAgentName: '',
+        rounds: [
+          null as unknown as DebateExportRound,
+          { roundNumber: Number.NaN, reactions: [] },
+          {
+            roundNumber: 0,
+            reactions: [
+              { agentName: '  ', content: '   ', stance: '' },
+              { agentName: 'The Analyst', content: 'Measure first.', stance: 'pushback' },
+            ],
+          },
+        ],
+        exportedAt: '2026-08-13T00:00:00.000Z',
+      }),
+    ) as {
+      challenged_agent_name: string;
+      rounds: Array<{ round_number: number; reaction_count: number; reactions: unknown[] }>;
+    };
+    expect(data.challenged_agent_name).toBe('Challenged mind');
+    expect(data.rounds.map((round) => round.round_number)).toEqual([1, 2]);
+    expect(data.rounds[1].reaction_count).toBe(2);
+    expect(data.rounds[1].reactions[0]).toEqual({
+      agent_name: 'Mind',
+      stance: null,
+      content: null,
+    });
+    expect(data.rounds[1].reactions[1]).toEqual({
+      agent_name: 'The Analyst',
+      stance: 'pushback',
+      content: 'Measure first.',
+    });
   });
 });

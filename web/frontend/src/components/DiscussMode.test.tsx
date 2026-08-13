@@ -174,7 +174,45 @@ describe('DiscussMode thread shortcuts (Shift+C / Shift+D)', () => {
     expect(anchor.download).toMatch(/^discuss-.*\.md$/);
   });
 
-  it('ignores Shift+C/D while a reply is streaming', async () => {
+  it('copies the seeded 1-on-1 thread as JSON with Shift+O', async () => {
+    const writeText = installClipboard();
+    renderDiscuss();
+
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const json = writeText.mock.calls[0][0] as string;
+    const data = JSON.parse(json) as {
+      export_type: string;
+      agent_name: string;
+      original_prompt: string;
+      message_count: number;
+    };
+    expect(data.export_type).toBe('discuss_thread');
+    expect(data.agent_name).toBe('The Analyst');
+    expect(data.original_prompt).toBe('Should we ship today?');
+    expect(data.message_count).toBe(1);
+  });
+
+  it('downloads the thread as JSON with Shift+J', async () => {
+    const clickSpy = vi.fn();
+    const originalCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') {
+        const el = originalCreate('a') as HTMLAnchorElement;
+        el.click = clickSpy;
+        return el;
+      }
+      return originalCreate(tag);
+    });
+    renderDiscuss();
+
+    fireEvent.keyDown(window, { key: 'j', shiftKey: true });
+    await waitFor(() => expect(clickSpy).toHaveBeenCalled());
+    const anchor = clickSpy.mock.instances[0] as HTMLAnchorElement;
+    expect(anchor.download).toMatch(/^discuss-.*\.json$/);
+  });
+
+  it('ignores thread export shortcuts while a reply is streaming', async () => {
     const writeText = installClipboard();
     streamDiscussMock.mockImplementation(() => new Promise<void>(() => {}));
     renderDiscuss();
@@ -187,6 +225,8 @@ describe('DiscussMode thread shortcuts (Shift+C / Shift+D)', () => {
 
     fireEvent.keyDown(window, { key: 'C', shiftKey: true });
     fireEvent.keyDown(window, { key: 'D', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'J', shiftKey: true });
     expect(writeText).not.toHaveBeenCalled();
   });
 
@@ -197,6 +237,8 @@ describe('DiscussMode thread shortcuts (Shift+C / Shift+D)', () => {
     const input = screen.getByRole('textbox') as HTMLInputElement;
     fireEvent.keyDown(input, { key: 'C', shiftKey: true });
     fireEvent.keyDown(input, { key: 'D', shiftKey: true });
+    fireEvent.keyDown(input, { key: 'O', shiftKey: true });
+    fireEvent.keyDown(input, { key: 'J', shiftKey: true });
     expect(writeText).not.toHaveBeenCalled();
   });
 
@@ -210,6 +252,8 @@ describe('DiscussMode thread shortcuts (Shift+C / Shift+D)', () => {
     document.body.appendChild(dialog);
     fireEvent.keyDown(window, { key: 'C', shiftKey: true });
     fireEvent.keyDown(window, { key: 'D', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'J', shiftKey: true });
     expect(writeText).not.toHaveBeenCalled();
   });
 
@@ -220,6 +264,17 @@ describe('DiscussMode thread shortcuts (Shift+C / Shift+D)', () => {
     fireEvent.keyDown(window, { key: 'C', shiftKey: true });
     expect(writeText).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Copy failed' })).toBeInTheDocument();
+  });
+
+  it('refuses to copy or download a contentless thread as JSON', async () => {
+    const writeText = installClipboard();
+    renderDiscuss(emptyTake);
+
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'J', shiftKey: true });
+    expect(writeText).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Copy failed' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download failed' })).toBeInTheDocument();
   });
 
   it('clears stale copy feedback when switching minds', async () => {

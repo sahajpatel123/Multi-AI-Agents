@@ -15,6 +15,8 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Debate: copy the full debate transcript as JSON with Shift+O and download it as a file with Shift+J',
+      '[NEW] Discuss: copy the full 1-on-1 thread as JSON with Shift+O and download it as a file with Shift+J',
       '[IMPROVED] Debate/Discuss: Shift+C and Shift+D thread exports are race-safe, refuse contentless threads, reset stale feedback when switching minds, and tolerate malformed export data',
       '[NEW] Debate: copy the full debate transcript as markdown with Shift+C and download it as a file with Shift+D',
       '[NEW] Discuss: copy the full 1-on-1 thread as markdown with Shift+C and download it as a file with Shift+D',
