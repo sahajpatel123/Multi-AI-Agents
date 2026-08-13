@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Agent: copy the full research report as markdown with Shift+P',
       '[NEW] Arena: copy all four takes as markdown with Shift+A',
       '[NEW] Arena: verify the winning take in Agent Mode with Shift+V',
       '[IMPROVED] Arena: Shift+V verification is duplicate-safe and handles empty or oversized takes gracefully',

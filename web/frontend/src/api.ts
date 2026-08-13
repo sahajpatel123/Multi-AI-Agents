@@ -1549,7 +1549,7 @@ export async function exportAgentTaskPdf(taskId: string): Promise<Blob> {
   return response.blob();
 }
 
-export async function exportAgentTaskMarkdown(taskId: string): Promise<Blob> {
+async function fetchAgentTaskMarkdownResponse(taskId: string): Promise<Response> {
   const response = await apiFetch(
     `/api/agent/tasks/${encodeURIComponent(taskId)}/export.md`,
   );
@@ -1561,7 +1561,17 @@ export async function exportAgentTaskMarkdown(taskId: string): Promise<Blob> {
       err,
     );
   }
+  return response;
+}
+
+export async function exportAgentTaskMarkdown(taskId: string): Promise<Blob> {
+  const response = await fetchAgentTaskMarkdownResponse(taskId);
   return response.blob();
+}
+
+export async function fetchAgentTaskMarkdownText(taskId: string): Promise<string> {
+  const response = await fetchAgentTaskMarkdownResponse(taskId);
+  return response.text();
 }
 
 export async function exportAgentTaskJson(taskId: string): Promise<Blob> {

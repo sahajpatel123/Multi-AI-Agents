@@ -15,6 +15,7 @@ import {
   isArenaSaveWinnerKey,
   isArenaVerifyWinnerKey,
   isAgentCopyAnswerKey,
+  isAgentCopyReportKey,
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
   isAgentNewTaskKey,
@@ -125,6 +126,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('agent').some(
         (s) => s.keys === 'Shift + J' && s.action.toLowerCase().includes('json'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('agent').some(
+        (s) => s.keys === 'Shift + P' && s.action.toLowerCase().includes('research report'),
       ),
     ).toBe(true);
     expect(
@@ -335,6 +341,13 @@ describe('keyboardShortcuts', () => {
     expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true, altKey: true })).toBe(false);
     expect(isAgentDownloadJsonKey({ key: 'D', shiftKey: true })).toBe(false);
 
+    expect(isAgentCopyReportKey({ key: 'P', shiftKey: true })).toBe(true);
+    expect(isAgentCopyReportKey({ key: 'p', shiftKey: true })).toBe(true);
+    expect(isAgentCopyReportKey({ key: 'P' })).toBe(false);
+    expect(isAgentCopyReportKey({ key: 'P', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isAgentCopyReportKey({ key: 'P', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isAgentCopyReportKey({ key: 'J', shiftKey: true })).toBe(false);
+
     expect(isAgentNewTaskKey({ key: 'N', shiftKey: true })).toBe(true);
     expect(isAgentNewTaskKey({ key: 'n', shiftKey: true })).toBe(true);
     expect(isAgentNewTaskKey({ key: 'N' })).toBe(false);
@@ -346,6 +359,7 @@ describe('keyboardShortcuts', () => {
     expect(isAgentCopyAnswerKey({ key: 'C', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadAnswerKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
+    expect(isAgentCopyReportKey({ key: 'P', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentNewTaskKey({ key: 'N', shiftKey: true, repeat: true })).toBe(false);
   });
 });

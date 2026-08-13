@@ -44,6 +44,7 @@ const AGENT: ShortcutHint[] = [
   { keys: 'Shift + C', action: 'Copy the completed answer as markdown' },
   { keys: 'Shift + D', action: 'Download the answer as a markdown file' },
   { keys: 'Shift + J', action: 'Download the full report as JSON' },
+  { keys: 'Shift + P', action: 'Copy the full research report as markdown' },
   { keys: 'Esc', action: 'Close attach menu, cadence picker, or rename' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
@@ -177,7 +178,7 @@ export type ShortcutKeyEvent = {
  */
 function isBareShiftLetterKey(
   event: ShortcutKeyEvent,
-  letter: 'a' | 'c' | 'd' | 'q' | 's' | 'r' | 'j' | 'k' | 'e' | 'n' | 'v' | 't' | 'y' | 'u' | 'i',
+  letter: 'a' | 'c' | 'd' | 'q' | 's' | 'r' | 'j' | 'k' | 'e' | 'n' | 'v' | 't' | 'y' | 'u' | 'i' | 'p',
 ): boolean {
   if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
@@ -269,6 +270,11 @@ export function isAgentDownloadAnswerKey(event: ShortcutKeyEvent): boolean {
 /** Shift+J — download the full Agent research report as JSON. */
 export function isAgentDownloadJsonKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'j');
+}
+
+/** Shift+P — copy the full Agent research report to the clipboard as markdown. */
+export function isAgentCopyReportKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'p');
 }
 
 /** Shift+N — reset Agent Mode to a fresh, empty task. */

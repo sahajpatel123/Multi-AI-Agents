@@ -25,6 +25,7 @@ import {
   exportAgentTaskMarkdown,
   exportAgentTaskJson,
   exportOrchestrationPdf,
+  fetchAgentTaskMarkdownText,
   getDiscoverRooms,
   getAgentHistory,
   getMyRooms,
@@ -81,6 +82,7 @@ import {
 } from '../lib/agentHistoryRow';
 import {
   isAgentCopyAnswerKey,
+  isAgentCopyReportKey,
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
   isAgentNewTaskKey,
@@ -949,6 +951,10 @@ export function AgentPage() {
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [copyAnswerFeedback, setCopyAnswerFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadAnswerFeedback, setDownloadAnswerFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [copyingReport, setCopyingReport] = useState(false);
+  const [copyReportFeedback, setCopyReportFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copyReportInFlightRef = useRef(false);
+  const copyReportFeedbackTimerRef = useRef<number | null>(null);
   const pendingRoomHandledRef = useRef<string | null>(null);
 
   const closeTemplatesModal = useCallback(() => {
@@ -2301,8 +2307,43 @@ export function AgentPage() {
     window.setTimeout(() => setDownloadAnswerFeedback('idle'), hold > 0 ? hold : 0);
   }, [completedAnswerMarkdown, result?.original_task, result?.task, result?.task_id, task]);
 
+  const handleCopyTaskMarkdown = useCallback(async () => {
+    if (!result?.task_id || copyReportInFlightRef.current) return;
+    copyReportInFlightRef.current = true;
+    setCopyingReport(true);
+    setCopyReportFeedback('idle');
+    if (copyReportFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportFeedbackTimerRef.current);
+      copyReportFeedbackTimerRef.current = null;
+    }
+    try {
+      const markdown = await fetchAgentTaskMarkdownText(result.task_id);
+      const ok = await copyToClipboard(markdown);
+      setCopyReportFeedback(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy the research report. Try the Report .md download instead.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyReportFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportFeedback('idle');
+        copyReportFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      setCopyReportFeedback('failed');
+      setError(e instanceof Error ? e.message : 'Could not copy the research report.');
+      const hold = motionDuration(2800);
+      copyReportFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportFeedback('idle');
+        copyReportFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      copyReportInFlightRef.current = false;
+      setCopyingReport(false);
+    }
+  }, [result?.task_id]);
+
   // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
-  // Shift+J mirror the result toolbar buttons. Form controls are skipped so
+  // Shift+J / Shift+P mirror the result toolbar buttons. Form controls are skipped so
   // normal Shift+letter typing is never swallowed.
   useEffect(() => {
     if (result?.status !== 'complete' || !result?.task_id || isRunning) return;
@@ -2320,6 +2361,9 @@ export function AgentPage() {
       } else if (isAgentDownloadJsonKey(e)) {
         e.preventDefault();
         void handleExportTaskJson();
+      } else if (isAgentCopyReportKey(e)) {
+        e.preventDefault();
+        void handleCopyTaskMarkdown();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -2327,6 +2371,7 @@ export function AgentPage() {
   }, [
     handleCopyAnswer,
     handleDownloadAnswer,
+    handleCopyTaskMarkdown,
     handleExportTaskJson,
     isRunning,
     result?.status,
@@ -2572,6 +2617,9 @@ export function AgentPage() {
       }
       if (roomsDownloadTimerRef.current != null) {
         window.clearTimeout(roomsDownloadTimerRef.current);
+      }
+      if (copyReportFeedbackTimerRef.current != null) {
+        window.clearTimeout(copyReportFeedbackTimerRef.current);
       }
     };
   }, []);
@@ -9112,6 +9160,27 @@ export function AgentPage() {
                         onClick={() => void handleExportTaskMarkdown()}
                       >
                         {exportingMd ? 'Exporting…' : 'Report .md'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={copyingReport ? undefined : Icons.copy(14)}
+                        loading={copyingReport}
+                        disabled={copyingReport}
+                        title="Copy the full research report as markdown (Shift+P)"
+                        aria-keyshortcuts="Shift+P"
+                        onClick={() => void handleCopyTaskMarkdown()}
+                      >
+                        {copyingReport
+                          ? 'Copying…'
+                          : copyReportFeedback === 'copied'
+                            ? 'Copied!'
+                            : copyReportFeedback === 'failed'
+                              ? 'Copy failed'
+                              : 'Copy report'}
                       </Button>
                     ) : null}
                     {result.task_id ? (
