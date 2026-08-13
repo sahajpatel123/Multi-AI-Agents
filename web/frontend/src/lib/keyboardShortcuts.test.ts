@@ -38,6 +38,11 @@ describe('keyboardShortcuts', () => {
         (s) => s.keys === 'Shift + S' && s.action.toLowerCase().includes('winning take'),
       ),
     ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + R' && s.action.toLowerCase().includes('re-run'),
+      ),
+    ).toBe(true);
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
     expect(
       shortcutsForSurface('agent').some(

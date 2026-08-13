@@ -897,7 +897,9 @@ function App() {
       } else if (isArenaCopyQuestionKey(e)) {
         e.preventDefault();
         void handleCopyPrompt();
-      } else if (isArenaReRunRoundKey(e)) {
+      } else if (isArenaReRunRoundKey(e) && !focusedAgentId) {
+        // Re-running while a focused mind is open would silently discard that
+        // thread; the other shortcuts are non-destructive, so only guard this one.
         e.preventDefault();
         reRunRoundRequestRef.current?.();
       }
@@ -909,6 +911,7 @@ function App() {
     handleDownloadWinner,
     handleExportWinner,
     handleSaveWinner,
+    focusedAgentId,
     phase,
     response,
     viewMode,
@@ -2006,9 +2009,10 @@ function App() {
 
   /** Replay the last completed round exactly: same prompt, same follow-up context. */
   const handleReRunRound = () => {
-    if (rerunInFlightRef.current) return;
+    const prompt = currentPrompt.trim();
+    if (rerunInFlightRef.current || !prompt || focusedAgentId) return;
     rerunInFlightRef.current = true;
-    void handleSubmit(currentPrompt, lastRoundContextRef.current, () => {
+    void handleSubmit(prompt, lastRoundContextRef.current, () => {
       void track('arena_rerun_round');
     }).finally(() => {
       rerunInFlightRef.current = false;
