@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { WatchlistPage } from './WatchlistPage';
-import type { AgentWatchlistItem } from '../api';
+import { ApiError, type AgentWatchlistItem } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
 import {
   downloadBlobFile,
@@ -385,6 +385,114 @@ describe('WatchlistPage', () => {
       await screen.findByText('Re-check started — the latest result will update shortly.'),
     ).toBeInTheDocument();
     expect(screen.getByText(/Run 4 times/)).toBeInTheDocument();
+  });
+
+  it('runs every active watch with one click and skips paused ones', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Run all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Run all 1 active watch now' }),
+    );
+
+    await waitFor(() => {
+      expect(postAgentWatchlistRunMock).toHaveBeenCalledTimes(1);
+    });
+    expect(postAgentWatchlistRunMock).toHaveBeenCalledWith('item-1');
+    expect(postAgentWatchlistRunMock).not.toHaveBeenCalledWith('item-2');
+    expect(
+      await screen.findByText('Started 1 re-check.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Run 4 times/)).toBeInTheDocument();
+  });
+
+  it('summarizes watches that are already re-checking', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [
+        baseItem,
+        { ...pausedItem, id: 'item-2', is_active: true },
+      ],
+      active_count: 2,
+      active_cap: 10,
+      total: 2,
+    });
+    postAgentWatchlistRunMock
+      .mockRejectedValueOnce(new ApiError('Already re-checking', 409))
+      .mockResolvedValue({
+        success: true,
+        task_id: 'task-new',
+        message: 'Watch re-check started',
+        item: {
+          ...baseItem,
+          id: 'item-2',
+          run_count: 1,
+          latest_task_id: 'task-new',
+        },
+      });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Run all (2)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Run all 2 active watches now' }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Started 1 re-check. Skipped 1 (already re-checking).',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('reports the rate-limit stop honestly when the burst is capped', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [
+        baseItem,
+        { ...pausedItem, id: 'item-2', is_active: true },
+      ],
+      active_count: 2,
+      active_cap: 10,
+      total: 2,
+    });
+    postAgentWatchlistRunMock.mockRejectedValue(
+      new ApiError('Too many manual watchlist runs. Limit is 12 per hour.', 429),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Run all (2)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Run all 2 active watches now' }),
+    );
+
+    expect(
+      await screen.findByText('Skipped 2 (rate or daily limit reached).'),
+    ).toBeInTheDocument();
+  });
+
+  it('runs all active watches with Shift+R', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Run all (1)')).toBeInTheDocument();
+    });
+
+    const runAllButton = screen.getByRole('button', {
+      name: 'Run all 1 active watch now',
+    });
+    expect(runAllButton).toHaveAttribute('aria-keyshortcuts', 'Shift+R');
+
+    fireEvent.keyDown(window, { key: 'R', shiftKey: true });
+
+    await waitFor(() => {
+      expect(postAgentWatchlistRunMock).toHaveBeenCalledWith('item-1');
+    });
+    expect(
+      await screen.findByText('Started 1 re-check.'),
+    ).toBeInTheDocument();
   });
 
   it('opens a watched question in Arena for fresh four-mind takes', async () => {

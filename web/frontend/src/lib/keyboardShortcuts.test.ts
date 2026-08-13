@@ -37,6 +37,7 @@ import {
   isWatchlistDownloadCsvKey,
   isWatchlistDownloadMarkdownKey,
   isWatchlistDownloadStatsCsvKey,
+  isWatchlistRunAllKey,
   shortcutsForSurface,
   shortcutsPanelTitle,
 } from './keyboardShortcuts';
@@ -604,6 +605,13 @@ describe('keyboardShortcuts', () => {
     expect(isWatchlistDownloadStatsCsvKey({ key: 'F', shiftKey: true, metaKey: true })).toBe(false);
     expect(isWatchlistDownloadStatsCsvKey({ key: 'F', shiftKey: true, repeat: true })).toBe(false);
     expect(isWatchlistDownloadStatsCsvKey({ key: 'E', shiftKey: true })).toBe(false);
+
+    expect(isWatchlistRunAllKey({ key: 'R', shiftKey: true })).toBe(true);
+    expect(isWatchlistRunAllKey({ key: 'r', shiftKey: true })).toBe(true);
+    expect(isWatchlistRunAllKey({ key: 'R' })).toBe(false);
+    expect(isWatchlistRunAllKey({ key: 'R', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isWatchlistRunAllKey({ key: 'R', shiftKey: true, repeat: true })).toBe(false);
+    expect(isWatchlistRunAllKey({ key: 'C', shiftKey: true })).toBe(false);
   });
 
   it('detects Discuss/Debate thread export shortcuts as bare Shift+letter keys', () => {

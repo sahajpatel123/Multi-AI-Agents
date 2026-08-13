@@ -93,6 +93,7 @@ const ROOM: ShortcutHint[] = [
 
 const WATCHLIST: ShortcutHint[] = [
   { keys: '/', action: 'Focus watchlist search' },
+  { keys: 'Shift + R', action: 'Run all active watches now' },
   { keys: 'Shift + C', action: 'Copy the current watchlist as markdown' },
   { keys: 'Shift + D', action: 'Download the current watchlist as markdown' },
   { keys: 'Shift + E', action: 'Download the current watchlist as CSV' },
@@ -429,4 +430,9 @@ export function isWatchlistDownloadCsvKey(event: ShortcutKeyEvent): boolean {
 /** Shift+F — download the full watchlist statistics report as CSV. */
 export function isWatchlistDownloadStatsCsvKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'f');
+}
+
+/** Shift+R — start an immediate re-check for every active watch. */
+export function isWatchlistRunAllKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'r');
 }

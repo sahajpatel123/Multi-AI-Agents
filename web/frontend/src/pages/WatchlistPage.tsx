@@ -44,7 +44,12 @@ import {
   isWatchlistDownloadCsvKey,
   isWatchlistDownloadMarkdownKey,
   isWatchlistDownloadStatsCsvKey,
+  isWatchlistRunAllKey,
 } from '../lib/keyboardShortcuts';
+import {
+  formatWatchlistBulkRunNotice,
+  runActiveWatchlistItems,
+} from '../lib/watchlistBulkRun';
 import {
   WATCHLIST_INTERVALS,
   type WatchlistIntervalHours,
@@ -129,6 +134,8 @@ export function WatchlistPage() {
   const [error, setError] = useState<string | null>(null);
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState<'pause_all' | 'resume_all' | null>(null);
+  const [runAllNotice, setRunAllNotice] = useState<string | null>(null);
+  const [runAllBusy, setRunAllBusy] = useState(false);
   const [cadenceBusyId, setCadenceBusyId] = useState<string | null>(null);
   const [runNowBusyId, setRunNowBusyId] = useState<string | null>(null);
   const [duplicateBusyId, setDuplicateBusyId] = useState<string | null>(null);
@@ -187,6 +194,7 @@ export function WatchlistPage() {
     downloadWatchlist: () => void;
     downloadWatchlistCsv: () => void;
     downloadStatsCsv: (() => Promise<void>) | null;
+    runAllNow: (() => void) | null;
   } | null>(null);
   const statsDownloadBusyRef = useRef(false);
   const copyStatusTimerRef = useRef<number | null>(null);
@@ -409,6 +417,34 @@ export function WatchlistPage() {
       setError(e instanceof ApiError ? e.message : 'Could not start this re-check');
     } finally {
       setRunNowBusyId(null);
+    }
+  };
+
+  const onRunAllNow = async () => {
+    if (runAllBusy || activeCount === 0) return;
+    setRunAllBusy(true);
+    setRunAllNotice(null);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      const result = await runActiveWatchlistItems(items, async (item) => {
+        const started = await postAgentWatchlistRun(item.id);
+        setItems((prev) =>
+          prev.map((x) => (x.id === item.id ? started.item : x)),
+        );
+      });
+      setRunAllNotice(formatWatchlistBulkRunNotice(result));
+      if (result.started.length > 0) {
+        void refreshStats();
+      }
+    } catch (e) {
+      setRunAllNotice(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not run watches — check your connection and try again.',
+      );
+    } finally {
+      setRunAllBusy(false);
     }
   };
 
@@ -931,14 +967,15 @@ export function WatchlistPage() {
           downloadWatchlist,
           downloadWatchlistCsv,
           downloadStatsCsv: stats ? downloadStatsCsv : null,
+          runAllNow: activeCount > 0 && !runAllBusy ? onRunAllNow : null,
         }
       : null;
 
-  // Keyboard-first exports for the watchlist: Shift+C / Shift+D / Shift+E /
-  // Shift+F mirror the header and overview buttons. Form controls are skipped
-  // so normal Shift+letter typing is never swallowed, and open dialogs keep
-  // ownership of their keystrokes. The actions ref is only populated when the
-  // matching visible control is available.
+  // Keyboard-first watchlist actions: Shift+C / Shift+D / Shift+E / Shift+F
+  // mirror the export buttons, and Shift+R starts every active watch. Form
+  // controls are skipped so normal Shift+letter typing is never swallowed,
+  // and open dialogs keep ownership of their keystrokes. The actions ref is
+  // only populated when the matching visible control is available.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isAriaModalOpen()) return;
@@ -958,6 +995,10 @@ export function WatchlistPage() {
         if (!actions.downloadStatsCsv) return;
         e.preventDefault();
         void actions.downloadStatsCsv();
+      } else if (isWatchlistRunAllKey(e)) {
+        if (!actions.runAllNow) return;
+        e.preventDefault();
+        actions.runAllNow();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -1021,6 +1062,25 @@ export function WatchlistPage() {
         </div>
         {bodyMode === 'list' && items.length > 0 ? (
           <div className="watchlist-page__header-actions">
+            <button
+              type="button"
+              onClick={() => void onRunAllNow()}
+              disabled={runAllBusy || activeCount === 0}
+              title={
+                activeCount === 0
+                  ? 'No active watches to run'
+                  : `Run all ${activeCount} active watch${activeCount === 1 ? '' : 'es'} now (Shift+R)`
+              }
+              aria-keyshortcuts="Shift+R"
+              aria-label={
+                activeCount === 0
+                  ? 'Run all watches now (none active)'
+                  : `Run all ${activeCount} active watch${activeCount === 1 ? '' : 'es'} now`
+              }
+              className="watchlist-header-btn"
+            >
+              {runAllBusy ? 'Starting…' : `Run all (${activeCount})`}
+            </button>
             <button
               type="button"
               onClick={() => void onBulkStatusChange('pause_all')}
@@ -1152,6 +1212,11 @@ export function WatchlistPage() {
         {bulkNotice ? (
           <p role="status" className="watchlist-page__bulk-notice">
             {bulkNotice}
+          </p>
+        ) : null}
+        {runAllNotice ? (
+          <p role="status" className="watchlist-page__bulk-notice">
+            {runAllNotice}
           </p>
         ) : null}
 

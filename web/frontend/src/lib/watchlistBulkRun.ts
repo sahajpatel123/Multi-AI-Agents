@@ -1,0 +1,144 @@
+/** Orchestrates "run all active watches now" for the Agent Watchlist. */
+
+import { ApiError, type AgentWatchlistItem } from '../api';
+
+export type WatchlistRunSkipReason =
+  | 'in_progress'
+  | 'no_question'
+  | 'rate_limited';
+
+export type WatchlistBulkRunResult = {
+  /** Watch ids whose re-check actually started. */
+  started: string[];
+  /** Watch ids skipped because the backend said so or the burst was stopped. */
+  skipped: Array<{ id: string; reason: WatchlistRunSkipReason }>;
+  /** Watch ids that failed with a non-actionable error. */
+  failed: Array<{ id: string; message: string }>;
+};
+
+export type WatchlistRunOne = (item: AgentWatchlistItem) => Promise<unknown>;
+
+const DEFAULT_CONCURRENCY = 3;
+
+/**
+ * Start an immediate re-check for every active watch.
+ *
+ * The backend bounds manual runs at 12/hour/user (shared scope), so a burst
+ * past the cap must stop instead of hammering the API: once a 429 arrives,
+ * queued watches are skipped as `rate_limited` and no further requests fire.
+ * Per-item errors that are just "this watch cannot run right now" become
+ * skips, while unexpected failures are reported verbatim.
+ */
+export async function runActiveWatchlistItems(
+  items: readonly AgentWatchlistItem[],
+  runOne: WatchlistRunOne,
+  concurrency: number = DEFAULT_CONCURRENCY,
+): Promise<WatchlistBulkRunResult> {
+  const active = items.filter((item) => item.is_active);
+  const started: string[] = [];
+  const skipped: Array<{ id: string; reason: WatchlistRunSkipReason }> = [];
+  const failed: Array<{ id: string; message: string }> = [];
+  const attempted = new Set<string>();
+  let rateLimitHit = false;
+  let cursor = 0;
+  const nextIndex = () => cursor++;
+
+  const worker = async () => {
+    while (true) {
+      if (rateLimitHit) return;
+      const index = nextIndex();
+      if (index >= active.length) return;
+      const item = active[index];
+      attempted.add(item.id);
+      try {
+        await runOne(item);
+        started.push(item.id);
+      } catch (err) {
+        const reason = runSkipReason(err);
+        if (reason === 'rate_limited') {
+          // Every remaining watch would hit the same limiter; stop the burst.
+          rateLimitHit = true;
+          skipped.push({ id: item.id, reason });
+          return;
+        }
+        if (reason) {
+          skipped.push({ id: item.id, reason });
+        } else {
+          failed.push({ id: item.id, message: errorMessage(err) });
+        }
+      }
+    }
+  };
+
+  const workerCount = Math.max(1, Math.min(concurrency, active.length));
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+  // Watches that were still queued when the rate limit cut the burst off
+  // never got a request; report them honestly as rate-limited skips.
+  for (const item of active) {
+    if (!attempted.has(item.id)) {
+      skipped.push({ id: item.id, reason: 'rate_limited' });
+    }
+  }
+
+  return { started, skipped, failed };
+}
+
+function runSkipReason(err: unknown): WatchlistRunSkipReason | null {
+  if (!(err instanceof ApiError)) return null;
+  if (err.status === 409) return 'in_progress';
+  if (err.status === 400) return 'no_question';
+  if (err.status === 429) return 'rate_limited';
+  return null;
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  return 'Could not start this re-check';
+}
+
+/**
+ * Human summary for the run-all notice, e.g.
+ * "Started 2 re-checks. Skipped 1 (already re-checking)."
+ */
+export function formatWatchlistBulkRunNotice(
+  result: WatchlistBulkRunResult,
+): string {
+  const parts: string[] = [];
+
+  const startedCount = result.started.length;
+  if (startedCount > 0) {
+    parts.push(`Started ${startedCount} re-check${startedCount === 1 ? '' : 's'}.`);
+  }
+
+  const skippedInProgress = result.skipped.filter(
+    (skip) => skip.reason === 'in_progress',
+  ).length;
+  const skippedNoQuestion = result.skipped.filter(
+    (skip) => skip.reason === 'no_question',
+  ).length;
+  const skippedRateLimited = result.skipped.filter(
+    (skip) => skip.reason === 'rate_limited',
+  ).length;
+
+  if (skippedInProgress > 0) {
+    parts.push(
+      `Skipped ${skippedInProgress} (already re-checking).`,
+    );
+  }
+  if (skippedNoQuestion > 0) {
+    parts.push(`Skipped ${skippedNoQuestion} (no usable question).`);
+  }
+  if (skippedRateLimited > 0) {
+    parts.push(
+      `Skipped ${skippedRateLimited} (rate or daily limit reached).`,
+    );
+  }
+
+  for (const failure of result.failed) {
+    parts.push(`1 failed: ${failure.message}`);
+  }
+
+  if (parts.length === 0) return 'No active watches to run.';
+  return parts.join(' ');
+}
