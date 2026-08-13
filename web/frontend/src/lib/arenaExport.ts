@@ -208,6 +208,19 @@ export async function copyArenaTranscriptToClipboard(
 }
 
 /**
+ * Copy the full-session JSON transcript to the clipboard. Reuses the
+ * download formatter so copy and download stay byte-for-byte in sync, and
+ * returns the clipboard helper's success flag for UI feedback.
+ */
+export async function copyArenaTranscriptJsonToClipboard(
+  turns: SessionTurn[],
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: ArenaTranscriptOptions,
+): Promise<boolean> {
+  return copyToClipboard(formatArenaTranscriptJsonExport(turns, resolvePersona, opts));
+}
+
+/**
  * Copy a combined full-transcript Markdown archive to the clipboard. Reuses
  * the download formatter so copy and download stay byte-for-byte in sync,
  * and returns the clipboard helper's success flag for UI feedback.

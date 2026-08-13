@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arena full-session transcripts can be copied as structured JSON (Shift+K),
+  matching the existing Markdown transcript copy with byte-for-byte parity
+  between the copy and download formatters
 - Agent Mode completed results can be copied (Shift+C) or downloaded as
   Markdown (Shift+D), and the full report can be downloaded as JSON (Shift+J)
 - Arena winner take can be saved to or removed from the saved-takes library

@@ -52,6 +52,7 @@ import {
   formatArenaCsvExport,
   formatArenaJsonExport,
   copyArenaTranscriptToClipboard,
+  copyArenaTranscriptJsonToClipboard,
   copyArenaTranscriptsToClipboard,
   formatArenaTranscriptExport,
   formatArenaTranscriptsExport,
@@ -89,6 +90,7 @@ import { titleForArenaBusy } from './lib/documentTitle';
 import { isBareSlashKey, shouldCaptureSlashFocus } from './lib/slashFocus';
 import {
   isArenaCopyQuestionKey,
+  isArenaCopyTranscriptJsonKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
   isArenaReRunRoundKey,
@@ -145,6 +147,7 @@ function App() {
   const [arenaCsvDownloaded, setArenaCsvDownloaded] = useState(false);
   const [transcriptDownloaded, setTranscriptDownloaded] = useState(false);
   const [transcriptCopied, setTranscriptCopied] = useState(false);
+  const [transcriptJsonCopied, setTranscriptJsonCopied] = useState(false);
   const [transcriptCopying, setTranscriptCopying] = useState(false);
   const [transcriptCsvDownloaded, setTranscriptCsvDownloaded] = useState(false);
   const [transcriptJsonDownloaded, setTranscriptJsonDownloaded] = useState(false);
@@ -615,6 +618,7 @@ function App() {
         sessionId: sessionData?.session_id,
       });
       if (ok) {
+        setTranscriptJsonCopied(false);
         setTranscriptCopied(true);
         if (transcriptCopyFeedbackTimer.current) {
           clearTimeout(transcriptCopyFeedbackTimer.current);
@@ -630,6 +634,34 @@ function App() {
     } finally {
       transcriptCopyInFlightRef.current = false;
       setTranscriptCopying(false);
+    }
+  }, [resolveArenaPersona, sessionData]);
+
+  const handleCopyTranscriptJson = useCallback(async () => {
+    if (transcriptCopyInFlightRef.current) return;
+    const turns = sessionData?.turns;
+    if (!turns || !turns.length) return;
+    transcriptCopyInFlightRef.current = true;
+    try {
+      const ok = await copyArenaTranscriptJsonToClipboard(turns, resolveArenaPersona, {
+        sessionId: sessionData?.session_id,
+      });
+      if (ok) {
+        setTranscriptCopied(false);
+        setTranscriptJsonCopied(true);
+        if (transcriptCopyFeedbackTimer.current) {
+          clearTimeout(transcriptCopyFeedbackTimer.current);
+        }
+        transcriptCopyFeedbackTimer.current = window.setTimeout(() => {
+          setTranscriptJsonCopied(false);
+          transcriptCopyFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_copy_transcript_json');
+      } else {
+        setError('Could not copy the transcript JSON. Try again or download it instead.');
+      }
+    } finally {
+      transcriptCopyInFlightRef.current = false;
     }
   }, [resolveArenaPersona, sessionData]);
 
@@ -897,6 +929,9 @@ function App() {
       } else if (isArenaCopyQuestionKey(e)) {
         e.preventDefault();
         void handleCopyPrompt();
+      } else if (isArenaCopyTranscriptJsonKey(e)) {
+        e.preventDefault();
+        void handleCopyTranscriptJson();
       } else if (isArenaReRunRoundKey(e) && !focusedAgentId) {
         // Re-running while a focused mind is open would silently discard that
         // thread; the other shortcuts are non-destructive, so only guard this one.
@@ -908,6 +943,7 @@ function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [
     handleCopyPrompt,
+    handleCopyTranscriptJson,
     handleDownloadWinner,
     handleExportWinner,
     handleSaveWinner,
@@ -2416,6 +2452,15 @@ function App() {
                     style={{ fontSize: 12 }}
                   >
                     {transcriptDownloaded ? 'Transcript saved' : 'Download transcript'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => void handleCopyTranscriptJson()}
+                    title="Copy the full session as structured JSON (Shift+K)"
+                    style={{ fontSize: 12 }}
+                  >
+                    {transcriptJsonCopied ? 'Transcript JSON copied' : 'Copy transcript JSON'}
                   </button>
                   <button
                     type="button"
