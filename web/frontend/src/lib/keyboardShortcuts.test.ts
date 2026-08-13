@@ -33,6 +33,10 @@ import {
   isThreadDownloadMarkdownKey,
   isThreadCopyJsonKey,
   isThreadDownloadJsonKey,
+  isWatchlistCopyKey,
+  isWatchlistDownloadCsvKey,
+  isWatchlistDownloadMarkdownKey,
+  isWatchlistDownloadStatsCsvKey,
   shortcutsForSurface,
   shortcutsPanelTitle,
 } from './keyboardShortcuts';
@@ -265,6 +269,26 @@ describe('keyboardShortcuts', () => {
     expect(shortcutsForSurface('watchlist').some((s) => s.action.includes('watchlist search'))).toBe(
       true,
     );
+    expect(
+      shortcutsForSurface('watchlist').some(
+        (s) => s.keys === 'Shift + C' && s.action.toLowerCase().includes('copy'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('watchlist').some(
+        (s) => s.keys === 'Shift + D' && s.action.toLowerCase().includes('download'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('watchlist').some(
+        (s) => s.keys === 'Shift + E' && s.action.toLowerCase().includes('csv'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('watchlist').some(
+        (s) => s.keys === 'Shift + F' && s.action.toLowerCase().includes('statistics'),
+      ),
+    ).toBe(true);
     expect(shortcutsForSurface('personas').some((s) => s.action.includes('library'))).toBe(true);
   });
 
@@ -548,6 +572,38 @@ describe('keyboardShortcuts', () => {
     expect(isAgentCopyReportKey({ key: 'P', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentCopyReportJsonKey({ key: 'O', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentNewTaskKey({ key: 'N', shiftKey: true, repeat: true })).toBe(false);
+  });
+
+  it('detects Watchlist export shortcuts as bare Shift+letter keys', () => {
+    expect(isWatchlistCopyKey({ key: 'C', shiftKey: true })).toBe(true);
+    expect(isWatchlistCopyKey({ key: 'c', shiftKey: true })).toBe(true);
+    expect(isWatchlistCopyKey({ key: 'C' })).toBe(false);
+    expect(isWatchlistCopyKey({ key: 'C', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isWatchlistCopyKey({ key: 'C', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isWatchlistCopyKey({ key: 'C', shiftKey: true, altKey: true })).toBe(false);
+    expect(isWatchlistCopyKey({ key: 'C', shiftKey: true, repeat: true })).toBe(false);
+    expect(isWatchlistCopyKey({ key: 'D', shiftKey: true })).toBe(false);
+
+    expect(isWatchlistDownloadMarkdownKey({ key: 'D', shiftKey: true })).toBe(true);
+    expect(isWatchlistDownloadMarkdownKey({ key: 'd', shiftKey: true })).toBe(true);
+    expect(isWatchlistDownloadMarkdownKey({ key: 'D' })).toBe(false);
+    expect(isWatchlistDownloadMarkdownKey({ key: 'D', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isWatchlistDownloadMarkdownKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
+    expect(isWatchlistDownloadMarkdownKey({ key: 'C', shiftKey: true })).toBe(false);
+
+    expect(isWatchlistDownloadCsvKey({ key: 'E', shiftKey: true })).toBe(true);
+    expect(isWatchlistDownloadCsvKey({ key: 'e', shiftKey: true })).toBe(true);
+    expect(isWatchlistDownloadCsvKey({ key: 'E' })).toBe(false);
+    expect(isWatchlistDownloadCsvKey({ key: 'E', shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isWatchlistDownloadCsvKey({ key: 'E', shiftKey: true, repeat: true })).toBe(false);
+    expect(isWatchlistDownloadCsvKey({ key: 'D', shiftKey: true })).toBe(false);
+
+    expect(isWatchlistDownloadStatsCsvKey({ key: 'F', shiftKey: true })).toBe(true);
+    expect(isWatchlistDownloadStatsCsvKey({ key: 'f', shiftKey: true })).toBe(true);
+    expect(isWatchlistDownloadStatsCsvKey({ key: 'F' })).toBe(false);
+    expect(isWatchlistDownloadStatsCsvKey({ key: 'F', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isWatchlistDownloadStatsCsvKey({ key: 'F', shiftKey: true, repeat: true })).toBe(false);
+    expect(isWatchlistDownloadStatsCsvKey({ key: 'E', shiftKey: true })).toBe(false);
   });
 
   it('detects Discuss/Debate thread export shortcuts as bare Shift+letter keys', () => {

@@ -93,6 +93,10 @@ const ROOM: ShortcutHint[] = [
 
 const WATCHLIST: ShortcutHint[] = [
   { keys: '/', action: 'Focus watchlist search' },
+  { keys: 'Shift + C', action: 'Copy the current watchlist as markdown' },
+  { keys: 'Shift + D', action: 'Download the current watchlist as markdown' },
+  { keys: 'Shift + E', action: 'Download the current watchlist as CSV' },
+  { keys: 'Shift + F', action: 'Download watchlist statistics as CSV' },
   { keys: 'Esc', action: 'Cancel pending remove' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
@@ -399,4 +403,30 @@ export function isAgentCopyReportJsonKey(event: ShortcutKeyEvent): boolean {
 /** Shift+N — reset Agent Mode to a fresh, empty task. */
 export function isAgentNewTaskKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'n');
+}
+
+/**
+ * Shift+C — copy the current watchlist view as markdown. Same letter as
+ * Arena/Agent/Discuss so C consistently means "copy the primary content".
+ */
+export function isWatchlistCopyKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'c');
+}
+
+/**
+ * Shift+D — download the current watchlist view as a markdown file. Same
+ * letter as the other surfaces so D consistently means "download it".
+ */
+export function isWatchlistDownloadMarkdownKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'd');
+}
+
+/** Shift+E — download the current watchlist view as a CSV file. */
+export function isWatchlistDownloadCsvKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'e');
+}
+
+/** Shift+F — download the full watchlist statistics report as CSV. */
+export function isWatchlistDownloadStatsCsvKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'f');
 }

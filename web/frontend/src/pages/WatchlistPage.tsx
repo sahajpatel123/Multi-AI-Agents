@@ -38,7 +38,13 @@ import {
   watchlistScoreTrend,
 } from '../lib/watchlistHistory';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
-import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import {
+  isWatchlistCopyKey,
+  isWatchlistDownloadCsvKey,
+  isWatchlistDownloadMarkdownKey,
+  isWatchlistDownloadStatsCsvKey,
+} from '../lib/keyboardShortcuts';
 import {
   WATCHLIST_INTERVALS,
   type WatchlistIntervalHours,
@@ -176,6 +182,12 @@ export function WatchlistPage() {
   const editQuestionRef = useRef<HTMLTextAreaElement | null>(null);
   const editDialogRef = useRef<HTMLDivElement | null>(null);
   const editTriggerRef = useRef<HTMLElement | null>(null);
+  const watchlistExportActionsRef = useRef<{
+    copyWatchlist: () => Promise<void>;
+    downloadWatchlist: () => void;
+    downloadWatchlistCsv: () => void;
+    downloadStatsCsv: () => Promise<void>;
+  } | null>(null);
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
   const csvDownloadStatusTimerRef = useRef<number | null>(null);
@@ -906,6 +918,41 @@ export function WatchlistPage() {
     }
   };
 
+  watchlistExportActionsRef.current = {
+    copyWatchlist,
+    downloadWatchlist,
+    downloadWatchlistCsv,
+    downloadStatsCsv,
+  };
+
+  // Keyboard-first exports for the watchlist: Shift+C / Shift+D / Shift+E /
+  // Shift+F mirror the header and overview buttons. Form controls are skipped
+  // so normal Shift+letter typing is never swallowed, and open dialogs keep
+  // ownership of their keystrokes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isAriaModalOpen()) return;
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      const actions = watchlistExportActionsRef.current;
+      if (!actions) return;
+      if (isWatchlistCopyKey(e)) {
+        e.preventDefault();
+        void actions.copyWatchlist();
+      } else if (isWatchlistDownloadMarkdownKey(e)) {
+        e.preventDefault();
+        actions.downloadWatchlist();
+      } else if (isWatchlistDownloadCsvKey(e)) {
+        e.preventDefault();
+        actions.downloadWatchlistCsv();
+      } else if (isWatchlistDownloadStatsCsvKey(e)) {
+        e.preventDefault();
+        void actions.downloadStatsCsv();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   if (!canWatchlist) {
     return (
       <div className="watchlist-gate">
@@ -1002,7 +1049,8 @@ export function WatchlistPage() {
             <button
               type="button"
               onClick={() => void copyWatchlist()}
-              title="Copy current view as markdown"
+              title="Copy current view as markdown (Shift+C)"
+              aria-keyshortcuts="Shift+C"
               aria-label={
                 copyStatus === 'copied'
                   ? 'Watchlist copied'
@@ -1023,7 +1071,8 @@ export function WatchlistPage() {
             <button
               type="button"
               onClick={() => downloadWatchlist()}
-              title="Download current view as markdown"
+              title="Download current view as markdown (Shift+D)"
+              aria-keyshortcuts="Shift+D"
               aria-label={
                 downloadStatus === 'done'
                   ? 'Watchlist downloaded'
@@ -1048,7 +1097,8 @@ export function WatchlistPage() {
             <button
               type="button"
               onClick={() => downloadWatchlistCsv()}
-              title="Download current view as CSV"
+              title="Download current view as CSV (Shift+E)"
+              aria-keyshortcuts="Shift+E"
               aria-label={
                 csvDownloadStatus === 'done'
                   ? 'Watchlist CSV downloaded'

@@ -27,7 +27,8 @@ export function WatchlistStatsStrip({
           type="button"
           onClick={onDownload}
           disabled={downloadBusy || !onDownload}
-          title="Download full watchlist statistics as CSV"
+          title="Download full watchlist statistics as CSV (Shift+F)"
+          aria-keyshortcuts="Shift+F"
           aria-label={
             downloadStatus === 'done'
               ? 'Watchlist statistics downloaded'

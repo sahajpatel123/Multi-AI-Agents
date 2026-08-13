@@ -3,6 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { WatchlistPage } from './WatchlistPage';
 import type { AgentWatchlistItem } from '../api';
+import { copyToClipboard } from '../lib/clipboard';
+import {
+  downloadBlobFile,
+  downloadMarkdownFile,
+  downloadTextFile,
+} from '../lib/downloadTextFile';
 
 const baseItem: AgentWatchlistItem = {
   id: 'item-1',
@@ -238,6 +244,10 @@ describe('WatchlistPage', () => {
     exportAgentWatchlistHistoryJsonMock.mockResolvedValue(
       new Blob(['{"success":true}'], { type: 'application/json' }),
     );
+    vi.mocked(copyToClipboard).mockClear();
+    vi.mocked(downloadMarkdownFile).mockClear();
+    vi.mocked(downloadTextFile).mockClear();
+    vi.mocked(downloadBlobFile).mockClear();
   });
 
   it('renders the watchlist page chrome with BEM classes', async () => {
@@ -575,6 +585,72 @@ describe('WatchlistPage', () => {
     );
     expect(opts.filename).toMatch(/^agent-watchlist-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(opts.mimeType).toBe('text/csv;charset=utf-8');
+  });
+
+  it('copies the current watchlist as markdown with Shift+C', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(window, { key: 'C', shiftKey: true });
+
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    });
+    const markdown = vi.mocked(copyToClipboard).mock.calls[0][0];
+    expect(markdown).toContain('# Agent Watchlist');
+    expect(markdown).toContain('How is the Indian IPO market evolving?');
+    expect(markdown).toContain('Will the monsoon affect Indian agriculture exports?');
+  });
+
+  it('downloads the current watchlist as markdown with Shift+D', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(window, { key: 'D', shiftKey: true });
+
+    expect(downloadMarkdownFile).toHaveBeenCalledTimes(1);
+    const [markdown] = vi.mocked(downloadMarkdownFile).mock.calls[0];
+    expect(markdown).toContain('# Agent Watchlist');
+  });
+
+  it('downloads the current watchlist as CSV with Shift+E', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    const csvButton = screen.getByRole('button', { name: 'Download watchlist as CSV' });
+    expect(csvButton).toHaveAttribute('aria-keyshortcuts', 'Shift+E');
+
+    fireEvent.keyDown(window, { key: 'E', shiftKey: true });
+
+    expect(downloadTextFile).toHaveBeenCalledTimes(1);
+    const [csv] = vi.mocked(downloadTextFile).mock.calls[0];
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv).toContain('"question","status","cadenceHours"');
+  });
+
+  it('downloads watchlist statistics as CSV with Shift+F', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Watchlist overview statistics')).toBeInTheDocument();
+    });
+
+    const statsButton = screen.getByRole('button', {
+      name: 'Download watchlist statistics as CSV',
+    });
+    expect(statsButton).toHaveAttribute('aria-keyshortcuts', 'Shift+F');
+
+    fireEvent.keyDown(window, { key: 'F', shiftKey: true });
+
+    await waitFor(() => {
+      expect(exportAgentWatchlistStatisticsCsvMock).toHaveBeenCalledTimes(1);
+    });
+    expect(downloadBlobFile).toHaveBeenCalledTimes(1);
   });
 
   it('renders the overview stats strip and downloads full statistics CSV', async () => {
