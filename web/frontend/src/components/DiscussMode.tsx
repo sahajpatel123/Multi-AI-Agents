@@ -89,6 +89,10 @@ export function DiscussMode({
   const stickToBottomRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** Guards so a thread export can never double-fire or update state after unmount. */
+  const mountedRef = useRef(true);
+  const copyThreadInFlightRef = useRef(false);
+  const downloadThreadInFlightRef = useRef(false);
 
   const currentHistory = histories[activeAgent.response.agent_id] || [];
   const discussBusy = discussWorkInFlight(isStreaming);
@@ -121,7 +125,20 @@ export function DiscussMode({
   useEffect(() => {
     setMsgCopyStatus('idle');
     setMsgCopyKey(null);
+    // Thread-level feedback belongs to the previous mind; reset it too so a
+    // stale "Copied/Downloaded" label never bleeds into the new thread.
+    setCopyFeedback('idle');
+    setDownloadFeedback('idle');
   }, [activeAgent.response.agent_id]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      copyThreadInFlightRef.current = false;
+      downloadThreadInFlightRef.current = false;
+    };
+  }, []);
 
   const buildThreadMarkdown = () => {
     const seed: DiscussChatMessage[] =
@@ -141,17 +158,46 @@ export function DiscussMode({
     });
   };
 
+  /** Whether the thread has any real body to export (seed take or messages). */
+  const threadHasContent = () => {
+    if (currentHistory.length > 0) {
+      return currentHistory.some((m) => Boolean((m.content || '').trim()));
+    }
+    return Boolean(
+      (activeAgent.response.verdict || activeAgent.response.one_liner || '').trim(),
+    );
+  };
+
   const handleCopyThread = async () => {
-    const md = buildThreadMarkdown();
-    const ok = await copyToClipboard(md);
-    setCopyFeedback(ok ? 'copied' : 'failed');
+    if (copyThreadInFlightRef.current) return;
+    if (!threadHasContent()) {
+      setCopyFeedback('failed');
+      return;
+    }
+    copyThreadInFlightRef.current = true;
+    try {
+      const ok = await copyToClipboard(buildThreadMarkdown());
+      if (mountedRef.current) setCopyFeedback(ok ? 'copied' : 'failed');
+    } finally {
+      copyThreadInFlightRef.current = false;
+    }
   };
 
   const handleDownloadThread = () => {
-    const md = buildThreadMarkdown();
-    const stem = `discuss-${agentConfig.name || 'thread'}`;
-    const ok = downloadMarkdownFile(md, stem);
-    setDownloadFeedback(ok ? 'done' : 'failed');
+    if (downloadThreadInFlightRef.current) return;
+    if (!threadHasContent()) {
+      setDownloadFeedback('failed');
+      return;
+    }
+    downloadThreadInFlightRef.current = true;
+    try {
+      const md = buildThreadMarkdown();
+      const stem = `discuss-${agentConfig.name || 'thread'}`;
+      const ok = downloadMarkdownFile(md, stem);
+      if (mountedRef.current) setDownloadFeedback(ok ? 'done' : 'failed');
+    } finally {
+      downloadThreadInFlightRef.current = false;
+    }
   };
 
   /** Latest thread export handlers so the key listener never goes stale. */

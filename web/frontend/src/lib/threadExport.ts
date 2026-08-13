@@ -33,7 +33,9 @@ export function formatDiscussExport(opts: {
     '',
   ];
 
-  const msgs = opts.messages || [];
+  const msgs = (opts.messages || []).filter(
+    (m): m is ThreadMessage => Boolean(m),
+  );
   if (msgs.length === 0) {
     lines.push('_No messages yet._');
   } else {
@@ -112,19 +114,35 @@ export function formatDebateExport(opts: {
   }
   lines.push('');
 
-  const rounds = opts.rounds || [];
+  const rounds = (opts.rounds || []).filter(
+    (round): round is DebateExportRound => Boolean(round),
+  );
   if (rounds.length === 0) {
     lines.push('_No rounds yet._');
   } else {
-    for (const round of rounds) {
-      lines.push(`## Round ${round.roundNumber}`);
+    for (const [index, round] of rounds.entries()) {
+      // Defensive: malformed payloads (NaN/zero/negative) fall back to the
+      // position in the list instead of printing "Round NaN/undefined".
+      const roundNumber =
+        Number.isFinite(round.roundNumber) && round.roundNumber > 0
+          ? round.roundNumber
+          : index + 1;
+      lines.push(`## Round ${roundNumber}`);
       lines.push('');
       const interjection = (round.userInterjection || '').trim();
       if (interjection) {
         lines.push(`**Your interjection:** ${interjection}`);
         lines.push('');
       }
-      for (const r of round.reactions || []) {
+      const reactions = (round.reactions || []).filter(
+        (r): r is DebateExportRound['reactions'][number] => Boolean(r),
+      );
+      if (reactions.length === 0) {
+        lines.push('_(No reactions in this round.)_');
+        lines.push('');
+        continue;
+      }
+      for (const r of reactions) {
         const name = (r.agentName || 'Mind').trim() || 'Mind';
         const stance = (r.stance || '').trim();
         const header = stance ? `### ${name} (${stance})` : `### ${name}`;

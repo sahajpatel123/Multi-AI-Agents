@@ -6,6 +6,8 @@ import {
   formatDebateReactionCopy,
   formatDiscussExport,
   formatDiscussMessageCopy,
+  type DebateExportRound,
+  type ThreadMessage,
 } from './threadExport';
 
 describe('formatDiscussExport', () => {
@@ -32,6 +34,22 @@ describe('formatDiscussExport', () => {
       messages: [],
     });
     expect(md).toContain('No messages yet');
+  });
+
+  it('skips null messages and whitespace-only bodies', () => {
+    const md = formatDiscussExport({
+      agentName: '  ',
+      originalPrompt: '   ',
+      messages: [
+        null as unknown as ThreadMessage,
+        { role: 'user', content: '   ' },
+        { role: 'agent', content: '  Keep this  ' },
+      ],
+    });
+    expect(md).toContain('Arena mind');
+    expect(md).toContain('(no prompt)');
+    expect(md).not.toContain('**You:**');
+    expect(md).toContain('Keep this');
   });
 });
 
@@ -84,6 +102,49 @@ describe('formatDebateExport', () => {
     expect(md).toContain('The Analyst');
     expect(md).toContain('Measure first.');
     expect(md).toContain('Shared from Arena Debate');
+  });
+
+  it('normalizes malformed rounds instead of printing NaN/undefined', () => {
+    const md = formatDebateExport({
+      originalPrompt: 'Q',
+      challengedAgentName: 'The Pragmatist',
+      rounds: [
+        null as unknown as DebateExportRound,
+        { roundNumber: Number.NaN, reactions: [] },
+        {
+          roundNumber: 0,
+          reactions: [
+            { agentName: '  ', content: '   ', stance: '' },
+          ],
+        },
+      ],
+    });
+    expect(md).toContain('## Round 1');
+    expect(md).toContain('## Round 2');
+    expect(md).not.toContain('NaN');
+    expect(md).not.toContain('undefined');
+    expect(md).toContain('_(No reactions in this round.)_');
+    expect(md).toContain('Mind');
+    expect(md).toContain('_(empty)_');
+  });
+
+  it('skips null reactions without losing later content', () => {
+    const md = formatDebateExport({
+      originalPrompt: 'Q',
+      challengedAgentName: 'The Pragmatist',
+      rounds: [
+        {
+          roundNumber: 1,
+          reactions: [
+            null as unknown as DebateExportRound['reactions'][number],
+            { agentName: 'The Analyst', content: 'Measure first.', stance: 'pushback' },
+          ],
+        },
+      ],
+    });
+    expect(md).toContain('The Analyst');
+    expect(md).toContain('Measure first.');
+    expect(md).not.toContain('(empty)');
   });
 });
 

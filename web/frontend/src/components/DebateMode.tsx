@@ -127,6 +127,10 @@ export function DebateMode({
   const roundInFlightRef = useRef(false);
   const requestIdRef = useRef<string | null>(null);
   const lastInterjectionRef = useRef<string | null>(null);
+  /** Guards so a thread export can never double-fire or update state after unmount. */
+  const mountedRef = useRef(true);
+  const copyDebateInFlightRef = useRef(false);
+  const downloadDebateInFlightRef = useRef(false);
 
   const [interjection, setInterjection] = useState('');
   /** After round 3, user may unlock one bonus follow-up round (max 4). */
@@ -176,6 +180,15 @@ export function DebateMode({
     };
   }, []);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      copyDebateInFlightRef.current = false;
+      downloadDebateInFlightRef.current = false;
+    };
+  }, []);
+
   const reducedMotion = prefersReducedMotion();
   const challengedConfig = getAgentDisplay(challengedAgent.response.agent_id);
   const reactingIds = AGENT_SLOT_IDS.filter(
@@ -199,16 +212,27 @@ export function DebateMode({
     });
 
   const handleCopyDebate = async () => {
-    const md = buildDebateMarkdown();
-    const ok = await copyToClipboard(md);
-    setCopyFeedback(ok ? 'copied' : 'failed');
+    if (copyDebateInFlightRef.current) return;
+    copyDebateInFlightRef.current = true;
+    try {
+      const ok = await copyToClipboard(buildDebateMarkdown());
+      if (mountedRef.current) setCopyFeedback(ok ? 'copied' : 'failed');
+    } finally {
+      copyDebateInFlightRef.current = false;
+    }
   };
 
   const handleDownloadDebate = () => {
-    const md = buildDebateMarkdown();
-    const stem = `debate-${challengedConfig.name || 'transcript'}`;
-    const ok = downloadMarkdownFile(md, stem);
-    setDownloadFeedback(ok ? 'done' : 'failed');
+    if (downloadDebateInFlightRef.current) return;
+    downloadDebateInFlightRef.current = true;
+    try {
+      const md = buildDebateMarkdown();
+      const stem = `debate-${challengedConfig.name || 'transcript'}`;
+      const ok = downloadMarkdownFile(md, stem);
+      if (mountedRef.current) setDownloadFeedback(ok ? 'done' : 'failed');
+    } finally {
+      downloadDebateInFlightRef.current = false;
+    }
   };
 
   /** Latest thread export handlers so the key listener never goes stale. */
