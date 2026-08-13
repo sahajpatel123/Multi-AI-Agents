@@ -45,6 +45,7 @@ const DISCUSS: ShortcutHint[] = [
   { keys: '/', action: 'Focus the discuss message box' },
   { keys: 'Enter', action: 'Send message' },
   { keys: 'End', action: 'Jump to latest message' },
+  { keys: 'Shift + N', action: 'Start a new Arena task' },
   { keys: 'Esc', action: 'Back to Arena' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
@@ -53,6 +54,7 @@ const DEBATE: ShortcutHint[] = [
   { keys: '/', action: 'Focus debate interjection' },
   { keys: 'Enter', action: 'Send interjection' },
   { keys: 'End', action: 'Jump to latest in the thread' },
+  { keys: 'Shift + N', action: 'Start a new Arena task' },
   { keys: 'Esc', action: 'Back to Arena' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];

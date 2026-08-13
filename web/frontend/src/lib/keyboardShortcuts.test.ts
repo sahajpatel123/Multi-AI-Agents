@@ -64,6 +64,16 @@ describe('keyboardShortcuts', () => {
         (s) => s.keys === 'Shift + N' && s.action.toLowerCase().includes('new arena task'),
       ),
     ).toBe(true);
+    expect(
+      shortcutsForSurface('debate').some(
+        (s) => s.keys === 'Shift + N' && s.action.toLowerCase().includes('new arena task'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('discuss').some(
+        (s) => s.keys === 'Shift + N' && s.action.toLowerCase().includes('new arena task'),
+      ),
+    ).toBe(true);
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
     expect(
       shortcutsForSurface('agent').some(

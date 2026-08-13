@@ -1226,12 +1226,11 @@ function App() {
     void refreshRecentSessions();
   }, [refreshRecentSessions, sessionData, user]);
 
-  // Shift+N starts a fresh Arena task from anywhere on the Arena surface,
-  // mirroring the sidebar's New task button without needing the sidebar open.
-  // Form controls are skipped so Shift+letter typing is never swallowed, and
-  // open dialogs keep ownership of their keystrokes.
+  // Shift+N starts a fresh Arena task from any Arena view (arena, leaderboard,
+  // debate, or discuss), mirroring the sidebar's New task button without
+  // needing the sidebar open. Form controls are skipped so Shift+letter typing
+  // is never swallowed, and open dialogs keep ownership of their keystrokes.
   useEffect(() => {
-    if (viewMode !== 'arena' && viewMode !== 'leaderboard') return;
     const onKey = (e: KeyboardEvent) => {
       if (isAriaModalOpen()) return;
       if (!shouldCaptureSlashFocus(e.target)) return;
@@ -1241,7 +1240,7 @@ function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleNewChat, viewMode]);
+  }, [handleNewChat]);
 
   const handleSessionSelect = async (sessionId: string) => {
     const data = await getSession(sessionId);
