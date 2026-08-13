@@ -38,6 +38,15 @@ describe('formatDiscussExport', () => {
     expect(md).toContain('No messages yet');
   });
 
+  it('treats a non-array history as empty instead of throwing', () => {
+    const md = formatDiscussExport({
+      agentName: 'Marcus',
+      originalPrompt: 'Q',
+      messages: { not: 'an array' } as unknown as ThreadMessage[],
+    });
+    expect(md).toContain('No messages yet');
+  });
+
   it('skips null messages and whitespace-only bodies', () => {
     const md = formatDiscussExport({
       agentName: '  ',
@@ -148,6 +157,21 @@ describe('formatDebateExport', () => {
     expect(md).toContain('Measure first.');
     expect(md).not.toContain('(empty)');
   });
+
+  it('tolerates non-array rounds/reactions and numeric-string round numbers', () => {
+    const md = formatDebateExport({
+      originalPrompt: 'Q',
+      challengedAgentName: 'The Pragmatist',
+      rounds: [
+        { roundNumber: '2', reactions: { not: 'an array' } } as unknown as DebateExportRound,
+        { roundNumber: '3', reactions: [] },
+      ],
+    });
+    expect(md).toContain('## Round 2');
+    expect(md).toContain('## Round 3');
+    expect(md).not.toContain('NaN');
+    expect(md).not.toContain('undefined');
+  });
 });
 
 describe('formatDebateReactionCopy', () => {
@@ -249,6 +273,36 @@ describe('formatDiscussJsonExport', () => {
     expect(data.original_prompt).toBe('(no prompt)');
     expect(data.message_count).toBe(0);
   });
+
+  it('degrades non-array messages and non-string scalars instead of throwing', () => {
+    const data = JSON.parse(
+      formatDiscussJsonExport({
+        agentName: 42 as unknown as string,
+        originalPrompt: null as unknown as string,
+        messages: [
+          { role: 'user', content: 7 } as unknown as ThreadMessage,
+          { role: 'agent', content: null as unknown as string },
+        ],
+        exportedAt: '2026-08-13T00:00:00.000Z',
+      }),
+    ) as { agent_name: string; original_prompt: string; message_count: number };
+    expect(data.agent_name).toBe('Arena mind');
+    expect(data.original_prompt).toBe('(no prompt)');
+    expect(data.message_count).toBe(0);
+  });
+
+  it('treats non-array messages as an empty thread', () => {
+    const data = JSON.parse(
+      formatDiscussJsonExport({
+        agentName: 'The Analyst',
+        originalPrompt: 'Q',
+        messages: { not: 'an array' } as unknown as ThreadMessage[],
+        exportedAt: '2026-08-13T00:00:00.000Z',
+      }),
+    ) as { message_count: number; messages: unknown[] };
+    expect(data.message_count).toBe(0);
+    expect(data.messages).toEqual([]);
+  });
 });
 
 describe('formatDebateJsonExport', () => {
@@ -322,6 +376,49 @@ describe('formatDebateJsonExport', () => {
       agent_name: 'The Analyst',
       stance: 'pushback',
       content: 'Measure first.',
+    });
+  });
+
+  it('tolerates non-array rounds/reactions and numeric-string round numbers', () => {
+    const data = JSON.parse(
+      formatDebateJsonExport({
+        originalPrompt: 99 as unknown as string,
+        challengedAgentName: null as unknown as string,
+        challengedOneLiner: 42 as unknown as string,
+        rounds: [
+          { roundNumber: '2', reactions: { not: 'an array' } } as unknown as DebateExportRound,
+          {
+            roundNumber: '3',
+            reactions: [
+              {
+                agentName: 7 as unknown as string,
+                content: 9 as unknown as string,
+                stance: null,
+              },
+            ],
+          } as unknown as DebateExportRound,
+        ],
+        exportedAt: '2026-08-13T00:00:00.000Z',
+      }),
+    ) as {
+      question: string;
+      challenged_agent_name: string;
+      challenged_one_liner: string | null;
+      rounds: Array<{
+        round_number: number;
+        reaction_count: number;
+        reactions: Array<{ agent_name: string; stance: string | null; content: string | null }>;
+      }>;
+    };
+    expect(data.question).toBe('(no prompt)');
+    expect(data.challenged_agent_name).toBe('Challenged mind');
+    expect(data.challenged_one_liner).toBeNull();
+    expect(data.rounds.map((round) => round.round_number)).toEqual([2, 3]);
+    expect(data.rounds[0].reaction_count).toBe(0);
+    expect(data.rounds[1].reactions[0]).toEqual({
+      agent_name: 'Mind',
+      stance: null,
+      content: null,
     });
   });
 });

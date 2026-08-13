@@ -18,14 +18,23 @@ export type DebateExportRound = {
   }>;
 };
 
+/**
+ * Normalize a payload field for export. Values that are not strings are
+ * treated as empty so a malformed response can never crash the exporter —
+ * the caller decides whether an empty result means null or a fallback.
+ */
+function toTrimmedText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 /** One-on-one Discuss conversation as markdown. */
 export function formatDiscussExport(opts: {
   agentName: string;
   originalPrompt: string;
   messages: ThreadMessage[];
 }): string {
-  const agentName = (opts.agentName || 'Arena mind').trim() || 'Arena mind';
-  const question = (opts.originalPrompt || '').trim() || '(no prompt)';
+  const agentName = toTrimmedText(opts.agentName) || 'Arena mind';
+  const question = toTrimmedText(opts.originalPrompt) || '(no prompt)';
   const lines: string[] = [
     `# Arena Discuss — ${agentName}`,
     '',
@@ -33,14 +42,14 @@ export function formatDiscussExport(opts: {
     '',
   ];
 
-  const msgs = (opts.messages || []).filter(
+  const msgs = (Array.isArray(opts.messages) ? opts.messages : []).filter(
     (m): m is ThreadMessage => Boolean(m),
   );
   if (msgs.length === 0) {
     lines.push('_No messages yet._');
   } else {
     for (const m of msgs) {
-      const body = (m.content || '').trim();
+      const body = toTrimmedText(m.content);
       if (!body) continue;
       if (m.role === 'user') {
         lines.push(`**You:** ${body}`);
@@ -99,8 +108,8 @@ export function formatDebateExport(opts: {
   challengedOneLiner?: string;
   rounds: DebateExportRound[];
 }): string {
-  const challenged = (opts.challengedAgentName || 'Challenged mind').trim() || 'Challenged mind';
-  const question = (opts.originalPrompt || '').trim() || '(no prompt)';
+  const challenged = toTrimmedText(opts.challengedAgentName) || 'Challenged mind';
+  const question = toTrimmedText(opts.originalPrompt) || '(no prompt)';
   const lines: string[] = [
     '# Arena Debate',
     '',
@@ -108,13 +117,13 @@ export function formatDebateExport(opts: {
     '',
     `**Challenged:** ${challenged}`,
   ];
-  const oneLiner = (opts.challengedOneLiner || '').trim();
+  const oneLiner = toTrimmedText(opts.challengedOneLiner);
   if (oneLiner) {
     lines.push(`> ${oneLiner}`);
   }
   lines.push('');
 
-  const rounds = (opts.rounds || []).filter(
+  const rounds = (Array.isArray(opts.rounds) ? opts.rounds : []).filter(
     (round): round is DebateExportRound => Boolean(round),
   );
   if (rounds.length === 0) {
@@ -123,18 +132,24 @@ export function formatDebateExport(opts: {
     for (const [index, round] of rounds.entries()) {
       // Defensive: malformed payloads (NaN/zero/negative) fall back to the
       // position in the list instead of printing "Round NaN/undefined".
-      const roundNumber =
-        Number.isFinite(round.roundNumber) && round.roundNumber > 0
+      const rawRoundNumber =
+        typeof round.roundNumber === 'number'
           ? round.roundNumber
+          : typeof round.roundNumber === 'string'
+            ? Number(round.roundNumber)
+            : Number.NaN;
+      const roundNumber =
+        Number.isFinite(rawRoundNumber) && rawRoundNumber > 0
+          ? rawRoundNumber
           : index + 1;
       lines.push(`## Round ${roundNumber}`);
       lines.push('');
-      const interjection = (round.userInterjection || '').trim();
+      const interjection = toTrimmedText(round.userInterjection);
       if (interjection) {
         lines.push(`**Your interjection:** ${interjection}`);
         lines.push('');
       }
-      const reactions = (round.reactions || []).filter(
+      const reactions = (Array.isArray(round.reactions) ? round.reactions : []).filter(
         (r): r is DebateExportRound['reactions'][number] => Boolean(r),
       );
       if (reactions.length === 0) {
@@ -143,12 +158,12 @@ export function formatDebateExport(opts: {
         continue;
       }
       for (const r of reactions) {
-        const name = (r.agentName || 'Mind').trim() || 'Mind';
-        const stance = (r.stance || '').trim();
+        const name = toTrimmedText(r.agentName) || 'Mind';
+        const stance = toTrimmedText(r.stance);
         const header = stance ? `### ${name} (${stance})` : `### ${name}`;
         lines.push(header);
         lines.push('');
-        lines.push((r.content || '').trim() || '_(empty)_');
+        lines.push(toTrimmedText(r.content) || '_(empty)_');
         lines.push('');
       }
     }
@@ -267,20 +282,21 @@ export function formatDiscussJsonExport(opts: {
   messages: ThreadMessage[];
   exportedAt?: string;
 }): string {
-  const agentName = (opts.agentName || 'Arena mind').trim() || 'Arena mind';
-  const question = (opts.originalPrompt || '').trim() || '(no prompt)';
-  const messages = (opts.messages || [])
+  const agentName = toTrimmedText(opts.agentName) || 'Arena mind';
+  const question = toTrimmedText(opts.originalPrompt) || '(no prompt)';
+  const exportedAt = toTrimmedText(opts.exportedAt) || new Date().toISOString();
+  const messages = (Array.isArray(opts.messages) ? opts.messages : [])
     .filter((m): m is ThreadMessage => Boolean(m))
     .map((m) => ({
       role: m.role === 'user' ? 'user' : 'agent',
-      content: (m.content || '').trim() || null,
+      content: toTrimmedText(m.content) || null,
     }))
     .filter((m) => m.content !== null);
   const data = {
     exported_from: 'arena',
     export_type: 'discuss_thread',
     format_version: 1,
-    exported_at: opts.exportedAt || new Date().toISOString(),
+    exported_at: exportedAt,
     agent_name: agentName,
     original_prompt: question,
     message_count: messages.length,
@@ -308,26 +324,32 @@ export function formatDebateJsonExport(opts: {
   rounds: DebateExportRound[];
   exportedAt?: string;
 }): string {
-  const challenged =
-    (opts.challengedAgentName || 'Challenged mind').trim() || 'Challenged mind';
-  const question = (opts.originalPrompt || '').trim() || '(no prompt)';
-  const rounds = (opts.rounds || [])
+  const challenged = toTrimmedText(opts.challengedAgentName) || 'Challenged mind';
+  const question = toTrimmedText(opts.originalPrompt) || '(no prompt)';
+  const exportedAt = toTrimmedText(opts.exportedAt) || new Date().toISOString();
+  const rounds = (Array.isArray(opts.rounds) ? opts.rounds : [])
     .filter((round): round is DebateExportRound => Boolean(round))
     .map((round, index) => {
-      const roundNumber =
-        Number.isFinite(round.roundNumber) && round.roundNumber > 0
+      const rawRoundNumber =
+        typeof round.roundNumber === 'number'
           ? round.roundNumber
+          : typeof round.roundNumber === 'string'
+            ? Number(round.roundNumber)
+            : Number.NaN;
+      const roundNumber =
+        Number.isFinite(rawRoundNumber) && rawRoundNumber > 0
+          ? rawRoundNumber
           : index + 1;
-      const reactions = (round.reactions || [])
+      const reactions = (Array.isArray(round.reactions) ? round.reactions : [])
         .filter((r): r is DebateExportRound['reactions'][number] => Boolean(r))
         .map((r) => ({
-          agent_name: (r.agentName || 'Mind').trim() || 'Mind',
-          stance: (r.stance || '').trim() || null,
-          content: (r.content || '').trim() || null,
+          agent_name: toTrimmedText(r.agentName) || 'Mind',
+          stance: toTrimmedText(r.stance) || null,
+          content: toTrimmedText(r.content) || null,
         }));
       return {
         round_number: roundNumber,
-        user_interjection: (round.userInterjection || '').trim() || null,
+        user_interjection: toTrimmedText(round.userInterjection) || null,
         reaction_count: reactions.length,
         reactions,
       };
@@ -336,12 +358,12 @@ export function formatDebateJsonExport(opts: {
     exported_from: 'arena',
     export_type: 'debate_transcript',
     format_version: 1,
-    exported_at: opts.exportedAt || new Date().toISOString(),
+    exported_at: exportedAt,
     question,
     challenged_agent_name: challenged,
-    challenged_one_liner: (opts.challengedOneLiner || '').trim() || null,
-    challenged_verdict: (opts.challengedVerdict || '').trim() || null,
-    challenged_key_assumption: (opts.challengedKeyAssumption || '').trim() || null,
+    challenged_one_liner: toTrimmedText(opts.challengedOneLiner) || null,
+    challenged_verdict: toTrimmedText(opts.challengedVerdict) || null,
+    challenged_key_assumption: toTrimmedText(opts.challengedKeyAssumption) || null,
     round_count: rounds.length,
     rounds,
   };
