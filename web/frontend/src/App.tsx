@@ -98,6 +98,7 @@ import {
   isArenaCopyTranscriptJsonKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
+  isArenaNewTaskKey,
   isArenaReRunRoundKey,
   isArenaSaveWinnerKey,
 } from './lib/keyboardShortcuts';
@@ -1224,6 +1225,23 @@ function App() {
     setIsSidebarOpen(false);
     void refreshRecentSessions();
   }, [refreshRecentSessions, sessionData, user]);
+
+  // Shift+N starts a fresh Arena task from anywhere on the Arena surface,
+  // mirroring the sidebar's New task button without needing the sidebar open.
+  // Form controls are skipped so Shift+letter typing is never swallowed, and
+  // open dialogs keep ownership of their keystrokes.
+  useEffect(() => {
+    if (viewMode !== 'arena' && viewMode !== 'leaderboard') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (isAriaModalOpen()) return;
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      if (!isArenaNewTaskKey(e)) return;
+      e.preventDefault();
+      void handleNewChat();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleNewChat, viewMode]);
 
   const handleSessionSelect = async (sessionId: string) => {
     const data = await getSession(sessionId);

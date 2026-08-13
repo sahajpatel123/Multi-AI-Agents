@@ -19,6 +19,7 @@ const ARENA: ShortcutHint[] = [
   { keys: '/', action: 'Focus the Arena prompt' },
   { keys: 'Enter', action: 'Send your question' },
   { keys: '↑ / ↓', action: 'Cycle recent prompts in the compose box' },
+  { keys: 'Shift + N', action: 'Start a new Arena task' },
   { keys: 'Shift + C', action: 'Copy the winning take' },
   { keys: 'Shift + D', action: 'Download the winning take' },
   { keys: 'Shift + S', action: 'Save or unsave the winning take' },
@@ -167,7 +168,7 @@ export type ShortcutKeyEvent = {
  */
 function isBareShiftLetterKey(
   event: ShortcutKeyEvent,
-  letter: 'c' | 'd' | 'q' | 's' | 'r' | 'j' | 'k' | 'e',
+  letter: 'c' | 'd' | 'q' | 's' | 'r' | 'j' | 'k' | 'e' | 'n',
 ): boolean {
   if (event.repeat) return false;
   if (event.key.toLowerCase() !== letter) return false;
@@ -199,6 +200,11 @@ export function isArenaSaveWinnerKey(event: ShortcutKeyEvent): boolean {
 /** Shift+R — replay the last completed Arena round with the same prompt. */
 export function isArenaReRunRoundKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'r');
+}
+
+/** Shift+N — reset the Arena to a fresh, empty task. */
+export function isArenaNewTaskKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'n');
 }
 
 /** Shift+K — copy the full Arena session transcript as JSON. */

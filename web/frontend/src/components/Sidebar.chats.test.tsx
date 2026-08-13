@@ -260,6 +260,10 @@ describe('Sidebar recent chats', () => {
     expect(screen.getByText(/Should we launch today/)).toBeInTheDocument();
     expect(screen.getByText(/3 msg/)).toBeInTheDocument();
     expect(screen.getByText('Untitled chat')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New task' })).toHaveAttribute(
+      'aria-keyshortcuts',
+      'Shift+N',
+    );
   });
 
   it('offers a chat search box when resumable chats exist', () => {

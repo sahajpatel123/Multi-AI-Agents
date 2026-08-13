@@ -5,6 +5,7 @@ import {
   isArenaCopyTranscriptJsonKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
+  isArenaNewTaskKey,
   isArenaReRunRoundKey,
   isArenaSaveWinnerKey,
   isAgentCopyAnswerKey,
@@ -56,6 +57,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('arena').some(
         (s) => s.keys === 'Shift + R' && s.action.toLowerCase().includes('re-run'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + N' && s.action.toLowerCase().includes('new arena task'),
       ),
     ).toBe(true);
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
@@ -143,6 +149,11 @@ describe('keyboardShortcuts', () => {
   });
 
   it('detects Arena export shortcuts as bare Shift+letter keys', () => {
+    expect(isArenaNewTaskKey({ key: 'N', shiftKey: true })).toBe(true);
+    expect(isArenaNewTaskKey({ key: 'n', shiftKey: true })).toBe(true);
+    expect(isArenaNewTaskKey({ key: 'N' })).toBe(false);
+    expect(isArenaNewTaskKey({ key: 'N', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isArenaNewTaskKey({ key: 'N', shiftKey: true, repeat: true })).toBe(false);
     expect(isArenaCopyWinnerKey({ key: 'C', shiftKey: true })).toBe(true);
     expect(isArenaCopyWinnerKey({ key: 'c', shiftKey: true })).toBe(true);
     expect(isArenaCopyWinnerKey({ key: 'C' })).toBe(false);

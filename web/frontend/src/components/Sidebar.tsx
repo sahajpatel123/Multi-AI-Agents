@@ -2009,7 +2009,15 @@ export function Sidebar({
       >
         <div className="flex flex-col h-full px-4 py-6">
           <div className="mb-2">
-            <Button type="button" variant="primary" size="sm" fullWidth icon={Icons.plus(14)} onClick={handleNewChatClick}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              fullWidth
+              icon={Icons.plus(14)}
+              onClick={handleNewChatClick}
+              aria-keyshortcuts="Shift+N"
+            >
               New task
             </Button>
           </div>
