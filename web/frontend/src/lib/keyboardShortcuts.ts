@@ -49,6 +49,7 @@ const AGENT: ShortcutHint[] = [
   { keys: 'Shift + D', action: 'Download the answer as a markdown file' },
   { keys: 'Shift + J', action: 'Download the full report as JSON' },
   { keys: 'Shift + L', action: 'Download the full research report as markdown' },
+  { keys: 'Shift + K', action: 'Download the full research report as CSV' },
   { keys: 'Shift + O', action: 'Copy the full research report as JSON' },
   { keys: 'Shift + P', action: 'Copy the full research report as markdown' },
   { keys: 'Esc', action: 'Close attach menu, cadence picker, or rename' },
@@ -321,6 +322,11 @@ export function isAgentDownloadJsonKey(event: ShortcutKeyEvent): boolean {
 /** Shift+L — download the full Agent research report as a markdown file. */
 export function isAgentDownloadReportMarkdownKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'l');
+}
+
+/** Shift+K — download the full Agent research report as a CSV file. */
+export function isAgentDownloadReportCsvKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'k');
 }
 
 /** Shift+P — copy the full Agent research report to the clipboard as markdown. */

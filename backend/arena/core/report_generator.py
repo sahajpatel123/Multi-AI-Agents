@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 import html
+import io
 import json
 import logging
 from typing import Any, Optional
@@ -526,6 +528,301 @@ def _score_text(value: Any) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value)
+
+
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: Any) -> str:
+    """Return ``value`` as a string safe to embed in a CSV cell.
+
+    Defense-in-depth against CSV injection (CWE-1236): a value whose first
+    character (after the leading whitespace spreadsheets ignore when deciding
+    whether to evaluate a formula) is a formula trigger gets a leading
+    apostrophe. The apostrophe is invisible in Excel and prevents the cell
+    from being parsed as a formula.
+    """
+    s = str(value) if value is not None else ""
+    first_significant = s.lstrip()[:1]
+    if first_significant and first_significant in _CSV_FORMULA_PREFIXES:
+        return "'" + s
+    return s
+
+
+def _csv_join_list(values: Any) -> str:
+    """Join list-shaped overlay fields into a single readable CSV cell."""
+    if not isinstance(values, list):
+        return ""
+    return "; ".join(
+        str(v) for v in values if str(v).strip()
+    )
+
+
+def _add_csv_row(
+    rows: list[tuple[str, str, str, str]],
+    task_id: str,
+    section: str,
+    key: str,
+    value: Any,
+) -> None:
+    """Append one normalized CSV report row (values are sanitized on write)."""
+    rows.append((task_id, section, key, str(value) if value is not None else ""))
+
+
+def generate_report_csv(
+    task: AgentTask, overlay: Optional[dict[str, Any]] = None
+) -> str:
+    """Portable CSV research report for a completed Agent task.
+
+    Emits a normalized ``task_id, section, key, value`` sheet so the report
+    stays spreadsheet-friendly (filter by section, pivot on key) instead of
+    cramming the entire answer into one giant cell. It carries the same
+    report context as the markdown export: question, answer, intelligence
+    score, sources, steelman, caveats, assumptions, source integrity, dissent,
+    and temporal profile.
+    """
+    ctx = build_report_context_from_row(task, overlay)
+    overlay = overlay or {}
+
+    task_id = str(task.task_id or "")
+    question = str(ctx.get("question") or "Research task").strip()
+    answer = str(ctx.get("final_answer_plain") or "").strip()
+    if not answer:
+        answer = str(task.final_answer or "").strip()
+    intel = ctx.get("intel") or {}
+    temporal = ctx.get("temporal") or {}
+    created = ctx.get("created_at")
+    created_s = created.strftime("%Y-%m-%dT%H:%M:%SZ") if created else ""
+
+    rows: list[tuple[str, str, str, str]] = []
+
+    _add_csv_row(rows, task_id, "metadata", "question", question)
+    _add_csv_row(rows, task_id, "metadata", "answer", answer)
+    _add_csv_row(
+        rows,
+        task_id,
+        "metadata",
+        "score",
+        _score_text(intel.get("total_score")),
+    )
+    _add_csv_row(
+        rows,
+        task_id,
+        "metadata",
+        "confidence",
+        task.final_confidence if task.final_confidence is not None else "",
+    )
+    _add_csv_row(rows, task_id, "metadata", "created_at", created_s)
+
+    _add_csv_row(
+        rows,
+        task_id,
+        "intelligence",
+        "one_line_verdict",
+        intel.get("one_line_verdict"),
+    )
+    for label, key in _DIMS:
+        block = intel.get(key)
+        score = "—"
+        if isinstance(block, dict) and block.get("score") is not None:
+            score = _score_text(block.get("score"))
+        _add_csv_row(rows, task_id, "intelligence", key, score)
+
+    sources = ctx.get("sources") or []
+    for i, s in enumerate(sources, 1):
+        if isinstance(s, dict):
+            title = s.get("title") or s.get("url") or s.get("name")
+        else:
+            title = str(s)
+        title = str(title).strip() or "Untitled source"
+        _add_csv_row(rows, task_id, "sources", f"source {i}", title)
+
+    steelman = ctx.get("steelman") or {}
+    if isinstance(steelman, dict):
+        _add_csv_row(
+            rows,
+            task_id,
+            "steelman",
+            "opposing_position",
+            steelman.get("opposing_position"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "steelman",
+            "key_arguments",
+            _csv_join_list(steelman.get("key_arguments")),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "steelman",
+            "strongest_evidence",
+            steelman.get("strongest_evidence"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "steelman",
+            "concession",
+            steelman.get("concession"),
+        )
+
+    caveats = ctx.get("caveats") or []
+    for c in caveats:
+        if not isinstance(c, dict):
+            continue
+        keyword = str(c.get("keyword") or c.get("category") or "Note")
+        desc = str(c.get("description") or c.get("text") or "")
+        _add_csv_row(rows, task_id, "caveats", keyword, desc)
+
+    assumptions = ctx.get("assumptions") or {}
+    if isinstance(assumptions, dict):
+        _add_csv_row(
+            rows,
+            task_id,
+            "assumptions",
+            "summary",
+            assumptions.get("summary"),
+        )
+        items = assumptions.get("assumptions")
+        if isinstance(items, list):
+            for i, item in enumerate(items, 1):
+                if not isinstance(item, dict):
+                    continue
+                text = str(item.get("assumption") or "").strip()
+                if not text:
+                    continue
+                criticality = str(item.get("criticality") or "").strip()
+                flag = item.get("flag")
+                suffix = ""
+                if criticality:
+                    suffix += f" (criticality: {criticality}"
+                    if flag is not None:
+                        suffix += f", flag: {flag}"
+                    suffix += ")"
+                _add_csv_row(
+                    rows,
+                    task_id,
+                    "assumptions",
+                    f"assumption {i}",
+                    text + suffix,
+                )
+
+    source_integrity = overlay.get("source_integrity") or {}
+    if isinstance(source_integrity, dict):
+        _add_csv_row(
+            rows,
+            task_id,
+            "source_integrity",
+            "summary",
+            source_integrity.get("summary"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "source_integrity",
+            "integrity_label",
+            source_integrity.get("integrity_label"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "source_integrity",
+            "source_count",
+            source_integrity.get("source_count"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "source_integrity",
+            "overall_source_integrity",
+            source_integrity.get("overall_source_integrity"),
+        )
+        claims = source_integrity.get("claims")
+        if isinstance(claims, list):
+            for i, claim in enumerate(claims, 1):
+                if not isinstance(claim, dict):
+                    continue
+                text = str(claim.get("claim") or "").strip()
+                if not text:
+                    continue
+                confidence = claim.get("agreement_confidence")
+                value = text
+                if confidence is not None:
+                    value += f" (confidence: {confidence})"
+                _add_csv_row(
+                    rows,
+                    task_id,
+                    "source_integrity",
+                    f"claim {i}",
+                    value,
+                )
+
+    dissent = overlay.get("dissent_report") or {}
+    if isinstance(dissent, dict):
+        positions = dissent.get("positions")
+        if isinstance(positions, list):
+            for pos in positions:
+                if not isinstance(pos, dict):
+                    continue
+                label = str(pos.get("label") or "").strip()
+                if not label:
+                    continue
+                _add_csv_row(
+                    rows,
+                    task_id,
+                    "dissent",
+                    f"position {label}",
+                    pos.get("count") if pos.get("count") is not None else "",
+                )
+        _add_csv_row(
+            rows,
+            task_id,
+            "dissent",
+            "minority_view_summary",
+            dissent.get("minority_view_summary"),
+        )
+
+    if isinstance(temporal, dict):
+        _add_csv_row(
+            rows,
+            task_id,
+            "temporal_profile",
+            "decay_class",
+            temporal.get("decay_class"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "temporal_profile",
+            "half_life",
+            temporal.get("half_life"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "temporal_profile",
+            "recheck_by",
+            temporal.get("recheck_by"),
+        )
+        time_sensitive = temporal.get("time_sensitive_claims")
+        if isinstance(time_sensitive, list):
+            _add_csv_row(
+                rows,
+                task_id,
+                "temporal_profile",
+                "time_sensitive_claims",
+                _csv_join_list(time_sensitive),
+            )
+
+    buf = io.StringIO()
+    buf.write("\ufeff")
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(["task_id", "section", "key", "value"])
+    for row in rows:
+        writer.writerow([_csv_safe(v) for v in row])
+    return buf.getvalue()
 
 
 def generate_report_markdown(

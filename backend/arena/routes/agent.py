@@ -72,6 +72,7 @@ from arena.core.agent_metrics import (
 )
 from arena.core.report_generator import (
     generate_orchestration_report_html,
+    generate_report_csv,
     generate_report_html,
     generate_report_markdown,
     write_pdf_or_html,
@@ -2312,6 +2313,64 @@ async def export_task_markdown(
     return Response(
         content=body,
         media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/tasks/{task_id}/export.csv")
+async def export_task_csv(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download a single completed task as a normalized CSV report.
+
+    Complements the markdown (human-readable) and JSON (machine-readable)
+    exports with a spreadsheet-friendly sheet: one row per report field,
+    with ``task_id`` / ``section`` / ``key`` / ``value`` columns so users can
+    filter by section or pivot on key. Formula-injection defense matches the
+    other CSV exports, and the file starts with a UTF-8 BOM so Excel detects
+    the Unicode question text.
+
+    Filename includes the task_id prefix so multiple downloads don't
+    overwrite each other in the browser downloads folder.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_export_csv",
+        limit=120,
+        window_seconds=3600,
+        message="Too many task CSV exports. Limit is 120 per hour.",
+    )
+    tid = task_id.strip()
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    if not (row.final_answer or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Nothing to export yet for this task"},
+        )
+
+    bb = get_blackboard(tid)
+    overlay = _export_overlay_from_bb(bb, row)
+    body = generate_report_csv(row, overlay)
+    filename = f"arena-report-{tid[:8]}.csv"
+    return Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
         headers={
             "Content-Disposition": content_disposition_attachment(filename),
             "Cache-Control": "no-store",

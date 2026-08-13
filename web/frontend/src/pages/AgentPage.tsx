@@ -21,6 +21,7 @@ import {
   createRoom,
   crossPollinateAgentAnswer,
   deleteAgentTask,
+  exportAgentTaskCsv,
   exportAgentTaskPdf,
   exportAgentTaskMarkdown,
   exportAgentTaskJson,
@@ -87,6 +88,7 @@ import {
   isAgentCopyReportJsonKey,
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
+  isAgentDownloadReportCsvKey,
   isAgentDownloadReportMarkdownKey,
   isAgentNewTaskKey,
 } from '../lib/keyboardShortcuts';
@@ -899,10 +901,14 @@ export function AgentPage() {
   const [pendingNote, setPendingNote] = useState('');
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingMd, setExportingMd] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingJson, setExportingJson] = useState(false);
   /** Guards Shift+L / toolbar clicks so a report download can never double-fire. */
   const exportMdInFlightRef = useRef(false);
   const exportReportRunIdRef = useRef(0);
+  /** Guards Shift+K / toolbar clicks so a report CSV download can never double-fire. */
+  const exportCsvInFlightRef = useRef(false);
+  const exportCsvRunIdRef = useRef(0);
   const [multiMode, setMultiMode] = useState(false);
   const [multiTasks, setMultiTasks] = useState(['', '', '', '']);
   const [activeTaskCount, setActiveTaskCount] = useState(2);
@@ -1960,6 +1966,31 @@ export function AgentPage() {
     }
   }, [result?.status, result?.task_id]);
 
+  const handleExportTaskCsv = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || exportCsvInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++exportCsvRunIdRef.current;
+    exportCsvInFlightRef.current = true;
+    setExportingCsv(true);
+    try {
+      const blob = await exportAgentTaskCsv(taskId);
+      if (exportCsvRunIdRef.current !== runId) return;
+      const ok = downloadBlobFile(
+        blob,
+        `arena-report-${taskId.slice(0, 8)}.csv`,
+      );
+      if (!ok) setError('Export failed');
+    } catch (e) {
+      if (exportCsvRunIdRef.current !== runId) return;
+      setError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      if (exportCsvRunIdRef.current === runId) {
+        exportCsvInFlightRef.current = false;
+        setExportingCsv(false);
+      }
+    }
+  }, [result?.status, result?.task_id]);
+
   const handleExportTaskJson = useCallback(async () => {
     if (!result?.task_id || exportingJson) return;
     setExportingJson(true);
@@ -2430,7 +2461,8 @@ export function AgentPage() {
   }, [result?.status, result?.task_id]);
 
   // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
-  // Shift+J / Shift+L / Shift+O / Shift+P mirror the result toolbar buttons.
+  // Shift+J / Shift+K / Shift+L / Shift+O / Shift+P mirror the result
+  // toolbar buttons.
   // Form controls are skipped so normal Shift+letter typing is never swallowed.
   useEffect(() => {
     if (result?.status !== 'complete' || !result?.task_id || isRunning) return;
@@ -2451,6 +2483,9 @@ export function AgentPage() {
       } else if (isAgentDownloadReportMarkdownKey(e)) {
         e.preventDefault();
         void handleExportTaskMarkdown();
+      } else if (isAgentDownloadReportCsvKey(e)) {
+        e.preventDefault();
+        void handleExportTaskCsv();
       } else if (isAgentCopyReportKey(e)) {
         e.preventDefault();
         void handleCopyTaskMarkdown();
@@ -2468,6 +2503,7 @@ export function AgentPage() {
     handleCopyTaskJson,
     handleExportTaskJson,
     handleExportTaskMarkdown,
+    handleExportTaskCsv,
     isRunning,
     result?.status,
     result?.task_id,
@@ -9250,6 +9286,21 @@ export function AgentPage() {
                         onClick={() => void handleExportTaskPdf()}
                       >
                         {exportingPdf ? 'Exporting…' : 'Export PDF'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={exportingCsv ? undefined : Icons.download(14)}
+                        loading={exportingCsv}
+                        disabled={exportingCsv}
+                        title="Download the full research report as CSV (Shift+K)"
+                        aria-keyshortcuts="Shift+K"
+                        onClick={() => void handleExportTaskCsv()}
+                      >
+                        {exportingCsv ? 'Exporting…' : 'Report .csv'}
                       </Button>
                     ) : null}
                     {result.task_id ? (

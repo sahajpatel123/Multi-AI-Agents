@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Agent: download the full research report as CSV (Shift+K)',
       '[IMPROVED] Agent: Shift+L markdown download refuses empty or whitespace-only reports and is stale-task-safe',
       '[NEW] Agent: download the full research report as markdown with Shift+L',
       '[NEW] Agent: copy the full research report as JSON (Shift+O)',

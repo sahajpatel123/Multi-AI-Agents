@@ -1584,6 +1584,32 @@ export async function fetchAgentTaskMarkdownText(taskId: string): Promise<string
   return text;
 }
 
+async function fetchAgentTaskCsvResponse(taskId: string): Promise<Response> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/export.csv`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Export failed'), response),
+      response.status,
+      err,
+    );
+  }
+  return response;
+}
+
+export async function exportAgentTaskCsv(taskId: string): Promise<Blob> {
+  const response = await fetchAgentTaskCsvResponse(taskId);
+  // Validate through a clone so the original byte stream (including the UTF-8
+  // BOM Excel needs for Unicode detection) is preserved in the returned Blob.
+  const text = await response.clone().text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty report returned by the server', response));
+  }
+  return response.blob();
+}
+
 async function fetchAgentTaskJsonResponse(taskId: string): Promise<Response> {
   const response = await apiFetch(
     `/api/agent/tasks/${encodeURIComponent(taskId)}/export.json`,
