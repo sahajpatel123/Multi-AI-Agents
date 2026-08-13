@@ -63,6 +63,29 @@ describe('Agent task Markdown text export frontend API helper', () => {
     );
   });
 
+  it('rejects an empty report body on the download path so no empty .md file is saved', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('', { status: 200 }),
+    );
+
+    await expect(exportAgentTaskMarkdown('task-123')).rejects.toThrow(
+      'Empty report returned by the server',
+    );
+  });
+
+  it('rejects a whitespace-only report body on the download path with the request id', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(' \n\t ', {
+        status: 200,
+        headers: { 'x-request-id': 'req-empty-md-download' },
+      }),
+    );
+
+    await expect(exportAgentTaskMarkdown('task-123')).rejects.toThrow(
+      'Empty report returned by the server (Request ID: req-empty-md-download)',
+    );
+  });
+
   it('keeps the blob download path working through the shared response helper', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response('# Report', { status: 200 }),

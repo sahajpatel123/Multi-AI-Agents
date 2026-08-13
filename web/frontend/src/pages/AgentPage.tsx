@@ -900,6 +900,9 @@ export function AgentPage() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingMd, setExportingMd] = useState(false);
   const [exportingJson, setExportingJson] = useState(false);
+  /** Guards Shift+L / toolbar clicks so a report download can never double-fire. */
+  const exportMdInFlightRef = useRef(false);
+  const exportReportRunIdRef = useRef(0);
   const [multiMode, setMultiMode] = useState(false);
   const [multiTasks, setMultiTasks] = useState(['', '', '', '']);
   const [activeTaskCount, setActiveTaskCount] = useState(2);
@@ -1933,21 +1936,29 @@ export function AgentPage() {
   };
 
   const handleExportTaskMarkdown = useCallback(async () => {
-    if (!result?.task_id || exportingMd) return;
+    if (!result?.task_id || result.status !== 'complete' || exportMdInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++exportReportRunIdRef.current;
+    exportMdInFlightRef.current = true;
     setExportingMd(true);
     try {
-      const blob = await exportAgentTaskMarkdown(result.task_id);
+      const blob = await exportAgentTaskMarkdown(taskId);
+      if (exportReportRunIdRef.current !== runId) return;
       const ok = downloadBlobFile(
         blob,
-        `arena-report-${result.task_id.slice(0, 8)}.md`,
+        `arena-report-${taskId.slice(0, 8)}.md`,
       );
       if (!ok) setError('Export failed');
     } catch (e) {
+      if (exportReportRunIdRef.current !== runId) return;
       setError(e instanceof Error ? e.message : 'Export failed');
     } finally {
-      setExportingMd(false);
+      if (exportReportRunIdRef.current === runId) {
+        exportMdInFlightRef.current = false;
+        setExportingMd(false);
+      }
     }
-  }, [exportingMd, result?.task_id]);
+  }, [result?.status, result?.task_id]);
 
   const handleExportTaskJson = useCallback(async () => {
     if (!result?.task_id || exportingJson) return;
@@ -2130,6 +2141,8 @@ export function AgentPage() {
     setExportingPdf(false);
     setExportingMd(false);
     setExportingJson(false);
+    exportReportRunIdRef.current += 1;
+    exportMdInFlightRef.current = false;
     setCopyAnswerFeedback('idle');
     setDownloadAnswerFeedback('idle');
     copyReportRunIdRef.current += 1;
@@ -2710,6 +2723,8 @@ export function AgentPage() {
       if (copyReportJsonFeedbackTimerRef.current != null) {
         window.clearTimeout(copyReportJsonFeedbackTimerRef.current);
       }
+      exportReportRunIdRef.current += 1;
+      exportMdInFlightRef.current = false;
     };
   }, []);
 
