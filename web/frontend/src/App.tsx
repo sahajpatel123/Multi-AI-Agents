@@ -94,6 +94,7 @@ import {
 } from './lib/slashFocus';
 import {
   isArenaCopyQuestionKey,
+  isArenaCopyTranscriptMarkdownKey,
   isArenaCopyTranscriptJsonKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
@@ -940,6 +941,9 @@ function App() {
       } else if (isArenaCopyQuestionKey(e)) {
         e.preventDefault();
         void handleCopyPrompt();
+      } else if (isArenaCopyTranscriptMarkdownKey(e)) {
+        e.preventDefault();
+        void handleCopyTranscript();
       } else if (isArenaCopyTranscriptJsonKey(e)) {
         e.preventDefault();
         void handleCopyTranscriptJson();
@@ -957,6 +961,7 @@ function App() {
     handleCopyTranscriptJson,
     handleDownloadWinner,
     handleExportWinner,
+    handleCopyTranscript,
     handleSaveWinner,
     focusedAgentId,
     phase,
@@ -2446,7 +2451,7 @@ function App() {
                     onClick={() => void handleCopyTranscript()}
                     disabled={transcriptCopying}
                     aria-busy={transcriptCopying}
-                    title="Copy the full session as a markdown transcript"
+                    title="Copy the full session as a markdown transcript (Shift+E)"
                     style={{ fontSize: 12 }}
                   >
                     {transcriptCopying
