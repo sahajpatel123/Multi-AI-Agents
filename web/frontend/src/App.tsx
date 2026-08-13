@@ -51,6 +51,7 @@ import {
   buildArenaTranscriptMarkdownDownload,
   buildArenaTranscriptJsonDownload,
   buildArenaTranscriptCsvDownload,
+  copyArenaComparisonToClipboard,
   formatArenaExport,
   formatArenaCsvExport,
   formatArenaJsonExport,
@@ -155,6 +156,7 @@ function App() {
   const { canUseFeature, refreshTier, messagesRemaining, isFree } = useTier();
   const { openModal: openProfileModal } = useProfileModal();
   const [exportCopied, setExportCopied] = useState(false);
+  const [exportCopying, setExportCopying] = useState(false);
   const [exportDownloaded, setExportDownloaded] = useState(false);
   const [arenaJsonDownloaded, setArenaJsonDownloaded] = useState(false);
   const [arenaJsonCopied, setArenaJsonCopied] = useState(false);
@@ -309,6 +311,9 @@ function App() {
   /** Prevents overlapping transcript copy attempts and stale copied feedback. */
   const transcriptCopyInFlightRef = useRef(false);
   const transcriptCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Prevents overlapping all-takes copies and stale "Copied comparison" feedback. */
+  const exportCopyInFlightRef = useRef(false);
+  const exportCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Guards Shift+T / header clicks so a transcript download can never double-fire. */
   const transcriptDownloadInFlightRef = useRef(false);
   const transcriptDownloadFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -561,17 +566,42 @@ function App() {
   }, [resolveArenaPersona, response]);
 
   const handleExportAllTakes = useCallback(async () => {
-    const md = buildArenaComparisonMarkdown();
-    if (!md) return;
-    const ok = await copyToClipboard(md);
-    if (ok) {
-      setExportCopied(true);
-      window.setTimeout(() => setExportCopied(false), 1800);
-      void track('arena_export_all');
-    } else {
+    if (exportCopyInFlightRef.current) return;
+    exportCopyInFlightRef.current = true;
+    setExportCopying(true);
+    try {
+      const ok = await copyArenaComparisonToClipboard(response, resolveArenaPersona);
+      if (ok) {
+        if (exportCopyFeedbackTimer.current) {
+          clearTimeout(exportCopyFeedbackTimer.current);
+          exportCopyFeedbackTimer.current = null;
+        }
+        setExportCopied(true);
+        exportCopyFeedbackTimer.current = window.setTimeout(() => {
+          setExportCopied(false);
+          exportCopyFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_export_all');
+      } else {
+        if (exportCopyFeedbackTimer.current) {
+          clearTimeout(exportCopyFeedbackTimer.current);
+          exportCopyFeedbackTimer.current = null;
+        }
+        setExportCopied(false);
+        setError('Could not copy the comparison. Try again or select text manually.');
+      }
+    } catch {
+      if (exportCopyFeedbackTimer.current) {
+        clearTimeout(exportCopyFeedbackTimer.current);
+        exportCopyFeedbackTimer.current = null;
+      }
+      setExportCopied(false);
       setError('Could not copy the comparison. Try again or select text manually.');
+    } finally {
+      exportCopyInFlightRef.current = false;
+      setExportCopying(false);
     }
-  }, [buildArenaComparisonMarkdown]);
+  }, [resolveArenaPersona, response]);
 
   const handleExportWinner = useCallback(async () => {
     const md = buildArenaWinnerMarkdown();
@@ -2145,6 +2175,7 @@ function App() {
     if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
     if (currentResponseBarTimer.current) clearTimeout(currentResponseBarTimer.current);
     if (transcriptCopyFeedbackTimer.current) clearTimeout(transcriptCopyFeedbackTimer.current);
+    if (exportCopyFeedbackTimer.current) clearTimeout(exportCopyFeedbackTimer.current);
     if (transcriptDownloadFeedbackTimer.current) clearTimeout(transcriptDownloadFeedbackTimer.current);
     if (transcriptJsonDownloadFeedbackTimer.current) clearTimeout(transcriptJsonDownloadFeedbackTimer.current);
     if (transcriptCsvDownloadFeedbackTimer.current) clearTimeout(transcriptCsvDownloadFeedbackTimer.current);
@@ -2608,11 +2639,17 @@ function App() {
                     onClick={() => {
                       void handleExportAllTakes();
                     }}
+                    disabled={exportCopying}
+                    aria-busy={exportCopying}
                     aria-keyshortcuts="Shift+A"
                     title="Copy all four takes as markdown (Shift+A)"
                     style={{ fontSize: 12 }}
                   >
-                    {exportCopied ? 'Copied comparison' : 'Copy all takes'}
+                    {exportCopying
+                      ? 'Copying…'
+                      : exportCopied
+                        ? 'Copied comparison'
+                        : 'Copy all takes'}
                   </button>
                   <button
                     type="button"

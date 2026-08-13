@@ -556,6 +556,28 @@ export function formatArenaExport(
 }
 
 /**
+ * Copy the full Arena comparison (all four takes) to the clipboard. Returns
+ * false when there is no finished round to copy so callers can surface
+ * feedback instead of silently no-oping. Reuses the same formatter as the
+ * button so copy and on-screen preview can never drift.
+ */
+export async function copyArenaComparisonToClipboard(
+  response: PromptResponse | null | undefined,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+): Promise<boolean> {
+  if (
+    !response ||
+    !Array.isArray(response.all_responses) ||
+    response.all_responses.length === 0
+  ) {
+    return false;
+  }
+  const md = formatArenaExport(response, resolvePersona);
+  if (!md.trim()) return false;
+  return copyToClipboard(md);
+}
+
+/**
  * Structured JSON for a full Arena round (all takes, winner, scores).
  */
 export function formatArenaJsonExport(

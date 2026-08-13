@@ -4,6 +4,7 @@ import {
   buildArenaTranscriptJsonDownload,
   buildArenaTranscriptCsvDownload,
   buildArenaVerifyBridgePayload,
+  copyArenaComparisonToClipboard,
   copyArenaTranscriptToClipboard,
   copyArenaTranscriptJsonToClipboard,
   copyArenaTranscriptCsvToClipboard,
@@ -79,6 +80,39 @@ describe('formatArenaExport', () => {
       (id) => ({ name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher' }),
     );
     expect(md).toContain('(no prompt)');
+  });
+});
+
+describe('copyArenaComparisonToClipboard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('copies the formatted four-take comparison through the clipboard helper', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const resolvePersona = (id: string) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    });
+
+    const ok = await copyArenaComparisonToClipboard(sample, resolvePersona);
+
+    expect(ok).toBe(true);
+    expect(writeText).toHaveBeenCalledWith(formatArenaExport(sample, resolvePersona));
+  });
+
+  it('returns false without touching the clipboard when there is no finished round', async () => {
+    const writeText = vi.fn();
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+
+    expect(await copyArenaComparisonToClipboard(null, () => ({ name: 'X' }))).toBe(false);
+    expect(
+      await copyArenaComparisonToClipboard(
+        { ...sample, all_responses: [] },
+        () => ({ name: 'X' }),
+      ),
+    ).toBe(false);
+    expect(writeText).not.toHaveBeenCalled();
   });
 });
 
