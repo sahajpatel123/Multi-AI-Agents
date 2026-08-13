@@ -186,8 +186,9 @@ export function WatchlistPage() {
     copyWatchlist: () => Promise<void>;
     downloadWatchlist: () => void;
     downloadWatchlistCsv: () => void;
-    downloadStatsCsv: () => Promise<void>;
+    downloadStatsCsv: (() => Promise<void>) | null;
   } | null>(null);
+  const statsDownloadBusyRef = useRef(false);
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
   const csvDownloadStatusTimerRef = useRef<number | null>(null);
@@ -899,7 +900,8 @@ export function WatchlistPage() {
   };
 
   const downloadStatsCsv = async () => {
-    if (statsDownloadBusy) return;
+    if (statsDownloadBusyRef.current) return;
+    statsDownloadBusyRef.current = true;
     setStatsDownloadBusy(true);
     try {
       const blob = await exportAgentWatchlistStatisticsCsv();
@@ -914,21 +916,29 @@ export function WatchlistPage() {
           : 'Could not download watchlist statistics — try again.',
       );
     } finally {
+      statsDownloadBusyRef.current = false;
       setStatsDownloadBusy(false);
     }
   };
 
-  watchlistExportActionsRef.current = {
-    copyWatchlist,
-    downloadWatchlist,
-    downloadWatchlistCsv,
-    downloadStatsCsv,
-  };
+  // The header/overview export controls only exist once the list has loaded
+  // (and the stats strip has data), so keep the keyboard actions inert until
+  // their visible counterpart can be triggered.
+  watchlistExportActionsRef.current =
+    bodyMode === 'list' && items.length > 0
+      ? {
+          copyWatchlist,
+          downloadWatchlist,
+          downloadWatchlistCsv,
+          downloadStatsCsv: stats ? downloadStatsCsv : null,
+        }
+      : null;
 
   // Keyboard-first exports for the watchlist: Shift+C / Shift+D / Shift+E /
   // Shift+F mirror the header and overview buttons. Form controls are skipped
   // so normal Shift+letter typing is never swallowed, and open dialogs keep
-  // ownership of their keystrokes.
+  // ownership of their keystrokes. The actions ref is only populated when the
+  // matching visible control is available.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isAriaModalOpen()) return;
@@ -945,6 +955,7 @@ export function WatchlistPage() {
         e.preventDefault();
         actions.downloadWatchlistCsv();
       } else if (isWatchlistDownloadStatsCsvKey(e)) {
+        if (!actions.downloadStatsCsv) return;
         e.preventDefault();
         void actions.downloadStatsCsv();
       }

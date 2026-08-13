@@ -653,6 +653,123 @@ describe('WatchlistPage', () => {
     expect(downloadBlobFile).toHaveBeenCalledTimes(1);
   });
 
+  it('ignores export shortcuts while the watchlist is still loading', async () => {
+    let resolveLoad!: (value: {
+      items: AgentWatchlistItem[];
+      active_count: number;
+      active_cap: number;
+      total: number;
+    }) => void;
+    getAgentWatchlistMock.mockReturnValue(
+      new Promise<{
+        items: AgentWatchlistItem[];
+        active_count: number;
+        active_cap: number;
+        total: number;
+      }>((resolve) => {
+        resolveLoad = resolve;
+      }),
+    );
+    const { unmount } = renderPage();
+
+    fireEvent.keyDown(window, { key: 'C', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'D', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'E', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'F', shiftKey: true });
+
+    expect(copyToClipboard).not.toHaveBeenCalled();
+    expect(downloadMarkdownFile).not.toHaveBeenCalled();
+    expect(downloadTextFile).not.toHaveBeenCalled();
+    expect(exportAgentWatchlistStatisticsCsvMock).not.toHaveBeenCalled();
+
+    resolveLoad({
+      items: [baseItem, pausedItem],
+      active_count: 1,
+      active_cap: 10,
+      total: 2,
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+    unmount();
+  });
+
+  it('ignores export shortcuts while there are no watched tasks', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [],
+      active_count: 0,
+      active_cap: 10,
+      total: 0,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('No watched tasks yet')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(window, { key: 'C', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'D', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'E', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'F', shiftKey: true });
+
+    expect(copyToClipboard).not.toHaveBeenCalled();
+    expect(downloadMarkdownFile).not.toHaveBeenCalled();
+    expect(downloadTextFile).not.toHaveBeenCalled();
+    expect(exportAgentWatchlistStatisticsCsvMock).not.toHaveBeenCalled();
+  });
+
+  it('does not download statistics with Shift+F before the stats strip is visible', async () => {
+    getAgentWatchlistStatisticsMock.mockRejectedValue(new Error('stats not ready'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText('Watchlist overview statistics')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'F', shiftKey: true });
+
+    expect(exportAgentWatchlistStatisticsCsvMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores export shortcuts while the edit dialog is open', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Edit watch: How is the Indian IPO market evolving?',
+      }),
+    );
+    await screen.findByRole('dialog', { name: 'Edit watch' });
+
+    fireEvent.keyDown(window, { key: 'C', shiftKey: true });
+
+    expect(copyToClipboard).not.toHaveBeenCalled();
+  });
+
+  it('dedupes repeated Shift+F exports while a stats download is in flight', async () => {
+    let resolveStats!: (blob: Blob) => void;
+    exportAgentWatchlistStatisticsCsvMock.mockReturnValue(
+      new Promise<Blob>((resolve) => {
+        resolveStats = resolve;
+      }),
+    );
+    const { unmount } = renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Watchlist overview statistics')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(window, { key: 'F', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'F', shiftKey: true });
+
+    expect(exportAgentWatchlistStatisticsCsvMock).toHaveBeenCalledTimes(1);
+    resolveStats(new Blob(['summary'], { type: 'text/csv' }));
+    await waitFor(() => {
+      expect(downloadBlobFile).toHaveBeenCalledTimes(1);
+    });
+    unmount();
+  });
+
   it('renders the overview stats strip and downloads full statistics CSV', async () => {
     renderPage();
     await waitFor(() => {
