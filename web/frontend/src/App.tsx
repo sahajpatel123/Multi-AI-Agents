@@ -49,6 +49,7 @@ import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from './lib/
 import { safeLocalStorage } from './lib/safeStorage';
 import {
   buildArenaTranscriptMarkdownDownload,
+  buildArenaTranscriptJsonDownload,
   formatArenaExport,
   formatArenaCsvExport,
   formatArenaJsonExport,
@@ -58,7 +59,6 @@ import {
   formatArenaTranscriptsExport,
   formatArenaTranscriptsJsonExport,
   formatArenaTranscriptCsvExport,
-  formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
   buildArenaVerifyBridgePayload,
   pickArenaWinner,
@@ -98,6 +98,7 @@ import {
   isArenaCopyTranscriptMarkdownKey,
   isArenaCopyTranscriptJsonKey,
   isArenaDownloadTranscriptKey,
+  isArenaDownloadTranscriptJsonKey,
   isArenaCopyWinnerKey,
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
@@ -719,14 +720,16 @@ function App() {
   }, [resolveArenaPersona, sessionData]);
 
   const handleDownloadTranscriptJson = useCallback(() => {
-    const turns = sessionData?.turns;
-    if (!turns || !turns.length) return;
-    const json = formatArenaTranscriptJsonExport(turns, resolveArenaPersona, {
+    const download = buildArenaTranscriptJsonDownload(sessionData?.turns, resolveArenaPersona, {
       sessionId: sessionData?.session_id,
     });
-    const stem = `arena-transcript-${(sessionData?.session_id || 'session').slice(0, 12)}`;
-    const ok = downloadTextFile(json, {
-      filename: `${withDownloadDate(stem)}.json`,
+    if (!download) {
+      setTranscriptJsonDownloaded(false);
+      setError('Could not download the transcript JSON. Try again or copy the latest take instead.');
+      return;
+    }
+    const ok = downloadTextFile(download.content, {
+      filename: `${withDownloadDate(download.stem)}.json`,
       mimeType: 'application/json;charset=utf-8',
     });
     if (ok) {
@@ -998,6 +1001,9 @@ function App() {
       } else if (isArenaDownloadTranscriptKey(e)) {
         e.preventDefault();
         handleDownloadTranscript();
+      } else if (isArenaDownloadTranscriptJsonKey(e)) {
+        e.preventDefault();
+        handleDownloadTranscriptJson();
       } else if (isArenaCopyTranscriptJsonKey(e)) {
         e.preventDefault();
         void handleCopyTranscriptJson();
@@ -1013,6 +1019,7 @@ function App() {
   }, [
     handleCopyPrompt,
     handleDownloadTranscript,
+    handleDownloadTranscriptJson,
     handleCopyTranscriptJson,
     handleDownloadWinner,
     handleExportWinner,
@@ -2580,7 +2587,8 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => handleDownloadTranscriptJson()}
-                    title="Download the full session as structured JSON"
+                    aria-keyshortcuts="Shift+Y"
+                    title="Download the full session as structured JSON (Shift+Y)"
                     style={{ fontSize: 12 }}
                   >
                     {transcriptJsonDownloaded ? 'JSON saved' : 'Transcript .json'}

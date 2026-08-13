@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildArenaTranscriptMarkdownDownload,
+  buildArenaTranscriptJsonDownload,
   buildArenaVerifyBridgePayload,
   copyArenaTranscriptToClipboard,
   copyArenaTranscriptJsonToClipboard,
@@ -715,6 +716,65 @@ describe('buildArenaTranscriptMarkdownDownload', () => {
 
   it('falls back to a generic session stem when the id is missing', () => {
     const download = buildArenaTranscriptMarkdownDownload(turns, () => ({ name: 'The Analyst' }));
+    expect(download?.stem).toBe('arena-transcript-session');
+  });
+});
+
+describe('buildArenaTranscriptJsonDownload', () => {
+  const turns: SessionTurn[] = [
+    {
+      turn_id: 't1',
+      prompt: 'Should we ship this week?',
+      prompt_category: 'question',
+      winner_id: 'agent_1',
+      timestamp: '2026-08-07T10:00:00Z',
+      agent_responses: {
+        agent_1: {
+          agent_id: 'agent_1',
+          agent_number: 1,
+          one_liner: 'Ship the smallest honest slice.',
+          verdict: 'Ship a thin vertical that de-risks the week.',
+          confidence: 0.9,
+          key_assumption: 'quality bar is fixed',
+          timestamp: '2026-08-07T10:00:00Z',
+        },
+      },
+    },
+  ];
+
+  it('builds JSON content with a safe session-based stem', () => {
+    const download = buildArenaTranscriptJsonDownload(turns, () => ({ name: 'The Analyst' }), {
+      exportedAt: '2026-08-07T12:00:00.000Z',
+      sessionId: 'sess123',
+    });
+    expect(download).not.toBeNull();
+    expect(download?.stem).toBe('arena-transcript-sess123');
+    const parsed = JSON.parse(download?.content || '{}');
+    expect(parsed.export_type).toBe('session_transcript');
+    expect(parsed.session_id).toBe('sess123');
+    expect(parsed.exchanges[0].prompt).toBe('Should we ship this week?');
+  });
+
+  it('returns null when there is no transcript to download', () => {
+    expect(
+      buildArenaTranscriptJsonDownload(undefined, () => ({ name: 'The Analyst' })),
+    ).toBeNull();
+    expect(
+      buildArenaTranscriptJsonDownload([], () => ({ name: 'The Analyst' })),
+    ).toBeNull();
+  });
+
+  it('sanitizes and truncates session ids used in the filename stem', () => {
+    const download = buildArenaTranscriptJsonDownload(
+      turns,
+      () => ({ name: 'The Analyst' }),
+      { sessionId: '../../a<b>c:defghijklmnop' },
+    );
+    expect(download?.stem).toBe('arena-transcript-a-b-c-defghi');
+  });
+
+  it('falls back to a generic session stem when the id is missing', () => {
+    const download = buildArenaTranscriptJsonDownload(turns, () => ({ name: 'The Analyst' }));
     expect(download?.stem).toBe('arena-transcript-session');
   });
 });
