@@ -87,6 +87,7 @@ import {
   isAgentCopyReportJsonKey,
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
+  isAgentDownloadReportMarkdownKey,
   isAgentNewTaskKey,
 } from '../lib/keyboardShortcuts';
 import {
@@ -1931,7 +1932,7 @@ export function AgentPage() {
     }
   };
 
-  const handleExportTaskMarkdown = async () => {
+  const handleExportTaskMarkdown = useCallback(async () => {
     if (!result?.task_id || exportingMd) return;
     setExportingMd(true);
     try {
@@ -1946,7 +1947,7 @@ export function AgentPage() {
     } finally {
       setExportingMd(false);
     }
-  };
+  }, [exportingMd, result?.task_id]);
 
   const handleExportTaskJson = useCallback(async () => {
     if (!result?.task_id || exportingJson) return;
@@ -2416,8 +2417,8 @@ export function AgentPage() {
   }, [result?.status, result?.task_id]);
 
   // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
-  // Shift+J / Shift+O / Shift+P mirror the result toolbar buttons. Form
-  // controls are skipped so normal Shift+letter typing is never swallowed.
+  // Shift+J / Shift+L / Shift+O / Shift+P mirror the result toolbar buttons.
+  // Form controls are skipped so normal Shift+letter typing is never swallowed.
   useEffect(() => {
     if (result?.status !== 'complete' || !result?.task_id || isRunning) return;
     const onKey = (e: KeyboardEvent) => {
@@ -2434,6 +2435,9 @@ export function AgentPage() {
       } else if (isAgentDownloadJsonKey(e)) {
         e.preventDefault();
         void handleExportTaskJson();
+      } else if (isAgentDownloadReportMarkdownKey(e)) {
+        e.preventDefault();
+        void handleExportTaskMarkdown();
       } else if (isAgentCopyReportKey(e)) {
         e.preventDefault();
         void handleCopyTaskMarkdown();
@@ -2450,6 +2454,7 @@ export function AgentPage() {
     handleCopyTaskMarkdown,
     handleCopyTaskJson,
     handleExportTaskJson,
+    handleExportTaskMarkdown,
     isRunning,
     result?.status,
     result?.task_id,
@@ -9240,7 +9245,8 @@ export function AgentPage() {
                         icon={exportingMd ? undefined : Icons.download(14)}
                         loading={exportingMd}
                         disabled={exportingMd}
-                        title="Download the full research report as Markdown"
+                        title="Download the full research report as Markdown (Shift+L)"
+                        aria-keyshortcuts="Shift+L"
                         onClick={() => void handleExportTaskMarkdown()}
                       >
                         {exportingMd ? 'Exporting…' : 'Report .md'}
