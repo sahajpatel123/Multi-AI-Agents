@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isBareEndKey, isBareSlashKey, shouldCaptureSlashFocus } from './slashFocus';
+import {
+  isAriaModalOpen,
+  isBareEndKey,
+  isBareSlashKey,
+  shouldCaptureSlashFocus,
+} from './slashFocus';
 
 describe('slashFocus', () => {
   it('isBareSlashKey ignores modified slashes', () => {
@@ -34,5 +39,23 @@ describe('slashFocus', () => {
     // jsdom may not flip isContentEditable from the attribute alone
     Object.defineProperty(editable, 'isContentEditable', { value: true });
     expect(shouldCaptureSlashFocus(editable)).toBe(false);
+  });
+
+  it('isAriaModalOpen detects open aria-modal dialogs', () => {
+    expect(isAriaModalOpen()).toBe(false);
+
+    const plainDialog = document.createElement('div');
+    plainDialog.setAttribute('role', 'dialog');
+    document.body.appendChild(plainDialog);
+    expect(isAriaModalOpen()).toBe(false);
+    plainDialog.remove();
+
+    const modal = document.createElement('div');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    document.body.appendChild(modal);
+    expect(isAriaModalOpen()).toBe(true);
+    modal.remove();
+    expect(isAriaModalOpen()).toBe(false);
   });
 });

@@ -84,7 +84,11 @@ import {
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
 } from '../lib/keyboardShortcuts';
-import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import {
+  isAriaModalOpen,
+  isBareSlashKey,
+  shouldCaptureSlashFocus,
+} from '../lib/slashFocus';
 import { User } from '../types';
 // setRedirectIntent is unused but kept for future use
 import {
@@ -2243,6 +2247,9 @@ export function AgentPage() {
   useEffect(() => {
     if (result?.status !== 'complete' || !result?.task_id || isRunning) return;
     const onKey = (e: KeyboardEvent) => {
+      // Never export through an open dialog (templates, room create, shortcut
+      // help, etc.) — the modal owns the keystroke.
+      if (isAriaModalOpen()) return;
       if (!shouldCaptureSlashFocus(e.target)) return;
       if (isAgentCopyAnswerKey(e)) {
         e.preventDefault();
