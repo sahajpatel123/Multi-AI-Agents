@@ -188,6 +188,63 @@ export function formatWatchlistLatestResultCopy(
 }
 
 /**
+ * Markdown digest of every completed latest result in the current
+ * (already-filtered) watchlist view. Watches whose latest task has no
+ * readable answer are skipped so a digest is never padded with "no data"
+ * placeholders, and an entirely empty digest returns '' so callers can
+ * surface a friendly "nothing to copy" message.
+ */
+export function formatWatchlistResultsDigest(opts: {
+  items: WatchlistLatestResultLike[];
+  activeCount?: number;
+  activeCap?: number;
+  filterNote?: string;
+}): string {
+  const results = (opts.items || [])
+    .map((item) => ({
+      question: (item.question || '').trim(),
+      title: (item.title || '').trim(),
+      answer: readableAgentAnswerText(item.finalAnswer),
+      finalScore: item.finalScore,
+      createdAt: item.createdAt,
+      taskId: item.taskId,
+    }))
+    .filter((item) => item.question && item.answer);
+
+  if (results.length === 0) return '';
+
+  const lines: string[] = ['# Agent Watchlist — Results Digest', ''];
+  const activeCount = opts.activeCount;
+  const activeCap = opts.activeCap;
+  if (typeof activeCount === 'number' && typeof activeCap === 'number') {
+    lines.push(`**Active:** ${activeCount} / ${activeCap}`);
+    lines.push('');
+  }
+  const filterNote = (opts.filterNote || '').trim();
+  if (filterNote) {
+    lines.push(`_Filtered view: ${filterNote}_`);
+    lines.push('');
+  }
+
+  results.forEach((item, i) => {
+    lines.push(`## ${i + 1}. ${item.question}`);
+    lines.push('');
+    if (item.title) lines.push(`**Latest run:** ${item.title}`);
+    if (typeof item.finalScore === 'number' && Number.isFinite(item.finalScore)) {
+      lines.push(`**Score:** ${Math.round(item.finalScore)}/100`);
+    }
+    if (item.createdAt) {
+      lines.push(`**When:** ${formatIsoWhen(item.createdAt, { fallback: '—' })}`);
+    }
+    if (item.taskId) lines.push(`**Task:** \`${item.taskId}\``);
+    lines.push('', item.answer, '');
+  });
+
+  lines.push('---', '_Shared from Arena Agent Watchlist_');
+  return lines.join('\n').trim() + '\n';
+}
+
+/**
  * Characters that, when they appear as the first character of a CSV cell,
  * cause Excel / Google Sheets / LibreOffice to evaluate the cell as a
  * formula. OWASP CSV Injection guidance: prefix any cell that begins with

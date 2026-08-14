@@ -747,6 +747,94 @@ describe('WatchlistPage', () => {
     expect(copyToClipboard).not.toHaveBeenCalled();
   });
 
+  it('copies every completed latest result as one digest from the header', async () => {
+    const secondCompleted: AgentWatchlistItem = {
+      ...baseItem,
+      id: 'item-2',
+      question: 'Will rates cut this quarter?',
+      latest_task: {
+        task_id: 'task-2',
+        title: 'Rates preview',
+        created_at: '2026-07-19T08:00:00Z',
+        final_answer: 'Markets price one cut, the desk leans toward two.',
+        final_score: 76,
+        is_complete: true,
+        is_shared: false,
+        share_url: null,
+      },
+    };
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [
+        baseItem,
+        secondCompleted,
+        {
+          ...pausedItem,
+          latest_task: null,
+        },
+      ],
+      active_count: 2,
+      active_cap: 10,
+      total: 3,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (2)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy all completed results as a markdown digest',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    });
+    const markdown = vi.mocked(copyToClipboard).mock.calls[0][0];
+    expect(markdown).toContain('# Agent Watchlist — Results Digest');
+    expect(markdown).toContain('**Active:** 2 / 10');
+    expect(markdown).toContain('## 1. How is the Indian IPO market evolving?');
+    expect(markdown).toContain('## 2. Will rates cut this quarter?');
+    expect(markdown).toContain('Markets price one cut');
+    expect(markdown).not.toContain('Will the monsoon affect');
+    expect(await screen.findByText('Digest copied')).toBeInTheDocument();
+  });
+
+  it('refuses to copy a digest when no completed result exists in the view', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [
+        {
+          ...baseItem,
+          latest_task: {
+            ...baseItem.latest_task!,
+            is_complete: false,
+            final_answer: null,
+          },
+        },
+      ],
+      active_count: 1,
+      active_cap: 10,
+      total: 1,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy all completed results as a markdown digest',
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        'No completed results in this view — a digest needs at least one finished answer.',
+      ),
+    ).toBeInTheDocument();
+    expect(copyToClipboard).not.toHaveBeenCalled();
+  });
+
   it('surfaces a share failure without disabling the card action permanently', async () => {
     createAgentTaskShareMock.mockRejectedValue(new Error('Share failed'));
     renderPage();

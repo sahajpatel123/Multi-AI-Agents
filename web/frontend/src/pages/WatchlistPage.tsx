@@ -67,6 +67,7 @@ import {
   formatWatchlistJsonExport,
   formatWatchlistLatestResultCopy,
   formatWatchlistQuestionCopy,
+  formatWatchlistResultsDigest,
 } from '../lib/watchlistExport';
 import {
   WATCHLIST_SORT_OPTIONS,
@@ -168,6 +169,7 @@ export function WatchlistPage() {
   const [csvDownloadStatus, setCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonCopyStatus, setJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [digestCopyStatus, setDigestCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   /** Per-card copy: which item id last acted, and which action. */
   const [itemCopyId, setItemCopyId] = useState<string | null>(null);
   const [itemCopyKind, setItemCopyKind] = useState<
@@ -238,6 +240,8 @@ export function WatchlistPage() {
   const jsonDownloadStatusTimerRef = useRef<number | null>(null);
   const jsonCopyStatusTimerRef = useRef<number | null>(null);
   const jsonCopyBusyRef = useRef(false);
+  const digestCopyStatusTimerRef = useRef<number | null>(null);
+  const digestCopyBusyRef = useRef(false);
   const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
@@ -778,6 +782,9 @@ export function WatchlistPage() {
       if (jsonCopyStatusTimerRef.current != null) {
         window.clearTimeout(jsonCopyStatusTimerRef.current);
       }
+      if (digestCopyStatusTimerRef.current != null) {
+        window.clearTimeout(digestCopyStatusTimerRef.current);
+      }
       if (historyCopyTimerRef.current != null) {
         window.clearTimeout(historyCopyTimerRef.current);
       }
@@ -857,6 +864,17 @@ export function WatchlistPage() {
     jsonCopyStatusTimerRef.current = window.setTimeout(() => {
       setJsonCopyStatus('idle');
       jsonCopyStatusTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const flashDigestCopyStatus = (status: 'copied' | 'failed') => {
+    if (digestCopyStatusTimerRef.current != null) {
+      window.clearTimeout(digestCopyStatusTimerRef.current);
+    }
+    setDigestCopyStatus(status);
+    digestCopyStatusTimerRef.current = window.setTimeout(() => {
+      setDigestCopyStatus('idle');
+      digestCopyStatusTimerRef.current = null;
     }, status === 'copied' ? 2200 : 3200);
   };
 
@@ -1255,6 +1273,46 @@ export function WatchlistPage() {
     }
   };
 
+  const buildWatchlistDigestItems = () =>
+    filteredItems.map((item) => ({
+      question: item.question,
+      title: item.latest_task?.title,
+      finalAnswer: item.latest_task?.final_answer,
+      finalScore: item.latest_task?.final_score,
+      createdAt: item.latest_task?.created_at,
+      taskId: item.latest_task?.task_id,
+    }));
+
+  const copyWatchlistDigest = async () => {
+    if (digestCopyBusyRef.current) return;
+    digestCopyBusyRef.current = true;
+    try {
+      const digest = formatWatchlistResultsDigest({
+        items: buildWatchlistDigestItems(),
+        activeCount,
+        activeCap,
+        filterNote: buildWatchlistFilterNote(),
+      });
+      if (!digest) {
+        flashDigestCopyStatus('failed');
+        setError(
+          'No completed results in this view — a digest needs at least one finished answer.',
+        );
+        return;
+      }
+      const ok = await copyToClipboard(digest);
+      flashDigestCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy the results digest — try again.');
+      }
+    } catch {
+      flashDigestCopyStatus('failed');
+      setError('Could not copy the results digest — try again.');
+    } finally {
+      digestCopyBusyRef.current = false;
+    }
+  };
+
   const downloadStatsCsv = async () => {
     if (statsDownloadBusyRef.current) return;
     statsDownloadBusyRef.current = true;
@@ -1572,6 +1630,31 @@ export function WatchlistPage() {
                 : jsonCopyStatus === 'failed'
                   ? 'Copy failed'
                   : 'Copy .json'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyWatchlistDigest()}
+              title="Copy every completed latest result in this view as one markdown digest"
+              aria-label={
+                digestCopyStatus === 'copied'
+                  ? 'Results digest copied'
+                  : digestCopyStatus === 'failed'
+                    ? 'Digest copy failed'
+                    : 'Copy all completed results as a markdown digest'
+              }
+              className={[
+                'watchlist-header-btn',
+                digestCopyStatus === 'copied' ? 'watchlist-header-btn--ok' : '',
+                digestCopyStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {digestCopyStatus === 'copied'
+                ? 'Digest copied'
+                : digestCopyStatus === 'failed'
+                  ? 'Copy failed'
+                  : 'Copy digest'}
             </button>
           </div>
         ) : null}

@@ -6,6 +6,7 @@ import {
   formatWatchlistJsonExport,
   formatWatchlistLatestResultCopy,
   formatWatchlistQuestionCopy,
+  formatWatchlistResultsDigest,
 } from './watchlistExport';
 
 describe('formatWatchlistExport', () => {
@@ -149,6 +150,72 @@ describe('formatWatchlistLatestResultCopy', () => {
       formatWatchlistLatestResultCopy({
         question: 'Question',
         finalAnswer: '   ',
+      }),
+    ).toBe('');
+  });
+});
+
+describe('formatWatchlistResultsDigest', () => {
+  const answered = {
+    question: 'How is the Indian IPO market evolving?',
+    title: 'IPO market mid-year recap',
+    finalAnswer: 'IPO momentum is strong with stable retail participation.',
+    finalScore: 82,
+    createdAt: '2026-07-18T10:00:00Z',
+    taskId: 'task-1',
+  };
+
+  it('composes every readable completed result into one digest', () => {
+    const md = formatWatchlistResultsDigest({
+      items: [
+        answered,
+        {
+          question: 'Will rates cut this quarter?',
+          finalAnswer: JSON.stringify({
+            sentences: [{ text: 'First sentence', confidence: 'high' }],
+          }),
+          finalScore: 75,
+        },
+      ],
+      activeCount: 2,
+      activeCap: 10,
+      filterNote: 'sort: next_soon',
+    });
+
+    expect(md).toContain('# Agent Watchlist — Results Digest');
+    expect(md).toContain('**Active:** 2 / 10');
+    expect(md).toContain('_Filtered view: sort: next_soon_');
+    expect(md).toContain('## 1. How is the Indian IPO market evolving?');
+    expect(md).toContain('**Latest run:** IPO market mid-year recap');
+    expect(md).toContain('**Score:** 82/100');
+    expect(md).toContain('**Task:** `task-1`');
+    expect(md).toContain('IPO momentum is strong');
+    expect(md).toContain('## 2. Will rates cut this quarter?');
+    expect(md).toContain('First sentence');
+    expect(md).not.toContain('"sentences"');
+    expect(md).toMatch(/Shared from Arena Agent Watchlist/);
+  });
+
+  it('skips watches whose latest result is missing or unreadable', () => {
+    const md = formatWatchlistResultsDigest({
+      items: [
+        { question: 'No answer yet', finalAnswer: null },
+        { question: '  ', finalAnswer: 'orphaned answer' },
+        answered,
+      ],
+    });
+    expect(md).toContain('## 1. How is the Indian IPO market evolving?');
+    expect(md).not.toContain('No answer yet');
+    expect(md).not.toContain('orphaned answer');
+  });
+
+  it('returns empty when no completed result is digestible', () => {
+    expect(
+      formatWatchlistResultsDigest({
+        items: [
+          { question: 'Pending', finalAnswer: '   ' },
+          { question: '  ', finalAnswer: 'answer' },
+        ],
       }),
     ).toBe('');
   });
