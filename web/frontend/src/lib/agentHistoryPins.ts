@@ -48,10 +48,18 @@ export function persistAgentHistoryPins(ids: string[]): string[] {
 
 /** Toggle a task's pin state and persist the result. */
 export function toggleAgentHistoryPin(taskId: string): string[] {
+  const id = taskId.trim();
   const current = loadAgentHistoryPins();
-  const next = current.includes(taskId)
-    ? current.filter((id) => id !== taskId)
-    : [...current, taskId];
+  if (!id) return current;
+  if (current.includes(id)) {
+    return persistAgentHistoryPins(current.filter((pinned) => pinned !== id));
+  }
+  // Evict the oldest pin so a newly pinned task is never silently dropped
+  // when the list is already at the cap.
+  const next =
+    current.length >= AGENT_HISTORY_PINS_MAX
+      ? [...current.slice(current.length - (AGENT_HISTORY_PINS_MAX - 1)), id]
+      : [...current, id];
   return persistAgentHistoryPins(next);
 }
 

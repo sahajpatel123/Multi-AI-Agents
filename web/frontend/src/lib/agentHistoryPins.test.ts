@@ -52,6 +52,32 @@ describe('agent history pin storage', () => {
     expect(loadAgentHistoryPins()).toEqual([]);
   });
 
+  it('normalizes whitespace around a pinned task id', () => {
+    const first = toggleAgentHistoryPin('  task-a  ');
+    expect(first).toEqual(['task-a']);
+    expect(loadAgentHistoryPins()).toEqual(['task-a']);
+    const second = toggleAgentHistoryPin('task-a');
+    expect(second).toEqual([]);
+    expect(loadAgentHistoryPins()).toEqual([]);
+  });
+
+  it('does not pin blank task ids', () => {
+    persistAgentHistoryPins(['task-a']);
+    expect(toggleAgentHistoryPin('   ')).toEqual(['task-a']);
+    expect(loadAgentHistoryPins()).toEqual(['task-a']);
+  });
+
+  it('evicts the oldest pin instead of dropping a new one at the cap', () => {
+    const full = Array.from({ length: AGENT_HISTORY_PINS_MAX }, (_, i) => `task-${i}`);
+    persistAgentHistoryPins(full);
+    const next = toggleAgentHistoryPin('task-new');
+    expect(next).toHaveLength(AGENT_HISTORY_PINS_MAX);
+    expect(next[next.length - 1]).toBe('task-new');
+    expect(next[0]).toBe('task-1');
+    expect(next).not.toContain('task-0');
+    expect(loadAgentHistoryPins()).toEqual(next);
+  });
+
   it('removes pins for deleted tasks while keeping others', () => {
     persistAgentHistoryPins(['task-a', 'task-b', 'task-c']);
     const next = removeAgentHistoryPins(['task-b', 'missing']);
