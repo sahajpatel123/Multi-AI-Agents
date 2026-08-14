@@ -163,6 +163,7 @@ describe('formatWatchlistResultsDigest', () => {
     finalScore: 82,
     createdAt: '2026-07-18T10:00:00Z',
     taskId: 'task-1',
+    isComplete: true,
   };
 
   it('composes every readable completed result into one digest', () => {
@@ -175,6 +176,7 @@ describe('formatWatchlistResultsDigest', () => {
             sentences: [{ text: 'First sentence', confidence: 'high' }],
           }),
           finalScore: 75,
+          isComplete: true,
         },
       ],
       activeCount: 2,
@@ -196,28 +198,50 @@ describe('formatWatchlistResultsDigest', () => {
     expect(md).toMatch(/Shared from Arena Agent Watchlist/);
   });
 
-  it('skips watches whose latest result is missing or unreadable', () => {
+  it('skips watches whose latest result is missing, unreadable, or unconfirmed', () => {
     const md = formatWatchlistResultsDigest({
       items: [
         { question: 'No answer yet', finalAnswer: null },
         { question: '  ', finalAnswer: 'orphaned answer' },
+        { question: 'Still running', finalAnswer: 'partial draft', isComplete: false },
         answered,
       ],
     });
     expect(md).toContain('## 1. How is the Indian IPO market evolving?');
     expect(md).not.toContain('No answer yet');
     expect(md).not.toContain('orphaned answer');
+    expect(md).not.toContain('Still running');
+    expect(md).not.toContain('partial draft');
   });
 
-  it('returns empty when no completed result is digestible', () => {
+  it('returns empty when every result is in-flight or unreadable', () => {
     expect(
       formatWatchlistResultsDigest({
         items: [
-          { question: 'Pending', finalAnswer: '   ' },
-          { question: '  ', finalAnswer: 'answer' },
+          { question: 'Pending', finalAnswer: '   ', isComplete: true },
+          { question: 'Running', finalAnswer: 'draft', isComplete: false },
+          { question: '  ', finalAnswer: 'answer', isComplete: true },
         ],
       }),
     ).toBe('');
+  });
+
+  it('keeps user-controlled questions and titles on one heading line', () => {
+    const md = formatWatchlistResultsDigest({
+      items: [
+        {
+          question: '# Fake heading\n\n**Injected:** yes',
+          title: 'Run\nsummary',
+          finalAnswer: 'Real answer.',
+          isComplete: true,
+        },
+      ],
+    });
+
+    expect(md).toContain('## 1. \\# Fake heading **Injected:** yes');
+    expect(md).toContain('**Latest run:** Run summary');
+    expect(md).not.toMatch(/\n## Fake heading/);
+    expect(md).not.toMatch(/\n\*\*Injected:\*\*/);
   });
 });
 

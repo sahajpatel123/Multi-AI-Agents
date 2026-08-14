@@ -771,10 +771,22 @@ describe('WatchlistPage', () => {
           ...pausedItem,
           latest_task: null,
         },
+        {
+          ...baseItem,
+          id: 'item-3',
+          question: 'Is the semiconductor rally sustainable?',
+          latest_task: {
+            ...baseItem.latest_task!,
+            task_id: 'task-3',
+            is_complete: false,
+            final_answer: 'Partial draft while the run is still in progress.',
+            final_score: null,
+          },
+        },
       ],
       active_count: 2,
       active_cap: 10,
-      total: 3,
+      total: 4,
     });
     renderPage();
     await waitFor(() => {
@@ -797,6 +809,8 @@ describe('WatchlistPage', () => {
     expect(markdown).toContain('## 2. Will rates cut this quarter?');
     expect(markdown).toContain('Markets price one cut');
     expect(markdown).not.toContain('Will the monsoon affect');
+    expect(markdown).not.toContain('Is the semiconductor rally sustainable?');
+    expect(markdown).not.toContain('Partial draft');
     expect(await screen.findByText('Digest copied')).toBeInTheDocument();
   });
 
@@ -808,7 +822,8 @@ describe('WatchlistPage', () => {
           latest_task: {
             ...baseItem.latest_task!,
             is_complete: false,
-            final_answer: null,
+            final_answer: 'Partial draft while the run is still in progress.',
+            final_score: null,
           },
         },
       ],

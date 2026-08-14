@@ -150,7 +150,18 @@ export type WatchlistLatestResultLike = {
   finalConfidence?: number | null;
   createdAt?: string | null;
   taskId?: string | null;
+  isComplete?: boolean | null;
 };
+
+/**
+ * Collapse user/model-controlled text onto a single line and neutralize a
+ * leading `#` so digest fields can never change a heading level, inject a
+ * fake `## n.` section, or smuggle a second markdown block into the copy.
+ */
+function digestInlineText(value: string | null | undefined): string {
+  const collapsed = (value || '').replace(/\s+/g, ' ').trim();
+  return collapsed.startsWith('#') ? `\\${collapsed}` : collapsed;
+}
 
 /**
  * Clipboard markdown for a watch's latest completed research result.
@@ -192,7 +203,9 @@ export function formatWatchlistLatestResultCopy(
  * (already-filtered) watchlist view. Watches whose latest task has no
  * readable answer are skipped so a digest is never padded with "no data"
  * placeholders, and an entirely empty digest returns '' so callers can
- * surface a friendly "nothing to copy" message.
+ * surface a friendly "nothing to copy" message. In-flight runs are excluded
+ * even when the pipeline has already persisted a partial draft answer, so
+ * the digest stays true to its "completed results" label.
  */
 export function formatWatchlistResultsDigest(opts: {
   items: WatchlistLatestResultLike[];
@@ -202,14 +215,15 @@ export function formatWatchlistResultsDigest(opts: {
 }): string {
   const results = (opts.items || [])
     .map((item) => ({
-      question: (item.question || '').trim(),
-      title: (item.title || '').trim(),
+      question: digestInlineText(item.question),
+      title: digestInlineText(item.title),
       answer: readableAgentAnswerText(item.finalAnswer),
       finalScore: item.finalScore,
       createdAt: item.createdAt,
       taskId: item.taskId,
+      isComplete: item.isComplete === true,
     }))
-    .filter((item) => item.question && item.answer);
+    .filter((item) => item.isComplete && item.question && item.answer);
 
   if (results.length === 0) return '';
 
@@ -220,7 +234,7 @@ export function formatWatchlistResultsDigest(opts: {
     lines.push(`**Active:** ${activeCount} / ${activeCap}`);
     lines.push('');
   }
-  const filterNote = (opts.filterNote || '').trim();
+  const filterNote = digestInlineText(opts.filterNote);
   if (filterNote) {
     lines.push(`_Filtered view: ${filterNote}_`);
     lines.push('');

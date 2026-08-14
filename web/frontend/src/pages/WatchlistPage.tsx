@@ -1281,6 +1281,7 @@ export function WatchlistPage() {
       finalScore: item.latest_task?.final_score,
       createdAt: item.latest_task?.created_at,
       taskId: item.latest_task?.task_id,
+      isComplete: item.latest_task?.is_complete,
     }));
 
   const copyWatchlistDigest = async () => {
