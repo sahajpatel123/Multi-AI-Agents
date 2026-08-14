@@ -4,6 +4,7 @@ import {
   formatWatchlistCsvExport,
   formatWatchlistItemCopy,
   formatWatchlistJsonExport,
+  formatWatchlistLatestResultCopy,
   formatWatchlistQuestionCopy,
 } from './watchlistExport';
 
@@ -99,6 +100,57 @@ describe('formatWatchlistQuestionCopy', () => {
 
   it('returns empty for blank', () => {
     expect(formatWatchlistQuestionCopy('   ')).toBe('');
+  });
+});
+
+describe('formatWatchlistLatestResultCopy', () => {
+  it('formats a completed result with metadata and answer', () => {
+    const md = formatWatchlistLatestResultCopy({
+      question: 'How is the Indian IPO market evolving?',
+      title: 'IPO market mid-year recap',
+      finalAnswer: 'IPO momentum is strong with stable retail participation.',
+      finalScore: 82,
+      finalConfidence: 0.72,
+      createdAt: '2026-07-18T10:00:00Z',
+      taskId: 'task-1',
+    });
+    expect(md).toContain('# How is the Indian IPO market evolving?');
+    expect(md).toContain('**Latest run:** IPO market mid-year recap');
+    expect(md).toContain('**Score:** 82/100 · **Confidence:** 72%');
+    expect(md).toContain('**Task:** `task-1`');
+    expect(md).toContain('IPO momentum is strong');
+    expect(md).toContain('Shared from Arena Agent Watchlist');
+  });
+
+  it('flattens structured Agent answer JSON before copying', () => {
+    const md = formatWatchlistLatestResultCopy({
+      question: 'Will rates cut this quarter?',
+      finalAnswer: JSON.stringify({
+        sentences: [
+          { text: 'First sentence', confidence: 'high' },
+          { text: 'Second sentence', confidence: 'medium' },
+        ],
+      }),
+      finalScore: 75,
+    });
+    expect(md).toContain('First sentence');
+    expect(md).toContain('Second sentence');
+    expect(md).not.toContain('"sentences"');
+  });
+
+  it('returns empty when question or answer is missing', () => {
+    expect(
+      formatWatchlistLatestResultCopy({
+        question: '  ',
+        finalAnswer: 'Answer',
+      }),
+    ).toBe('');
+    expect(
+      formatWatchlistLatestResultCopy({
+        question: 'Question',
+        finalAnswer: '   ',
+      }),
+    ).toBe('');
   });
 });
 

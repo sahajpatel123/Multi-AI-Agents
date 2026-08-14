@@ -203,6 +203,7 @@ async def test_watchlist_latest_summary_carries_share_state(
     assert latest["is_shared"] is False
     assert latest["share_url"] is None
     assert latest["is_complete"] is True
+    assert latest["final_answer"] == "Yes, with a token and a public page."
 
     created = await app_client.post(
         f"/api/agent/tasks/{task.task_id}/share", headers=headers
@@ -245,6 +246,7 @@ async def test_watchlist_latest_summary_flags_incomplete_task(
     assert latest["is_complete"] is False
     assert latest["is_shared"] is False
     assert latest["share_url"] is None
+    assert latest["final_answer"] is None
 
 
 @pytest.mark.asyncio

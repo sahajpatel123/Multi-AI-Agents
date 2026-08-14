@@ -65,6 +65,7 @@ import {
   formatWatchlistCsvExport,
   formatWatchlistItemCopy,
   formatWatchlistJsonExport,
+  formatWatchlistLatestResultCopy,
   formatWatchlistQuestionCopy,
 } from '../lib/watchlistExport';
 import {
@@ -169,7 +170,9 @@ export function WatchlistPage() {
   const [jsonCopyStatus, setJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   /** Per-card copy: which item id last acted, and which action. */
   const [itemCopyId, setItemCopyId] = useState<string | null>(null);
-  const [itemCopyKind, setItemCopyKind] = useState<'watch' | 'question' | null>(null);
+  const [itemCopyKind, setItemCopyKind] = useState<
+    'watch' | 'question' | 'result' | null
+  >(null);
   const [itemCopyStatus, setItemCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const itemCopyTimerRef = useRef<number | null>(null);
   /** Per-card latest-result share: which item last acted, and with what result. */
@@ -881,7 +884,7 @@ export function WatchlistPage() {
 
   const flashItemCopy = (
     itemId: string,
-    kind: 'watch' | 'question',
+    kind: 'watch' | 'question' | 'result',
     status: 'copied' | 'failed',
   ) => {
     if (itemCopyTimerRef.current != null) {
@@ -959,10 +962,22 @@ export function WatchlistPage() {
     }
   };
 
-  const copyWatchItem = async (item: AgentWatchlistItem, kind: 'watch' | 'question') => {
+  const copyWatchItem = async (
+    item: AgentWatchlistItem,
+    kind: 'watch' | 'question' | 'result',
+  ) => {
     const text =
       kind === 'question'
         ? formatWatchlistQuestionCopy(item.question)
+        : kind === 'result'
+          ? formatWatchlistLatestResultCopy({
+              question: item.question,
+              title: item.latest_task?.title,
+              finalAnswer: item.latest_task?.final_answer,
+              finalScore: item.latest_task?.final_score,
+              createdAt: item.latest_task?.created_at,
+              taskId: item.latest_task?.task_id,
+            })
         : formatWatchlistItemCopy({
             question: item.question,
             intervalHours: item.interval_hours,
@@ -980,7 +995,9 @@ export function WatchlistPage() {
       setError(
         kind === 'question'
           ? 'Nothing to copy — this watch has no question text.'
-          : 'Nothing to copy on this watch.',
+          : kind === 'result'
+            ? 'No completed answer to copy — open it in Agent for details.'
+            : 'Nothing to copy on this watch.',
       );
       return;
     }
@@ -990,7 +1007,9 @@ export function WatchlistPage() {
       setError(
         kind === 'question'
           ? 'Could not copy question — try again.'
-          : 'Could not copy this watch — try the list Copy export.',
+          : kind === 'result'
+            ? 'Could not copy this result — try again.'
+            : 'Could not copy this watch — try the list Copy export.',
       );
     }
   };
@@ -2104,6 +2123,41 @@ export function WatchlistPage() {
                           className="watchlist-link watchlist-link--accent"
                         >
                           Latest result →
+                        </button>
+                      ) : null}
+                      {item.latest_task?.is_complete &&
+                      readableAgentAnswerText(item.latest_task.final_answer) ? (
+                        <button
+                          type="button"
+                          onClick={() => void copyWatchItem(item, 'result')}
+                          title="Copy the latest completed research answer as markdown"
+                          aria-label={`Copy latest result: ${item.question.slice(0, 80) || 'watched question'}`}
+                          className={[
+                            'watchlist-link',
+                            'watchlist-link--accent',
+                            itemCopyId === item.id &&
+                            itemCopyKind === 'result' &&
+                            itemCopyStatus === 'copied'
+                              ? 'watchlist-link--ok'
+                              : '',
+                            itemCopyId === item.id &&
+                            itemCopyKind === 'result' &&
+                            itemCopyStatus === 'failed'
+                              ? 'watchlist-link--err'
+                              : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                        >
+                          {itemCopyId === item.id &&
+                          itemCopyKind === 'result' &&
+                          itemCopyStatus === 'copied'
+                            ? 'Result copied'
+                            : itemCopyId === item.id &&
+                                itemCopyKind === 'result' &&
+                                itemCopyStatus === 'failed'
+                              ? 'Copy failed'
+                              : 'Copy result'}
                         </button>
                       ) : null}
                       {item.latest_task_id &&

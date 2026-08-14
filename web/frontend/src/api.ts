@@ -1944,6 +1944,7 @@ export type AgentWatchlistItem = {
     task_id: string;
     title: string;
     created_at: string;
+    final_answer: string | null;
     final_score: number | null;
     is_complete: boolean;
     is_shared: boolean;

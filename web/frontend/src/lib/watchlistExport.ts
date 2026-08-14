@@ -1,6 +1,7 @@
 /** Portable markdown for Agent Watchlist. */
 
 import { formatIsoWhen } from './relativeTime';
+import { readableAgentAnswerText } from './watchlistHistory';
 
 export type WatchlistExportItem = {
   question: string;
@@ -139,6 +140,51 @@ export function formatWatchlistItemCopy(item: WatchlistExportItem): string {
 export function formatWatchlistQuestionCopy(question: string): string {
   const q = (question || '').trim();
   return q ? `${q}\n` : '';
+}
+
+export type WatchlistLatestResultLike = {
+  question?: string | null;
+  title?: string | null;
+  finalAnswer?: string | null;
+  finalScore?: number | null;
+  finalConfidence?: number | null;
+  createdAt?: string | null;
+  taskId?: string | null;
+};
+
+/**
+ * Clipboard markdown for a watch's latest completed research result.
+ * The answer is flattened from structured Agent JSON when present so the
+ * copied text is readable outside the app.
+ */
+export function formatWatchlistLatestResultCopy(
+  item: WatchlistLatestResultLike,
+): string {
+  const q = (item.question || '').trim();
+  const answer = readableAgentAnswerText(item.finalAnswer);
+  if (!q || !answer) return '';
+
+  const lines: string[] = [`# ${q}`, ''];
+  const title = (item.title || '').trim();
+  if (title) lines.push(`**Latest run:** ${title}`);
+  const score =
+    typeof item.finalScore === 'number' && Number.isFinite(item.finalScore)
+      ? `${Math.round(item.finalScore)}/100`
+      : '';
+  const confidence =
+    typeof item.finalConfidence === 'number' &&
+    Number.isFinite(item.finalConfidence)
+      ? `${Math.round(item.finalConfidence * 100)}%`
+      : '';
+  if (score || confidence) {
+    lines.push(`**Score:** ${score || '—'} · **Confidence:** ${confidence || '—'}`);
+  }
+  if (item.createdAt) {
+    lines.push(`**When:** ${formatIsoWhen(item.createdAt, { fallback: '—' })}`);
+  }
+  if (item.taskId) lines.push(`**Task:** \`${item.taskId}\``);
+  lines.push('', '---', '', answer, '', '---', '_Shared from Arena Agent Watchlist_');
+  return lines.join('\n').trim() + '\n';
 }
 
 /**

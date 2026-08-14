@@ -26,6 +26,7 @@ const baseItem: AgentWatchlistItem = {
     task_id: 'task-1',
     title: 'IPO market mid-year recap',
     created_at: '2026-07-18T10:00:00Z',
+    final_answer: 'IPO momentum is strong with stable retail participation.',
     final_score: 82,
     is_complete: true,
     is_shared: false,
@@ -692,6 +693,58 @@ describe('WatchlistPage', () => {
     expect(vi.mocked(copyToClipboard).mock.calls[0][0]).toContain(
       '/share/agent/existing',
     );
+  });
+
+  it('copies the latest completed research answer from the card', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy latest result: How is the Indian IPO market evolving?',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    });
+    const markdown = vi.mocked(copyToClipboard).mock.calls[0][0];
+    expect(markdown).toContain('# How is the Indian IPO market evolving?');
+    expect(markdown).toContain('IPO market mid-year recap');
+    expect(markdown).toContain('IPO momentum is strong');
+    expect(markdown).toContain('82/100');
+    expect(await screen.findByText('Result copied')).toBeInTheDocument();
+  });
+
+  it('hides the copy-result action when the latest task has no answer', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [
+        {
+          ...baseItem,
+          latest_task: {
+            ...baseItem.latest_task!,
+            is_complete: false,
+            final_answer: null,
+          },
+        },
+      ],
+      active_count: 1,
+      active_cap: 10,
+      total: 1,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Copy latest result: How is the Indian IPO market evolving?',
+      }),
+    ).not.toBeInTheDocument();
+    expect(copyToClipboard).not.toHaveBeenCalled();
   });
 
   it('surfaces a share failure without disabling the card action permanently', async () => {
