@@ -216,10 +216,12 @@ export function formatWatchlistCsvExport(items: WatchlistExportItem[]): string {
 /**
  * JSON export of the current watchlist view.
  *
- * Keeps the same columns and semantics as the CSV export (snake_case field
- * names), so a downloaded JSON file can be dropped into scripts without a
- * second mapping step. Includes export timestamp, active-count context, and
- * any filter note so the file is self-describing outside the app.
+ * Mirrors the CSV field set normalized to snake_case so a downloaded JSON
+ * file can be dropped into scripts without a second mapping step, and uses
+ * the same machine-readable envelope as the other Arena JSON exports
+ * (exported_from, filter_note, count). Includes export timestamp,
+ * active-count context, and any filter note so the file is self-describing
+ * outside the app.
  */
 export function formatWatchlistJsonExport(opts: {
   items: WatchlistExportItem[];
@@ -251,17 +253,20 @@ export function formatWatchlistJsonExport(opts: {
   }));
 
   const payload: Record<string, unknown> = {
+    exported_from: 'arena',
     exported_at: opts.exportedAt || new Date().toISOString(),
+    active_count:
+      typeof opts.activeCount === 'number' && Number.isFinite(opts.activeCount)
+        ? opts.activeCount
+        : null,
+    active_cap:
+      typeof opts.activeCap === 'number' && Number.isFinite(opts.activeCap)
+        ? opts.activeCap
+        : null,
+    filter_note: (opts.filterNote || '').trim() || null,
+    count: items.length,
+    items,
   };
-  if (typeof opts.activeCount === 'number' && Number.isFinite(opts.activeCount)) {
-    payload.active_count = opts.activeCount;
-  }
-  if (typeof opts.activeCap === 'number' && Number.isFinite(opts.activeCap)) {
-    payload.active_cap = opts.activeCap;
-  }
-  const filterNote = (opts.filterNote || '').trim();
-  if (filterNote) payload.filter_note = filterNote;
-  payload.items = items;
 
   return JSON.stringify(payload, null, 2) + '\n';
 }

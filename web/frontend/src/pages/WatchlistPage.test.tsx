@@ -954,6 +954,13 @@ describe('WatchlistPage', () => {
       expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByRole('button', { name: 'Active' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Will the monsoon affect Indian agriculture exports?'),
+      ).not.toBeInTheDocument();
+    });
+
     fireEvent.click(
       screen.getByRole('button', { name: 'Download watchlist as JSON' }),
     );
@@ -962,19 +969,44 @@ describe('WatchlistPage', () => {
     expect(downloadTextFile).toHaveBeenCalledTimes(1);
     const [json, opts] = vi.mocked(downloadTextFile).mock.calls[0];
     const parsed = JSON.parse(json as string) as {
+      exported_from: string;
       active_count: number;
       active_cap: number;
+      filter_note: string;
+      count: number;
       items: Array<{ question: string; status: string; latest_score: number | null }>;
     };
+    expect(parsed.exported_from).toBe('arena');
     expect(parsed.active_count).toBe(1);
     expect(parsed.active_cap).toBe(10);
-    expect(parsed.items).toHaveLength(2);
+    expect(parsed.filter_note).toBe('status: active');
+    expect(parsed.count).toBe(1);
+    expect(parsed.items).toHaveLength(1);
     expect(parsed.items[0].question).toBe('How is the Indian IPO market evolving?');
     expect(parsed.items[0].status).toBe('active');
     expect(parsed.items[0].latest_score).toBe(82);
-    expect(parsed.items[1].status).toBe('paused');
     expect(opts.filename).toMatch(/^agent-watchlist-\d{4}-\d{2}-\d{2}\.json$/);
     expect(opts.mimeType).toBe('application/json;charset=utf-8');
+  });
+
+  it('surfaces a JSON download failure and marks the button as failed', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    vi.mocked(downloadTextFile).mockReturnValueOnce(false);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Download watchlist as JSON' }),
+    );
+
+    expect(downloadTextFile).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByText('Could not download watchlist JSON — try again.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'JSON download failed' }),
+    ).toBeInTheDocument();
   });
 
   it('copies the current watchlist as markdown with Shift+C', async () => {

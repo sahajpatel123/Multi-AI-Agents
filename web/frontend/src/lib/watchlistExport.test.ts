@@ -246,16 +246,20 @@ describe('formatWatchlistJsonExport', () => {
     });
 
     const parsed = JSON.parse(json) as {
+      exported_from: string;
       exported_at: string;
       active_count: number;
       active_cap: number;
       filter_note: string;
+      count: number;
       items: Array<Record<string, unknown>>;
     };
+    expect(parsed.exported_from).toBe('arena');
     expect(parsed.exported_at).toBe('2026-08-14T00:00:00.000Z');
     expect(parsed.active_count).toBe(1);
     expect(parsed.active_cap).toBe(10);
     expect(parsed.filter_note).toBe('status: active');
+    expect(parsed.count).toBe(2);
     expect(parsed.items).toHaveLength(2);
     expect(parsed.items[0]).toEqual({
       question: 'How is the Indian IPO market evolving?',
@@ -291,8 +295,20 @@ describe('formatWatchlistJsonExport', () => {
         ],
         exportedAt: '2026-08-14T00:00:00.000Z',
       }),
-    ) as { items: Array<Record<string, unknown>> };
+    ) as {
+      exported_from: string;
+      active_count: number | null;
+      active_cap: number | null;
+      filter_note: string | null;
+      count: number;
+      items: Array<Record<string, unknown>>;
+    };
 
+    expect(parsed.exported_from).toBe('arena');
+    expect(parsed.active_count).toBeNull();
+    expect(parsed.active_cap).toBeNull();
+    expect(parsed.filter_note).toBeNull();
+    expect(parsed.count).toBe(1);
     expect(parsed.items[0]).toEqual({
       question: '(untitled question)',
       status: 'active',

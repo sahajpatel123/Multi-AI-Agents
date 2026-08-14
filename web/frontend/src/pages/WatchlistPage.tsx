@@ -1190,7 +1190,7 @@ export function WatchlistPage() {
       flashJsonDownloadStatus('done');
     } else {
       flashJsonDownloadStatus('failed');
-      setError('Could not download watchlist JSON — try Copy instead.');
+      setError('Could not download watchlist JSON — try again.');
     }
   };
 
