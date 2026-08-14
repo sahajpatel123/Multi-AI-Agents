@@ -1159,6 +1159,33 @@ describe('WatchlistPage', () => {
     expect(screen.getByRole('button', { name: 'JSON copy failed' })).toBeInTheDocument();
   });
 
+  it('dedupes repeated Shift+O JSON copies while one is in flight', async () => {
+    const { unmount } = renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    let resolveCopy!: (value: boolean) => void;
+    vi.mocked(copyToClipboard).mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        resolveCopy = resolve;
+      }),
+    );
+
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+
+    expect(copyToClipboard).toHaveBeenCalledTimes(1);
+
+    resolveCopy(true);
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Watchlist JSON copied' }),
+      ).toBeInTheDocument();
+    });
+    unmount();
+  });
+
   it('downloads watchlist statistics as CSV with Shift+F', async () => {
     renderPage();
     await waitFor(() => {
@@ -1201,6 +1228,7 @@ describe('WatchlistPage', () => {
     fireEvent.keyDown(window, { key: 'D', shiftKey: true });
     fireEvent.keyDown(window, { key: 'E', shiftKey: true });
     fireEvent.keyDown(window, { key: 'J', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
     fireEvent.keyDown(window, { key: 'F', shiftKey: true });
 
     expect(copyToClipboard).not.toHaveBeenCalled();
@@ -1235,6 +1263,7 @@ describe('WatchlistPage', () => {
     fireEvent.keyDown(window, { key: 'C', shiftKey: true });
     fireEvent.keyDown(window, { key: 'D', shiftKey: true });
     fireEvent.keyDown(window, { key: 'E', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
     fireEvent.keyDown(window, { key: 'F', shiftKey: true });
 
     expect(copyToClipboard).not.toHaveBeenCalled();
@@ -1269,6 +1298,7 @@ describe('WatchlistPage', () => {
     await screen.findByRole('dialog', { name: 'Edit watch' });
 
     fireEvent.keyDown(window, { key: 'C', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
 
     expect(copyToClipboard).not.toHaveBeenCalled();
   });

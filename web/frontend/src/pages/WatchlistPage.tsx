@@ -234,6 +234,7 @@ export function WatchlistPage() {
   const csvDownloadStatusTimerRef = useRef<number | null>(null);
   const jsonDownloadStatusTimerRef = useRef<number | null>(null);
   const jsonCopyStatusTimerRef = useRef<number | null>(null);
+  const jsonCopyBusyRef = useRef(false);
   const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
@@ -1213,16 +1214,25 @@ export function WatchlistPage() {
   };
 
   const copyWatchlistJson = async () => {
-    const json = formatWatchlistJsonExport({
-      items: buildWatchlistExportItems(),
-      activeCount,
-      activeCap,
-      filterNote: buildWatchlistFilterNote(),
-    });
-    const ok = await copyToClipboard(json);
-    flashJsonCopyStatus(ok ? 'copied' : 'failed');
-    if (!ok) {
+    if (jsonCopyBusyRef.current) return;
+    jsonCopyBusyRef.current = true;
+    try {
+      const json = formatWatchlistJsonExport({
+        items: buildWatchlistExportItems(),
+        activeCount,
+        activeCap,
+        filterNote: buildWatchlistFilterNote(),
+      });
+      const ok = await copyToClipboard(json);
+      flashJsonCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy watchlist JSON — try Download .json instead.');
+      }
+    } catch {
+      flashJsonCopyStatus('failed');
       setError('Could not copy watchlist JSON — try Download .json instead.');
+    } finally {
+      jsonCopyBusyRef.current = false;
     }
   };
 
