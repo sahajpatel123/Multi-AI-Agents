@@ -115,10 +115,12 @@ import {
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
   isArenaReRunRoundKey,
+  isArenaSaveAllTakesKey,
   isArenaSaveWinnerKey,
   isArenaShareRoundKey,
   isArenaVerifyWinnerKey,
 } from './lib/keyboardShortcuts';
+import { bulkSaveNotice, unsavedTakes } from './lib/arenaSavedTakes';
 import { RecentPromptChips } from './components/RecentPromptChips';
 import { usePanel } from './context/PanelContext';
 import { useTier } from './context/TierContext';
@@ -181,6 +183,7 @@ function App() {
   const [winnerCopied, setWinnerCopied] = useState(false);
   const [winnerDownloaded, setWinnerDownloaded] = useState(false);
   const [winnerSaveFeedback, setWinnerSaveFeedback] = useState<'saved' | 'removed' | null>(null);
+  const [allTakesSaveFeedback, setAllTakesSaveFeedback] = useState<string | null>(null);
   const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
   const [followUpSuggestionsSource, setFollowUpSuggestionsSource] = useState<'llm' | 'fallback'>('llm');
   const [recentPrompts, setRecentPrompts] = useState<RecentPrompt[]>(() => loadRecentPrompts());
@@ -370,6 +373,8 @@ function App() {
   const verifyWinnerInFlightRef = useRef(false);
   /** Owns the save-winner button feedback so rapid toggles can't leave stale timers. */
   const winnerSaveFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Owns the save-all-takes button feedback so rapid presses can't leave stale timers. */
+  const allTakesSaveFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushStreamPreviews = useCallback(() => {
     const next: Record<string, string> = {};
@@ -1269,6 +1274,34 @@ function App() {
     }, 1800);
   }, [activeTurnId, canUseFeature, handleSaveResponse, response, savedItems]);
 
+  /**
+   * Save every take in the finished round to the saved-takes library. Takes
+   * already bookmarked for this session are skipped so the toggle semantics
+   * of the per-take save never unsave them by accident.
+   */
+  const handleSaveAllTakes = useCallback(() => {
+    if (!response || !activeTurnId) return;
+    const missing = unsavedTakes(response, savedItems);
+    const total = response.all_responses.length;
+    const showFeedback = (label: string) => {
+      if (allTakesSaveFeedbackTimer.current) {
+        window.clearTimeout(allTakesSaveFeedbackTimer.current);
+      }
+      setAllTakesSaveFeedback(label);
+      allTakesSaveFeedbackTimer.current = window.setTimeout(() => {
+        setAllTakesSaveFeedback(null);
+        allTakesSaveFeedbackTimer.current = null;
+      }, 1800);
+    };
+    if (missing.length === 0) {
+      showFeedback(bulkSaveNotice(total, 0));
+      return;
+    }
+    missing.forEach((take) => handleSaveResponse(take));
+    void track('arena_save_all_takes', undefined, undefined, { takes: missing.length });
+    showFeedback(bulkSaveNotice(total, missing.length));
+  }, [activeTurnId, handleSaveResponse, response, savedItems]);
+
   // Keyboard-first Arena actions: Shift+C / Shift+D / Shift+S / Shift+V /
   // Shift+Q / Shift+E / Shift+K / Shift+R / Shift+U / Shift+I / Shift+O /
   // Shift+J mirror the header action buttons once a round has finished. Form
@@ -1313,6 +1346,9 @@ function App() {
       } else if (isArenaSaveWinnerKey(e)) {
         e.preventDefault();
         handleSaveWinner();
+      } else if (isArenaSaveAllTakesKey(e)) {
+        e.preventDefault();
+        handleSaveAllTakes();
       } else if (isArenaVerifyWinnerKey(e)) {
         e.preventDefault();
         const winner = pickArenaWinner(response);
@@ -1363,6 +1399,7 @@ function App() {
     handleDownloadWinner,
     handleExportWinner,
     handleExportAllTakes,
+    handleSaveAllTakes,
     handleCopyTranscript,
     handleShareRound,
     handleSaveWinner,
@@ -2378,6 +2415,7 @@ function App() {
     if (transcriptCsvDownloadFeedbackTimer.current) clearTimeout(transcriptCsvDownloadFeedbackTimer.current);
     if (arenaCsvDownloadFeedbackTimer.current) clearTimeout(arenaCsvDownloadFeedbackTimer.current);
     if (winnerSaveFeedbackTimer.current) clearTimeout(winnerSaveFeedbackTimer.current);
+    if (allTakesSaveFeedbackTimer.current) clearTimeout(allTakesSaveFeedbackTimer.current);
   }, []);
 
   const handleFocusedAgentSubmit = async (message: string) => {
@@ -2575,6 +2613,10 @@ function App() {
   const winnerIsSaved = winnerTake
     ? savedKeys.has(`${response?.session_id}:${winnerTake.response.agent_id}`)
     : false;
+  const allTakesSaved =
+    response !== null &&
+    response.all_responses.length > 0 &&
+    unsavedTakes(response, savedItems).length === 0;
   const focusedTargetStyle = {
     left: isMobile ? '0' : '50%',
     top: isMobile ? 'auto' : '50%',
@@ -2830,6 +2872,20 @@ function App() {
                         : winnerIsSaved
                           ? 'Unsave winner'
                           : 'Save winner'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={handleSaveAllTakes}
+                    aria-keyshortcuts="Shift+B"
+                    title={
+                      allTakesSaved
+                        ? 'All four takes are already in your saved library (Shift+B)'
+                        : 'Save all four takes to your saved library (Shift+B)'
+                    }
+                    style={{ fontSize: 12 }}
+                  >
+                    {allTakesSaveFeedback ?? (allTakesSaved ? 'All takes saved' : 'Save all takes')}
                   </button>
                   <button
                     type="button"

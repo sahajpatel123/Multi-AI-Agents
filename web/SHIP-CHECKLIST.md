@@ -118,6 +118,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Perspective drift copy**: Room drift panel exports score, clusters, and divergences as markdown (room name in title) with clipboard feedback.
 - **Room board copy**: export the research board (or current search filter) as markdown — titles, authors, scores, excerpts.
 - **Saved takes bulk copy**: sidebar “Copy all” exports filtered bookmarks as markdown (mind, question, take, score).
+- **Arena save all takes**: one click or Shift+B saves the full four-take panel to Saved, skipping already-bookmarked minds and reporting “all already saved” honestly.
 - **Arena recents copy**: sidebar Recents “Copy” exports filtered turns (title, prompt, winner, category) as markdown.
 - **Download .md**: Arena four-mind comparison and Agent answers can download markdown files (not only clipboard).
 - **Answer evolution export**: Agent temporal evolution panel supports copy + download markdown (score, shifts, related runs).

@@ -16,6 +16,7 @@ import {
   isArenaDownloadWinnerKey,
   isArenaNewTaskKey,
   isArenaReRunRoundKey,
+  isArenaSaveAllTakesKey,
   isArenaSaveWinnerKey,
   isArenaShareRoundKey,
   isArenaVerifyWinnerKey,
@@ -128,6 +129,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('arena').some(
         (s) => s.keys === 'Shift + S' && s.action.toLowerCase().includes('winning take'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('arena').some(
+        (s) => s.keys === 'Shift + B' && s.action.toLowerCase().includes('all four takes'),
       ),
     ).toBe(true);
     expect(
@@ -364,6 +370,13 @@ describe('keyboardShortcuts', () => {
     expect(isArenaSaveWinnerKey({ key: 'S' })).toBe(false);
     expect(isArenaSaveWinnerKey({ key: 'S', shiftKey: true, ctrlKey: true })).toBe(false);
     expect(isArenaSaveWinnerKey({ key: 'C', shiftKey: true })).toBe(false);
+
+    expect(isArenaSaveAllTakesKey({ key: 'B', shiftKey: true })).toBe(true);
+    expect(isArenaSaveAllTakesKey({ key: 'b', shiftKey: true })).toBe(true);
+    expect(isArenaSaveAllTakesKey({ key: 'B' })).toBe(false);
+    expect(isArenaSaveAllTakesKey({ key: 'B', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isArenaSaveAllTakesKey({ key: 'B', shiftKey: true, repeat: true })).toBe(false);
+    expect(isArenaSaveAllTakesKey({ key: 'S', shiftKey: true })).toBe(false);
 
     expect(isArenaVerifyWinnerKey({ key: 'V', shiftKey: true })).toBe(true);
     expect(isArenaVerifyWinnerKey({ key: 'v', shiftKey: true })).toBe(true);
