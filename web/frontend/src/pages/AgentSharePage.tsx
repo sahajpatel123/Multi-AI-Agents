@@ -7,6 +7,9 @@ import { MotionButton } from '../components/MotionButton';
 import MicroLoader from '../components/MicroLoader';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
+import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentTitle';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
@@ -26,6 +29,9 @@ export function AgentSharePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,6 +39,9 @@ export function AgentSharePage() {
     setError(null);
     setNotFound(false);
     setReport(null);
+    setCopyStatus('idle');
+    setDownloadStatus('idle');
+    setCopyError(null);
     getPublicAgentReport(token)
       .then((data) => {
         if (cancelled) return;
@@ -63,10 +72,60 @@ export function AgentSharePage() {
     [report],
   );
 
+  const exportMarkdown = useMemo(
+    () =>
+      report
+        ? formatAgentAnswerExport({
+            question: report.question || '',
+            answer: report.answer || '',
+          })
+        : '',
+    [report],
+  );
+
   useEffect(() => {
     applyAbsoluteDocumentTitle(`Agent report · ${title}`);
     return () => applyDocumentTitle('/share/agent');
   }, [title]);
+
+  useEffect(() => {
+    if (copyStatus === 'idle') return;
+    const hold = copyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => setCopyStatus('idle'), hold);
+    return () => window.clearTimeout(t);
+  }, [copyStatus]);
+
+  useEffect(() => {
+    if (downloadStatus === 'idle') return;
+    const hold = downloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => setDownloadStatus('idle'), hold);
+    return () => window.clearTimeout(t);
+  }, [downloadStatus]);
+
+  const handleCopyReport = async () => {
+    setCopyError(null);
+    if (!report) return;
+    const ok = await copyToClipboard(exportMarkdown);
+    if (ok) {
+      setCopyStatus('copied');
+    } else {
+      setCopyStatus('failed');
+      setCopyError('Could not copy the report — select the text manually.');
+    }
+  };
+
+  const handleDownloadReport = () => {
+    setCopyError(null);
+    if (!report) return;
+    const stem = `agent-share-${(report.title || report.question || 'report').slice(0, 40)}`;
+    const ok = downloadMarkdownFile(exportMarkdown, stem);
+    if (ok) {
+      setDownloadStatus('done');
+    } else {
+      setDownloadStatus('failed');
+      setCopyError('Could not download the report — try Copy report instead.');
+    }
+  };
 
   const goAgent = () => {
     if (isAuthenticated) {
@@ -165,6 +224,35 @@ export function AgentSharePage() {
                 <div className="share-take__section">
                   <p className="share-take__label">The report</p>
                   <AgentAnswerMarkdown markdown={report.answer} question={report.question} />
+                  {copyError ? (
+                    <p className="share-take__error" role="alert">
+                      {copyError}
+                    </p>
+                  ) : null}
+                  <div className="share-take__tools">
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${copyStatus === 'copied' ? ' is-success' : ''}`}
+                      onClick={() => void handleCopyReport()}
+                    >
+                      {copyStatus === 'copied'
+                        ? 'Report copied'
+                        : copyStatus === 'failed'
+                          ? 'Copy failed'
+                          : 'Copy report'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}`}
+                      onClick={handleDownloadReport}
+                    >
+                      {downloadStatus === 'done'
+                        ? 'Downloaded'
+                        : downloadStatus === 'failed'
+                          ? 'Download failed'
+                          : 'Download .md'}
+                    </button>
+                  </div>
                 </div>
                 <div className="share-take__ctas">
                   <MotionButton type="button" variant="primary" size="md" onClick={goAgent}>

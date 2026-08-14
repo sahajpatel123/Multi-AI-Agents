@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Public shared Agent reports offer Copy report and Download .md, so
+  visitors can take the full markdown report without signing in
 - Completed Agent Mode reports can be published as public share links
   (Share report in the result toolbar): the link copies to the clipboard,
   opens a sanitized public report page at /share/agent/:token, and can be

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AgentSharePage } from './AgentSharePage';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
+import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 
 vi.mock('../api', () => ({
   getPublicAgentReport: vi.fn(),
@@ -19,6 +21,14 @@ vi.mock('../api', () => ({
 
 vi.mock('../hooks/useAuth', () => ({
   useAuth: vi.fn(() => ({ isAuthenticated: false, user: null, loading: false })),
+}));
+
+vi.mock('../lib/clipboard', () => ({
+  copyToClipboard: vi.fn(),
+}));
+
+vi.mock('../lib/downloadTextFile', () => ({
+  downloadMarkdownFile: vi.fn(),
 }));
 
 vi.mock('../components/Navbar', () => ({
@@ -62,6 +72,8 @@ describe('AgentSharePage', () => {
       loading: false,
       isLoading: false,
     }));
+    vi.mocked(copyToClipboard).mockResolvedValue(true);
+    vi.mocked(downloadMarkdownFile).mockReturnValue(true);
   });
 
   it('renders a shared report question and answer', async () => {
@@ -113,5 +125,51 @@ describe('AgentSharePage', () => {
     renderShare('tok_abc');
     await screen.findByText('Is this report shareable?');
     expect(getPublicAgentReport).toHaveBeenCalledWith('tok_abc');
+  });
+
+  it('copies the report as markdown to the clipboard', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy report' }));
+    expect(await screen.findByText('Report copied')).toBeInTheDocument();
+    expect(copyToClipboard).toHaveBeenCalledWith(
+      expect.stringContaining('Is this report shareable?'),
+    );
+    expect(copyToClipboard).toHaveBeenCalledWith(
+      expect.stringContaining('Yes, with a token and a public page.'),
+    );
+  });
+
+  it('shows an honest error when the clipboard copy fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy report' }));
+    expect(await screen.findByText(/could not copy the report/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy failed' })).toBeInTheDocument();
+  });
+
+  it('downloads the report as a markdown file', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Download .md' }));
+    expect(await screen.findByText('Downloaded')).toBeInTheDocument();
+    expect(downloadMarkdownFile).toHaveBeenCalledWith(
+      expect.stringContaining('Yes, with a token and a public page.'),
+      expect.stringContaining('agent-share-'),
+    );
+  });
+
+  it('shows an honest error when the download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadMarkdownFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Download .md' }));
+    expect(await screen.findByText(/could not download the report/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download failed' })).toBeInTheDocument();
   });
 });
