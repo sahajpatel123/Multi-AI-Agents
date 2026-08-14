@@ -46,6 +46,7 @@ import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib
 import {
   isWatchlistCopyKey,
   isWatchlistDownloadCsvKey,
+  isWatchlistDownloadJsonKey,
   isWatchlistDownloadMarkdownKey,
   isWatchlistDownloadStatsCsvKey,
   isWatchlistRunAllKey,
@@ -62,6 +63,7 @@ import {
   formatWatchlistExport,
   formatWatchlistCsvExport,
   formatWatchlistItemCopy,
+  formatWatchlistJsonExport,
   formatWatchlistQuestionCopy,
 } from '../lib/watchlistExport';
 import {
@@ -162,6 +164,7 @@ export function WatchlistPage() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [csvDownloadStatus, setCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Per-card copy: which item id last acted, and which action. */
   const [itemCopyId, setItemCopyId] = useState<string | null>(null);
   const [itemCopyKind, setItemCopyKind] = useState<'watch' | 'question' | null>(null);
@@ -217,6 +220,7 @@ export function WatchlistPage() {
     copyWatchlist: () => Promise<void>;
     downloadWatchlist: () => void;
     downloadWatchlistCsv: () => void;
+    downloadWatchlistJson: () => void;
     downloadStatsCsv: (() => Promise<void>) | null;
     runAllNow: (() => void) | null;
   } | null>(null);
@@ -225,6 +229,7 @@ export function WatchlistPage() {
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
   const csvDownloadStatusTimerRef = useRef<number | null>(null);
+  const jsonDownloadStatusTimerRef = useRef<number | null>(null);
   const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
@@ -759,6 +764,9 @@ export function WatchlistPage() {
       if (csvDownloadStatusTimerRef.current != null) {
         window.clearTimeout(csvDownloadStatusTimerRef.current);
       }
+      if (jsonDownloadStatusTimerRef.current != null) {
+        window.clearTimeout(jsonDownloadStatusTimerRef.current);
+      }
       if (historyCopyTimerRef.current != null) {
         window.clearTimeout(historyCopyTimerRef.current);
       }
@@ -816,6 +824,17 @@ export function WatchlistPage() {
     csvDownloadStatusTimerRef.current = window.setTimeout(() => {
       setCsvDownloadStatus('idle');
       csvDownloadStatusTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashJsonDownloadStatus = (status: 'done' | 'failed') => {
+    if (jsonDownloadStatusTimerRef.current != null) {
+      window.clearTimeout(jsonDownloadStatusTimerRef.current);
+    }
+    setJsonDownloadStatus(status);
+    jsonDownloadStatusTimerRef.current = window.setTimeout(() => {
+      setJsonDownloadStatus('idle');
+      jsonDownloadStatusTimerRef.current = null;
     }, status === 'done' ? 2200 : 3200);
   };
 
@@ -1085,7 +1104,7 @@ export function WatchlistPage() {
       expertiseDomain: item.expertise_domain,
     }));
 
-  const buildWatchlistMarkdown = () => {
+  const buildWatchlistFilterNote = () => {
     const filterBits: string[] = [];
     if (statusFilter !== 'all') filterBits.push(`status: ${statusFilter}`);
     if (cadenceFilter !== 'all') {
@@ -1108,11 +1127,15 @@ export function WatchlistPage() {
     const q = searchQuery.trim();
     if (q) filterBits.push(`search: “${q}”`);
     if (listSort !== 'next_soon') filterBits.push(`sort: ${watchlistSortLabel(listSort)}`);
+    return filterBits.length > 0 ? filterBits.join(' · ') : undefined;
+  };
+
+  const buildWatchlistMarkdown = () => {
     return formatWatchlistExport({
       items: buildWatchlistExportItems(),
       activeCount,
       activeCap,
-      filterNote: filterBits.length > 0 ? filterBits.join(' · ') : undefined,
+      filterNote: buildWatchlistFilterNote(),
     });
   };
 
@@ -1152,6 +1175,25 @@ export function WatchlistPage() {
     }
   };
 
+  const downloadWatchlistJson = () => {
+    const json = formatWatchlistJsonExport({
+      items: buildWatchlistExportItems(),
+      activeCount,
+      activeCap,
+      filterNote: buildWatchlistFilterNote(),
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('agent-watchlist')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    if (ok) {
+      flashJsonDownloadStatus('done');
+    } else {
+      flashJsonDownloadStatus('failed');
+      setError('Could not download watchlist JSON — try Copy instead.');
+    }
+  };
+
   const downloadStatsCsv = async () => {
     if (statsDownloadBusyRef.current) return;
     statsDownloadBusyRef.current = true;
@@ -1183,16 +1225,18 @@ export function WatchlistPage() {
           copyWatchlist,
           downloadWatchlist,
           downloadWatchlistCsv,
+          downloadWatchlistJson,
           downloadStatsCsv: stats ? downloadStatsCsv : null,
           runAllNow: activeCount > 0 && !runAllBusy ? onRunAllNow : null,
         }
       : null;
 
-  // Keyboard-first watchlist actions: Shift+C / Shift+D / Shift+E / Shift+F
-  // mirror the export buttons, and Shift+R starts every active watch. Form
-  // controls are skipped so normal Shift+letter typing is never swallowed,
-  // and open dialogs keep ownership of their keystrokes. The actions ref is
-  // only populated when the matching visible control is available.
+  // Keyboard-first watchlist actions: Shift+C / Shift+D / Shift+E / Shift+J /
+  // Shift+F mirror the export buttons, and Shift+R starts every active watch.
+  // Form controls are skipped so normal Shift+letter typing is never
+  // swallowed, and open dialogs keep ownership of their keystrokes. The
+  // actions ref is only populated when the matching visible control is
+  // available.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isAriaModalOpen()) return;
@@ -1208,6 +1252,9 @@ export function WatchlistPage() {
       } else if (isWatchlistDownloadCsvKey(e)) {
         e.preventDefault();
         actions.downloadWatchlistCsv();
+      } else if (isWatchlistDownloadJsonKey(e)) {
+        e.preventDefault();
+        actions.downloadWatchlistJson();
       } else if (isWatchlistDownloadStatsCsvKey(e)) {
         if (!actions.downloadStatsCsv) return;
         e.preventDefault();
@@ -1407,6 +1454,32 @@ export function WatchlistPage() {
                 : csvDownloadStatus === 'failed'
                   ? 'Failed'
                   : 'Download .csv'}
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadWatchlistJson()}
+              title="Download current view as JSON (Shift+J)"
+              aria-keyshortcuts="Shift+J"
+              aria-label={
+                jsonDownloadStatus === 'done'
+                  ? 'Watchlist JSON downloaded'
+                  : jsonDownloadStatus === 'failed'
+                    ? 'JSON download failed'
+                    : 'Download watchlist as JSON'
+              }
+              className={[
+                'watchlist-header-btn',
+                jsonDownloadStatus === 'done' ? 'watchlist-header-btn--ok' : '',
+                jsonDownloadStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {jsonDownloadStatus === 'done'
+                ? 'Downloaded'
+                : jsonDownloadStatus === 'failed'
+                  ? 'Failed'
+                  : 'Download .json'}
             </button>
           </div>
         ) : null}

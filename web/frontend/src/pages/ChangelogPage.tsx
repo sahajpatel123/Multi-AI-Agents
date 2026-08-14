@@ -260,6 +260,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Sidebar Chats: duplicate any chat as a fresh, independent fork',
       '[NEW] Sidebar Chats: filter to pinned-only chats with one click',
       '[IMPROVED] Sidebar Chats: pinned-only view recovers automatically when the last pinned chat is unpinned',
+      '[NEW] Watchlist: download the current filtered view as JSON (Shift+J) — snake_case fields, filter note, and active-count context for scripts',
     ],
   },
   {

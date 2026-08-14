@@ -212,3 +212,56 @@ export function formatWatchlistCsvExport(items: WatchlistExportItem[]): string {
   }
   return `\uFEFF${lines.join('\r\n')}\r\n`;
 }
+
+/**
+ * JSON export of the current watchlist view.
+ *
+ * Keeps the same columns and semantics as the CSV export (snake_case field
+ * names), so a downloaded JSON file can be dropped into scripts without a
+ * second mapping step. Includes export timestamp, active-count context, and
+ * any filter note so the file is self-describing outside the app.
+ */
+export function formatWatchlistJsonExport(opts: {
+  items: WatchlistExportItem[];
+  activeCount?: number;
+  activeCap?: number;
+  filterNote?: string;
+  exportedAt?: string;
+}): string {
+  const items = (opts.items || []).map((item) => ({
+    question: (item.question || '').trim() || '(untitled question)',
+    status: item.isActive ? 'active' : 'paused',
+    cadence_hours:
+      typeof item.intervalHours === 'number' && Number.isFinite(item.intervalHours)
+        ? Math.max(0, Math.floor(item.intervalHours))
+        : null,
+    runs:
+      typeof item.runCount === 'number' && Number.isFinite(item.runCount)
+        ? Math.max(0, Math.floor(item.runCount))
+        : null,
+    last_run_at: item.lastRunAt || null,
+    next_run_at: item.isActive && item.nextRunAt ? item.nextRunAt : null,
+    latest_title: (item.latestTitle || '').trim() || null,
+    latest_score:
+      typeof item.latestScore === 'number' && Number.isFinite(item.latestScore)
+        ? Math.round(item.latestScore)
+        : null,
+    expertise_level: (item.expertiseLevel || '').trim() || null,
+    expertise_domain: (item.expertiseDomain || '').trim() || null,
+  }));
+
+  const payload: Record<string, unknown> = {
+    exported_at: opts.exportedAt || new Date().toISOString(),
+  };
+  if (typeof opts.activeCount === 'number' && Number.isFinite(opts.activeCount)) {
+    payload.active_count = opts.activeCount;
+  }
+  if (typeof opts.activeCap === 'number' && Number.isFinite(opts.activeCap)) {
+    payload.active_cap = opts.activeCap;
+  }
+  const filterNote = (opts.filterNote || '').trim();
+  if (filterNote) payload.filter_note = filterNote;
+  payload.items = items;
+
+  return JSON.stringify(payload, null, 2) + '\n';
+}

@@ -3,6 +3,7 @@ import {
   formatWatchlistExport,
   formatWatchlistCsvExport,
   formatWatchlistItemCopy,
+  formatWatchlistJsonExport,
   formatWatchlistQuestionCopy,
 } from './watchlistExport';
 
@@ -211,5 +212,98 @@ describe('formatWatchlistCsvExport', () => {
       { question: '   ', intervalHours: NaN, isActive: true },
     ]);
     expect(csv).toContain('"(untitled question)","active","","","","","","","",""');
+  });
+});
+
+describe('formatWatchlistJsonExport', () => {
+  it('renders a self-describing JSON payload with snake_case fields', () => {
+    const json = formatWatchlistJsonExport({
+      items: [
+        {
+          question: 'How is the Indian IPO market evolving?',
+          intervalHours: 24,
+          isActive: true,
+          runCount: 3,
+          lastRunAt: '2026-07-18T10:00:00Z',
+          nextRunAt: '2026-07-19T10:00:00Z',
+          latestTitle: 'IPO market mid-year recap',
+          latestScore: 82,
+          expertiseLevel: 'expert',
+          expertiseDomain: 'finance',
+        },
+        {
+          question: 'Will the monsoon affect Indian agriculture exports?',
+          intervalHours: 168,
+          isActive: false,
+          runCount: 0,
+          nextRunAt: '2026-07-20T10:00:00Z',
+        },
+      ],
+      activeCount: 1,
+      activeCap: 10,
+      filterNote: 'status: active',
+      exportedAt: '2026-08-14T00:00:00.000Z',
+    });
+
+    const parsed = JSON.parse(json) as {
+      exported_at: string;
+      active_count: number;
+      active_cap: number;
+      filter_note: string;
+      items: Array<Record<string, unknown>>;
+    };
+    expect(parsed.exported_at).toBe('2026-08-14T00:00:00.000Z');
+    expect(parsed.active_count).toBe(1);
+    expect(parsed.active_cap).toBe(10);
+    expect(parsed.filter_note).toBe('status: active');
+    expect(parsed.items).toHaveLength(2);
+    expect(parsed.items[0]).toEqual({
+      question: 'How is the Indian IPO market evolving?',
+      status: 'active',
+      cadence_hours: 24,
+      runs: 3,
+      last_run_at: '2026-07-18T10:00:00Z',
+      next_run_at: '2026-07-19T10:00:00Z',
+      latest_title: 'IPO market mid-year recap',
+      latest_score: 82,
+      expertise_level: 'expert',
+      expertise_domain: 'finance',
+    });
+    expect(parsed.items[1]).toMatchObject({
+      status: 'paused',
+      next_run_at: null,
+    });
+    expect(json.trimEnd()).toMatch(/^\{/);
+    expect(json.endsWith('\n')).toBe(true);
+  });
+
+  it('normalizes blank questions, non-finite numbers, and empty metadata', () => {
+    const parsed = JSON.parse(
+      formatWatchlistJsonExport({
+        items: [
+          {
+            question: '   ',
+            intervalHours: NaN,
+            isActive: true,
+            runCount: Infinity,
+            latestScore: -5,
+          },
+        ],
+        exportedAt: '2026-08-14T00:00:00.000Z',
+      }),
+    ) as { items: Array<Record<string, unknown>> };
+
+    expect(parsed.items[0]).toEqual({
+      question: '(untitled question)',
+      status: 'active',
+      cadence_hours: null,
+      runs: null,
+      last_run_at: null,
+      next_run_at: null,
+      latest_title: null,
+      latest_score: -5,
+      expertise_level: null,
+      expertise_domain: null,
+    });
   });
 });

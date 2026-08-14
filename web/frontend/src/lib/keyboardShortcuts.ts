@@ -98,6 +98,7 @@ const WATCHLIST: ShortcutHint[] = [
   { keys: 'Shift + C', action: 'Copy the current watchlist as markdown' },
   { keys: 'Shift + D', action: 'Download the current watchlist as markdown' },
   { keys: 'Shift + E', action: 'Download the current watchlist as CSV' },
+  { keys: 'Shift + J', action: 'Download the current watchlist as JSON' },
   { keys: 'Shift + F', action: 'Download watchlist statistics as CSV' },
   { keys: 'Esc', action: 'Cancel pending remove' },
   { keys: '?', action: 'Toggle this shortcuts list' },
@@ -432,6 +433,11 @@ export function isWatchlistDownloadMarkdownKey(event: ShortcutKeyEvent): boolean
 /** Shift+E — download the current watchlist view as a CSV file. */
 export function isWatchlistDownloadCsvKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'e');
+}
+
+/** Shift+J — download the current watchlist view as a JSON file. */
+export function isWatchlistDownloadJsonKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'j');
 }
 
 /** Shift+F — download the full watchlist statistics report as CSV. */

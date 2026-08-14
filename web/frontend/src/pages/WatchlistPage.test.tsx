@@ -948,6 +948,35 @@ describe('WatchlistPage', () => {
     expect(opts.mimeType).toBe('text/csv;charset=utf-8');
   });
 
+  it('downloads the current filtered view as JSON', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Download watchlist as JSON' }),
+    );
+
+    const { downloadTextFile } = await import('../lib/downloadTextFile');
+    expect(downloadTextFile).toHaveBeenCalledTimes(1);
+    const [json, opts] = vi.mocked(downloadTextFile).mock.calls[0];
+    const parsed = JSON.parse(json as string) as {
+      active_count: number;
+      active_cap: number;
+      items: Array<{ question: string; status: string; latest_score: number | null }>;
+    };
+    expect(parsed.active_count).toBe(1);
+    expect(parsed.active_cap).toBe(10);
+    expect(parsed.items).toHaveLength(2);
+    expect(parsed.items[0].question).toBe('How is the Indian IPO market evolving?');
+    expect(parsed.items[0].status).toBe('active');
+    expect(parsed.items[0].latest_score).toBe(82);
+    expect(parsed.items[1].status).toBe('paused');
+    expect(opts.filename).toMatch(/^agent-watchlist-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(opts.mimeType).toBe('application/json;charset=utf-8');
+  });
+
   it('copies the current watchlist as markdown with Shift+C', async () => {
     renderPage();
     await waitFor(() => {
@@ -995,6 +1024,24 @@ describe('WatchlistPage', () => {
     expect(csv).toContain('"question","status","cadenceHours"');
   });
 
+  it('downloads the current watchlist as JSON with Shift+J', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    const jsonButton = screen.getByRole('button', { name: 'Download watchlist as JSON' });
+    expect(jsonButton).toHaveAttribute('aria-keyshortcuts', 'Shift+J');
+
+    fireEvent.keyDown(window, { key: 'J', shiftKey: true });
+
+    expect(downloadTextFile).toHaveBeenCalledTimes(1);
+    const [json] = vi.mocked(downloadTextFile).mock.calls[0];
+    const parsed = JSON.parse(json as string) as { items: Array<{ question: string }> };
+    expect(parsed.items[0].question).toBe('How is the Indian IPO market evolving?');
+    expect(parsed.items[1].question).toBe('Will the monsoon affect Indian agriculture exports?');
+  });
+
   it('downloads watchlist statistics as CSV with Shift+F', async () => {
     renderPage();
     await waitFor(() => {
@@ -1036,6 +1083,7 @@ describe('WatchlistPage', () => {
     fireEvent.keyDown(window, { key: 'C', shiftKey: true });
     fireEvent.keyDown(window, { key: 'D', shiftKey: true });
     fireEvent.keyDown(window, { key: 'E', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'J', shiftKey: true });
     fireEvent.keyDown(window, { key: 'F', shiftKey: true });
 
     expect(copyToClipboard).not.toHaveBeenCalled();
