@@ -1074,6 +1074,91 @@ describe('WatchlistPage', () => {
     expect(parsed.items[1].question).toBe('Will the monsoon affect Indian agriculture exports?');
   });
 
+  it('copies the current filtered view as JSON', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Active' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Will the monsoon affect Indian agriculture exports?'),
+      ).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy watchlist as JSON' }));
+
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    });
+    const json = vi.mocked(copyToClipboard).mock.calls[0][0];
+    const parsed = JSON.parse(json as string) as {
+      exported_from: string;
+      active_count: number;
+      active_cap: number;
+      filter_note: string;
+      count: number;
+      items: Array<{ question: string; status: string; latest_score: number | null }>;
+    };
+    expect(parsed.exported_from).toBe('arena');
+    expect(parsed.active_count).toBe(1);
+    expect(parsed.active_cap).toBe(10);
+    expect(parsed.filter_note).toBe('status: active');
+    expect(parsed.count).toBe(1);
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0].question).toBe('How is the Indian IPO market evolving?');
+    expect(parsed.items[0].status).toBe('active');
+    expect(parsed.items[0].latest_score).toBe(82);
+    expect(
+      await screen.findByRole('button', { name: 'Watchlist JSON copied' }),
+    ).toBeInTheDocument();
+  });
+
+  it('copies the current watchlist as JSON with Shift+O', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    const jsonCopyButton = screen.getByRole('button', { name: 'Copy watchlist as JSON' });
+    expect(jsonCopyButton).toHaveAttribute('aria-keyshortcuts', 'Shift+O');
+
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
+
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    });
+    const json = vi.mocked(copyToClipboard).mock.calls[0][0];
+    const parsed = JSON.parse(json as string) as {
+      exported_from: string;
+      count: number;
+      items: Array<{ question: string }>;
+    };
+    expect(parsed.exported_from).toBe('arena');
+    expect(parsed.count).toBe(2);
+    expect(parsed.items[0].question).toBe('How is the Indian IPO market evolving?');
+    expect(parsed.items[1].question).toBe('Will the monsoon affect Indian agriculture exports?');
+  });
+
+  it('surfaces a JSON copy failure and marks the button as failed', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy watchlist as JSON' }));
+
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      await screen.findByText('Could not copy watchlist JSON — try Download .json instead.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'JSON copy failed' })).toBeInTheDocument();
+  });
+
   it('downloads watchlist statistics as CSV with Shift+F', async () => {
     renderPage();
     await waitFor(() => {

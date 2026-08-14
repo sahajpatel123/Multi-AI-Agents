@@ -45,6 +45,7 @@ import { filterBySearchQuery } from '../lib/sidebarSearch';
 import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import {
   isWatchlistCopyKey,
+  isWatchlistCopyJsonKey,
   isWatchlistDownloadCsvKey,
   isWatchlistDownloadJsonKey,
   isWatchlistDownloadMarkdownKey,
@@ -165,6 +166,7 @@ export function WatchlistPage() {
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [csvDownloadStatus, setCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [jsonCopyStatus, setJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   /** Per-card copy: which item id last acted, and which action. */
   const [itemCopyId, setItemCopyId] = useState<string | null>(null);
   const [itemCopyKind, setItemCopyKind] = useState<'watch' | 'question' | null>(null);
@@ -218,6 +220,7 @@ export function WatchlistPage() {
   const editTriggerRef = useRef<HTMLElement | null>(null);
   const watchlistExportActionsRef = useRef<{
     copyWatchlist: () => Promise<void>;
+    copyWatchlistJson: () => Promise<void>;
     downloadWatchlist: () => void;
     downloadWatchlistCsv: () => void;
     downloadWatchlistJson: () => void;
@@ -230,6 +233,7 @@ export function WatchlistPage() {
   const downloadStatusTimerRef = useRef<number | null>(null);
   const csvDownloadStatusTimerRef = useRef<number | null>(null);
   const jsonDownloadStatusTimerRef = useRef<number | null>(null);
+  const jsonCopyStatusTimerRef = useRef<number | null>(null);
   const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
@@ -767,6 +771,9 @@ export function WatchlistPage() {
       if (jsonDownloadStatusTimerRef.current != null) {
         window.clearTimeout(jsonDownloadStatusTimerRef.current);
       }
+      if (jsonCopyStatusTimerRef.current != null) {
+        window.clearTimeout(jsonCopyStatusTimerRef.current);
+      }
       if (historyCopyTimerRef.current != null) {
         window.clearTimeout(historyCopyTimerRef.current);
       }
@@ -836,6 +843,17 @@ export function WatchlistPage() {
       setJsonDownloadStatus('idle');
       jsonDownloadStatusTimerRef.current = null;
     }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashJsonCopyStatus = (status: 'copied' | 'failed') => {
+    if (jsonCopyStatusTimerRef.current != null) {
+      window.clearTimeout(jsonCopyStatusTimerRef.current);
+    }
+    setJsonCopyStatus(status);
+    jsonCopyStatusTimerRef.current = window.setTimeout(() => {
+      setJsonCopyStatus('idle');
+      jsonCopyStatusTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
   };
 
   const flashStatsDownloadStatus = (status: 'done' | 'failed') => {
@@ -1194,6 +1212,20 @@ export function WatchlistPage() {
     }
   };
 
+  const copyWatchlistJson = async () => {
+    const json = formatWatchlistJsonExport({
+      items: buildWatchlistExportItems(),
+      activeCount,
+      activeCap,
+      filterNote: buildWatchlistFilterNote(),
+    });
+    const ok = await copyToClipboard(json);
+    flashJsonCopyStatus(ok ? 'copied' : 'failed');
+    if (!ok) {
+      setError('Could not copy watchlist JSON — try Download .json instead.');
+    }
+  };
+
   const downloadStatsCsv = async () => {
     if (statsDownloadBusyRef.current) return;
     statsDownloadBusyRef.current = true;
@@ -1223,6 +1255,7 @@ export function WatchlistPage() {
     bodyMode === 'list' && items.length > 0
       ? {
           copyWatchlist,
+          copyWatchlistJson,
           downloadWatchlist,
           downloadWatchlistCsv,
           downloadWatchlistJson,
@@ -1232,7 +1265,8 @@ export function WatchlistPage() {
       : null;
 
   // Keyboard-first watchlist actions: Shift+C / Shift+D / Shift+E / Shift+J /
-  // Shift+F mirror the export buttons, and Shift+R starts every active watch.
+  // Shift+O / Shift+F mirror the export buttons, and Shift+R starts every
+  // active watch.
   // Form controls are skipped so normal Shift+letter typing is never
   // swallowed, and open dialogs keep ownership of their keystrokes. The
   // actions ref is only populated when the matching visible control is
@@ -1246,6 +1280,9 @@ export function WatchlistPage() {
       if (isWatchlistCopyKey(e)) {
         e.preventDefault();
         void actions.copyWatchlist();
+      } else if (isWatchlistCopyJsonKey(e)) {
+        e.preventDefault();
+        void actions.copyWatchlistJson();
       } else if (isWatchlistDownloadMarkdownKey(e)) {
         e.preventDefault();
         actions.downloadWatchlist();
@@ -1480,6 +1517,32 @@ export function WatchlistPage() {
                 : jsonDownloadStatus === 'failed'
                   ? 'Failed'
                   : 'Download .json'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyWatchlistJson()}
+              title="Copy current view as JSON (Shift+O)"
+              aria-keyshortcuts="Shift+O"
+              aria-label={
+                jsonCopyStatus === 'copied'
+                  ? 'Watchlist JSON copied'
+                  : jsonCopyStatus === 'failed'
+                    ? 'JSON copy failed'
+                    : 'Copy watchlist as JSON'
+              }
+              className={[
+                'watchlist-header-btn',
+                jsonCopyStatus === 'copied' ? 'watchlist-header-btn--ok' : '',
+                jsonCopyStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {jsonCopyStatus === 'copied'
+                ? 'Copied'
+                : jsonCopyStatus === 'failed'
+                  ? 'Copy failed'
+                  : 'Copy .json'}
             </button>
           </div>
         ) : null}

@@ -35,6 +35,7 @@ import {
   isThreadCopyJsonKey,
   isThreadDownloadJsonKey,
   isWatchlistCopyKey,
+  isWatchlistCopyJsonKey,
   isWatchlistDownloadCsvKey,
   isWatchlistDownloadJsonKey,
   isWatchlistDownloadMarkdownKey,
@@ -619,6 +620,13 @@ describe('keyboardShortcuts', () => {
     expect(isWatchlistDownloadJsonKey({ key: 'J', shiftKey: true, metaKey: true })).toBe(false);
     expect(isWatchlistDownloadJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
     expect(isWatchlistDownloadJsonKey({ key: 'E', shiftKey: true })).toBe(false);
+
+    expect(isWatchlistCopyJsonKey({ key: 'O', shiftKey: true })).toBe(true);
+    expect(isWatchlistCopyJsonKey({ key: 'o', shiftKey: true })).toBe(true);
+    expect(isWatchlistCopyJsonKey({ key: 'O' })).toBe(false);
+    expect(isWatchlistCopyJsonKey({ key: 'O', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isWatchlistCopyJsonKey({ key: 'O', shiftKey: true, repeat: true })).toBe(false);
+    expect(isWatchlistCopyJsonKey({ key: 'J', shiftKey: true })).toBe(false);
 
     expect(isWatchlistDownloadStatsCsvKey({ key: 'F', shiftKey: true })).toBe(true);
     expect(isWatchlistDownloadStatsCsvKey({ key: 'f', shiftKey: true })).toBe(true);

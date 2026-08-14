@@ -99,6 +99,7 @@ const WATCHLIST: ShortcutHint[] = [
   { keys: 'Shift + D', action: 'Download the current watchlist as markdown' },
   { keys: 'Shift + E', action: 'Download the current watchlist as CSV' },
   { keys: 'Shift + J', action: 'Download the current watchlist as JSON' },
+  { keys: 'Shift + O', action: 'Copy the current watchlist as JSON' },
   { keys: 'Shift + F', action: 'Download watchlist statistics as CSV' },
   { keys: 'Esc', action: 'Cancel pending remove' },
   { keys: '?', action: 'Toggle this shortcuts list' },
@@ -438,6 +439,14 @@ export function isWatchlistDownloadCsvKey(event: ShortcutKeyEvent): boolean {
 /** Shift+J — download the current watchlist view as a JSON file. */
 export function isWatchlistDownloadJsonKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'j');
+}
+
+/**
+ * Shift+O — copy the current watchlist view as JSON. Same letter as the other
+ * Arena surfaces so O consistently means "copy the structured export".
+ */
+export function isWatchlistCopyJsonKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'o');
 }
 
 /** Shift+F — download the full watchlist statistics report as CSV. */
