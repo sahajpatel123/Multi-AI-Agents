@@ -139,6 +139,8 @@ import {
 } from './types';
 
 const AGENT_IDS = ['agent_1', 'agent_2', 'agent_3', 'agent_4'] as const;
+const SAVED_TAKES_UPGRADE_COPY =
+  'Save your best responses, unlock all 16 minds, and build memory across sessions with Plus.';
 const EXAMPLE_PROMPTS = [
   'Should I quit my job and start a business?',
   'Is AI going to replace most jobs?',
@@ -1177,7 +1179,7 @@ function App() {
 
   const handleSaveResponse = useCallback((scoredAgent: ScoredAgent) => {
     if (!canUseFeature('saved_responses')) {
-      showPlusUpgrade('Save your best responses, unlock all 16 minds, and build memory across sessions with Plus.');
+      showPlusUpgrade(SAVED_TAKES_UPGRADE_COPY);
       return;
     }
     if (!activeTurnId || !response) return;
@@ -1281,6 +1283,10 @@ function App() {
    */
   const handleSaveAllTakes = useCallback(() => {
     if (!response || !activeTurnId) return;
+    if (!canUseFeature('saved_responses')) {
+      showPlusUpgrade(SAVED_TAKES_UPGRADE_COPY);
+      return;
+    }
     const missing = unsavedTakes(response, savedItems);
     const total = response.all_responses.length;
     const showFeedback = (label: string) => {
@@ -1300,11 +1306,11 @@ function App() {
     missing.forEach((take) => handleSaveResponse(take));
     void track('arena_save_all_takes', undefined, undefined, { takes: missing.length });
     showFeedback(bulkSaveNotice(total, missing.length));
-  }, [activeTurnId, handleSaveResponse, response, savedItems]);
+  }, [activeTurnId, canUseFeature, handleSaveResponse, response, savedItems, showPlusUpgrade]);
 
   // Keyboard-first Arena actions: Shift+C / Shift+D / Shift+S / Shift+V /
   // Shift+Q / Shift+E / Shift+K / Shift+R / Shift+U / Shift+I / Shift+O /
-  // Shift+J mirror the header action buttons once a round has finished. Form
+  // Shift+J / Shift+B mirror the header action buttons once a round has finished. Form
   // controls are skipped so normal Shift+letter typing is never swallowed.
   useEffect(() => {
     if (
@@ -2877,15 +2883,23 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={handleSaveAllTakes}
+                    disabled={response.all_responses.length === 0}
                     aria-keyshortcuts="Shift+B"
                     title={
-                      allTakesSaved
-                        ? 'All four takes are already in your saved library (Shift+B)'
-                        : 'Save all four takes to your saved library (Shift+B)'
+                      response.all_responses.length === 0
+                        ? 'No takes in this round to save'
+                        : allTakesSaved
+                          ? `All ${response.all_responses.length} takes are already in your saved library (Shift+B)`
+                          : `Save all ${response.all_responses.length} takes to your saved library (Shift+B)`
                     }
                     style={{ fontSize: 12 }}
                   >
-                    {allTakesSaveFeedback ?? (allTakesSaved ? 'All takes saved' : 'Save all takes')}
+                    {allTakesSaveFeedback ??
+                      (response.all_responses.length === 0
+                        ? 'No takes to save'
+                        : allTakesSaved
+                          ? 'All takes saved'
+                          : 'Save all takes')}
                   </button>
                   <button
                     type="button"

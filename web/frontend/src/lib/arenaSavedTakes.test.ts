@@ -55,6 +55,15 @@ describe('arenaSavedTakes', () => {
     expect(missing).toHaveLength(3);
   });
 
+  it('handles an empty panel without crashing or claiming saves', () => {
+    const emptyResponse = {
+      ...response,
+      all_responses: [],
+    } as unknown as Pick<PromptResponse, 'session_id' | 'all_responses'>;
+    expect(unsavedTakes(emptyResponse, savedItems)).toEqual([]);
+    expect(bulkSaveNotice(0, 0)).toBe('Nothing to save yet');
+  });
+
   it('builds honest labels for zero, partial, and full saves', () => {
     expect(bulkSaveNotice(4, 0)).toBe('All 4 takes are already saved');
     expect(bulkSaveNotice(4, 2)).toBe('Saving 2 takes…');
