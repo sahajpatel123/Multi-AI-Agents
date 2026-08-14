@@ -22,6 +22,7 @@ import {
   postAgentWatchlistDuplicate,
   postAgentWatchlistRun,
   type AgentWatchlistHistoryResponse,
+  type AgentWatchlistHistoryRun,
   type AgentWatchlistItem,
   type AgentWatchlistStatistics,
 } from '../api';
@@ -186,10 +187,16 @@ export function WatchlistPage() {
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [historyJsonDownloadStatus, setHistoryJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [historyCsvDownloadStatus, setHistoryCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  /** Inline per-run answer expansion: which run is open, plus copy feedback. */
+  const [historyAnswerTaskId, setHistoryAnswerTaskId] = useState<string | null>(null);
+  const [historyAnswerCopyStatus, setHistoryAnswerCopyStatus] = useState<
+    'idle' | 'copied' | 'failed'
+  >('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
   const historyJsonDownloadTimerRef = useRef<number | null>(null);
   const historyCsvDownloadTimerRef = useRef<number | null>(null);
+  const historyAnswerCopyTimerRef = useRef<number | null>(null);
   const [stats, setStats] = useState<AgentWatchlistStatistics | null>(null);
   const [statsDownloadBusy, setStatsDownloadBusy] = useState(false);
   const [statsDownloadStatus, setStatsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -260,14 +267,23 @@ export function WatchlistPage() {
     (itemId: string) => {
       if (historyOpenId === itemId) {
         setHistoryOpenId(null);
+        setHistoryAnswerTaskId(null);
+        setHistoryAnswerCopyStatus('idle');
         return;
       }
       setHistoryOpenId(itemId);
       setHistoryMoreError(null);
+      setHistoryAnswerTaskId(null);
+      setHistoryAnswerCopyStatus('idle');
       void loadWatchHistory(itemId);
     },
     [historyOpenId, loadWatchHistory],
   );
+
+  const toggleHistoryAnswer = useCallback((taskId: string) => {
+    setHistoryAnswerTaskId((current) => (current === taskId ? null : taskId));
+    setHistoryAnswerCopyStatus('idle');
+  }, []);
 
   const loadMoreWatchHistory = useCallback(
     async (itemId: string) => {
@@ -345,6 +361,8 @@ export function WatchlistPage() {
       loadMoreEpochRef.current += 1;
       setHistoryCache({});
       setHistoryOpenId(null);
+      setHistoryAnswerTaskId(null);
+      setHistoryAnswerCopyStatus('idle');
       setHistoryMoreBusyId(null);
       setHistoryMoreError(null);
     } catch (e) {
@@ -758,6 +776,9 @@ export function WatchlistPage() {
       if (historyCsvDownloadTimerRef.current != null) {
         window.clearTimeout(historyCsvDownloadTimerRef.current);
       }
+      if (historyAnswerCopyTimerRef.current != null) {
+        window.clearTimeout(historyAnswerCopyTimerRef.current);
+      }
       if (statsDownloadTimerRef.current != null) {
         window.clearTimeout(statsDownloadTimerRef.current);
       }
@@ -966,6 +987,31 @@ export function WatchlistPage() {
       setHistoryCsvDownloadStatus('idle');
       historyCsvDownloadTimerRef.current = null;
     }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashHistoryAnswerCopyStatus = (status: 'copied' | 'failed') => {
+    if (historyAnswerCopyTimerRef.current != null) {
+      window.clearTimeout(historyAnswerCopyTimerRef.current);
+    }
+    setHistoryAnswerCopyStatus(status);
+    historyAnswerCopyTimerRef.current = window.setTimeout(() => {
+      setHistoryAnswerCopyStatus('idle');
+      historyAnswerCopyTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const copyHistoryAnswer = async (run: AgentWatchlistHistoryRun) => {
+    const text = (run.final_answer || '').trim();
+    if (!text) {
+      flashHistoryAnswerCopyStatus('failed');
+      setError('No answer recorded for this run yet.');
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    flashHistoryAnswerCopyStatus(ok ? 'copied' : 'failed');
+    if (!ok) {
+      setError('Could not copy this answer — try again.');
+    }
   };
 
   const exportOpenWatchHistory = async (mode: 'copy' | 'download', question: string, itemId: string) => {
@@ -2192,43 +2238,116 @@ export function WatchlistPage() {
                                 <ul className="watchlist-history__list">
                                   {data.items.map((run) => {
                                     const score = run.final_score;
+                                    const runTitle = run.title?.trim() || 'Research run';
+                                    const hasAnswer = Boolean((run.final_answer || '').trim());
+                                    const answerOpen = historyAnswerTaskId === run.task_id;
                                     return (
-                                      <li key={run.task_id}>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            navigate(
-                                              `/agent?task_id=${encodeURIComponent(run.task_id)}`,
-                                            )
-                                          }
-                                          className="watchlist-history__run"
-                                        >
-                                          <div className="watchlist-history__run-row">
-                                            <span className="watchlist-history__run-title">
-                                              {run.title?.trim() || 'Research run'}
-                                            </span>
-                                            <span
+                                      <li key={run.task_id} className="watchlist-history__item">
+                                        <div className="watchlist-history__run-wrap">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              navigate(
+                                                `/agent?task_id=${encodeURIComponent(run.task_id)}`,
+                                              )
+                                            }
+                                            className="watchlist-history__run"
+                                          >
+                                            <div className="watchlist-history__run-row">
+                                              <span className="watchlist-history__run-title">
+                                                {runTitle}
+                                              </span>
+                                              <span
+                                                className={[
+                                                  'watchlist-score-chip',
+                                                  score == null
+                                                    ? 'watchlist-score-chip--neutral'
+                                                    : score >= 80
+                                                      ? 'watchlist-score-chip--high'
+                                                      : score >= 60
+                                                        ? 'watchlist-score-chip--mid'
+                                                        : 'watchlist-score-chip--low',
+                                                ].join(' ')}
+                                              >
+                                                {score != null ? `${score}/100` : '—'}
+                                              </span>
+                                            </div>
+                                            <div className="watchlist-history__run-meta">
+                                              {watchRelativePast(run.created_at)}
+                                              {run.user_feedback
+                                                ? ` · ${String(run.user_feedback)}`
+                                                : ''}
+                                            </div>
+                                          </button>
+                                          {hasAnswer ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => toggleHistoryAnswer(run.task_id)}
+                                              aria-expanded={answerOpen}
+                                              aria-controls={`watch-history-answer-${run.task_id}`}
+                                              aria-label={`${answerOpen ? 'Hide' : 'View'} answer for ${runTitle}`}
                                               className={[
-                                                'watchlist-score-chip',
-                                                score == null
-                                                  ? 'watchlist-score-chip--neutral'
-                                                  : score >= 80
-                                                    ? 'watchlist-score-chip--high'
-                                                    : score >= 60
-                                                      ? 'watchlist-score-chip--mid'
-                                                      : 'watchlist-score-chip--low',
-                                              ].join(' ')}
+                                                'watchlist-history__answer-toggle',
+                                                answerOpen ? 'watchlist-history__answer-toggle--open' : '',
+                                              ]
+                                                .filter(Boolean)
+                                                .join(' ')}
                                             >
-                                              {score != null ? `${score}/100` : '—'}
-                                            </span>
+                                              {answerOpen ? 'Hide answer' : 'Answer'}
+                                            </button>
+                                          ) : null}
+                                        </div>
+                                        {answerOpen ? (
+                                          <div
+                                            id={`watch-history-answer-${run.task_id}`}
+                                            className="watchlist-history__answer"
+                                          >
+                                            <p className="watchlist-history__answer-text">
+                                              {run.final_answer?.trim() || 'No answer recorded for this run yet.'}
+                                            </p>
+                                            <div className="watchlist-history__answer-actions">
+                                              <button
+                                                type="button"
+                                                onClick={() => void copyHistoryAnswer(run)}
+                                                aria-label={
+                                                  historyAnswerCopyStatus === 'copied'
+                                                    ? 'Answer copied'
+                                                    : historyAnswerCopyStatus === 'failed'
+                                                      ? 'Answer copy failed'
+                                                      : 'Copy this run answer'
+                                                }
+                                                className={[
+                                                  'watchlist-history__answer-btn',
+                                                  historyAnswerCopyStatus === 'copied'
+                                                    ? 'watchlist-history__answer-btn--ok'
+                                                    : '',
+                                                  historyAnswerCopyStatus === 'failed'
+                                                    ? 'watchlist-history__answer-btn--err'
+                                                    : '',
+                                                ]
+                                                  .filter(Boolean)
+                                                  .join(' ')}
+                                              >
+                                                {historyAnswerCopyStatus === 'copied'
+                                                  ? 'Copied'
+                                                  : historyAnswerCopyStatus === 'failed'
+                                                    ? 'Failed'
+                                                    : 'Copy answer'}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  navigate(
+                                                    `/agent?task_id=${encodeURIComponent(run.task_id)}`,
+                                                  )
+                                                }
+                                                className="watchlist-history__answer-btn"
+                                              >
+                                                Open full report
+                                              </button>
+                                            </div>
                                           </div>
-                                          <div className="watchlist-history__run-meta">
-                                            {watchRelativePast(run.created_at)}
-                                            {run.user_feedback
-                                              ? ` · ${String(run.user_feedback)}`
-                                              : ''}
-                                          </div>
-                                        </button>
+                                        ) : null}
                                       </li>
                                     );
                                   })}

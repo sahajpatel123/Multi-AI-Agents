@@ -2127,6 +2127,9 @@ export async function deleteAgentWatchlist(itemId: string): Promise<void> {
 export type AgentWatchlistHistoryRun = {
   task_id: string;
   title: string | null;
+  status?: string | null;
+  intelligence_score?: number | null;
+  final_answer?: string | null;
   final_score: number | null;
   final_confidence: number | null;
   user_feedback: string | null;

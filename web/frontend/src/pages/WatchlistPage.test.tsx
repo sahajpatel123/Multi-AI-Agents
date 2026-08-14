@@ -1197,6 +1197,131 @@ describe('WatchlistPage', () => {
     expect(calls[calls.length - 1][1]).toMatch(/^watch-history-.*\.csv$/);
   });
 
+  it('expands a run answer inline and copies it from the history panel', async () => {
+    getAgentWatchlistHistoryMock.mockResolvedValue({
+      items: [
+        {
+          task_id: 'task-1',
+          title: 'IPO market mid-year recap',
+          final_answer: 'The IPO pipeline remains strong, with three large listings expected.',
+          final_score: 82,
+          final_confidence: 0.72,
+          user_feedback: null,
+          created_at: '2026-07-18T10:00:00Z',
+        },
+      ],
+      stats: {
+        count: 1,
+        scored_count: 1,
+        avg_score: 82,
+        min_score: 82,
+        max_score: 82,
+      },
+      total: 1,
+      has_more: false,
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run history' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    });
+
+    const toggle = screen.getByRole('button', {
+      name: 'View answer for IPO market mid-year recap',
+    });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+
+    expect(
+      screen.getByText(
+        'The IPO pipeline remains strong, with three large listings expected.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Hide answer for IPO market mid-year recap' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy this run answer' }));
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledWith(
+        'The IPO pipeline remains strong, with three large listings expected.',
+      );
+    });
+    expect(screen.getByRole('button', { name: 'Answer copied' })).toBeInTheDocument();
+  });
+
+  it('hides a run answer and opens the full report from the history panel', async () => {
+    getAgentWatchlistHistoryMock.mockResolvedValue({
+      items: [
+        {
+          task_id: 'task-1',
+          title: 'IPO market mid-year recap',
+          final_answer: 'A concise answer to read inline.',
+          final_score: 82,
+          final_confidence: 0.72,
+          user_feedback: null,
+          created_at: '2026-07-18T10:00:00Z',
+        },
+      ],
+      stats: {
+        count: 1,
+        scored_count: 1,
+        avg_score: 82,
+        min_score: 82,
+        max_score: 82,
+      },
+      total: 1,
+      has_more: false,
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run history' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View answer for IPO market mid-year recap' }),
+    );
+    expect(screen.getByText('A concise answer to read inline.')).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Hide answer for IPO market mid-year recap' }),
+    );
+    expect(screen.queryByText('A concise answer to read inline.')).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View answer for IPO market mid-year recap' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open full report' }));
+    expect(navigateMock).toHaveBeenCalledWith('/agent?task_id=task-1');
+  });
+
+  it('does not show an answer toggle when a run has no final answer', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run history' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole('button', { name: /View answer for/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it('loads older runs from the history panel with pagination', async () => {
     getAgentWatchlistHistoryMock
       .mockResolvedValueOnce({
