@@ -3371,6 +3371,14 @@ async def get_watchlist_item_history(
     item_id: str,
     limit: int = Query(50, ge=1, le=200, description="Max number of history rows to return."),
     offset: int = Query(0, ge=0, description="Number of newest rows to skip for paging."),
+    before_task_id: Optional[str] = Query(
+        None,
+        description=(
+            "Cursor: task_id of the last loaded run; returns strictly older runs "
+            "so concurrent new runs cannot duplicate or skip rows. Falls back to "
+            "offset paging if the cursor row no longer exists."
+        ),
+    ),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -3399,7 +3407,14 @@ async def get_watchlist_item_history(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
         )
-    payload = get_watchlist_history(db, user.id, item.id, limit=limit, offset=offset)
+    payload = get_watchlist_history(
+        db,
+        user.id,
+        item.id,
+        limit=limit,
+        offset=offset,
+        before_task_id=before_task_id,
+    )
     return JSONResponse(
         content={
             "request_id": correlation_request_id(http_request),

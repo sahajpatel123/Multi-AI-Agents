@@ -1114,9 +1114,175 @@ describe('WatchlistPage', () => {
     });
 
     expect(getAgentWatchlistHistoryMock).toHaveBeenNthCalledWith(1, 'item-1', 30);
-    expect(getAgentWatchlistHistoryMock).toHaveBeenNthCalledWith(2, 'item-1', 50, 2);
+    expect(getAgentWatchlistHistoryMock).toHaveBeenNthCalledWith(
+      2,
+      'item-1',
+      50,
+      2,
+      'task-2',
+    );
     expect(
       screen.queryByRole('button', { name: 'Load older runs (1 more)' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('deduplicates overlapping load-more rows instead of repeating runs', async () => {
+    getAgentWatchlistHistoryMock
+      .mockResolvedValueOnce({
+        items: [
+          {
+            task_id: 'task-1',
+            title: 'IPO market mid-year recap',
+            final_score: 82,
+            final_confidence: 0.72,
+            user_feedback: null,
+            created_at: '2026-07-18T10:00:00Z',
+          },
+          {
+            task_id: 'task-2',
+            title: 'Earlier IPO recap',
+            final_score: 71,
+            final_confidence: 0.61,
+            user_feedback: null,
+            created_at: '2026-07-10T10:00:00Z',
+          },
+        ],
+        stats: {
+          count: 3,
+          scored_count: 3,
+          avg_score: 72.3,
+          min_score: 64,
+          max_score: 82,
+        },
+        total: 3,
+        has_more: true,
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            task_id: 'task-2',
+            title: 'Earlier IPO recap',
+            final_score: 71,
+            final_confidence: 0.61,
+            user_feedback: null,
+            created_at: '2026-07-10T10:00:00Z',
+          },
+          {
+            task_id: 'task-3',
+            title: 'Oldest IPO recap',
+            final_score: 64,
+            final_confidence: 0.55,
+            user_feedback: null,
+            created_at: '2026-07-01T10:00:00Z',
+          },
+        ],
+        stats: {
+          count: 3,
+          scored_count: 3,
+          avg_score: 72.3,
+          min_score: 64,
+          max_score: 82,
+        },
+        total: 3,
+        has_more: false,
+      });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run history' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Load older runs (1 more)' }));
+    await waitFor(() => {
+      expect(screen.getByText('Oldest IPO recap')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('Earlier IPO recap')).toHaveLength(1);
+  });
+
+  it('keeps loaded runs and allows retry when loading older runs fails', async () => {
+    getAgentWatchlistHistoryMock
+      .mockResolvedValueOnce({
+        items: [
+          {
+            task_id: 'task-1',
+            title: 'IPO market mid-year recap',
+            final_score: 82,
+            final_confidence: 0.72,
+            user_feedback: null,
+            created_at: '2026-07-18T10:00:00Z',
+          },
+          {
+            task_id: 'task-2',
+            title: 'Earlier IPO recap',
+            final_score: 71,
+            final_confidence: 0.61,
+            user_feedback: null,
+            created_at: '2026-07-10T10:00:00Z',
+          },
+        ],
+        stats: {
+          count: 3,
+          scored_count: 3,
+          avg_score: 72.3,
+          min_score: 64,
+          max_score: 82,
+        },
+        total: 3,
+        has_more: true,
+      })
+      .mockRejectedValueOnce(new ApiError('History exploded', 500))
+      .mockResolvedValueOnce({
+        items: [
+          {
+            task_id: 'task-3',
+            title: 'Oldest IPO recap',
+            final_score: 64,
+            final_confidence: 0.55,
+            user_feedback: null,
+            created_at: '2026-07-01T10:00:00Z',
+          },
+        ],
+        stats: {
+          count: 3,
+          scored_count: 3,
+          avg_score: 72.3,
+          min_score: 64,
+          max_score: 82,
+        },
+        total: 3,
+        has_more: false,
+      });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run history' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Load older runs (1 more)' }));
+    await waitFor(() => {
+      expect(screen.getByText('History exploded')).toBeInTheDocument();
+    });
+    expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    expect(screen.getByText('Earlier IPO recap')).toBeInTheDocument();
+
+    // The button returns to an enabled state so the user can retry.
+    const retryButton = screen.getByRole('button', {
+      name: 'Load older runs (1 more)',
+    });
+    expect(retryButton).not.toBeDisabled();
+    fireEvent.click(retryButton);
+    await waitFor(() => {
+      expect(screen.getByText('Oldest IPO recap')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('History exploded')).not.toBeInTheDocument();
   });
 });

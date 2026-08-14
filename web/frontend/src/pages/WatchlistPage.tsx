@@ -186,6 +186,10 @@ export function WatchlistPage() {
   const statsDownloadTimerRef = useRef<number | null>(null);
   const historyCacheRef = useRef(historyCache);
   historyCacheRef.current = historyCache;
+  /** Bumped whenever the history cache is replaced (forced reload / page
+   * refresh) so an in-flight "load older runs" response cannot append stale
+   * rows or stale total/has_more flags onto a refreshed cache. */
+  const loadMoreEpochRef = useRef(0);
   const errorRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const editQuestionRef = useRef<HTMLTextAreaElement | null>(null);
@@ -226,6 +230,7 @@ export function WatchlistPage() {
       const existing = historyCacheRef.current[itemId];
       if (existing && (existing.status === 'ready' || existing.status === 'loading')) return;
     }
+    loadMoreEpochRef.current += 1;
     setHistoryCache((prev) => ({ ...prev, [itemId]: { status: 'loading' } }));
     try {
       const data = await getAgentWatchlistHistory(itemId, 30);
@@ -259,13 +264,24 @@ export function WatchlistPage() {
       if (historyMoreBusyId === itemId) return;
       const hist = historyCacheRef.current[itemId];
       if (!hist || hist.status !== 'ready') return;
+      const lastRun = hist.data.items[hist.data.items.length - 1];
+      if (!lastRun) return;
+      const epoch = loadMoreEpochRef.current;
       setHistoryMoreBusyId(itemId);
       setHistoryMoreError(null);
       try {
-        const next = await getAgentWatchlistHistory(itemId, 50, hist.data.items.length);
+        // Cursor-based paging keeps load-more stable when new runs land
+        // between pages; the offset is a fallback if the cursor row is gone.
+        const next = await getAgentWatchlistHistory(
+          itemId,
+          50,
+          hist.data.items.length,
+          lastRun.task_id,
+        );
         setHistoryCache((prev) => {
           const current = prev[itemId];
           if (!current || current.status !== 'ready') return prev;
+          if (loadMoreEpochRef.current !== epoch) return prev;
           const seen = new Set(current.data.items.map((run) => run.task_id));
           const appended = next.items.filter((run) => !seen.has(run.task_id));
           return {
@@ -316,6 +332,7 @@ export function WatchlistPage() {
       setTotalCount(data.total);
       setBulkNotice(null);
       setLoadFailed(false);
+      loadMoreEpochRef.current += 1;
       setHistoryCache({});
       setHistoryOpenId(null);
       setHistoryMoreBusyId(null);

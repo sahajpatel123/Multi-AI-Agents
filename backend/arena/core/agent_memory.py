@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from arena.core.blackboard import Blackboard
@@ -624,6 +624,7 @@ def get_watchlist_history(
     limit: int = 50,
     max_limit: int = 200,
     offset: int = 0,
+    before_task_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """All spawned runs of a single watchlist item, newest first, with aggregate stats.
 
@@ -640,6 +641,13 @@ def get_watchlist_history(
     Limit is clamped to [1, max_limit] and offset to >= 0; the caller controls
     the ceiling so interactive history stays at 200 rows while export endpoints
     can opt into their advertised 500-row cap.
+
+    Paging is stable against concurrent inserts: pass ``before_task_id`` (the
+    task_id of the last loaded row) to fetch strictly older runs, so a new run
+    landing between pages cannot duplicate or skip rows. Ordering always
+    includes task_id as a tiebreaker for deterministic page boundaries. If the
+    cursor row no longer exists, the call falls back to ``offset`` paging so
+    the client never dead-ends on a stale cursor.
     """
     cap = max(1, min(int(limit), max_limit))
     off = max(0, int(offset))
@@ -648,14 +656,52 @@ def get_watchlist_history(
         AgentTask.watchlist_item_id == watchlist_item_id,
     )
     total = db.query(func.count(AgentTask.task_id)).filter(*base_filter).scalar() or 0
-    rows = (
-        db.query(AgentTask)
-        .filter(*base_filter)
-        .order_by(AgentTask.created_at.desc())
-        .offset(off)
-        .limit(cap)
-        .all()
-    )
+    order_by = (AgentTask.created_at.desc(), AgentTask.task_id.desc())
+
+    cursor_filter = None
+    if before_task_id and before_task_id.strip():
+        cursor_task_id = before_task_id.strip()
+        anchor = (
+            db.query(AgentTask)
+            .filter(
+                AgentTask.task_id == cursor_task_id,
+                AgentTask.user_id == user_id,
+                AgentTask.watchlist_item_id == watchlist_item_id,
+            )
+            .first()
+        )
+        if anchor is not None and anchor.created_at is not None:
+            cursor_filter = or_(
+                AgentTask.created_at < anchor.created_at,
+                and_(
+                    AgentTask.created_at == anchor.created_at,
+                    AgentTask.task_id < cursor_task_id,
+                ),
+            )
+            off = 0
+
+    if cursor_filter is not None:
+        # Fetch one extra row to derive has_more without depending on the
+        # full-count query, which can lag behind live inserts.
+        raw_rows = (
+            db.query(AgentTask)
+            .filter(*base_filter, cursor_filter)
+            .order_by(*order_by)
+            .limit(cap + 1)
+            .all()
+        )
+        has_more = len(raw_rows) > cap
+        rows = raw_rows[:cap]
+    else:
+        rows = (
+            db.query(AgentTask)
+            .filter(*base_filter)
+            .order_by(*order_by)
+            .offset(off)
+            .limit(cap)
+            .all()
+        )
+        has_more = off + len(rows) < total
 
     items = [
         {
@@ -690,7 +736,7 @@ def get_watchlist_history(
         "items": items,
         "stats": stats,
         "total": total,
-        "has_more": off + len(rows) < total,
+        "has_more": has_more,
     }
 
 
