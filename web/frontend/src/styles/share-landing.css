@@ -330,6 +330,24 @@
   background: rgba(232, 242, 236, 0.85);
 }
 
+.share-take__tools .arena-btn--secondary.is-error {
+  color: #993c1d;
+  border-color: rgba(153, 60, 29, 0.45);
+  background: rgba(249, 236, 230, 0.85);
+}
+
+.share-take__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .share-take__ctas {
   display: flex;
   flex-wrap: wrap;

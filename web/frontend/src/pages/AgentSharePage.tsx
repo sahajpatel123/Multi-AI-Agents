@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
@@ -32,6 +32,9 @@ export function AgentSharePage() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [copyInFlight, setCopyInFlight] = useState(false);
+  const copyBusyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +45,7 @@ export function AgentSharePage() {
     setCopyStatus('idle');
     setDownloadStatus('idle');
     setCopyError(null);
+    setDownloadError(null);
     getPublicAgentReport(token)
       .then((data) => {
         if (cancelled) return;
@@ -91,39 +95,55 @@ export function AgentSharePage() {
   useEffect(() => {
     if (copyStatus === 'idle') return;
     const hold = copyStatus === 'failed' ? 2800 : 1600;
-    const t = window.setTimeout(() => setCopyStatus('idle'), hold);
+    const t = window.setTimeout(() => {
+      setCopyStatus('idle');
+      setCopyError(null);
+    }, hold);
     return () => window.clearTimeout(t);
   }, [copyStatus]);
 
   useEffect(() => {
     if (downloadStatus === 'idle') return;
     const hold = downloadStatus === 'failed' ? 2800 : 2000;
-    const t = window.setTimeout(() => setDownloadStatus('idle'), hold);
+    const t = window.setTimeout(() => {
+      setDownloadStatus('idle');
+      setDownloadError(null);
+    }, hold);
     return () => window.clearTimeout(t);
   }, [downloadStatus]);
 
   const handleCopyReport = async () => {
+    if (copyBusyRef.current || !report) return;
+    copyBusyRef.current = true;
+    setCopyInFlight(true);
     setCopyError(null);
-    if (!report) return;
-    const ok = await copyToClipboard(exportMarkdown);
-    if (ok) {
-      setCopyStatus('copied');
-    } else {
+    try {
+      const ok = await copyToClipboard(exportMarkdown);
+      if (ok) {
+        setCopyStatus('copied');
+      } else {
+        setCopyStatus('failed');
+        setCopyError('Could not copy the report — select the text manually.');
+      }
+    } catch {
       setCopyStatus('failed');
       setCopyError('Could not copy the report — select the text manually.');
+    } finally {
+      copyBusyRef.current = false;
+      setCopyInFlight(false);
     }
   };
 
   const handleDownloadReport = () => {
-    setCopyError(null);
     if (!report) return;
+    setDownloadError(null);
     const stem = `agent-share-${(report.title || report.question || 'report').slice(0, 40)}`;
     const ok = downloadMarkdownFile(exportMarkdown, stem);
     if (ok) {
       setDownloadStatus('done');
     } else {
       setDownloadStatus('failed');
-      setCopyError('Could not download the report — try Copy report instead.');
+      setDownloadError('Could not download the report — try Copy report instead.');
     }
   };
 
@@ -229,13 +249,21 @@ export function AgentSharePage() {
                       {copyError}
                     </p>
                   ) : null}
+                  {downloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {downloadError}
+                    </p>
+                  ) : null}
                   <div className="share-take__tools">
                     <button
                       type="button"
-                      className={`arena-btn arena-btn--secondary arena-btn--sm${copyStatus === 'copied' ? ' is-success' : ''}`}
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${copyStatus === 'copied' ? ' is-success' : ''}${copyStatus === 'failed' ? ' is-error' : ''}`}
                       onClick={() => void handleCopyReport()}
+                      disabled={copyInFlight}
                     >
-                      {copyStatus === 'copied'
+                      {copyInFlight
+                        ? 'Copying…'
+                        : copyStatus === 'copied'
                         ? 'Report copied'
                         : copyStatus === 'failed'
                           ? 'Copy failed'
@@ -243,7 +271,7 @@ export function AgentSharePage() {
                     </button>
                     <button
                       type="button"
-                      className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}`}
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}${downloadStatus === 'failed' ? ' is-error' : ''}`}
                       onClick={handleDownloadReport}
                     >
                       {downloadStatus === 'done'
@@ -253,6 +281,10 @@ export function AgentSharePage() {
                           : 'Download .md'}
                     </button>
                   </div>
+                  <span className="share-take__status" role="status" aria-live="polite">
+                    {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
+                    {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
+                  </span>
                 </div>
                 <div className="share-take__ctas">
                   <MotionButton type="button" variant="primary" size="md" onClick={goAgent}>

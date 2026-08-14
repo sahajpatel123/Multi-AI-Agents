@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AgentSharePage } from './AgentSharePage';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
@@ -151,6 +151,63 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'Copy failed' })).toBeInTheDocument();
   });
 
+  it('reports failure when the clipboard call throws', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockRejectedValueOnce(new Error('clipboard blocked'));
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy report' }));
+    expect(await screen.findByText(/could not copy the report/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy failed' })).toBeInTheDocument();
+  });
+
+  it('keeps the copy button disabled while a copy is in flight', async () => {
+    let finishCopy: ((ok: boolean) => void) | undefined;
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishCopy = resolve;
+        }),
+    );
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy report' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: 'Copying…' })).toBeDisabled();
+    expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finishCopy?.(true);
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: 'Report copied' })).toBeEnabled();
+  });
+
+  it('resets copy feedback and clears the error after the feedback window', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+      vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+      renderShare();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Copy report' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole('button', { name: 'Copy failed' })).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent(/could not copy/i);
+      act(() => vi.advanceTimersByTime(2900));
+      expect(screen.queryByRole('button', { name: 'Copy failed' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('downloads the report as a markdown file', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     renderShare();
@@ -171,5 +228,42 @@ describe('AgentSharePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Download .md' }));
     expect(await screen.findByText(/could not download the report/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download failed' })).toBeInTheDocument();
+  });
+
+  it('resets download feedback and clears the error after the feedback window', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+      vi.mocked(downloadMarkdownFile).mockReturnValueOnce(false);
+      renderShare();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Download .md' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole('button', { name: 'Download failed' })).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent(/could not download/i);
+      act(() => vi.advanceTimersByTime(2900));
+      expect(
+        screen.queryByRole('button', { name: 'Download failed' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('announces copy and download outcomes through a live status region', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    const status = screen.getByRole('status');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy report' }));
+    expect(await screen.findByText(/Report copied to clipboard/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Download .md' }));
+    expect(await screen.findByText(/Report downloaded as markdown/)).toBeInTheDocument();
   });
 });
