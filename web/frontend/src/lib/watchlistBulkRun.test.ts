@@ -49,7 +49,14 @@ describe('runActiveWatchlistItems', () => {
   it('skips watches already re-checking (409)', async () => {
     const runner = vi
       .fn()
-      .mockRejectedValueOnce(new ApiError('Already re-checking', 409))
+      .mockRejectedValueOnce(
+        new ApiError('Already re-checking', 409, {
+          detail: {
+            error: 'watchlist_run_in_progress',
+            message: 'This watch is already re-checking; wait for the current run to finish.',
+          },
+        }),
+      )
       .mockResolvedValue({ task_id: 'task' });
     const result = await runActiveWatchlistItems([watch('a'), watch('b')], runner, 1);
 
@@ -88,6 +95,51 @@ describe('runActiveWatchlistItems', () => {
       { id: 'c', reason: 'rate_limited' },
     ]);
     expect(result.failed).toEqual([]);
+  });
+
+  it.each([401, 403])(
+    'stops the burst on %s and reports queued watches as auth-skips',
+    async (status) => {
+      const runner = vi
+        .fn()
+        .mockRejectedValueOnce(new ApiError('Session expired', status))
+        .mockResolvedValue({ task_id: 'task' });
+      const result = await runActiveWatchlistItems(
+        [watch('a'), watch('b'), watch('c')],
+        runner,
+        1,
+      );
+
+      expect(runner).toHaveBeenCalledTimes(1);
+      expect(result.started).toEqual([]);
+      expect(result.skipped).toEqual([
+        { id: 'a', reason: 'auth' },
+        { id: 'b', reason: 'auth' },
+        { id: 'c', reason: 'auth' },
+      ]);
+      expect(result.failed).toEqual([]);
+    },
+  );
+
+  it('does not mislabel a Condura local-execution 409 as already re-checking', async () => {
+    const runner = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ApiError('This task needs your machine.', 409, {
+          detail: {
+            error: 'requires_local_execution',
+            message: 'This task needs your machine.',
+          },
+        }),
+      )
+      .mockResolvedValue({ task_id: 'task' });
+    const result = await runActiveWatchlistItems([watch('a'), watch('b')], runner, 1);
+
+    expect(result.started).toEqual(['b']);
+    expect(result.skipped).toEqual([]);
+    expect(result.failed).toEqual([
+      { id: 'a', message: 'This task needs your machine.' },
+    ]);
   });
 
   it('reports unexpected failures with their message', async () => {
@@ -185,5 +237,18 @@ describe('formatWatchlistBulkRunNotice', () => {
         failed: [],
       }),
     ).toBe('No active watches to run.');
+  });
+
+  it('calls out a burst stopped by a session or access error', () => {
+    expect(
+      formatWatchlistBulkRunNotice({
+        started: ['a'],
+        skipped: [
+          { id: 'b', reason: 'auth' },
+          { id: 'c', reason: 'auth' },
+        ],
+        failed: [],
+      }),
+    ).toBe('Started 1 re-check. Stopped 2 (session or access error).');
   });
 });

@@ -196,6 +196,7 @@ export function WatchlistPage() {
     downloadStatsCsv: (() => Promise<void>) | null;
     runAllNow: (() => void) | null;
   } | null>(null);
+  const runAllBusyRef = useRef(false);
   const statsDownloadBusyRef = useRef(false);
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
@@ -421,7 +422,10 @@ export function WatchlistPage() {
   };
 
   const onRunAllNow = async () => {
-    if (runAllBusy || activeCount === 0) return;
+    if (runAllBusyRef.current || runAllBusy || activeCount === 0) return;
+    // The ref guards against a double click / repeated Shift+R landing
+    // before React re-renders with `runAllBusy` true.
+    runAllBusyRef.current = true;
     setRunAllBusy(true);
     setRunAllNotice(null);
     setError(null);
@@ -444,6 +448,7 @@ export function WatchlistPage() {
           : 'Could not run watches — check your connection and try again.',
       );
     } finally {
+      runAllBusyRef.current = false;
       setRunAllBusy(false);
     }
   };

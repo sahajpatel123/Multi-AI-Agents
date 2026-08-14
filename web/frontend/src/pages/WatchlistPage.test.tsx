@@ -419,7 +419,14 @@ describe('WatchlistPage', () => {
       total: 2,
     });
     postAgentWatchlistRunMock
-      .mockRejectedValueOnce(new ApiError('Already re-checking', 409))
+      .mockRejectedValueOnce(
+        new ApiError('Already re-checking', 409, {
+          detail: {
+            error: 'watchlist_run_in_progress',
+            message: 'This watch is already re-checking; wait for the current run to finish.',
+          },
+        }),
+      )
       .mockResolvedValue({
         success: true,
         task_id: 'task-new',
@@ -490,6 +497,49 @@ describe('WatchlistPage', () => {
     await waitFor(() => {
       expect(postAgentWatchlistRunMock).toHaveBeenCalledWith('item-1');
     });
+    expect(
+      await screen.findByText('Started 1 re-check.'),
+    ).toBeInTheDocument();
+  });
+
+  it('ignores a second run-all click while the burst is in flight', async () => {
+    let resolveRun:
+      | ((value: {
+          success: boolean;
+          task_id: string;
+          message: string;
+          item: AgentWatchlistItem;
+        }) => void)
+      | undefined;
+    postAgentWatchlistRunMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Run all (1)')).toBeInTheDocument();
+    });
+
+    const runAllButton = screen.getByRole('button', {
+      name: 'Run all 1 active watch now',
+    });
+    fireEvent.click(runAllButton);
+    fireEvent.click(runAllButton);
+
+    await waitFor(() => {
+      expect(postAgentWatchlistRunMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(resolveRun).toBeDefined();
+    resolveRun?.({
+      success: true,
+      task_id: 'task-new',
+      message: 'Watch re-check started',
+      item: { ...baseItem, run_count: 4, latest_task_id: 'task-new' },
+    });
+
     expect(
       await screen.findByText('Started 1 re-check.'),
     ).toBeInTheDocument();

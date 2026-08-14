@@ -5,7 +5,8 @@ import { ApiError, type AgentWatchlistItem } from '../api';
 export type WatchlistRunSkipReason =
   | 'in_progress'
   | 'no_question'
-  | 'rate_limited';
+  | 'rate_limited'
+  | 'auth';
 
 export type WatchlistBulkRunResult = {
   /** Watch ids whose re-check actually started. */
@@ -26,8 +27,10 @@ const DEFAULT_CONCURRENCY = 3;
  * The backend bounds manual runs at 12/hour/user (shared scope), so a burst
  * past the cap must stop instead of hammering the API: once a 429 arrives,
  * queued watches are skipped as `rate_limited` and no further requests fire.
- * Per-item errors that are just "this watch cannot run right now" become
- * skips, while unexpected failures are reported verbatim.
+ * A 401/403 session or access failure is just as global, so the burst stops
+ * and the remaining watches are skipped as `auth`. Per-item errors that are
+ * just "this watch cannot run right now" become skips, while unexpected
+ * failures are reported verbatim.
  */
 export async function runActiveWatchlistItems(
   items: readonly AgentWatchlistItem[],
@@ -39,13 +42,13 @@ export async function runActiveWatchlistItems(
   const skipped: Array<{ id: string; reason: WatchlistRunSkipReason }> = [];
   const failed: Array<{ id: string; message: string }> = [];
   const attempted = new Set<string>();
-  let rateLimitHit = false;
+  let stopReason: WatchlistRunSkipReason | null = null;
   let cursor = 0;
   const nextIndex = () => cursor++;
 
   const worker = async () => {
     while (true) {
-      if (rateLimitHit) return;
+      if (stopReason) return;
       const index = nextIndex();
       if (index >= active.length) return;
       const item = active[index];
@@ -55,9 +58,10 @@ export async function runActiveWatchlistItems(
         started.push(item.id);
       } catch (err) {
         const reason = runSkipReason(err);
-        if (reason === 'rate_limited') {
-          // Every remaining watch would hit the same limiter; stop the burst.
-          rateLimitHit = true;
+        if (reason === 'rate_limited' || reason === 'auth') {
+          // Every remaining watch would hit the same limiter or auth gate;
+          // stop the burst instead of firing requests that cannot succeed.
+          if (!stopReason) stopReason = reason;
           skipped.push({ id: item.id, reason });
           return;
         }
@@ -73,11 +77,11 @@ export async function runActiveWatchlistItems(
   const workerCount = Math.max(1, Math.min(concurrency, active.length));
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
-  // Watches that were still queued when the rate limit cut the burst off
-  // never got a request; report them honestly as rate-limited skips.
+  // Watches that were still queued when the burst was cut off never got a
+  // request; report them honestly with the reason that stopped the burst.
   for (const item of active) {
     if (!attempted.has(item.id)) {
-      skipped.push({ id: item.id, reason: 'rate_limited' });
+      skipped.push({ id: item.id, reason: stopReason ?? 'rate_limited' });
     }
   }
 
@@ -86,10 +90,34 @@ export async function runActiveWatchlistItems(
 
 function runSkipReason(err: unknown): WatchlistRunSkipReason | null {
   if (!(err instanceof ApiError)) return null;
-  if (err.status === 409) return 'in_progress';
+  if (err.status === 401 || err.status === 403) return 'auth';
+  if (err.status === 409) {
+    // 409 covers both "already re-checking" and a Condura local-execution
+    // rejection. Only the former is a harmless skip; the latter is an honest
+    // failure the user should see, not a status the run was "already busy".
+    return apiErrorCode(err) === 'watchlist_run_in_progress'
+      ? 'in_progress'
+      : null;
+  }
   if (err.status === 400) return 'no_question';
   if (err.status === 429) return 'rate_limited';
   return null;
+}
+
+function apiErrorCode(err: ApiError): string | null {
+  const detail = err.detail as
+    | { detail?: unknown; error?: unknown }
+    | null
+    | undefined;
+  const inner =
+    detail && typeof detail === 'object' && 'detail' in detail
+      ? detail.detail
+      : detail;
+  const error =
+    inner && typeof inner === 'object'
+      ? (inner as { error?: unknown }).error
+      : null;
+  return typeof error === 'string' ? error : null;
 }
 
 function errorMessage(err: unknown): string {
@@ -120,6 +148,9 @@ export function formatWatchlistBulkRunNotice(
   const skippedRateLimited = result.skipped.filter(
     (skip) => skip.reason === 'rate_limited',
   ).length;
+  const skippedAuth = result.skipped.filter(
+    (skip) => skip.reason === 'auth',
+  ).length;
 
   if (skippedInProgress > 0) {
     parts.push(
@@ -132,6 +163,11 @@ export function formatWatchlistBulkRunNotice(
   if (skippedRateLimited > 0) {
     parts.push(
       `Skipped ${skippedRateLimited} (rate or daily limit reached).`,
+    );
+  }
+  if (skippedAuth > 0) {
+    parts.push(
+      `Stopped ${skippedAuth} (session or access error).`,
     );
   }
 
