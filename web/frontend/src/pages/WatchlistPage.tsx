@@ -11,6 +11,7 @@ import {
   ApiError,
   createAgentTaskShare,
   deleteAgentWatchlist,
+  exportAgentWatchlistHistoryCsv,
   exportAgentWatchlistHistoryJson,
   exportAgentWatchlistStatisticsCsv,
   getAgentWatchlist,
@@ -184,9 +185,11 @@ export function WatchlistPage() {
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [historyJsonDownloadStatus, setHistoryJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyCsvDownloadStatus, setHistoryCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
   const historyJsonDownloadTimerRef = useRef<number | null>(null);
+  const historyCsvDownloadTimerRef = useRef<number | null>(null);
   const [stats, setStats] = useState<AgentWatchlistStatistics | null>(null);
   const [statsDownloadBusy, setStatsDownloadBusy] = useState(false);
   const [statsDownloadStatus, setStatsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -752,6 +755,9 @@ export function WatchlistPage() {
       if (historyJsonDownloadTimerRef.current != null) {
         window.clearTimeout(historyJsonDownloadTimerRef.current);
       }
+      if (historyCsvDownloadTimerRef.current != null) {
+        window.clearTimeout(historyCsvDownloadTimerRef.current);
+      }
       if (statsDownloadTimerRef.current != null) {
         window.clearTimeout(statsDownloadTimerRef.current);
       }
@@ -951,6 +957,17 @@ export function WatchlistPage() {
     }, status === 'done' ? 2200 : 3200);
   };
 
+  const flashHistoryCsvDownloadStatus = (status: 'done' | 'failed') => {
+    if (historyCsvDownloadTimerRef.current != null) {
+      window.clearTimeout(historyCsvDownloadTimerRef.current);
+    }
+    setHistoryCsvDownloadStatus(status);
+    historyCsvDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryCsvDownloadStatus('idle');
+      historyCsvDownloadTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
   const exportOpenWatchHistory = async (mode: 'copy' | 'download', question: string, itemId: string) => {
     const hist = historyCacheRef.current[itemId];
     if (!hist || hist.status !== 'ready') return;
@@ -986,6 +1003,23 @@ export function WatchlistPage() {
         e instanceof ApiError
           ? e.message
           : 'Could not download run history JSON — try again.',
+      );
+    }
+  };
+
+  const downloadWatchHistoryCsv = async (question: string, itemId: string) => {
+    const stem = `watch-history-${question.slice(0, 40) || itemId}`;
+    try {
+      const blob = await exportAgentWatchlistHistoryCsv(itemId, 100);
+      const ok = downloadBlobFile(blob, `${withDownloadDate(stem)}.csv`);
+      flashHistoryCsvDownloadStatus(ok ? 'done' : 'failed');
+      if (!ok) setError('Could not download run history CSV — try again.');
+    } catch (e) {
+      flashHistoryCsvDownloadStatus('failed');
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not download run history CSV — try again.',
       );
     }
   };
@@ -2123,6 +2157,31 @@ export function WatchlistPage() {
                                         : historyJsonDownloadStatus === 'failed'
                                           ? 'Failed'
                                           : '.json'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void downloadWatchHistoryCsv(item.question, item.id)}
+                                      title="Download run history as CSV"
+                                      aria-label={
+                                        historyCsvDownloadStatus === 'done'
+                                          ? 'Run history CSV downloaded'
+                                          : historyCsvDownloadStatus === 'failed'
+                                            ? 'Run history CSV download failed'
+                                            : 'Download run history as CSV'
+                                      }
+                                      className={[
+                                        'watchlist-history-btn',
+                                        historyCsvDownloadStatus === 'done' ? 'watchlist-history-btn--ok' : '',
+                                        historyCsvDownloadStatus === 'failed' ? 'watchlist-history-btn--err' : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                    >
+                                      {historyCsvDownloadStatus === 'done'
+                                        ? 'Downloaded'
+                                        : historyCsvDownloadStatus === 'failed'
+                                          ? 'Failed'
+                                          : '.csv'}
                                     </button>
                                   </div>
                                 ) : null}

@@ -59,6 +59,7 @@ const postAgentWatchlistDuplicateMock = vi.fn();
 const getAgentWatchlistStatisticsMock = vi.fn();
 const exportAgentWatchlistStatisticsCsvMock = vi.fn();
 const exportAgentWatchlistHistoryJsonMock = vi.fn();
+const exportAgentWatchlistHistoryCsvMock = vi.fn();
 const getAgentWatchlistHistoryMock = vi.fn();
 const createAgentTaskShareMock = vi.fn();
 
@@ -87,6 +88,8 @@ vi.mock('../api', async () => {
       exportAgentWatchlistStatisticsCsvMock(...args),
     exportAgentWatchlistHistoryJson: (...args: unknown[]) =>
       exportAgentWatchlistHistoryJsonMock(...args),
+    exportAgentWatchlistHistoryCsv: (...args: unknown[]) =>
+      exportAgentWatchlistHistoryCsvMock(...args),
     getAgentWatchlistHistory: (...args: unknown[]) =>
       getAgentWatchlistHistoryMock(...args),
     createAgentTaskShare: (...args: unknown[]) =>
@@ -249,6 +252,10 @@ describe('WatchlistPage', () => {
     exportAgentWatchlistHistoryJsonMock.mockReset();
     exportAgentWatchlistHistoryJsonMock.mockResolvedValue(
       new Blob(['{"success":true}'], { type: 'application/json' }),
+    );
+    exportAgentWatchlistHistoryCsvMock.mockReset();
+    exportAgentWatchlistHistoryCsvMock.mockResolvedValue(
+      new Blob(['task_id,question'], { type: 'text/csv' }),
     );
     createAgentTaskShareMock.mockReset();
     createAgentTaskShareMock.mockResolvedValue({
@@ -1166,6 +1173,28 @@ describe('WatchlistPage', () => {
     const calls = vi.mocked(downloadBlobFile).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
     expect(calls[calls.length - 1][1]).toMatch(/^watch-history-.*\.json$/);
+  });
+
+  it('downloads run history as CSV from the history panel', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run history' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download run history as CSV' }));
+    await waitFor(() => {
+      expect(exportAgentWatchlistHistoryCsvMock).toHaveBeenCalledWith('item-1', 100);
+    });
+
+    const { downloadBlobFile } = await import('../lib/downloadTextFile');
+    const calls = vi.mocked(downloadBlobFile).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[calls.length - 1][1]).toMatch(/^watch-history-.*\.csv$/);
   });
 
   it('loads older runs from the history panel with pagination', async () => {
