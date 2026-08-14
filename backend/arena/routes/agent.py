@@ -3582,7 +3582,7 @@ async def get_watchlist_item_history_csv(
     """CSV export of run history for a single watchlist item.
 
     Streams rows in CSV format with formula-injection defense (_csv_safe).
-    Includes task_id, status, created_at, intelligence_score, and final_answer snippet.
+    Includes task_id, status, created_at, final_score, and final_answer snippet.
     """
     _ensure_agent_watchlist_access(user)
     enforce_user_rate_limit(
@@ -3617,7 +3617,7 @@ async def get_watchlist_item_history_csv(
         "question",
         "status",
         "created_at",
-        "intelligence_score",
+        "final_score",
         "final_answer_snippet",
     ])
 
@@ -3629,7 +3629,7 @@ async def get_watchlist_item_history_csv(
             _csv_safe(item.question),
             _csv_safe(row.get("status")),
             _csv_safe(row.get("created_at")),
-            _csv_safe(row.get("intelligence_score") if row.get("intelligence_score") is not None else ""),
+            _csv_safe(row.get("final_score") if row.get("final_score") is not None else ""),
             _csv_safe(snippet),
         ])
 
