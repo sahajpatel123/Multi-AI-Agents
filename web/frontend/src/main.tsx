@@ -191,6 +191,9 @@ const WatchlistPage = lazy(() =>
 const SharePage = lazy(() =>
   import('./pages/SharePage').then((m) => ({ default: m.SharePage })),
 )
+const AgentSharePage = lazy(() =>
+  import('./pages/AgentSharePage').then((m) => ({ default: m.AgentSharePage })),
+)
 const NotFoundPage = lazy(() =>
   import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
 )
@@ -361,6 +364,7 @@ if (!rootElement) {
                   <Route path="/persona-mosaic-roasting-battle" element={<PersonaMosaicRoastingBattlePage />} />
                   <Route path="/persona-mosaic-dilemma-forecast" element={<PersonaMosaicDilemmaForecastPage />} />
                   <Route path="/share" element={<SharePage />} />
+                  <Route path="/share/agent/:token" element={<AgentSharePage />} />
                   <Route path="/app" element={
                     <ProtectedRoute>
                       <App />

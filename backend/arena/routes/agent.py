@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -1700,6 +1701,99 @@ async def get_agent_task_detail(
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
         )
     return JSONResponse(content=payload)
+
+
+@router.post("/tasks/{task_id}/share")
+async def share_agent_task(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Publish a completed Agent report as a public share link.
+
+    Returns the same token/link on repeat calls (idempotent), so a user can
+    copy the link again without creating duplicates. Only the task owner can
+    share, and only reports with a finished answer are shareable — an
+    in-progress or failed run has nothing honest to publish.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_share",
+        limit=30,
+        window_seconds=3600,
+        message="Too many report share actions. Limit is 30 per hour.",
+    )
+    tid = task_id.strip()
+    if not tid:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    owned = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not owned:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    if not (owned.final_answer or "").strip():
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "task_not_complete",
+                "message": "Only completed reports can be shared.",
+            },
+        )
+    if not owned.share_token:
+        owned.share_token = secrets.token_urlsafe(24)
+        owned.share_created_at = utcnow_naive()
+        db.commit()
+        db.refresh(owned)
+    return {
+        "share_token": owned.share_token,
+        "share_url": f"/share/agent/{owned.share_token}",
+    }
+
+
+@router.delete("/tasks/{task_id}/share")
+async def revoke_agent_task_share(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Revoke a public report link so the token stops resolving."""
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_share",
+        limit=30,
+        window_seconds=3600,
+        message="Too many report share actions. Limit is 30 per hour.",
+    )
+    tid = task_id.strip()
+    if not tid:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    owned = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not owned:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    owned.share_token = None
+    owned.share_created_at = None
+    db.commit()
+    return {"revoked": True}
 
 
 @router.post("/tasks/{task_id}/feedback")

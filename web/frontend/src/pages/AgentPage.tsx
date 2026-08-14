@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Copy, Ellipsis, Lock, Pencil, RotateCcw, Trash2, X } from 'lucide-react';
+import { Copy, Ellipsis, Link2, Lock, Pencil, RotateCcw, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { Button } from '../components/Button';
@@ -19,6 +19,7 @@ import {
   cancelAgentTask,
   challengeAgentAnswer,
   createRoom,
+  createAgentTaskShare,
   crossPollinateAgentAnswer,
   deleteAgentTask,
   exportAgentTaskCsv,
@@ -50,6 +51,7 @@ import {
   postCalibrationRate,
   refineAgentAnswer,
   renameAgentTask,
+  revokeAgentTaskShare,
   runAgentTask,
   recordConduraHandoff,
   saveConduraHandoffDraft,
@@ -980,6 +982,12 @@ export function AgentPage() {
   const copyReportCsvInFlightRef = useRef(false);
   const copyReportCsvRunIdRef = useRef(0);
   const copyReportCsvFeedbackTimerRef = useRef<number | null>(null);
+  const [sharingTask, setSharingTask] = useState(false);
+  const [revokingTaskShare, setRevokingTaskShare] = useState(false);
+  const [taskShareFeedback, setTaskShareFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [taskShareActive, setTaskShareActive] = useState(false);
+  const taskShareInFlightRef = useRef(false);
+  const taskShareFeedbackTimerRef = useRef<number | null>(null);
   const pendingRoomHandledRef = useRef<string | null>(null);
 
   const closeTemplatesModal = useCallback(() => {
@@ -2520,6 +2528,63 @@ export function AgentPage() {
     }
   }, [result?.status, result?.task_id]);
 
+  /**
+   * Publish a completed report as a public link and copy it to the
+   * clipboard. The backend is idempotent, so repeat clicks return the same
+   * link; the in-flight ref prevents a double-fire from racing two copies.
+   */
+  const handleShareTask = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || taskShareInFlightRef.current) return;
+    taskShareInFlightRef.current = true;
+    setSharingTask(true);
+    setTaskShareFeedback('idle');
+    if (taskShareFeedbackTimerRef.current != null) {
+      window.clearTimeout(taskShareFeedbackTimerRef.current);
+      taskShareFeedbackTimerRef.current = null;
+    }
+    try {
+      const share = await createAgentTaskShare(result.task_id);
+      const absoluteUrl = `${window.location.origin}${share.shareUrl}`;
+      const ok = await copyToClipboard(absoluteUrl);
+      setTaskShareFeedback(ok ? 'copied' : 'failed');
+      setTaskShareActive(true);
+      if (!ok) {
+        setError('Could not copy the share link — try again.');
+      }
+      const hold = motionDuration(ok ? 2200 : 3200);
+      taskShareFeedbackTimerRef.current = window.setTimeout(() => {
+        setTaskShareFeedback('idle');
+        taskShareFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      setTaskShareFeedback('failed');
+      setError(e instanceof Error ? e.message : 'Could not share this report.');
+      const hold = motionDuration(3200);
+      taskShareFeedbackTimerRef.current = window.setTimeout(() => {
+        setTaskShareFeedback('idle');
+        taskShareFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      taskShareInFlightRef.current = false;
+      setSharingTask(false);
+    }
+  }, [result?.status, result?.task_id]);
+
+  const handleRevokeTaskShare = useCallback(async () => {
+    if (!result?.task_id || revokingTaskShare) return;
+    setRevokingTaskShare(true);
+    try {
+      await revokeAgentTaskShare(result.task_id);
+      setTaskShareActive(false);
+      setTaskShareFeedback('idle');
+      setToastMessage('Public link revoked.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not revoke the share link.');
+    } finally {
+      setRevokingTaskShare(false);
+    }
+  }, [result?.task_id, revokingTaskShare]);
+
   // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
   // Shift+I / Shift+J / Shift+K / Shift+L / Shift+O / Shift+P mirror the result
   // toolbar buttons.
@@ -2827,6 +2892,10 @@ export function AgentPage() {
       copyReportCsvInFlightRef.current = false;
       if (copyReportCsvFeedbackTimerRef.current != null) {
         window.clearTimeout(copyReportCsvFeedbackTimerRef.current);
+      }
+      taskShareInFlightRef.current = false;
+      if (taskShareFeedbackTimerRef.current != null) {
+        window.clearTimeout(taskShareFeedbackTimerRef.current);
       }
       exportReportRunIdRef.current += 1;
       exportMdInFlightRef.current = false;
@@ -9346,6 +9415,42 @@ export function AgentPage() {
                     <Button type="button" variant="ghost" size="sm" icon={Icons.refresh(14)} onClick={runAgainWithSameQuestion}>
                       Run again
                     </Button>
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={sharingTask ? undefined : <Link2 size={14} aria-hidden />}
+                        loading={sharingTask}
+                        disabled={sharingTask || revokingTaskShare}
+                        title="Publish this report as a public link and copy it"
+                        onClick={() => void handleShareTask()}
+                      >
+                        {sharingTask
+                          ? 'Sharing…'
+                          : taskShareFeedback === 'copied'
+                            ? 'Link copied'
+                            : taskShareFeedback === 'failed'
+                              ? 'Share failed'
+                              : taskShareActive
+                                ? 'Copy link'
+                                : 'Share report'}
+                      </Button>
+                    ) : null}
+                    {result.task_id && taskShareActive ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={revokingTaskShare ? undefined : <X size={14} aria-hidden />}
+                        loading={revokingTaskShare}
+                        disabled={revokingTaskShare || sharingTask}
+                        title="Stop sharing this public link"
+                        onClick={() => void handleRevokeTaskShare()}
+                      >
+                        {revokingTaskShare ? 'Revoking…' : 'Stop sharing'}
+                      </Button>
+                    ) : null}
                     {result.task_id ? (
                       <Button
                         type="button"

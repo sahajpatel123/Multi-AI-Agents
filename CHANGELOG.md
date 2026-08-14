@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Completed Agent Mode reports can be published as public share links
+  (Share report in the result toolbar): the link copies to the clipboard,
+  opens a sanitized public report page at /share/agent/:token, and can be
+  revoked at any time so old links stop resolving
 - Shared Arena round/take landings now hand the question to Arena: "Try this
   in Arena" (and "Open Arena" for signed-in visitors) opens the compose box
   with the shared prompt already filled in

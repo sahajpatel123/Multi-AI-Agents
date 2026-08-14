@@ -1536,6 +1536,118 @@ export async function getAgentTaskDetail(taskId: string): Promise<AgentTaskDetai
   };
 }
 
+/** Result of publishing a completed Agent report as a public link. */
+export type AgentTaskShareResponse = {
+  shareToken: string;
+  shareUrl: string;
+};
+
+export async function createAgentTaskShare(taskId: string): Promise<AgentTaskShareResponse> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/share`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<
+    {
+      share_token?: unknown;
+      share_url?: unknown;
+      detail?: string | { message?: string };
+    }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Share request failed'), response),
+      response.status,
+      data,
+    );
+  }
+  const token = typeof data?.share_token === 'string' ? data.share_token : '';
+  const url = typeof data?.share_url === 'string' ? data.share_url : '';
+  if (!token || !url.startsWith('/share/agent/')) {
+    throw new Error(withRequestId('Invalid share response', response));
+  }
+  return { shareToken: token, shareUrl: url };
+}
+
+export async function revokeAgentTaskShare(taskId: string): Promise<{ revoked: boolean }> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/share`,
+    { method: 'DELETE' },
+  );
+  const data = await parseJsonSafely<
+    { revoked?: unknown; detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Revoke request failed'), response),
+      response.status,
+      data,
+    );
+  }
+  if (!data || data.revoked !== true) {
+    throw new Error(withRequestId('Invalid revoke response', response));
+  }
+  return { revoked: true };
+}
+
+/** Sanitized public snapshot of a shared Agent Mode report. */
+export type PublicAgentReport = {
+  token: string;
+  title: string | null;
+  question: string;
+  answer: string;
+  finalScore: number | null;
+  finalConfidence: number | null;
+  createdAt: string | null;
+  sharedAt: string | null;
+};
+
+export async function getPublicAgentReport(token: string): Promise<PublicAgentReport> {
+  const response = await apiFetch(`/api/public/agent/${encodeURIComponent(token)}`);
+  const data = await parseJsonSafely<
+    {
+      token?: unknown;
+      title?: unknown;
+      question?: unknown;
+      answer?: unknown;
+      final_score?: unknown;
+      final_confidence?: unknown;
+      created_at?: unknown;
+      shared_at?: unknown;
+      detail?: string | { message?: string };
+    }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Report request failed'), response),
+      response.status,
+      data,
+    );
+  }
+  if (
+    !data ||
+    typeof data.token !== 'string' ||
+    typeof data.question !== 'string' ||
+    typeof data.answer !== 'string'
+  ) {
+    throw new Error(withRequestId('Invalid public report response', response));
+  }
+  const nullableNumber = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null;
+  const nullableString = (v: unknown): string | null =>
+    typeof v === 'string' ? v : null;
+  return {
+    token: data.token,
+    title: nullableString(data.title),
+    question: data.question,
+    answer: data.answer,
+    finalScore: nullableNumber(data.final_score),
+    finalConfidence: nullableNumber(data.final_confidence),
+    createdAt: nullableString(data.created_at),
+    sharedAt: nullableString(data.shared_at),
+  };
+}
+
 export async function exportAgentTaskPdf(taskId: string): Promise<Blob> {
   const response = await apiFetch(`/api/agent/tasks/${encodeURIComponent(taskId)}/export/pdf`);
   if (!response.ok) {
