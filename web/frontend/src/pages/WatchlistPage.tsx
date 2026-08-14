@@ -38,6 +38,7 @@ import { prefersReducedMotion } from '../lib/motion';
 import {
   formatWatchlistHistoryExport,
   formatWatchlistHistoryStats,
+  readableAgentAnswerText,
   watchlistScoreTrend,
 } from '../lib/watchlistHistory';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
@@ -1001,7 +1002,7 @@ export function WatchlistPage() {
   };
 
   const copyHistoryAnswer = async (run: AgentWatchlistHistoryRun) => {
-    const text = (run.final_answer || '').trim();
+    const text = readableAgentAnswerText(run.final_answer);
     if (!text) {
       flashHistoryAnswerCopyStatus('failed');
       setError('No answer recorded for this run yet.');
@@ -2239,7 +2240,8 @@ export function WatchlistPage() {
                                   {data.items.map((run) => {
                                     const score = run.final_score;
                                     const runTitle = run.title?.trim() || 'Research run';
-                                    const hasAnswer = Boolean((run.final_answer || '').trim());
+                                    const answerText = readableAgentAnswerText(run.final_answer);
+                                    const hasAnswer = Boolean(answerText);
                                     const answerOpen = historyAnswerTaskId === run.task_id;
                                     return (
                                       <li key={run.task_id} className="watchlist-history__item">
@@ -2303,7 +2305,7 @@ export function WatchlistPage() {
                                             className="watchlist-history__answer"
                                           >
                                             <p className="watchlist-history__answer-text">
-                                              {run.final_answer?.trim() || 'No answer recorded for this run yet.'}
+                                              {answerText || 'No answer recorded for this run yet.'}
                                             </p>
                                             <div className="watchlist-history__answer-actions">
                                               <button

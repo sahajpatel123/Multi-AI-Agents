@@ -1322,6 +1322,98 @@ describe('WatchlistPage', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('flattens structured run answers for inline reading and copying', async () => {
+    getAgentWatchlistHistoryMock.mockResolvedValue({
+      items: [
+        {
+          task_id: 'task-1',
+          title: 'IPO market mid-year recap',
+          final_answer: JSON.stringify({
+            sentences: [
+              { text: 'First paragraph.', confidence: 'supported', type: 'fact' },
+              { text: '## Bottom line\nSecond paragraph.', confidence: 'verified' },
+            ],
+          }),
+          final_score: 82,
+          final_confidence: 0.72,
+          user_feedback: null,
+          created_at: '2026-07-18T10:00:00Z',
+        },
+      ],
+      stats: {
+        count: 1,
+        scored_count: 1,
+        avg_score: 82,
+        min_score: 82,
+        max_score: 82,
+      },
+      total: 1,
+      has_more: false,
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run history' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View answer for IPO market mid-year recap' }),
+    );
+    expect(screen.getByText(/First paragraph\./)).toBeInTheDocument();
+    expect(screen.getByText(/## Bottom line/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy this run answer' }));
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledWith(
+        'First paragraph.\n\n## Bottom line\nSecond paragraph.',
+      );
+    });
+  });
+
+  it('hides the answer toggle when a run only has an empty JSON payload', async () => {
+    getAgentWatchlistHistoryMock.mockResolvedValue({
+      items: [
+        {
+          task_id: 'task-1',
+          title: 'IPO market mid-year recap',
+          final_answer: '{}',
+          final_score: 82,
+          final_confidence: 0.72,
+          user_feedback: null,
+          created_at: '2026-07-18T10:00:00Z',
+        },
+      ],
+      stats: {
+        count: 1,
+        scored_count: 1,
+        avg_score: 82,
+        min_score: 82,
+        max_score: 82,
+      },
+      total: 1,
+      has_more: false,
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run history' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole('button', { name: /View answer for/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it('loads older runs from the history panel with pagination', async () => {
     getAgentWatchlistHistoryMock
       .mockResolvedValueOnce({
