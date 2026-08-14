@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Watchlist exports every completed latest result in the current view as a
+  markdown digest file (Download digest, Shift+M), mirroring the existing
+  Copy digest action with the same completed-only, filter-aware content
 - Watchlist cards can publish and copy a public link to the latest completed
   result without leaving the list, and re-copy an already-shared link instead
   of minting a new one

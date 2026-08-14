@@ -47,6 +47,7 @@ import {
   isWatchlistCopyKey,
   isWatchlistCopyJsonKey,
   isWatchlistDownloadCsvKey,
+  isWatchlistDownloadDigestKey,
   isWatchlistDownloadJsonKey,
   isWatchlistDownloadMarkdownKey,
   isWatchlistDownloadStatsCsvKey,
@@ -170,6 +171,9 @@ export function WatchlistPage() {
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonCopyStatus, setJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [digestCopyStatus, setDigestCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [digestDownloadStatus, setDigestDownloadStatus] = useState<
+    'idle' | 'done' | 'failed'
+  >('idle');
   /** Per-card copy: which item id last acted, and which action. */
   const [itemCopyId, setItemCopyId] = useState<string | null>(null);
   const [itemCopyKind, setItemCopyKind] = useState<
@@ -229,6 +233,7 @@ export function WatchlistPage() {
     downloadWatchlist: () => void;
     downloadWatchlistCsv: () => void;
     downloadWatchlistJson: () => void;
+    downloadDigest: () => void;
     downloadStatsCsv: (() => Promise<void>) | null;
     runAllNow: (() => void) | null;
   } | null>(null);
@@ -242,6 +247,8 @@ export function WatchlistPage() {
   const jsonCopyBusyRef = useRef(false);
   const digestCopyStatusTimerRef = useRef<number | null>(null);
   const digestCopyBusyRef = useRef(false);
+  const digestDownloadStatusTimerRef = useRef<number | null>(null);
+  const digestDownloadBusyRef = useRef(false);
   const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
@@ -785,6 +792,9 @@ export function WatchlistPage() {
       if (digestCopyStatusTimerRef.current != null) {
         window.clearTimeout(digestCopyStatusTimerRef.current);
       }
+      if (digestDownloadStatusTimerRef.current != null) {
+        window.clearTimeout(digestDownloadStatusTimerRef.current);
+      }
       if (historyCopyTimerRef.current != null) {
         window.clearTimeout(historyCopyTimerRef.current);
       }
@@ -876,6 +886,17 @@ export function WatchlistPage() {
       setDigestCopyStatus('idle');
       digestCopyStatusTimerRef.current = null;
     }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const flashDigestDownloadStatus = (status: 'done' | 'failed') => {
+    if (digestDownloadStatusTimerRef.current != null) {
+      window.clearTimeout(digestDownloadStatusTimerRef.current);
+    }
+    setDigestDownloadStatus(status);
+    digestDownloadStatusTimerRef.current = window.setTimeout(() => {
+      setDigestDownloadStatus('idle');
+      digestDownloadStatusTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
   };
 
   const flashStatsDownloadStatus = (status: 'done' | 'failed') => {
@@ -1314,6 +1335,36 @@ export function WatchlistPage() {
     }
   };
 
+  const downloadWatchlistDigest = () => {
+    if (digestDownloadBusyRef.current) return;
+    digestDownloadBusyRef.current = true;
+    try {
+      const digest = formatWatchlistResultsDigest({
+        items: buildWatchlistDigestItems(),
+        activeCount,
+        activeCap,
+        filterNote: buildWatchlistFilterNote(),
+      });
+      if (!digest) {
+        flashDigestDownloadStatus('failed');
+        setError(
+          'No completed results in this view — a digest needs at least one finished answer.',
+        );
+        return;
+      }
+      const ok = downloadMarkdownFile(digest, 'agent-watchlist-digest');
+      flashDigestDownloadStatus(ok ? 'done' : 'failed');
+      if (!ok) {
+        setError('Could not download the results digest — try Copy digest instead.');
+      }
+    } catch {
+      flashDigestDownloadStatus('failed');
+      setError('Could not download the results digest — try Copy digest instead.');
+    } finally {
+      digestDownloadBusyRef.current = false;
+    }
+  };
+
   const downloadStatsCsv = async () => {
     if (statsDownloadBusyRef.current) return;
     statsDownloadBusyRef.current = true;
@@ -1347,14 +1398,15 @@ export function WatchlistPage() {
           downloadWatchlist,
           downloadWatchlistCsv,
           downloadWatchlistJson,
+          downloadDigest: downloadWatchlistDigest,
           downloadStatsCsv: stats ? downloadStatsCsv : null,
           runAllNow: activeCount > 0 && !runAllBusy ? onRunAllNow : null,
         }
       : null;
 
   // Keyboard-first watchlist actions: Shift+C / Shift+D / Shift+E / Shift+J /
-  // Shift+O / Shift+F mirror the export buttons, and Shift+R starts every
-  // active watch.
+  // Shift+M / Shift+O / Shift+F mirror the export buttons, and Shift+R starts
+  // every active watch.
   // Form controls are skipped so normal Shift+letter typing is never
   // swallowed, and open dialogs keep ownership of their keystrokes. The
   // actions ref is only populated when the matching visible control is
@@ -1380,6 +1432,9 @@ export function WatchlistPage() {
       } else if (isWatchlistDownloadJsonKey(e)) {
         e.preventDefault();
         actions.downloadWatchlistJson();
+      } else if (isWatchlistDownloadDigestKey(e)) {
+        e.preventDefault();
+        actions.downloadDigest();
       } else if (isWatchlistDownloadStatsCsvKey(e)) {
         if (!actions.downloadStatsCsv) return;
         e.preventDefault();
@@ -1656,6 +1711,32 @@ export function WatchlistPage() {
                 : digestCopyStatus === 'failed'
                   ? 'Copy failed'
                   : 'Copy digest'}
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadWatchlistDigest()}
+              title="Download every completed latest result in this view as one markdown digest (Shift+M)"
+              aria-keyshortcuts="Shift+M"
+              aria-label={
+                digestDownloadStatus === 'done'
+                  ? 'Results digest downloaded'
+                  : digestDownloadStatus === 'failed'
+                    ? 'Digest download failed'
+                    : 'Download all completed results as a markdown digest'
+              }
+              className={[
+                'watchlist-header-btn',
+                digestDownloadStatus === 'done' ? 'watchlist-header-btn--ok' : '',
+                digestDownloadStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {digestDownloadStatus === 'done'
+                ? 'Digest downloaded'
+                : digestDownloadStatus === 'failed'
+                  ? 'Download failed'
+                  : 'Download digest'}
             </button>
           </div>
         ) : null}

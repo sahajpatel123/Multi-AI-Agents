@@ -214,6 +214,7 @@ function isBareShiftLetterKey(
     | 'j'
     | 'k'
     | 'e'
+    | 'm'
     | 'n'
     | 'v'
     | 't'
@@ -429,6 +430,16 @@ export function isWatchlistCopyKey(event: ShortcutKeyEvent): boolean {
  */
 export function isWatchlistDownloadMarkdownKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'd');
+}
+
+/**
+ * Shift+M — download the completed-results digest for the current watchlist
+ * view as a markdown file. M keeps the "markdown digest" action next to the
+ * other watchlist exports without reusing Shift+D, which already downloads
+ * the raw view.
+ */
+export function isWatchlistDownloadDigestKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'm');
 }
 
 /** Shift+E — download the current watchlist view as a CSV file. */

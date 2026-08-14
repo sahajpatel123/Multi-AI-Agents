@@ -850,6 +850,109 @@ describe('WatchlistPage', () => {
     expect(copyToClipboard).not.toHaveBeenCalled();
   });
 
+  it('downloads every completed latest result as one digest from the header', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [
+        baseItem,
+        {
+          ...baseItem,
+          id: 'item-3',
+          question: 'Is the semiconductor rally sustainable?',
+          latest_task: {
+            ...baseItem.latest_task!,
+            task_id: 'task-3',
+            is_complete: false,
+            final_answer: 'Partial draft while the run is still in progress.',
+            final_score: null,
+          },
+        },
+      ],
+      active_count: 1,
+      active_cap: 10,
+      total: 2,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Download all completed results as a markdown digest',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(downloadMarkdownFile).toHaveBeenCalledTimes(1);
+    });
+    const [markdown, stem] = vi.mocked(downloadMarkdownFile).mock.calls[0];
+    expect(markdown).toContain('# Agent Watchlist — Results Digest');
+    expect(markdown).toContain('## 1. How is the Indian IPO market evolving?');
+    expect(markdown).toContain('IPO momentum is strong');
+    expect(markdown).not.toContain('Is the semiconductor rally sustainable?');
+    expect(markdown).not.toContain('Partial draft');
+    expect(stem).toBe('agent-watchlist-digest');
+    expect(await screen.findByText('Digest downloaded')).toBeInTheDocument();
+  });
+
+  it('downloads the completed-results digest with Shift+M', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    const digestButton = screen.getByRole('button', {
+      name: 'Download all completed results as a markdown digest',
+    });
+    expect(digestButton).toHaveAttribute('aria-keyshortcuts', 'Shift+M');
+
+    fireEvent.keyDown(window, { key: 'M', shiftKey: true });
+
+    await waitFor(() => {
+      expect(downloadMarkdownFile).toHaveBeenCalledTimes(1);
+    });
+    const [markdown, stem] = vi.mocked(downloadMarkdownFile).mock.calls[0];
+    expect(markdown).toContain('# Agent Watchlist — Results Digest');
+    expect(markdown).toContain('How is the Indian IPO market evolving?');
+    expect(stem).toBe('agent-watchlist-digest');
+  });
+
+  it('refuses to download a digest when no completed result exists in the view', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [
+        {
+          ...baseItem,
+          latest_task: {
+            ...baseItem.latest_task!,
+            is_complete: false,
+            final_answer: 'Partial draft while the run is still in progress.',
+            final_score: null,
+          },
+        },
+      ],
+      active_count: 1,
+      active_cap: 10,
+      total: 1,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Download all completed results as a markdown digest',
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        'No completed results in this view — a digest needs at least one finished answer.',
+      ),
+    ).toBeInTheDocument();
+    expect(downloadMarkdownFile).not.toHaveBeenCalled();
+  });
+
   it('surfaces a share failure without disabling the card action permanently', async () => {
     createAgentTaskShareMock.mockRejectedValue(new Error('Share failed'));
     renderPage();

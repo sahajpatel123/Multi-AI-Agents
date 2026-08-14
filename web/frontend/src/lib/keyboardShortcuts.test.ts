@@ -37,6 +37,7 @@ import {
   isWatchlistCopyKey,
   isWatchlistCopyJsonKey,
   isWatchlistDownloadCsvKey,
+  isWatchlistDownloadDigestKey,
   isWatchlistDownloadJsonKey,
   isWatchlistDownloadMarkdownKey,
   isWatchlistDownloadStatsCsvKey,
@@ -606,6 +607,13 @@ describe('keyboardShortcuts', () => {
     expect(isWatchlistDownloadMarkdownKey({ key: 'D', shiftKey: true, metaKey: true })).toBe(false);
     expect(isWatchlistDownloadMarkdownKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
     expect(isWatchlistDownloadMarkdownKey({ key: 'C', shiftKey: true })).toBe(false);
+
+    expect(isWatchlistDownloadDigestKey({ key: 'M', shiftKey: true })).toBe(true);
+    expect(isWatchlistDownloadDigestKey({ key: 'm', shiftKey: true })).toBe(true);
+    expect(isWatchlistDownloadDigestKey({ key: 'M' })).toBe(false);
+    expect(isWatchlistDownloadDigestKey({ key: 'M', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isWatchlistDownloadDigestKey({ key: 'M', shiftKey: true, repeat: true })).toBe(false);
+    expect(isWatchlistDownloadDigestKey({ key: 'D', shiftKey: true })).toBe(false);
 
     expect(isWatchlistDownloadCsvKey({ key: 'E', shiftKey: true })).toBe(true);
     expect(isWatchlistDownloadCsvKey({ key: 'e', shiftKey: true })).toBe(true);
