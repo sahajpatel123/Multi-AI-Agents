@@ -202,6 +202,7 @@ async def test_watchlist_latest_summary_carries_share_state(
     latest = before.json()["items"][0]["latest_task"]
     assert latest["is_shared"] is False
     assert latest["share_url"] is None
+    assert latest["is_complete"] is True
 
     created = await app_client.post(
         f"/api/agent/tasks/{task.task_id}/share", headers=headers
@@ -214,6 +215,36 @@ async def test_watchlist_latest_summary_carries_share_state(
     latest = after.json()["items"][0]["latest_task"]
     assert latest["is_shared"] is True
     assert latest["share_url"] == f"/share/agent/{token}"
+    assert latest["is_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_watchlist_latest_summary_flags_incomplete_task(
+    app_client, make_user, db_session
+):
+    """In-progress/failed latest tasks are not shareable from the card."""
+    user = make_user(email="share-watch-incomplete@test.com", tier=UserTier.PRO)
+    task = _seed_task(db_session, user_id=user.id, completed=False)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Is this running report shareable?",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=1,
+        latest_task_id=task.task_id,
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    res = await app_client.get("/api/agent/watchlist", headers=_headers(user))
+    assert res.status_code == 200
+    latest = res.json()["items"][0]["latest_task"]
+    assert latest["is_complete"] is False
+    assert latest["is_shared"] is False
+    assert latest["share_url"] is None
 
 
 @pytest.mark.asyncio

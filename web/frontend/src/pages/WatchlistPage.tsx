@@ -848,7 +848,7 @@ export function WatchlistPage() {
   /** Publish (once) and copy the latest completed result's public link. */
   const shareLatestResult = async (item: AgentWatchlistItem) => {
     const latest = item.latest_task;
-    if (!latest || latestShareBusyRef.current) return;
+    if (!latest || !latest.is_complete || latestShareBusyRef.current) return;
 
     let shareUrl = latest.share_url;
     if (!shareUrl) {
@@ -1879,7 +1879,9 @@ export function WatchlistPage() {
                           Latest result →
                         </button>
                       ) : null}
-                      {item.latest_task_id && item.latest_task ? (
+                      {item.latest_task_id &&
+                      item.latest_task &&
+                      item.latest_task.is_complete ? (
                         <button
                           type="button"
                           onClick={() => void shareLatestResult(item)}

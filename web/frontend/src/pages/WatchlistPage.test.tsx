@@ -27,6 +27,7 @@ const baseItem: AgentWatchlistItem = {
     title: 'IPO market mid-year recap',
     created_at: '2026-07-18T10:00:00Z',
     final_score: 82,
+    is_complete: true,
     is_shared: false,
     share_url: null,
   },
@@ -709,6 +710,35 @@ describe('WatchlistPage', () => {
         name: 'Share latest result: How is the Indian IPO market evolving?',
       }),
     ).not.toBeDisabled();
+  });
+
+  it('does not offer to share an in-progress or failed latest result', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [
+        {
+          ...baseItem,
+          latest_task: {
+            ...baseItem.latest_task!,
+            is_complete: false,
+          },
+        },
+        pausedItem,
+      ],
+      active_count: 1,
+      active_cap: 10,
+      total: 2,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Share latest result: How is the Indian IPO market evolving?',
+      }),
+    ).not.toBeInTheDocument();
+    expect(createAgentTaskShareMock).not.toHaveBeenCalled();
   });
 
   it('duplicates a watch as a paused copy through the duplicate endpoint', async () => {

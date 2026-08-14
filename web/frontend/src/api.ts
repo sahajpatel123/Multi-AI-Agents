@@ -1945,6 +1945,7 @@ export type AgentWatchlistItem = {
     title: string;
     created_at: string;
     final_score: number | null;
+    is_complete: boolean;
     is_shared: boolean;
     share_url: string | null;
   } | null;

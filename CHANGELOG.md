@@ -51,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Watchlist cards only offer to publish or copy a link for completed latest
+  runs, so in-progress or failed results no longer show a share action the
+  API would reject
 - Shared Arena handoff clears any previously staged question when a share
   link carries no prompt, so opening Arena from a prompt-less or expired
   share landing can never prefill an older question

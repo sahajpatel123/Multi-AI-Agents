@@ -840,6 +840,7 @@ def _watchlist_latest_summary(db: Session, user_id: int, latest_task_id: Optiona
         "title": title,
         "created_at": row.created_at.isoformat() if row.created_at else "",
         "final_score": row.final_score,
+        "is_complete": bool((row.final_answer or "").strip()),
         "is_shared": bool(row.share_token),
         "share_url": (
             f"/share/agent/{row.share_token}" if row.share_token else None
@@ -864,6 +865,7 @@ def _batch_watchlist_latest_summaries(db: Session, user_id: int, task_ids: list[
             "title": title,
             "created_at": row.created_at.isoformat() if row.created_at else "",
             "final_score": row.final_score,
+            "is_complete": bool((row.final_answer or "").strip()),
             "is_shared": bool(row.share_token),
             "share_url": (
                 f"/share/agent/{row.share_token}" if row.share_token else None
