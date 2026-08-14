@@ -116,6 +116,94 @@ async def test_share_requires_owner(app_client, make_user, db_session):
 
 
 @pytest.mark.asyncio
+async def test_task_reads_reflect_share_state(app_client, make_user, db_session):
+    """Owned task reads expose is_shared/share_url so the UI can restore
+    the 'Stop sharing' affordance after a reload or a later session."""
+    user = make_user(email="share-state@test.com", tier=UserTier.PRO)
+    task = _seed_task(db_session, user_id=user.id)
+    headers = _headers(user)
+
+    detail_res = await app_client.get(
+        f"/api/agent/tasks/{task.task_id}/detail", headers=headers
+    )
+    assert detail_res.status_code == 200
+    assert detail_res.json()["task"]["is_shared"] is False
+    assert detail_res.json()["task"]["share_url"] is None
+
+    created = await app_client.post(
+        f"/api/agent/tasks/{task.task_id}/share", headers=headers
+    )
+    token = created.json()["share_token"]
+    assert token
+
+    shared = await app_client.get(
+        f"/api/agent/tasks/{task.task_id}/detail", headers=headers
+    )
+    assert shared.status_code == 200
+    assert shared.json()["task"]["is_shared"] is True
+    assert shared.json()["task"]["share_url"] == f"/share/agent/{token}"
+
+    revoked = await app_client.delete(
+        f"/api/agent/tasks/{task.task_id}/share", headers=headers
+    )
+    assert revoked.status_code == 200
+
+    after = await app_client.get(
+        f"/api/agent/tasks/{task.task_id}/detail", headers=headers
+    )
+    assert after.status_code == 200
+    assert after.json()["task"]["is_shared"] is False
+    assert after.json()["task"]["share_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_result_and_saved_reads_carry_share_state(
+    app_client, make_user, db_session
+):
+    user = make_user(email="share-reads@test.com", tier=UserTier.PRO)
+    task = _seed_task(db_session, user_id=user.id)
+    headers = _headers(user)
+
+    for path in ("result", "saved"):
+        res = await app_client.get(f"/api/agent/{path}/{task.task_id}", headers=headers)
+        assert res.status_code == 200
+        body = res.json()
+        assert body["is_shared"] is False
+        assert body["share_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_share_retries_fresh_token_on_unique_collision(
+    app_client, make_user, db_session, monkeypatch
+):
+    """A generated token that collides with another row must not 500: the
+    endpoint rolls back and retries with a fresh token."""
+    user = make_user(email="share-collide@test.com", tier=UserTier.PRO)
+    headers = _headers(user)
+    occupied = _seed_task(db_session, user_id=user.id)
+    occupied.share_token = "collision-token"
+    db_session.commit()
+    task = _seed_task(db_session, user_id=user.id)
+
+    calls = {"n": 0}
+
+    def fake_token_urlsafe(_nbytes: int) -> str:
+        calls["n"] += 1
+        return "collision-token" if calls["n"] == 1 else "fresh-token"
+
+    monkeypatch.setattr("secrets.token_urlsafe", fake_token_urlsafe)
+
+    res = await app_client.post(
+        f"/api/agent/tasks/{task.task_id}/share", headers=headers
+    )
+    assert res.status_code == 200
+    assert res.json()["share_token"] == "fresh-token"
+    assert calls["n"] == 2
+    assert (await app_client.get("/api/public/agent/fresh-token")).status_code == 200
+    assert (await app_client.get("/api/public/agent/collision-token")).status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_public_read_returns_sanitized_payload(
     app_client, make_user, db_session
 ):

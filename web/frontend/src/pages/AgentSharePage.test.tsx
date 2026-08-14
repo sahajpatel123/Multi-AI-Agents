@@ -2,11 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AgentSharePage } from './AgentSharePage';
-import { getPublicAgentReport, type PublicAgentReport } from '../api';
+import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
 
 vi.mock('../api', () => ({
   getPublicAgentReport: vi.fn(),
+  ApiError: class extends Error {
+    status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+    }
+  },
 }));
 
 vi.mock('../hooks/useAuth', () => ({
@@ -74,7 +82,9 @@ describe('AgentSharePage', () => {
   });
 
   it('shows the unavailable state for revoked or unknown links', async () => {
-    vi.mocked(getPublicAgentReport).mockRejectedValueOnce(new Error('Report not found'));
+    vi.mocked(getPublicAgentReport).mockRejectedValueOnce(
+      new ApiError('Report not found', 404),
+    );
     renderShare('missing-token');
     expect(
       await screen.findByText('This report link is no longer available'),
@@ -82,6 +92,20 @@ describe('AgentSharePage', () => {
     expect(
       screen.getByText(/may have been revoked by its owner/i),
     ).toBeInTheDocument();
+  });
+
+  it('distinguishes network failures from revoked links', async () => {
+    vi.mocked(getPublicAgentReport).mockRejectedValueOnce(new Error('NetworkError'));
+    renderShare('tok_net');
+    expect(
+      await screen.findByText('Could not load this report'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/check your connection and try again/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/revoked by its owner/i),
+    ).not.toBeInTheDocument();
   });
 
   it('requests the token from the URL', async () => {

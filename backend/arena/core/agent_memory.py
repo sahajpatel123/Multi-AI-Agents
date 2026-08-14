@@ -464,8 +464,14 @@ def get_task_detail(
         except (TypeError, ValueError):
             parsed_insight = None
 
+    task_payload = row.to_dict()
+    task_payload["is_shared"] = bool(row.share_token)
+    task_payload["share_url"] = (
+        f"/share/agent/{row.share_token}" if row.share_token else None
+    )
+
     return {
-        "task": row.to_dict(),
+        "task": task_payload,
         "insight_report": parsed_insight,
         "contradictions": [
             _serialize_contradiction(c, task_id) for c in contradictions

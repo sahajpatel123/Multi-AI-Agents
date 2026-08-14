@@ -378,6 +378,8 @@ type AgentResult = {
   live_last_checked?: string | null;
   live_next_check?: string | null;
   live_updates?: any[] | null;
+  is_shared?: boolean;
+  share_url?: string | null;
 };
 
 type ContradictionItem = {
@@ -2584,6 +2586,14 @@ export function AgentPage() {
       setRevokingTaskShare(false);
     }
   }, [result?.task_id, revokingTaskShare]);
+
+  // A task that was shared in a previous session keeps its public link.
+  // Restore the share affordance from the persisted payload so a reload or
+  // a later visit still shows "Copy link" and "Stop sharing".
+  useEffect(() => {
+    setTaskShareActive(Boolean(result?.share_url));
+    setTaskShareFeedback('idle');
+  }, [result?.task_id, result?.share_url]);
 
   // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
   // Shift+I / Shift+J / Shift+K / Shift+L / Shift+O / Shift+P mirror the result

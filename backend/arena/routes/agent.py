@@ -15,6 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.core.agent_pipeline import (
@@ -293,6 +294,10 @@ def _persisted_agent_task_result_dict(
         "current_stage": "done",
         "iterations": 0,
         "stages": {sid: _stage_complete() for sid in stage_ids},
+        "is_shared": bool(row.share_token),
+        "share_url": (
+            f"/share/agent/{row.share_token}" if row.share_token else None
+        ),
         "final_answer": row.final_answer or "",
         "final_confidence": float(row.final_confidence or 0.0),
         "final_score": int(row.final_score or 0),
@@ -1730,9 +1735,14 @@ async def share_agent_task(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
         )
+    # Lock the row so concurrent share requests from the same user serialize
+    # on Postgres instead of both generating a token and one failing on the
+    # unique index. SQLite ignores the lock; the IntegrityError retry below
+    # covers that dev path and rare cross-row token collisions.
     owned = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .with_for_update()
         .first()
     )
     if not owned:
@@ -1749,10 +1759,44 @@ async def share_agent_task(
             },
         )
     if not owned.share_token:
-        owned.share_token = secrets.token_urlsafe(24)
-        owned.share_created_at = utcnow_naive()
-        db.commit()
-        db.refresh(owned)
+        for _attempt in range(3):
+            owned.share_token = secrets.token_urlsafe(24)
+            owned.share_created_at = utcnow_naive()
+            try:
+                db.commit()
+                break
+            except IntegrityError:
+                # A concurrent share (or a lucky token collision) won the
+                # unique index. Roll back, re-read, and either reuse the
+                # token that won or retry with a fresh one.
+                db.rollback()
+                owned = (
+                    db.query(AgentTaskRow)
+                    .filter(
+                        AgentTaskRow.task_id == tid,
+                        AgentTaskRow.user_id == user.id,
+                    )
+                    .first()
+                )
+                if owned is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": ErrorCodes.NOT_FOUND,
+                            "message": "Task not found",
+                        },
+                    )
+                if owned.share_token:
+                    break
+        if not owned.share_token:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "share_token_unavailable",
+                    "message": "Could not create a unique share link. Please try again.",
+                },
+            )
+    db.refresh(owned)
     return {
         "share_token": owned.share_token,
         "share_url": f"/share/agent/{owned.share_token}",
@@ -4671,6 +4715,10 @@ async def get_saved_agent_task(
             "final_answer": row.final_answer,
             "final_score": row.final_score,
             "final_confidence": row.final_confidence,
+            "is_shared": bool(row.share_token),
+            "share_url": (
+                f"/share/agent/{row.share_token}" if row.share_token else None
+            ),
             "topics": json.loads(row.topics or "[]"),
             "user_feedback": row.user_feedback,
             "created_at": row.created_at.isoformat() if row.created_at else "",

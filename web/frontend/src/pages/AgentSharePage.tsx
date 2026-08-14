@@ -6,7 +6,7 @@ import { EmptyState } from '../components/EmptyState';
 import { MotionButton } from '../components/MotionButton';
 import MicroLoader from '../components/MicroLoader';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
-import { getPublicAgentReport, type PublicAgentReport } from '../api';
+import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentTitle';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
@@ -25,11 +25,13 @@ export function AgentSharePage() {
   const [report, setReport] = useState<PublicAgentReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setNotFound(false);
     setReport(null);
     getPublicAgentReport(token)
       .then((data) => {
@@ -38,7 +40,15 @@ export function AgentSharePage() {
       })
       .catch((e) => {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : 'This report could not be loaded.');
+        const isNotFound = e instanceof ApiError && e.status === 404;
+        setNotFound(isNotFound);
+        setError(
+          isNotFound
+            ? null
+            : e instanceof Error
+              ? e.message
+              : 'This report could not be loaded.',
+        );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -98,10 +108,16 @@ export function AgentSharePage() {
         ) : error || !report ? (
           <EmptyState
             variant="card"
-            title="This report link is no longer available"
+            title={
+              notFound
+                ? 'This report link is no longer available'
+                : 'Could not load this report'
+            }
             description={
-              error
+              notFound
                 ? 'The report may have been revoked by its owner, or the link is invalid.'
+                : error
+                  ? 'Could not load this report — check your connection and try again.'
                 : 'Ask a hard question in Agent Mode and share the finished report.'
             }
             actions={
