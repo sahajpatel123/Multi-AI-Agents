@@ -27,6 +27,8 @@ const baseItem: AgentWatchlistItem = {
     title: 'IPO market mid-year recap',
     created_at: '2026-07-18T10:00:00Z',
     final_score: 82,
+    is_shared: false,
+    share_url: null,
   },
 };
 
@@ -57,6 +59,7 @@ const getAgentWatchlistStatisticsMock = vi.fn();
 const exportAgentWatchlistStatisticsCsvMock = vi.fn();
 const exportAgentWatchlistHistoryJsonMock = vi.fn();
 const getAgentWatchlistHistoryMock = vi.fn();
+const createAgentTaskShareMock = vi.fn();
 
 vi.mock('../context/TierContext', () => ({
   useTier: () => tierState,
@@ -85,6 +88,8 @@ vi.mock('../api', async () => {
       exportAgentWatchlistHistoryJsonMock(...args),
     getAgentWatchlistHistory: (...args: unknown[]) =>
       getAgentWatchlistHistoryMock(...args),
+    createAgentTaskShare: (...args: unknown[]) =>
+      createAgentTaskShareMock(...args),
     patchAgentWatchlist: (...args: unknown[]) => patchAgentWatchlistMock(...args),
     postAgentWatchlistRun: (...args: unknown[]) => postAgentWatchlistRunMock(...args),
     postAgentWatchlistDuplicate: (...args: unknown[]) =>
@@ -244,6 +249,11 @@ describe('WatchlistPage', () => {
     exportAgentWatchlistHistoryJsonMock.mockResolvedValue(
       new Blob(['{"success":true}'], { type: 'application/json' }),
     );
+    createAgentTaskShareMock.mockReset();
+    createAgentTaskShareMock.mockResolvedValue({
+      shareToken: 'token-1',
+      shareUrl: '/share/agent/token-1',
+    });
     vi.mocked(copyToClipboard).mockClear();
     vi.mocked(downloadMarkdownFile).mockClear();
     vi.mocked(downloadTextFile).mockClear();
@@ -612,6 +622,93 @@ describe('WatchlistPage', () => {
     );
 
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('shares the latest result from the card and copies the public link', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    const shareButton = screen.getByRole('button', {
+      name: 'Share latest result: How is the Indian IPO market evolving?',
+    });
+    expect(shareButton).toHaveTextContent('Share result');
+
+    fireEvent.click(shareButton);
+
+    await waitFor(() => {
+      expect(createAgentTaskShareMock).toHaveBeenCalledWith('task-1');
+    });
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    });
+    const copied = vi.mocked(copyToClipboard).mock.calls[0][0];
+    expect(copied).toContain('/share/agent/token-1');
+    expect(copied.startsWith('http')).toBe(true);
+    expect(await screen.findByText('Link copied')).toBeInTheDocument();
+  });
+
+  it('copies an already-shared latest result without publishing a new link', async () => {
+    getAgentWatchlistMock.mockResolvedValue({
+      items: [
+        {
+          ...baseItem,
+          latest_task: {
+            ...baseItem.latest_task!,
+            is_shared: true,
+            share_url: '/share/agent/existing',
+          },
+        },
+        pausedItem,
+      ],
+      active_count: 1,
+      active_cap: 10,
+      total: 2,
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Share latest result: How is the Indian IPO market evolving?',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    });
+    expect(createAgentTaskShareMock).not.toHaveBeenCalled();
+    expect(vi.mocked(copyToClipboard).mock.calls[0][0]).toContain(
+      '/share/agent/existing',
+    );
+  });
+
+  it('surfaces a share failure without disabling the card action permanently', async () => {
+    createAgentTaskShareMock.mockRejectedValue(new Error('Share failed'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Share latest result: How is the Indian IPO market evolving?',
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Could not share this result — open it in Agent and try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: 'Share latest result: How is the Indian IPO market evolving?',
+      }),
+    ).not.toBeDisabled();
   });
 
   it('duplicates a watch as a paused copy through the duplicate endpoint', async () => {

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Watchlist cards can publish and copy a public link to the latest completed
+  result without leaving the list, and re-copy an already-shared link instead
+  of minting a new one
 - Public shared Agent reports offer Copy report and Download .md, so
   visitors can take the full markdown report without signing in
 - Completed Agent Mode reports can be published as public share links

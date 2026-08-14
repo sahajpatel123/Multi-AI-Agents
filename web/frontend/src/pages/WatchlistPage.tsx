@@ -9,6 +9,7 @@ import { MotionButton } from '../components/MotionButton';
 import { ExpertiseSelector } from '../components/ExpertiseSelector';
 import {
   ApiError,
+  createAgentTaskShare,
   deleteAgentWatchlist,
   exportAgentWatchlistHistoryJson,
   exportAgentWatchlistStatisticsCsv,
@@ -163,6 +164,12 @@ export function WatchlistPage() {
   const [itemCopyKind, setItemCopyKind] = useState<'watch' | 'question' | null>(null);
   const [itemCopyStatus, setItemCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const itemCopyTimerRef = useRef<number | null>(null);
+  /** Per-card latest-result share: which item last acted, and with what result. */
+  const [latestShareBusyId, setLatestShareBusyId] = useState<string | null>(null);
+  const [latestShareId, setLatestShareId] = useState<string | null>(null);
+  const [latestShareStatus, setLatestShareStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const latestShareTimerRef = useRef<number | null>(null);
+  const latestShareBusyRef = useRef(false);
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
   const [historyMoreBusyId, setHistoryMoreBusyId] = useState<string | null>(null);
   const [historyMoreError, setHistoryMoreError] = useState<string | null>(null);
@@ -736,6 +743,9 @@ export function WatchlistPage() {
       if (itemCopyTimerRef.current != null) {
         window.clearTimeout(itemCopyTimerRef.current);
       }
+      if (latestShareTimerRef.current != null) {
+        window.clearTimeout(latestShareTimerRef.current);
+      }
       if (historyDownloadTimerRef.current != null) {
         window.clearTimeout(historyDownloadTimerRef.current);
       }
@@ -820,6 +830,67 @@ export function WatchlistPage() {
       setItemCopyKind(null);
       itemCopyTimerRef.current = null;
     }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const flashLatestShare = (itemId: string, status: 'copied' | 'failed') => {
+    if (latestShareTimerRef.current != null) {
+      window.clearTimeout(latestShareTimerRef.current);
+    }
+    setLatestShareId(itemId);
+    setLatestShareStatus(status);
+    latestShareTimerRef.current = window.setTimeout(() => {
+      setLatestShareStatus('idle');
+      setLatestShareId(null);
+      latestShareTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  /** Publish (once) and copy the latest completed result's public link. */
+  const shareLatestResult = async (item: AgentWatchlistItem) => {
+    const latest = item.latest_task;
+    if (!latest || latestShareBusyRef.current) return;
+
+    let shareUrl = latest.share_url;
+    if (!shareUrl) {
+      latestShareBusyRef.current = true;
+      setLatestShareBusyId(item.id);
+      try {
+        const share = await createAgentTaskShare(latest.task_id);
+        shareUrl = share.shareUrl;
+        setItems((prev) =>
+          prev.map((entry) =>
+            entry.id === item.id && entry.latest_task
+              ? {
+                  ...entry,
+                  latest_task: {
+                    ...entry.latest_task,
+                    is_shared: true,
+                    share_url: share.shareUrl,
+                  },
+                }
+              : entry,
+          ),
+        );
+      } catch (e) {
+        flashLatestShare(item.id, 'failed');
+        setError(
+          e instanceof ApiError
+            ? e.message
+            : 'Could not share this result — open it in Agent and try again.',
+        );
+        return;
+      } finally {
+        latestShareBusyRef.current = false;
+        setLatestShareBusyId(null);
+      }
+    }
+
+    const absoluteUrl = `${window.location.origin}${shareUrl}`;
+    const ok = await copyToClipboard(absoluteUrl);
+    flashLatestShare(item.id, ok ? 'copied' : 'failed');
+    if (!ok) {
+      setError('Could not copy the share link — try opening the latest result and sharing there.');
+    }
   };
 
   const copyWatchItem = async (item: AgentWatchlistItem, kind: 'watch' | 'question') => {
@@ -1806,6 +1877,45 @@ export function WatchlistPage() {
                           className="watchlist-link watchlist-link--accent"
                         >
                           Latest result →
+                        </button>
+                      ) : null}
+                      {item.latest_task_id && item.latest_task ? (
+                        <button
+                          type="button"
+                          onClick={() => void shareLatestResult(item)}
+                          disabled={latestShareBusyId === item.id}
+                          title={
+                            item.latest_task.share_url
+                              ? 'Copy the public link to the latest result'
+                              : 'Publish and copy a public link to the latest result'
+                          }
+                          aria-label={`Share latest result: ${item.question.slice(0, 80) || 'watched question'}`}
+                          className={[
+                            'watchlist-link',
+                            'watchlist-link--accent',
+                            latestShareId === item.id &&
+                            latestShareStatus === 'copied'
+                              ? 'watchlist-link--ok'
+                              : '',
+                            latestShareId === item.id &&
+                            latestShareStatus === 'failed'
+                              ? 'watchlist-link--err'
+                              : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                        >
+                          {latestShareBusyId === item.id
+                            ? 'Sharing…'
+                            : latestShareId === item.id &&
+                                latestShareStatus === 'copied'
+                              ? 'Link copied'
+                              : latestShareId === item.id &&
+                                  latestShareStatus === 'failed'
+                                ? 'Share failed'
+                                : item.latest_task.share_url
+                                  ? 'Copy result link'
+                                  : 'Share result'}
                         </button>
                       ) : null}
                       <button

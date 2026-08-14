@@ -18,7 +18,8 @@ import uuid
 import pytest
 
 from arena.core.auth import create_access_token
-from arena.db_models import AgentTask, UserTier
+from arena.core.datetime_utils import utcnow_naive
+from arena.db_models import AgentTask, UserTier, WatchlistItem
 
 
 def _headers(user):
@@ -170,6 +171,49 @@ async def test_result_and_saved_reads_carry_share_state(
         body = res.json()
         assert body["is_shared"] is False
         assert body["share_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_watchlist_latest_summary_carries_share_state(
+    app_client, make_user, db_session
+):
+    """Watchlist latest-task summaries expose share state so the card can
+    copy an existing link instead of publishing a new one on every click."""
+    user = make_user(email="share-watch@test.com", tier=UserTier.PRO)
+    task = _seed_task(db_session, user_id=user.id)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Is this watched report shareable?",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=1,
+        latest_task_id=task.task_id,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+    headers = _headers(user)
+
+    before = await app_client.get("/api/agent/watchlist", headers=headers)
+    assert before.status_code == 200
+    latest = before.json()["items"][0]["latest_task"]
+    assert latest["is_shared"] is False
+    assert latest["share_url"] is None
+
+    created = await app_client.post(
+        f"/api/agent/tasks/{task.task_id}/share", headers=headers
+    )
+    assert created.status_code == 200
+    token = created.json()["share_token"]
+
+    after = await app_client.get("/api/agent/watchlist", headers=headers)
+    assert after.status_code == 200
+    latest = after.json()["items"][0]["latest_task"]
+    assert latest["is_shared"] is True
+    assert latest["share_url"] == f"/share/agent/{token}"
 
 
 @pytest.mark.asyncio
