@@ -1040,4 +1040,83 @@ describe('WatchlistPage', () => {
     expect(calls.length).toBeGreaterThan(0);
     expect(calls[calls.length - 1][1]).toMatch(/^watch-history-.*\.json$/);
   });
+
+  it('loads older runs from the history panel with pagination', async () => {
+    getAgentWatchlistHistoryMock
+      .mockResolvedValueOnce({
+        items: [
+          {
+            task_id: 'task-1',
+            title: 'IPO market mid-year recap',
+            final_score: 82,
+            final_confidence: 0.72,
+            user_feedback: null,
+            created_at: '2026-07-18T10:00:00Z',
+          },
+          {
+            task_id: 'task-2',
+            title: 'Earlier IPO recap',
+            final_score: 71,
+            final_confidence: 0.61,
+            user_feedback: null,
+            created_at: '2026-07-10T10:00:00Z',
+          },
+        ],
+        stats: {
+          count: 3,
+          scored_count: 3,
+          avg_score: 72.3,
+          min_score: 64,
+          max_score: 82,
+        },
+        total: 3,
+        has_more: true,
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            task_id: 'task-3',
+            title: 'Oldest IPO recap',
+            final_score: 64,
+            final_confidence: 0.55,
+            user_feedback: null,
+            created_at: '2026-07-01T10:00:00Z',
+          },
+        ],
+        stats: {
+          count: 3,
+          scored_count: 3,
+          avg_score: 72.3,
+          min_score: 64,
+          max_score: 82,
+        },
+        total: 3,
+        has_more: false,
+      });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run history' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('IPO market mid-year recap')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Earlier IPO recap')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Load older runs (1 more)' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load older runs (1 more)' }));
+    await waitFor(() => {
+      expect(screen.getByText('Oldest IPO recap')).toBeInTheDocument();
+    });
+
+    expect(getAgentWatchlistHistoryMock).toHaveBeenNthCalledWith(1, 'item-1', 30);
+    expect(getAgentWatchlistHistoryMock).toHaveBeenNthCalledWith(2, 'item-1', 50, 2);
+    expect(
+      screen.queryByRole('button', { name: 'Load older runs (1 more)' }),
+    ).not.toBeInTheDocument();
+  });
 });

@@ -211,3 +211,83 @@ async def test_history_clamps_limit(app_client, make_user, db_session):
     )
     assert res.status_code == 422
 
+
+@pytest.mark.asyncio
+async def test_history_paginates_with_offset_and_has_more(
+    app_client, make_user, db_session
+):
+    """offset pages older runs while total/has_more stay coherent and stats
+    describe the full history rather than just the current page."""
+    user = _make_pro(make_user)
+    item = _seed_watch(db_session, user_id=user.id)
+    for days_ago, score in ((4, 10), (3, 20), (2, 30), (1, 40), (0, 50)):
+        _seed_run(
+            db_session,
+            user_id=user.id,
+            watchlist_item_id=item.id,
+            score=score,
+            days_ago=days_ago,
+        )
+    db_session.commit()
+
+    first = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&offset=0",
+        headers=_pro_headers(user),
+    )
+    assert first.status_code == 200
+    first_body = first.json()
+    assert [row["final_score"] for row in first_body["items"]] == [50, 40]
+    assert first_body["total"] == 5
+    assert first_body["has_more"] is True
+    assert first_body["stats"] == {
+        "count": 5,
+        "scored_count": 5,
+        "avg_score": 30.0,
+        "min_score": 10,
+        "max_score": 50,
+    }
+
+    middle = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&offset=2",
+        headers=_pro_headers(user),
+    )
+    assert middle.status_code == 200
+    middle_body = middle.json()
+    assert [row["final_score"] for row in middle_body["items"]] == [30, 20]
+    assert middle_body["total"] == 5
+    assert middle_body["has_more"] is True
+    assert middle_body["stats"]["count"] == 5
+
+    last = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&offset=4",
+        headers=_pro_headers(user),
+    )
+    assert last.status_code == 200
+    last_body = last.json()
+    assert [row["final_score"] for row in last_body["items"]] == [10]
+    assert last_body["total"] == 5
+    assert last_body["has_more"] is False
+    assert last_body["stats"]["count"] == 5
+
+    beyond = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&offset=99",
+        headers=_pro_headers(user),
+    )
+    assert beyond.status_code == 200
+    beyond_body = beyond.json()
+    assert beyond_body["items"] == []
+    assert beyond_body["total"] == 5
+    assert beyond_body["has_more"] is False
+
+
+@pytest.mark.asyncio
+async def test_history_rejects_negative_offset(app_client, make_user, db_session):
+    user = _make_pro(make_user)
+    item = _seed_watch(db_session, user_id=user.id)
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?offset=-1",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422

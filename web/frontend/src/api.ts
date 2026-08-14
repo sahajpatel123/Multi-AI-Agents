@@ -2029,16 +2029,20 @@ export type AgentWatchlistHistoryStats = {
 export type AgentWatchlistHistoryResponse = {
   items: AgentWatchlistHistoryRun[];
   stats: AgentWatchlistHistoryStats;
+  total: number;
+  has_more: boolean;
 };
 
-/** Run history for one watch (newest first) + aggregate score stats. */
+/** Run history for one watch (newest first, paged) + aggregate score stats. */
 export async function getAgentWatchlistHistory(
   itemId: string,
   limit = 50,
+  offset = 0,
 ): Promise<AgentWatchlistHistoryResponse> {
   const cap = Math.max(1, Math.min(200, Math.floor(limit)));
+  const off = Math.max(0, Math.floor(offset));
   const response = await apiFetch(
-    `/api/agent/watchlist/${encodeURIComponent(itemId)}/history?limit=${encodeURIComponent(String(cap))}`,
+    `/api/agent/watchlist/${encodeURIComponent(itemId)}/history?limit=${encodeURIComponent(String(cap))}&offset=${encodeURIComponent(String(off))}`,
   );
   const data = await parseJsonSafely<
     AgentWatchlistHistoryResponse & {
@@ -2063,6 +2067,13 @@ export async function getAgentWatchlistHistory(
       min_score: null,
       max_score: null,
     },
+    total:
+      typeof data.total === 'number'
+        ? Math.max(0, Math.floor(data.total))
+        : Array.isArray(data.items)
+          ? data.items.length
+          : 0,
+    has_more: data.has_more === true,
   };
 }
 

@@ -164,6 +164,8 @@ export function WatchlistPage() {
   const [itemCopyStatus, setItemCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const itemCopyTimerRef = useRef<number | null>(null);
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [historyMoreBusyId, setHistoryMoreBusyId] = useState<string | null>(null);
+  const [historyMoreError, setHistoryMoreError] = useState<string | null>(null);
   const [historyCache, setHistoryCache] = useState<
     Record<
       string,
@@ -246,9 +248,48 @@ export function WatchlistPage() {
         return;
       }
       setHistoryOpenId(itemId);
+      setHistoryMoreError(null);
       void loadWatchHistory(itemId);
     },
     [historyOpenId, loadWatchHistory],
+  );
+
+  const loadMoreWatchHistory = useCallback(
+    async (itemId: string) => {
+      if (historyMoreBusyId === itemId) return;
+      const hist = historyCacheRef.current[itemId];
+      if (!hist || hist.status !== 'ready') return;
+      setHistoryMoreBusyId(itemId);
+      setHistoryMoreError(null);
+      try {
+        const next = await getAgentWatchlistHistory(itemId, 50, hist.data.items.length);
+        setHistoryCache((prev) => {
+          const current = prev[itemId];
+          if (!current || current.status !== 'ready') return prev;
+          const seen = new Set(current.data.items.map((run) => run.task_id));
+          const appended = next.items.filter((run) => !seen.has(run.task_id));
+          return {
+            ...prev,
+            [itemId]: {
+              status: 'ready',
+              data: {
+                items: [...current.data.items, ...appended],
+                stats: next.stats,
+                total: next.total,
+                has_more: next.has_more,
+              },
+            },
+          };
+        });
+      } catch (e) {
+        setHistoryMoreError(
+          e instanceof ApiError ? e.message : 'Could not load older runs',
+        );
+      } finally {
+        setHistoryMoreBusyId(null);
+      }
+    },
+    [historyMoreBusyId],
   );
 
   const refreshStats = useCallback(async () => {
@@ -277,6 +318,8 @@ export function WatchlistPage() {
       setLoadFailed(false);
       setHistoryCache({});
       setHistoryOpenId(null);
+      setHistoryMoreBusyId(null);
+      setHistoryMoreError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not load watchlist');
       setItems([]);
@@ -2003,6 +2046,25 @@ export function WatchlistPage() {
                                   })}
                                 </ul>
                               )}
+                              {data.has_more && data.total > data.items.length ? (
+                                <div className="watchlist-history__more">
+                                  <button
+                                    type="button"
+                                    onClick={() => void loadMoreWatchHistory(item.id)}
+                                    disabled={historyMoreBusyId === item.id}
+                                    className="watchlist-link watchlist-link--accent"
+                                  >
+                                    {historyMoreBusyId === item.id
+                                      ? 'Loading older runs…'
+                                      : `Load older runs (${data.total - data.items.length} more)`}
+                                  </button>
+                                  {historyMoreError ? (
+                                    <p className="watchlist-history__more-error">
+                                      {historyMoreError}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })()}

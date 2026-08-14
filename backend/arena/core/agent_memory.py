@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from arena.core.blackboard import Blackboard
@@ -623,27 +623,36 @@ def get_watchlist_history(
     watchlist_item_id: str,
     limit: int = 50,
     max_limit: int = 200,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """All spawned runs of a single watchlist item, newest first, with aggregate stats.
 
     Returns a dict shaped for the Watchlist history surface:
       - items: list of {task_id, title, final_score, final_confidence,
         created_at, user_feedback} newest first
-      - stats: {count, avg_score, min_score, max_score, scored_count}
+      - stats: {count, avg_score, min_score, max_score, scored_count} computed
+        across the FULL matching history (not just the current page) so paging
+        never makes aggregate numbers drift.
+      - total: total number of matching runs (for \"showing X of Y\" labels)
+      - has_more: whether older runs exist beyond this page
     The stats ignore unscored rows for min/avg/max but report the
     total run count separately so the UI can say \"3 runs, 2 scored\".
-    Limit is clamped to [1, max_limit]; the caller controls the ceiling so
-    interactive history stays at 200 rows while export endpoints can opt into
-    their advertised 500-row cap.
+    Limit is clamped to [1, max_limit] and offset to >= 0; the caller controls
+    the ceiling so interactive history stays at 200 rows while export endpoints
+    can opt into their advertised 500-row cap.
     """
     cap = max(1, min(int(limit), max_limit))
+    off = max(0, int(offset))
+    base_filter = (
+        AgentTask.user_id == user_id,
+        AgentTask.watchlist_item_id == watchlist_item_id,
+    )
+    total = db.query(func.count(AgentTask.task_id)).filter(*base_filter).scalar() or 0
     rows = (
         db.query(AgentTask)
-        .filter(
-            AgentTask.user_id == user_id,
-            AgentTask.watchlist_item_id == watchlist_item_id,
-        )
+        .filter(*base_filter)
         .order_by(AgentTask.created_at.desc())
+        .offset(off)
         .limit(cap)
         .all()
     )
@@ -663,16 +672,26 @@ def get_watchlist_history(
         for t in rows
     ]
 
-    scored = [t.final_score for t in rows if isinstance(t.final_score, (int, float))]
+    scored_rows = (
+        db.query(AgentTask.final_score)
+        .filter(*base_filter, AgentTask.final_score.isnot(None))
+        .all()
+    )
+    scored = [value for (value,) in scored_rows if isinstance(value, (int, float))]
     stats = {
-        "count": len(rows),
+        "count": total,
         "scored_count": len(scored),
         "avg_score": round(sum(scored) / len(scored), 1) if scored else None,
         "min_score": min(scored) if scored else None,
         "max_score": max(scored) if scored else None,
     }
 
-    return {"items": items, "stats": stats}
+    return {
+        "items": items,
+        "stats": stats,
+        "total": total,
+        "has_more": off + len(rows) < total,
+    }
 
 
 def get_watchlist_statistics(

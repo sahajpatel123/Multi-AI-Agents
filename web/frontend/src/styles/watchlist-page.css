@@ -598,6 +598,25 @@
   margin-top: 2px;
 }
 
+.watchlist-history__more {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.watchlist-history__more .watchlist-link:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.watchlist-history__more-error {
+  margin: 0;
+  font-size: 11px;
+  color: #993c1d;
+}
+
 /* Edit-watch dialog: refine question/expertise without losing history. */
 .watchlist-edit-overlay {
   position: fixed;

@@ -3370,6 +3370,7 @@ async def get_watchlist_item_history(
     http_request: Request,
     item_id: str,
     limit: int = Query(50, ge=1, le=200, description="Max number of history rows to return."),
+    offset: int = Query(0, ge=0, description="Number of newest rows to skip for paging."),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -3398,7 +3399,7 @@ async def get_watchlist_item_history(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
         )
-    payload = get_watchlist_history(db, user.id, item.id, limit=limit)
+    payload = get_watchlist_history(db, user.id, item.id, limit=limit, offset=offset)
     return JSONResponse(
         content={
             "request_id": correlation_request_id(http_request),
