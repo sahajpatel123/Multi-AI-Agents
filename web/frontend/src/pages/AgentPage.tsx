@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Copy, Ellipsis, Link2, Lock, Pencil, RotateCcw, Trash2, X } from 'lucide-react';
+import { Copy, Ellipsis, Link2, Lock, Pencil, Pin, RotateCcw, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { Button } from '../components/Button';
@@ -109,6 +109,11 @@ import {
   loadDismissedAgentChipIds,
   pickRecentAgentChips,
 } from '../lib/agentRecentChips';
+import {
+  loadAgentHistoryPins,
+  removeAgentHistoryPins,
+  toggleAgentHistoryPin,
+} from '../lib/agentHistoryPins';
 import {
   AGENT_REFINE_MAX_CHARS,
   AGENT_TASK_MAX_CHARS,
@@ -825,6 +830,7 @@ export function AgentPage() {
   const [steelmanInnerExpanded, setSteelmanInnerExpanded] = useState(false);
   const [showAllSourcePills, setShowAllSourcePills] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
+  const [pinnedTaskIds, setPinnedTaskIds] = useState<string[]>(() => loadAgentHistoryPins());
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [historySort, setHistorySort] = useState<AgentHistorySort>('newest');
   const [historyStatusFilter, setHistoryStatusFilter] =
@@ -2760,9 +2766,11 @@ export function AgentPage() {
         isLive: item.is_live,
       })),
       historySort,
+      pinnedTaskIds,
     );
   }, [
     taskHistory,
+    pinnedTaskIds,
     historySearchQuery,
     historySort,
     historyStatusFilter,
@@ -3320,16 +3328,23 @@ export function AgentPage() {
     }
   };
 
+  const toggleHistoryPin = (taskId: string) => {
+    setPinnedTaskIds(toggleAgentHistoryPin(taskId));
+  };
+
   const deleteHistoryItem = (taskId: string) => {
     const removed = taskHistory.find((t) => t.task_id === taskId) ?? null;
+    const wasPinned = pinnedTaskIds.includes(taskId);
     const wasActive = result?.task_id === taskId;
     if (wasActive) {
       resetRun();
     }
+    setPinnedTaskIds(removeAgentHistoryPins([taskId]));
     setOpenMenuTaskId(null);
     setConfirmDeleteTaskId(null);
     setTaskHistory((prev) => prev.filter((t) => t.task_id !== taskId));
     void deleteAgentTask(taskId).catch(() => {
+      if (wasPinned) setPinnedTaskIds(toggleAgentHistoryPin(taskId));
       if (removed) {
         setTaskHistory((prev) => {
           if (prev.some((t) => t.task_id === taskId)) return prev;
@@ -3535,6 +3550,7 @@ export function AgentPage() {
     const isMenuOpen = openMenuTaskId === item.task_id;
     const isConfirmingDelete = confirmDeleteTaskId === item.task_id;
     const isEditing = editingTaskId === item.task_id;
+    const pinned = pinnedTaskIds.includes(item.task_id);
     const displayTitle = agentHistoryDisplayTitle(item);
     const scoreBg =
       score >= 80
@@ -3638,6 +3654,15 @@ export function AgentPage() {
                     lineHeight: '1.35',
                   }}
                 >
+                  {pinned ? (
+                    <span
+                      title="Pinned to top"
+                      aria-label="Pinned to top"
+                      style={{ display: 'inline-flex', flexShrink: 0, color: '#B07840' }}
+                    >
+                      <Pin width={12} height={12} fill="currentColor" strokeWidth={1.8} aria-hidden />
+                    </span>
+                  ) : null}
                   {item.watchlist_item_id ? (
                     <svg
                       width={12}
@@ -3802,6 +3827,16 @@ export function AgentPage() {
                   color="#1A1714"
                   hoverBackground="#F0EBE3"
                   onClick={() => rerunFromHistory(item)}
+                />
+                <AgentSidebarMenuItem
+                  icon={<Pin className="w-[14px] h-[14px]" fill={pinned ? 'currentColor' : 'none'} />}
+                  label={pinned ? 'Unpin' : 'Pin to top'}
+                  color="#B07840"
+                  hoverBackground="#FBF3E3"
+                  onClick={() => {
+                    setOpenMenuTaskId(null);
+                    toggleHistoryPin(item.task_id);
+                  }}
                 />
                 <AgentSidebarMenuItem
                   icon={<Copy className="w-[14px] h-[14px]" />}

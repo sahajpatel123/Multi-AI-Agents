@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Agent history: pin important research tasks to the top (local, persists across visits)',
       '[IMPROVED] Debate/Discuss: Shift+O/Shift+J JSON thread exports (and their markdown siblings) tolerate non-array histories, rounds, and reactions plus non-string fields instead of crashing',
       '[NEW] Debate: copy the full debate transcript as JSON with Shift+O and download it as a file with Shift+J',
       '[NEW] Discuss: copy the full 1-on-1 thread as JSON with Shift+O and download it as a file with Shift+J',

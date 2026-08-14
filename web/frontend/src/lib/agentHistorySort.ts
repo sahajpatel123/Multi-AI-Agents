@@ -51,6 +51,7 @@ function displayTitle(item: AgentHistorySortableItem): string {
 export function sortAgentHistoryItems<T extends AgentHistorySortableItem>(
   items: T[],
   sort: AgentHistorySort,
+  pinnedFirstIds: readonly string[] = [],
 ): T[] {
   const list = [...(items || [])];
   const tie = (a: T, b: T) => cmpStr(String(a.id || ''), String(b.id || ''));
@@ -107,5 +108,10 @@ export function sortAgentHistoryItems<T extends AgentHistorySortableItem>(
     }
   });
 
-  return list;
+  if (!pinnedFirstIds.length) return list;
+  const pinned = new Set(pinnedFirstIds.map((id) => String(id || '')));
+  return [
+    ...list.filter((item) => pinned.has(String(item.id || ''))),
+    ...list.filter((item) => !pinned.has(String(item.id || ''))),
+  ];
 }

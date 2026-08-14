@@ -49,6 +49,24 @@ describe('sortAgentHistoryItems', () => {
     const ids = sortAgentHistoryItems(sample, 'title').map((i) => i.id);
     expect(ids).toEqual(['b', 'c', 'a']);
   });
+
+  it('keeps pinned tasks first in every sort mode', () => {
+    const pinnedFirst = sortAgentHistoryItems(sample, 'newest', ['a', 'c']);
+    expect(pinnedFirst.map((i) => i.id)).toEqual(['c', 'a', 'b']);
+
+    const byScore = sortAgentHistoryItems(sample, 'score_desc', ['a']);
+    expect(byScore.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('respects the selected sort within pinned and unpinned groups', () => {
+    const sorted = sortAgentHistoryItems(sample, 'score_desc', ['b', 'a']);
+    expect(sorted.map((i) => i.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('ignores pinned ids that are not present', () => {
+    const ids = sortAgentHistoryItems(sample, 'newest', ['ghost']).map((i) => i.id);
+    expect(ids).toEqual(['b', 'c', 'a']);
+  });
 });
 
 describe('agentHistorySortLabel', () => {
