@@ -19,7 +19,14 @@ import { formatRelativePast } from '../lib/relativeTime';
 import { prefersReducedMotion } from '../lib/motion';
 import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadBlobFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
+import {
+  downloadBlobFile,
+  downloadJsonFile,
+  downloadMarkdownFile,
+  downloadTextFile,
+  withDownloadDate,
+} from '../lib/downloadTextFile';
+import { formatMemorySelectionCsv } from '../lib/memoryExport';
 import { PERSONAS } from '../data/personas';
 
 const PER_PAGE = 20;
@@ -55,8 +62,8 @@ type DetailState =
 
 type CopyStatus = 'copied' | 'failed';
 type DownloadStatus = 'downloaded' | 'failed';
-type SelectionExportAction = 'copy' | 'download' | 'json' | null;
-type SelectionExportStatus = 'copied' | 'downloaded' | 'json-downloaded' | null;
+type SelectionExportAction = 'copy' | 'download' | 'json' | 'csv' | null;
+type SelectionExportStatus = 'copied' | 'downloaded' | 'json-downloaded' | 'csv-downloaded' | null;
 
 function personaName(personaId: string | null | undefined): string {
   if (!personaId) return '';
@@ -549,6 +556,20 @@ export function MemoryPage() {
             return;
           }
           setSelectionExportStatus('downloaded');
+        } else if (action === 'csv') {
+          if (!isCurrentRun()) return;
+          const downloaded = downloadTextFile(formatMemorySelectionCsv(detailedSummaries), {
+            filename: `${withDownloadDate(
+              `arena-memory-selection-${detailedSummaries.length}`,
+            )}.csv`,
+            mimeType: 'text/csv;charset=utf-8',
+          });
+          if (!isCurrentRun()) return;
+          if (!downloaded) {
+            setSelectionExportError('Could not download selected memories as CSV — try again.');
+            return;
+          }
+          setSelectionExportStatus('csv-downloaded');
         } else {
           if (!isCurrentRun()) return;
           if (
@@ -920,6 +941,21 @@ export function MemoryPage() {
                   onClick={() => void exportSelectedMemories('json')}
                 >
                   {selectionExportStatus === 'json-downloaded' ? 'Downloaded JSON' : 'Download JSON'}
+                </MotionButton>
+                <MotionButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  loading={selectionExportAction === 'csv'}
+                  disabled={Boolean(selectionExportAction)}
+                  aria-label={
+                    selectionExportStatus === 'csv-downloaded'
+                      ? 'Selected memories CSV downloaded'
+                      : 'Download selected memories as CSV'
+                  }
+                  onClick={() => void exportSelectedMemories('csv')}
+                >
+                  {selectionExportStatus === 'csv-downloaded' ? 'Downloaded CSV' : 'Download CSV'}
                 </MotionButton>
                 <MotionButton
                   type="button"

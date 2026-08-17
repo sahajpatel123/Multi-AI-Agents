@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { MemoryPage } from './MemoryPage';
 import { ApiError, type MemorySummary, type MemorySummariesResponse } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadJsonFile, downloadMarkdownFile, downloadTextFile } from '../lib/downloadTextFile';
 
 const baseSummary: MemorySummary = {
   id: 1,
@@ -99,6 +99,7 @@ vi.mock('../lib/downloadTextFile', async () => {
     downloadBlobFile: vi.fn().mockReturnValue(true),
     downloadJsonFile: vi.fn().mockReturnValue(true),
     downloadMarkdownFile: vi.fn().mockReturnValue(true),
+    downloadTextFile: vi.fn().mockReturnValue(true),
   };
 });
 
@@ -125,6 +126,7 @@ describe('MemoryPage', () => {
     vi.mocked(copyToClipboard).mockReset().mockResolvedValue(true);
     vi.mocked(downloadJsonFile).mockReset().mockReturnValue(true);
     vi.mocked(downloadMarkdownFile).mockReset().mockReturnValue(true);
+    vi.mocked(downloadTextFile).mockReset().mockReturnValue(true);
     tierState.canUseFeature.mockImplementation((feature: string) => feature === 'memory');
     listMemorySummariesMock.mockImplementation(
       async (params: { page?: number } = {}) =>
@@ -776,6 +778,20 @@ describe('MemoryPage', () => {
     expect(archive.format_version).toBe(1);
     expect(archive.memories).toHaveLength(2);
     expect(archive.memories[0]?.session_summary).toContain('Indian IPOs');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download selected memories as CSV' }));
+    await waitFor(() => {
+      expect(downloadTextFile).toHaveBeenCalledWith(
+        expect.stringContaining('"session_summary"'),
+        expect.objectContaining({
+          filename: expect.stringMatching(/^arena-memory-selection-2-\d{4}-\d{2}-\d{2}\.csv$/),
+          mimeType: 'text/csv;charset=utf-8',
+        }),
+      );
+    });
+    expect(vi.mocked(downloadTextFile).mock.calls.at(-1)?.[0]).toContain(
+      'Compared practical research paths for quantum computing.',
+    );
   });
 
   it('keeps the selection and reports a detail failure during selected export', async () => {

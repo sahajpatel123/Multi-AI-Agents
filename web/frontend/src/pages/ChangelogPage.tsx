@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Memory: download selected summaries as a spreadsheet-safe CSV alongside Markdown and JSON exports',
       '[NEW] Watchlist: download every completed latest result in the current view as one markdown digest file (Download digest or Shift+M), matching the Copy digest content',
       '[NEW] Agent history: pin important research tasks to the top (local, persists across visits)',
       '[IMPROVED] Agent history: pinning now handles the 50-pin cap gracefully by evicting the oldest pin, and ignores blank/whitespace-only ids',
