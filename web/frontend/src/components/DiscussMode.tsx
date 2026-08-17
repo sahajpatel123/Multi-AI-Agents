@@ -568,6 +568,9 @@ export function DiscussMode({
               ...prev,
               [activeAgent.response.agent_id]: data.conversation_history,
             }));
+            // A fresh reply may have replaced an empty seed, so clear any
+            // stale "nothing to verify yet" notice left by an earlier press.
+            setVerifyFeedback('idle');
             setIsStreaming(false);
             scrollToBottom({ force: stickToBottomRef.current });
             

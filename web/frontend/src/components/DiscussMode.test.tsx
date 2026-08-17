@@ -432,4 +432,43 @@ describe('DiscussMode verify-in-Agent bridge', () => {
       screen.getByRole('alert'),
     ).toHaveTextContent(/Nothing to verify yet/);
   });
+
+  it('clears a stale empty-thread warning once a reply lands', async () => {
+    streamDiscussMock.mockImplementation(async (_params, callbacks) => {
+      callbacks.onResult?.({
+        request_id: 'r2',
+        agent_id: 'agent_1',
+        content: 'Ship on Friday instead.',
+        conversation_history: [
+          {
+            role: 'user',
+            content: 'What is the risk?',
+            timestamp: new Date().toISOString(),
+          },
+          {
+            role: 'agent',
+            content: 'Ship on Friday instead.',
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        session_id: 's1',
+      });
+    });
+    renderWithVerify({ activeAgent: emptyTake });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verify in Agent Mode' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/Nothing to verify yet/);
+
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'What is the risk?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Send message to/i }));
+    await waitFor(() =>
+      expect(screen.getByText('Ship on Friday instead.')).toBeInTheDocument(),
+    );
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Verify in Agent Mode' }));
+    expect(onVerifyInAgent).toHaveBeenCalledWith('Ship on Friday instead.');
+  });
 });

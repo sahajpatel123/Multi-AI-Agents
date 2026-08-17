@@ -39,10 +39,38 @@ const MAX_VERIFY_TEXT_LENGTH = 2000;
 const MAX_VERIFY_PERSONA_LENGTH = 100;
 
 /**
+ * Shared normalization for every take handed to Agent Mode. Trims to the
+ * backend's 2000-char text and 100-char persona caps, defaults missing
+ * question/persona labels, coerces non-finite scores to zero, and rejects a
+ * completely empty answer so the bridge contract is never surprised by
+ * malformed values.
+ */
+function normalizeVerifyBridgePayload(input: {
+  answer: string;
+  question: string;
+  personaName: string;
+  score: number;
+  fallbackQuestion: string;
+  fallbackPersonaName: string;
+}): ArenaVerifyBridgePayload | null {
+  const answer = (input.answer || '').trim();
+  if (!answer) return null;
+  return {
+    answer: answer.slice(0, MAX_VERIFY_TEXT_LENGTH),
+    question:
+      (input.question || '').trim().slice(0, MAX_VERIFY_TEXT_LENGTH) ||
+      input.fallbackQuestion,
+    personaName:
+      (input.personaName || '').trim().slice(0, MAX_VERIFY_PERSONA_LENGTH) ||
+      input.fallbackPersonaName,
+    score: Number.isFinite(input.score) ? input.score : 0,
+  };
+}
+
+/**
  * Build a safe Agent Mode bridge payload from a winning Arena take. Falls
- * back from the one-liner to the full verdict, rejects completely empty takes,
- * and normalizes question/persona/score so the backend contract is never
- * surprised by missing or malformed values.
+ * back from the one-liner to the full verdict and rejects completely empty
+ * takes.
  */
 export function buildArenaVerifyBridgePayload(
   scoredAgent: ScoredAgent,
@@ -51,13 +79,36 @@ export function buildArenaVerifyBridgePayload(
 ): ArenaVerifyBridgePayload | null {
   const oneLiner = (scoredAgent.response.one_liner || '').trim();
   const answer = oneLiner || (scoredAgent.response.verdict || '').trim();
-  if (!answer) return null;
-  return {
-    answer: answer.slice(0, MAX_VERIFY_TEXT_LENGTH),
-    question: (question || '').trim().slice(0, MAX_VERIFY_TEXT_LENGTH) || 'Arena discussion',
-    personaName: (personaName || 'Arena winner').trim().slice(0, MAX_VERIFY_PERSONA_LENGTH),
-    score: Number.isFinite(scoredAgent.score) ? scoredAgent.score : 0,
-  };
+  return normalizeVerifyBridgePayload({
+    answer,
+    question,
+    personaName,
+    score: scoredAgent.score,
+    fallbackQuestion: 'Arena discussion',
+    fallbackPersonaName: 'Arena winner',
+  });
+}
+
+/**
+ * Build a safe Agent Mode bridge payload from the latest take in a 1-on-1
+ * Discuss thread. The caller supplies the take directly (the seeded Arena
+ * take or the newest reply), so this shares the same caps and fallbacks as
+ * the winner bridge without needing a ScoredAgent one-liner.
+ */
+export function buildDiscussVerifyBridgePayload(
+  answer: string,
+  question: string,
+  personaName: string,
+  score: number,
+): ArenaVerifyBridgePayload | null {
+  return normalizeVerifyBridgePayload({
+    answer,
+    question,
+    personaName,
+    score,
+    fallbackQuestion: 'Arena discussion',
+    fallbackPersonaName: 'Discuss partner',
+  });
 }
 
 /**

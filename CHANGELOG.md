@@ -61,6 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Discuss-thread Agent verification now normalizes its bridge payload the
+  same way the Arena winner path does: long replies/questions are capped at
+  the backend's 2000-character limit, persona labels at 100 characters, and
+  non-finite scores are coerced to zero, so a large take can no longer be
+  rejected by validation; the empty-thread warning also clears as soon as a
+  reply lands instead of lingering after the thread becomes verifiable
 - Watchlist bulk removal now re-syncs header counters from the delete
   response instead of a follow-up list fetch, so a successful deletion can
   never be misreported as a failure when the refetch flakes, and the

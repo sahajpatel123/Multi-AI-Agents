@@ -7,6 +7,7 @@ import {
   buildArenaTranscriptJsonDownload,
   buildArenaTranscriptCsvDownload,
   buildArenaVerifyBridgePayload,
+  buildDiscussVerifyBridgePayload,
   copyArenaComparisonToClipboard,
   copyArenaJsonToClipboard,
   copyArenaTranscriptToClipboard,
@@ -305,6 +306,62 @@ describe('buildArenaVerifyBridgePayload', () => {
       'The Analyst',
     );
     expect(payload?.score).toBe(0);
+  });
+});
+
+describe('buildDiscussVerifyBridgePayload', () => {
+  it('normalizes the latest thread take, question, persona, and score', () => {
+    const payload = buildDiscussVerifyBridgePayload(
+      '  Ship on Friday instead.  ',
+      '  Should we ship today?  ',
+      '  The Analyst  ',
+      87,
+    );
+    expect(payload).toEqual({
+      answer: 'Ship on Friday instead.',
+      question: 'Should we ship today?',
+      personaName: 'The Analyst',
+      score: 87,
+    });
+  });
+
+  it('caps answer, question, and persona at the backend limits', () => {
+    const payload = buildDiscussVerifyBridgePayload(
+      'x'.repeat(2500),
+      'q'.repeat(2500),
+      'p'.repeat(150),
+      12,
+    );
+    expect(payload?.answer).toHaveLength(2000);
+    expect(payload?.question).toHaveLength(2000);
+    expect(payload?.personaName).toHaveLength(100);
+  });
+
+  it('defaults a missing question and persona without losing the take', () => {
+    const payload = buildDiscussVerifyBridgePayload(
+      'A well-supported take.',
+      '   ',
+      '',
+      55,
+    );
+    expect(payload?.question).toBe('Arena discussion');
+    expect(payload?.personaName).toBe('Discuss partner');
+  });
+
+  it('coerces a non-finite score to zero', () => {
+    const payload = buildDiscussVerifyBridgePayload(
+      'A take',
+      'Question?',
+      'The Analyst',
+      Number.NaN,
+    );
+    expect(payload?.score).toBe(0);
+  });
+
+  it('returns null for a completely empty take', () => {
+    expect(
+      buildDiscussVerifyBridgePayload('   ', 'Question?', 'The Analyst', 42),
+    ).toBeNull();
   });
 });
 

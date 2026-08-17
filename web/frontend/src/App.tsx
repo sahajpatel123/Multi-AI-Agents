@@ -64,6 +64,7 @@ import {
   formatArenaTranscriptsJsonExport,
   formatArenaWinnerExport,
   buildArenaVerifyBridgePayload,
+  buildDiscussVerifyBridgePayload,
   pickArenaWinner,
 } from './lib/arenaExport';
 import { buildFollowUpContext } from './lib/followUpContext';
@@ -1488,8 +1489,13 @@ function App() {
       const persona = getPersonaForAgentId(aid);
       const personaName = persona?.name || AGENTS[aid]?.name || 'Discuss partner';
       const question = (response?.prompt || currentPrompt || '').trim();
-      const cleanAnswer = (answer || '').trim();
-      if (!question || !cleanAnswer) {
+      const payload = buildDiscussVerifyBridgePayload(
+        answer,
+        question,
+        personaName,
+        discussAgent.score,
+      );
+      if (!payload) {
         setError('There is nothing to verify yet — send a message first.');
         return;
       }
@@ -1498,19 +1504,19 @@ function App() {
       setError(null);
       try {
         const data = await verifyArenaAnswerInAgent(
-          cleanAnswer,
-          question,
-          personaName,
-          discussAgent.score,
+          payload.answer,
+          payload.question,
+          payload.personaName,
+          payload.score,
         );
         void track('arena_verify_discuss', persona?.id, aid, {
-          arena_score: discussAgent.score,
+          arena_score: payload.score,
         });
         navigate('/agent', {
           state: {
             bridgeTaskId: data.task_id,
             bridgeMode: true,
-            originalQuestion: question,
+            originalQuestion: payload.question,
           },
         });
       } catch (e) {
