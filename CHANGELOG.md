@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plain-text rationale rides along on every round payload and appears as a
   collapsible "Why this mind won" disclosure under the cards grid, and stays
   hidden whenever scoring fell back so users never see an empty widget
+- Arena rounds also surface the judge's full scorecard: a collapsible
+  ranking of every take with proportional score bars appears above the
+  winner rationale, highlighting the winning mind with a crown, and stays
+  hidden whenever scoring fell back to flat default scores so the panel
+  never shows a hollow ranking
 
 ### Fixed
 - The judge's rationale now rewrites internal `agent_1`–`agent_4` slot ids to

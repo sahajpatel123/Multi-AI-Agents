@@ -5,6 +5,7 @@ import { FollowUpBar } from './components/FollowUpBar';
 import { FollowUpSuggestions } from './components/FollowUpSuggestions';
 import { ReRunRoundButton } from './components/ReRunRoundButton';
 import { AgentCard } from './components/AgentCard';
+import { VerdictScoreboard } from './components/VerdictScoreboard';
 import { WinnerReasoning } from './components/WinnerReasoning';
 import { DebateMode } from './components/DebateMode';
 import { DiscussMode } from './components/DiscussMode';
@@ -3472,15 +3473,29 @@ function App() {
               ))}
               </div>
 
-              {/* Judge's rationale — only when the scorer supplied one */}
+              {/* Judge's verdict — full scorecard plus rationale for the winner */}
               {isDone && currentResponses && (
-                <WinnerReasoning
-                  reasoning={currentResponses.scoring_reasoning}
-                  winnerName={
-                    resolveArenaPersona(currentResponses.winner_agent_id).name ||
-                    'Arena winner'
-                  }
-                />
+                <>
+                  <VerdictScoreboard
+                    entries={sortedResponses.map((scored) => {
+                      const persona = resolveArenaPersona(scored.response.agent_id);
+                      return {
+                        agentId: scored.response.agent_id,
+                        name: persona.name || scored.response.agent_id,
+                        color: persona.color,
+                        score: scored.score,
+                        isWinner: Boolean(scored.is_winner),
+                      };
+                    })}
+                  />
+                  <WinnerReasoning
+                    reasoning={currentResponses.scoring_reasoning}
+                    winnerName={
+                      resolveArenaPersona(currentResponses.winner_agent_id).name ||
+                      'Arena winner'
+                    }
+                  />
+                </>
               )}
 
               {/* Scoring indicator */}
