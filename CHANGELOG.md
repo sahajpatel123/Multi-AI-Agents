@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arena Discuss threads can be sent into Agent Mode for deeper verification
+  (Verify in Agent Mode or Shift+V): the focused mind's latest reply — or the
+  seeded take before any replies — becomes a fresh research task with the
+  original question, reusing the same honest Pro-tier bridge as the winner
 - Watchlist supports multi-select bulk removal: tick the checkboxes on several
   watches and use "Remove selected (N)" to clear them in one confirmed request,
   with honest partial-success reporting when some ids have already gone

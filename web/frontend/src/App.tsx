@@ -229,6 +229,7 @@ function App() {
   const [stressFromAgentBanner, setStressFromAgentBanner] = useState(false);
   const [watchlistFreshTakesBanner, setWatchlistFreshTakesBanner] = useState(false);
   const [verifyingWinnerAgentId, setVerifyingWinnerAgentId] = useState<string | null>(null);
+  const [verifyingDiscussAgentId, setVerifyingDiscussAgentId] = useState<string | null>(null);
   const [crossPollinateSourceTaskId, setCrossPollinateSourceTaskId] = useState<string | null>(null);
   const [crossPollinateIntelScore, setCrossPollinateIntelScore] = useState<number | null>(null);
   const [showPerspectiveComparison, setShowPerspectiveComparison] = useState(false);
@@ -373,6 +374,8 @@ function App() {
   const verifyWinnerRequestRef = useRef<((winner: ScoredAgent) => void) | null>(null);
   /** Guards Shift+V / card clicks so a verify request can never double-fire. */
   const verifyWinnerInFlightRef = useRef(false);
+  /** Guards the Discuss Shift+V action so a verify request can never double-fire. */
+  const verifyDiscussInFlightRef = useRef(false);
   /** Owns the save-winner button feedback so rapid toggles can't leave stale timers. */
   const winnerSaveFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Owns the save-all-takes button feedback so rapid presses can't leave stale timers. */
@@ -1468,6 +1471,61 @@ function App() {
     [canUseFeature, currentPrompt, getPersonaForAgentId, navigate, response?.prompt, showPlusUpgrade],
   );
   verifyWinnerRequestRef.current = handleVerifyWinnerInAgent;
+
+  /**
+   * Hands the focused 1-on-1 Discuss thread to Agent Mode. The Discuss view
+   * passes the latest agent take (or the seeded Arena take when no reply
+   * exists yet) and we reuse the same verify bridge as the Arena winner.
+   */
+  const handleVerifyDiscussInAgent = useCallback(
+    async (discussAgent: ScoredAgent, answer: string) => {
+      if (!canUseFeature('agent_mode')) {
+        showPlusUpgrade('Agent verification requires a Pro subscription.');
+        return;
+      }
+      if (verifyDiscussInFlightRef.current) return;
+      const aid = discussAgent.response.agent_id;
+      const persona = getPersonaForAgentId(aid);
+      const personaName = persona?.name || AGENTS[aid]?.name || 'Discuss partner';
+      const question = (response?.prompt || currentPrompt || '').trim();
+      const cleanAnswer = (answer || '').trim();
+      if (!question || !cleanAnswer) {
+        setError('There is nothing to verify yet — send a message first.');
+        return;
+      }
+      verifyDiscussInFlightRef.current = true;
+      setVerifyingDiscussAgentId(aid);
+      setError(null);
+      try {
+        const data = await verifyArenaAnswerInAgent(
+          cleanAnswer,
+          question,
+          personaName,
+          discussAgent.score,
+        );
+        void track('arena_verify_discuss', persona?.id, aid, {
+          arena_score: discussAgent.score,
+        });
+        navigate('/agent', {
+          state: {
+            bridgeTaskId: data.task_id,
+            bridgeMode: true,
+            originalQuestion: question,
+          },
+        });
+      } catch (e) {
+        setError(
+          e instanceof Error
+            ? e.message
+            : 'Could not start Agent verification. Try again in a moment.',
+        );
+      } finally {
+        verifyDiscussInFlightRef.current = false;
+        setVerifyingDiscussAgentId(null);
+      }
+    },
+    [canUseFeature, currentPrompt, getPersonaForAgentId, navigate, response?.prompt, showPlusUpgrade],
+  );
 
   const handleSavedItemClick = useCallback((item: SavedResponseItem) => {
     setViewMode('arena');
@@ -3846,6 +3904,11 @@ function App() {
               );
               if (found) setDiscussAgent(found);
             }}
+            onVerifyInAgent={(answer) => {
+              if (discussAgent) void handleVerifyDiscussInAgent(discussAgent, answer);
+            }}
+            verifyInAgentLoading={verifyingDiscussAgentId !== null}
+            verifyInAgentDisabled={!canUseFeature('agent_mode')}
           />
         </div>
       )}

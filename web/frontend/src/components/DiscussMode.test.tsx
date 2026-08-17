@@ -301,3 +301,135 @@ describe('DiscussMode thread shortcuts (Shift+C / Shift+D)', () => {
     expect(writeText).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('DiscussMode verify-in-Agent bridge', () => {
+  const onVerifyInAgent = vi.fn();
+
+  beforeEach(() => {
+    onVerifyInAgent.mockReset();
+    streamDiscussMock.mockReset();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    document
+      .querySelectorAll('[role="dialog"][aria-modal="true"]')
+      .forEach((el) => el.remove());
+  });
+
+  function renderWithVerify(
+    opts: {
+      activeAgent?: ScoredAgent;
+      verifyInAgentLoading?: boolean;
+      verifyInAgentDisabled?: boolean;
+    } = {},
+  ) {
+    return render(
+      <DiscussMode
+        originalPrompt="Should we ship today?"
+        activeAgent={opts.activeAgent ?? analyst}
+        allResponses={[analyst, philosopher]}
+        sessionId="s1"
+        onExit={vi.fn()}
+        onSwitchAgent={vi.fn()}
+        onVerifyInAgent={onVerifyInAgent}
+        verifyInAgentLoading={opts.verifyInAgentLoading}
+        verifyInAgentDisabled={opts.verifyInAgentDisabled}
+      />,
+    );
+  }
+
+  it('shows no verify action when the host does not offer the bridge', () => {
+    renderDiscuss();
+    expect(
+      screen.queryByRole('button', { name: 'Verify in Agent Mode' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('sends the seeded Arena take when the thread has no replies yet', () => {
+    renderWithVerify();
+    fireEvent.click(screen.getByRole('button', { name: 'Verify in Agent Mode' }));
+    expect(onVerifyInAgent).toHaveBeenCalledTimes(1);
+    expect(onVerifyInAgent).toHaveBeenCalledWith('Ship the smallest honest slice.');
+  });
+
+  it('sends the latest agent reply once the thread has one', async () => {
+    streamDiscussMock.mockImplementation(async (_params, callbacks) => {
+      callbacks.onResult?.({
+        request_id: 'r1',
+        agent_id: 'agent_1',
+        content: 'Ship on Friday instead.',
+        conversation_history: [
+          {
+            role: 'agent',
+            content: 'Ship the smallest honest slice.',
+            timestamp: new Date().toISOString(),
+          },
+          {
+            role: 'user',
+            content: 'What is the risk?',
+            timestamp: new Date().toISOString(),
+          },
+          {
+            role: 'agent',
+            content: 'Ship on Friday instead.',
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        session_id: 's1',
+      });
+    });
+    renderWithVerify();
+
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'What is the risk?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Send message to/i }));
+    await waitFor(() =>
+      expect(screen.getByText('Ship on Friday instead.')).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verify in Agent Mode' }));
+    expect(onVerifyInAgent).toHaveBeenCalledWith('Ship on Friday instead.');
+  });
+
+  it('triggers the bridge with Shift+V', () => {
+    renderWithVerify();
+    fireEvent.keyDown(window, { key: 'V', shiftKey: true });
+    expect(onVerifyInAgent).toHaveBeenCalledTimes(1);
+    expect(onVerifyInAgent).toHaveBeenCalledWith('Ship the smallest honest slice.');
+  });
+
+  it('ignores Shift+V while a reply is streaming', async () => {
+    streamDiscussMock.mockImplementation(() => new Promise<void>(() => {}));
+    renderWithVerify();
+
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'What is the risk?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Send message to/i }));
+    await waitFor(() => expect(streamDiscussMock).toHaveBeenCalled());
+
+    fireEvent.keyDown(window, { key: 'V', shiftKey: true });
+    expect(onVerifyInAgent).not.toHaveBeenCalled();
+  });
+
+  it('disables the action for tier-gated hosts instead of faking the bridge', () => {
+    renderWithVerify({ verifyInAgentDisabled: true });
+    const button = screen.getByRole('button', { name: 'Verify in Agent Mode' });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onVerifyInAgent).not.toHaveBeenCalled();
+  });
+
+  it('refuses to verify a contentless thread and reports the failure', () => {
+    renderWithVerify({ activeAgent: emptyTake });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify in Agent Mode' }));
+    expect(onVerifyInAgent).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('alert'),
+    ).toHaveTextContent(/Nothing to verify yet/);
+  });
+});

@@ -67,6 +67,7 @@ const DISCUSS: ShortcutHint[] = [
   { keys: 'Shift + D', action: 'Download the full 1-on-1 thread as markdown' },
   { keys: 'Shift + O', action: 'Copy the full 1-on-1 thread as JSON' },
   { keys: 'Shift + J', action: 'Download the full 1-on-1 thread as JSON' },
+  { keys: 'Shift + V', action: 'Verify the focused thread in Agent Mode' },
   { keys: 'Shift + N', action: 'Start a new Arena task' },
   { keys: 'Esc', action: 'Back to Arena' },
   { keys: '?', action: 'Toggle this shortcuts list' },
@@ -370,6 +371,15 @@ export function isThreadCopyJsonKey(event: ShortcutKeyEvent): boolean {
  */
 export function isThreadDownloadJsonKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'j');
+}
+
+/**
+ * Shift+V — send the focused 1-on-1 Discuss thread into Agent Mode for
+ * deeper verification. Same letter as Arena's "verify the winner" so V
+ * consistently means "verify this take with research".
+ */
+export function isDiscussVerifyKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'v');
 }
 
 /** Shift+C — copy a completed Agent answer to the clipboard as markdown. */

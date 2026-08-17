@@ -30,6 +30,7 @@ import {
   isAgentDownloadReportMarkdownKey,
   isAgentNewTaskKey,
   isBareQuestionHelpKey,
+  isDiscussVerifyKey,
   isThreadCopyMarkdownKey,
   isThreadDownloadMarkdownKey,
   isThreadCopyJsonKey,
@@ -483,6 +484,15 @@ describe('keyboardShortcuts', () => {
     expect(isThreadDownloadJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
     expect(isThreadCopyMarkdownKey({ key: 'O', shiftKey: true })).toBe(false);
     expect(isThreadDownloadMarkdownKey({ key: 'J', shiftKey: true })).toBe(false);
+  });
+
+  it('detects the Discuss Shift+V verify key as a bare Shift+letter key', () => {
+    expect(isDiscussVerifyKey({ key: 'V', shiftKey: true })).toBe(true);
+    expect(isDiscussVerifyKey({ key: 'v', shiftKey: true })).toBe(true);
+    expect(isDiscussVerifyKey({ key: 'V' })).toBe(false);
+    expect(isDiscussVerifyKey({ key: 'V', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isDiscussVerifyKey({ key: 'V', shiftKey: true, repeat: true })).toBe(false);
+    expect(isDiscussVerifyKey({ key: 'C', shiftKey: true })).toBe(false);
   });
 
   it('ignores OS auto-repeat so holding a key cannot spam exports', () => {

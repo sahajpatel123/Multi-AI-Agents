@@ -43,6 +43,7 @@ import {
   isThreadDownloadMarkdownKey,
   isThreadCopyJsonKey,
   isThreadDownloadJsonKey,
+  isDiscussVerifyKey,
 } from '../lib/keyboardShortcuts';
 
 interface DiscussModeProps {
@@ -53,6 +54,22 @@ interface DiscussModeProps {
   onExit: () => void;
   onSwitchAgent: (agentId: string) => void;
   onSuccess?: () => void;
+  /** Hand the focused thread's latest take to Agent Mode for verification. */
+  onVerifyInAgent?: (answer: string) => void;
+  verifyInAgentLoading?: boolean;
+  verifyInAgentDisabled?: boolean;
+}
+
+/** Latest agent take in a thread, or the seeded Arena take before any reply. */
+function latestThreadTake(
+  history: DiscussChatMessage[],
+  seed: string,
+): string {
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const content = (history[i]?.content || '').trim();
+    if (history[i]?.role === 'agent' && content) return content;
+  }
+  return seed.trim();
 }
 
 export function DiscussMode({
@@ -63,6 +80,9 @@ export function DiscussMode({
   onExit,
   onSwitchAgent,
   onSuccess,
+  onVerifyInAgent,
+  verifyInAgentLoading = false,
+  verifyInAgentDisabled = false,
 }: DiscussModeProps) {
   const { panel } = usePanel();
   const slotIndex = ['agent_1', 'agent_2', 'agent_3', 'agent_4'].indexOf(
@@ -88,6 +108,7 @@ export function DiscussMode({
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
   const [copyJsonFeedback, setCopyJsonFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadJsonFeedback, setDownloadJsonFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [verifyFeedback, setVerifyFeedback] = useState<'idle' | 'failed'>('idle');
   /** Which message key last copied: 'seed' | `msg-${i}` | null */
   const [msgCopyKey, setMsgCopyKey] = useState<string | null>(null);
   const [msgCopyStatus, setMsgCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -109,6 +130,11 @@ export function DiscussMode({
   const downloadThreadJsonInFlightRef = useRef(false);
 
   const currentHistory = histories[activeAgent.response.agent_id] || [];
+  /** Latest agent take in the thread, falling back to the seeded Arena take. */
+  const latestAgentTake = latestThreadTake(
+    currentHistory,
+    activeAgent.response.verdict || activeAgent.response.one_liner || '',
+  );
   const discussBusy = discussWorkInFlight(isStreaming);
   useBusyNavigationGuard(discussBusy);
   useBusyDocumentTitle(discussBusy, titleForArenaBusy('discuss'), '/app');
@@ -157,6 +183,7 @@ export function DiscussMode({
     setDownloadFeedback('idle');
     setCopyJsonFeedback('idle');
     setDownloadJsonFeedback('idle');
+    setVerifyFeedback('idle');
   }, [activeAgent.response.agent_id]);
 
   useEffect(() => {
@@ -276,12 +303,23 @@ export function DiscussMode({
     }
   };
 
+  const handleVerifyInAgent = useCallback(() => {
+    if (!onVerifyInAgent || verifyInAgentDisabled || verifyInAgentLoading) return;
+    if (!latestAgentTake) {
+      setVerifyFeedback('failed');
+      return;
+    }
+    setVerifyFeedback('idle');
+    onVerifyInAgent(latestAgentTake);
+  }, [latestAgentTake, onVerifyInAgent, verifyInAgentDisabled, verifyInAgentLoading]);
+
   /** Latest thread export handlers so the key listener never goes stale. */
   const threadActionsRef = useRef({
     copy: handleCopyThread,
     download: handleDownloadThread,
     copyJson: handleCopyThreadJson,
     downloadJson: handleDownloadThreadJson,
+    verify: handleVerifyInAgent,
   });
 
   const copyMessage = async (
@@ -439,6 +477,7 @@ export function DiscussMode({
       download: handleDownloadThread,
       copyJson: handleCopyThreadJson,
       downloadJson: handleDownloadThreadJson,
+      verify: handleVerifyInAgent,
     };
   });
 
@@ -459,6 +498,9 @@ export function DiscussMode({
       } else if (isThreadDownloadJsonKey(e)) {
         e.preventDefault();
         threadActionsRef.current.downloadJson();
+      } else if (isDiscussVerifyKey(e)) {
+        e.preventDefault();
+        threadActionsRef.current.verify();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -810,19 +852,52 @@ export function DiscussMode({
                   ? 'Download failed'
                   : 'Download .json'}
             </button>
+            {onVerifyInAgent ? (
+              <button
+                type="button"
+                onClick={handleVerifyInAgent}
+                disabled={isStreaming || verifyInAgentDisabled || verifyInAgentLoading}
+                title={
+                  verifyInAgentDisabled
+                    ? 'Pro feature — upgrade to verify threads in Agent Mode'
+                    : 'Verify this thread in Agent Mode (Shift+V)'
+                }
+                aria-keyshortcuts="Shift+V"
+                style={{
+                  fontSize: 12,
+                  color: '#FFFFFF',
+                  background: '#0B0C0A',
+                  border: '0.5px solid #0B0C0A',
+                  borderRadius: 999,
+                  padding: '4px 10px',
+                  cursor:
+                    isStreaming || verifyInAgentDisabled || verifyInAgentLoading
+                      ? 'not-allowed'
+                      : 'pointer',
+                  opacity:
+                    isStreaming || verifyInAgentDisabled || verifyInAgentLoading ? 0.55 : 1,
+                  fontFamily: 'var(--vp-font-sans)',
+                }}
+              >
+                {verifyInAgentLoading ? 'Verifying…' : 'Verify in Agent Mode'}
+              </button>
+            ) : null}
           </div>
         </div>
         {copyFeedback === 'failed' ||
         downloadFeedback === 'failed' ||
         copyJsonFeedback === 'failed' ||
         downloadJsonFeedback === 'failed' ||
+        verifyFeedback === 'failed' ||
         msgCopyStatus === 'failed' ? (
           <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: '0 0 8px' }}>
             {msgCopyStatus === 'failed'
               ? 'Could not copy that message — try again or select text manually.'
-              : copyFeedback === 'failed' || copyJsonFeedback === 'failed'
-                ? 'Could not copy — try again or select text manually.'
-                : 'Could not download — try Copy thread instead.'}
+              : verifyFeedback === 'failed'
+                ? 'Nothing to verify yet — send a message or pick a take with an answer.'
+                : copyFeedback === 'failed' || copyJsonFeedback === 'failed'
+                  ? 'Could not copy — try again or select text manually.'
+                  : 'Could not download — try Copy thread instead.'}
           </p>
         ) : null}
 
