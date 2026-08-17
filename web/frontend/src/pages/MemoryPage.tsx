@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import '../styles/memory-page.css';
 import MicroLoader from '../components/MicroLoader';
 import { EmptyState } from '../components/EmptyState';
@@ -33,6 +33,44 @@ const PER_PAGE = 20;
 // `decision` is kept for summaries created by earlier classifiers; current
 // Arena prompt classification uses the four categories above it.
 const CATEGORY_OPTIONS = ['question', 'task', 'statement', 'debate', 'decision'] as const;
+const MEMORY_DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/;
+
+type MemoryUrlFilters = {
+  search: string;
+  category: string;
+  personaId: string;
+  fromDate: string;
+  toDate: string;
+  sort: MemorySummarySort;
+};
+
+function isMemorySort(value: string | null): value is MemorySummarySort {
+  return (
+    value === 'newest' ||
+    value === 'oldest' ||
+    value === 'most_exchanges' ||
+    value === 'fewest_exchanges'
+  );
+}
+
+function readMemoryUrlFilters(searchParams: URLSearchParams): MemoryUrlFilters {
+  const read = (key: string) => searchParams.get(key)?.trim() || '';
+  const category = read('category');
+  const personaId = read('persona_id');
+  const fromDate = read('from_date');
+  const toDate = read('to_date');
+  const sort = searchParams.get('sort');
+  return {
+    search: read('search'),
+    category: CATEGORY_OPTIONS.includes(category as (typeof CATEGORY_OPTIONS)[number])
+      ? category
+      : '',
+    personaId: PERSONAS.some((persona) => persona.id === personaId) ? personaId : '',
+    fromDate: MEMORY_DATE_PARAM.test(fromDate) ? fromDate : '',
+    toDate: MEMORY_DATE_PARAM.test(toDate) ? toDate : '',
+    sort: isMemorySort(sort) ? sort : 'newest',
+  };
+}
 
 /** Persona display names for the `trusted_persona` field. The raw id stays the
  * source of truth; this is presentation-only with a graceful fallback. */
@@ -164,15 +202,17 @@ function memoryFilterParams(
 
 export function MemoryPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialUrlFilters = readMemoryUrlFilters(searchParams);
   const { canUseFeature } = useTier();
   const canMemory = canUseFeature('memory');
-  const [rawSearch, setRawSearch] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [personaFilter, setPersonaFilter] = useState('');
-  const [fromDateFilter, setFromDateFilter] = useState('');
-  const [toDateFilter, setToDateFilter] = useState('');
-  const [sortOrder, setSortOrder] = useState<MemorySummarySort>('newest');
+  const [rawSearch, setRawSearch] = useState(initialUrlFilters.search);
+  const [searchQuery, setSearchQuery] = useState(initialUrlFilters.search);
+  const [categoryFilter, setCategoryFilter] = useState(initialUrlFilters.category);
+  const [personaFilter, setPersonaFilter] = useState(initialUrlFilters.personaId);
+  const [fromDateFilter, setFromDateFilter] = useState(initialUrlFilters.fromDate);
+  const [toDateFilter, setToDateFilter] = useState(initialUrlFilters.toDate);
+  const [sortOrder, setSortOrder] = useState<MemorySummarySort>(initialUrlFilters.sort);
   const [items, setItems] = useState<MemorySummary[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
@@ -225,6 +265,48 @@ export function MemoryPage() {
     setSelectionExportStatus(null);
     setSelectionExportError(null);
   }, []);
+
+  // Keep the browser URL as a shareable representation of the current view.
+  // Replacing the entry means typing or changing a filter does not create a
+  // long trail of intermediate states in the back-button history.
+  const setMemoryUrlValue = useCallback(
+    (key: string, value: string, defaultValue = '') => {
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          if (value && value !== defaultValue) next.set(key, value);
+          else next.delete(key);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const clearMemoryUrlFilters = useCallback(() => {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        ['category', 'persona_id', 'from_date', 'to_date'].forEach((key) => next.delete(key));
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
+  // Also accept browser back/forward navigation or a newly shared URL while
+  // the page is mounted. Local state remains the source for the debounced API
+  // query, so this follows the same refresh behavior as a typed search.
+  useEffect(() => {
+    const next = readMemoryUrlFilters(searchParams);
+    setRawSearch((current) => (current === next.search ? current : next.search));
+    setCategoryFilter((current) => (current === next.category ? current : next.category));
+    setPersonaFilter((current) => (current === next.personaId ? current : next.personaId));
+    setFromDateFilter((current) => (current === next.fromDate ? current : next.fromDate));
+    setToDateFilter((current) => (current === next.toDate ? current : next.toDate));
+    setSortOrder((current) => (current === next.sort ? current : next.sort));
+  }, [searchParams]);
 
   // Debounce the raw search box into the query actually sent to the API.
   useEffect(() => {
@@ -735,7 +817,8 @@ export function MemoryPage() {
             {!loading && <span className="memory-page__title-count">{total} saved</span>}
           </div>
           <p className="memory-page__lede">
-            What Arena has learned across your sessions, compressed after each one ends.
+            What Arena has learned across your sessions, compressed after each one ends. Search
+            and filter choices stay in the link, so you can bookmark or share this view.
           </p>
         </div>
       </header>
@@ -750,7 +833,11 @@ export function MemoryPage() {
             type="search"
             className="memory-search__input"
             value={rawSearch}
-            onChange={(event) => setRawSearch(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value;
+              setRawSearch(value);
+              setMemoryUrlValue('search', value.trim());
+            }}
             placeholder="Search what Arena remembers…"
             aria-label="Search memory summaries"
           />
@@ -766,7 +853,11 @@ export function MemoryPage() {
               className="memory-filter__select"
               aria-label="Filter memory by category"
               value={categoryFilter}
-              onChange={(event) => setCategoryFilter(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setCategoryFilter(value);
+                setMemoryUrlValue('category', value);
+              }}
             >
               <option value="">All kinds</option>
               {CATEGORY_OPTIONS.map((category) => (
@@ -782,7 +873,11 @@ export function MemoryPage() {
               className="memory-filter__select"
               aria-label="Filter memory by trusted mind"
               value={personaFilter}
-              onChange={(event) => setPersonaFilter(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setPersonaFilter(value);
+                setMemoryUrlValue('persona_id', value);
+              }}
             >
               <option value="">All minds</option>
               {PERSONAS.map((persona) => (
@@ -800,7 +895,11 @@ export function MemoryPage() {
               aria-label="Filter memory from date"
               value={fromDateFilter}
               max={toDateFilter || undefined}
-              onChange={(event) => setFromDateFilter(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setFromDateFilter(value);
+                setMemoryUrlValue('from_date', value);
+              }}
             />
           </label>
           <label className="memory-filter memory-filter--date">
@@ -811,7 +910,11 @@ export function MemoryPage() {
               aria-label="Filter memory to date"
               value={toDateFilter}
               min={fromDateFilter || undefined}
-              onChange={(event) => setToDateFilter(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setToDateFilter(value);
+                setMemoryUrlValue('to_date', value);
+              }}
             />
           </label>
           <label className="memory-filter">
@@ -820,7 +923,11 @@ export function MemoryPage() {
               className="memory-filter__select"
               aria-label="Sort memory summaries"
               value={sortOrder}
-              onChange={(event) => setSortOrder(event.target.value as MemorySummarySort)}
+              onChange={(event) => {
+                const value = event.target.value as MemorySummarySort;
+                setSortOrder(value);
+                setMemoryUrlValue('sort', value, 'newest');
+              }}
             >
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
@@ -837,6 +944,7 @@ export function MemoryPage() {
                 setPersonaFilter('');
                 setFromDateFilter('');
                 setToDateFilter('');
+                clearMemoryUrlFilters();
               }}
             >
               Clear filters
@@ -1085,7 +1193,10 @@ export function MemoryPage() {
                   type="button"
                   variant="secondary"
                   size="md"
-                  onClick={() => setRawSearch('')}
+                  onClick={() => {
+                    setRawSearch('');
+                    setMemoryUrlValue('search', '');
+                  }}
                 >
                   Clear search
                 </MotionButton>

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { MemoryPage } from './MemoryPage';
 import { ApiError, type MemorySummary, type MemorySummariesResponse } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
@@ -107,10 +107,16 @@ vi.mock('../lib/clipboard', () => ({
   copyToClipboard: vi.fn(),
 }));
 
-function renderPage() {
+function MemoryLocationProbe() {
+  const location = useLocation();
+  return <output data-testid="memory-location">{location.search}</output>;
+}
+
+function renderPage(initialEntry = '/memory') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <MemoryPage />
+      <MemoryLocationProbe />
     </MemoryRouter>,
   );
 }
@@ -330,6 +336,50 @@ describe('MemoryPage', () => {
         perPage: 20,
         search: 'IPO',
       });
+    });
+  });
+
+  it('restores filters from a shared URL and keeps the view linkable', async () => {
+    renderPage(
+      '/memory?search=IPO+notes&category=decision&persona_id=analyst&from_date=2026-08-01&to_date=2026-08-16&sort=oldest',
+    );
+
+    expect(screen.getByRole('searchbox', { name: 'Search memory summaries' })).toHaveValue(
+      'IPO notes',
+    );
+    expect(screen.getByRole('combobox', { name: 'Filter memory by category' })).toHaveValue(
+      'decision',
+    );
+    expect(screen.getByRole('combobox', { name: 'Filter memory by trusted mind' })).toHaveValue(
+      'analyst',
+    );
+    expect(screen.getByLabelText('Filter memory from date')).toHaveValue('2026-08-01');
+    expect(screen.getByLabelText('Filter memory to date')).toHaveValue('2026-08-16');
+    expect(screen.getByRole('combobox', { name: 'Sort memory summaries' })).toHaveValue('oldest');
+
+    expect(await screen.findByText('Indian IPO market')).toBeInTheDocument();
+    expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+      page: 1,
+      perPage: 20,
+      search: 'IPO notes',
+      category: 'decision',
+      personaId: 'analyst',
+      fromDate: '2026-08-01',
+      toDate: '2026-08-16',
+      sort: 'oldest',
+    });
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter memory by category' }), {
+      target: { value: 'task' },
+    });
+    await waitFor(() => {
+      const params = new URLSearchParams(screen.getByTestId('memory-location').textContent || '');
+      expect(params.get('search')).toBe('IPO notes');
+      expect(params.get('category')).toBe('task');
+      expect(params.get('persona_id')).toBe('analyst');
+      expect(params.get('from_date')).toBe('2026-08-01');
+      expect(params.get('to_date')).toBe('2026-08-16');
+      expect(params.get('sort')).toBe('oldest');
     });
   });
 
