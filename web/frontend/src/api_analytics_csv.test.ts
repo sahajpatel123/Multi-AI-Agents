@@ -55,11 +55,11 @@ describe('Analytics CSV export frontend API helpers', () => {
       })
     );
 
-    const res = await exportAnalyticsPersonaWinRateCsv(14);
+    const res = await exportAnalyticsPersonaWinRateCsv(14, 5);
     expectBlob(res.blob);
     expect(res.filename).toBe('arena-persona-win-rate-2026-08-01-to-2026-08-14.csv');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
-      '/api/analytics/persona-win-rate/export.csv?window_days=14',
+      '/api/analytics/persona-win-rate/export.csv?window_days=14&min_appearances=5',
       {}
     );
   });
@@ -88,11 +88,11 @@ describe('Analytics CSV export frontend API helpers', () => {
       }),
     );
 
-    const res = await exportAnalyticsPersonaWinRateJson(14);
+    const res = await exportAnalyticsPersonaWinRateJson(14, 3);
     expectBlob(res.blob);
     expect(res.filename).toBe('arena-persona-win-rate-2026-08-01-to-2026-08-14.json');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
-      '/api/analytics/persona-win-rate/export.json?window_days=14',
+      '/api/analytics/persona-win-rate/export.json?window_days=14&min_appearances=3',
       {},
     );
   });
@@ -105,6 +105,13 @@ describe('Analytics CSV export frontend API helpers', () => {
     const res = await exportAnalyticsPersonaWinRateJson(7);
     expectBlob(res.blob);
     expect(res.filename).toBe('arena-persona-win-rates-7d.json');
+  });
+
+  it('rejects an invalid persona win-rate sample floor before fetching', async () => {
+    await expect(exportAnalyticsPersonaWinRateCsv(30, 0)).rejects.toThrow(
+      'minAppearances must be an integer between 1 and 200',
+    );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
   });
 
   it('exportAnalyticsCategoryStatsCsv fetches expected endpoint', async () => {

@@ -170,6 +170,7 @@ function TabIconHelp({ active }: { active: boolean }) {
 
 const PLACEHOLDER_HISTORY = [8, 14, 11, 19, 15, 22, 17, 12, 25, 18, 14, 21, 10, 28];
 const PERSONA_WIN_RATE_WINDOWS = [7, 30, 90] as const;
+const PERSONA_WIN_RATE_MIN_APPEARANCES = [1, 3, 5, 10] as const;
 
 function UsageChart({
   data,
@@ -373,6 +374,7 @@ export function ProfileModal() {
   const [winRateErr, setWinRateErr] = useState<string | null>(null);
   const [winRateReload, setWinRateReload] = useState(0);
   const [winRateWindowDays, setWinRateWindowDays] = useState(30);
+  const [winRateMinAppearances, setWinRateMinAppearances] = useState(1);
   const [calStats, setCalStats] = useState<{
     total_ratings?: number;
     avg_delta?: number;
@@ -478,7 +480,7 @@ export function ProfileModal() {
     let cancelled = false;
     setWinRateLoading(true);
     setWinRateErr(null);
-    void getAnalyticsPersonaWinRate(winRateWindowDays)
+    void getAnalyticsPersonaWinRate(winRateWindowDays, winRateMinAppearances)
       .then((w) => {
         if (!cancelled) setWinRate(w);
       })
@@ -494,7 +496,7 @@ export function ProfileModal() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, activeTab, winRateReload, winRateWindowDays]);
+  }, [isOpen, activeTab, winRateReload, winRateWindowDays, winRateMinAppearances]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -1445,38 +1447,72 @@ export function ProfileModal() {
                   >
                     Persona win rates · {winRateWindowDays} days
                   </div>
-                  <label
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      color: '#A0A39A',
-                      fontSize: 11,
-                      fontFamily: 'var(--vp-font-sans)',
-                    }}
-                  >
-                    <span>Window</span>
-                    <select
-                      aria-label="Persona win-rate window"
-                      value={winRateWindowDays}
-                      onChange={(event) => setWinRateWindowDays(Number(event.target.value))}
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <label
                       style={{
-                        border: '0.5px solid #E0D5C5',
-                        borderRadius: 5,
-                        background: '#F0E8DC',
-                        color: '#F3F0E7',
-                        padding: '4px 6px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        color: '#A0A39A',
                         fontSize: 11,
                         fontFamily: 'var(--vp-font-sans)',
                       }}
                     >
-                      {PERSONA_WIN_RATE_WINDOWS.map((days) => (
-                        <option key={days} value={days}>
-                          {days} days
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      <span>Window</span>
+                      <select
+                        aria-label="Persona win-rate window"
+                        value={winRateWindowDays}
+                        onChange={(event) => setWinRateWindowDays(Number(event.target.value))}
+                        style={{
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 5,
+                          background: '#F0E8DC',
+                          color: '#F3F0E7',
+                          padding: '4px 6px',
+                          fontSize: 11,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        {PERSONA_WIN_RATE_WINDOWS.map((days) => (
+                          <option key={days} value={days}>
+                            {days} days
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        color: '#A0A39A',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      <span>Minimum sample</span>
+                      <select
+                        aria-label="Persona win-rate minimum appearances"
+                        value={winRateMinAppearances}
+                        onChange={(event) => setWinRateMinAppearances(Number(event.target.value))}
+                        style={{
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 5,
+                          background: '#F0E8DC',
+                          color: '#F3F0E7',
+                          padding: '4px 6px',
+                          fontSize: 11,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        {PERSONA_WIN_RATE_MIN_APPEARANCES.map((appearances) => (
+                          <option key={appearances} value={appearances}>
+                            {appearances === 1 ? 'Any sample' : `${appearances}+ appearances`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                 </div>
                 {winRateLoading ? (
                   <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }} role="status">
@@ -1510,9 +1546,11 @@ export function ProfileModal() {
                     <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
                       {winRate.scored_exchanges === 0 && winRate.fallback_exchanges > 0
                         ? `No judged panels in the last ${winRateWindowDays} days yet — fallback scorings are excluded.`
-                        : winRate.scored_exchanges === 0 && winRate.unattributed_exchanges > 0
-                          ? `No panels with recorded appearances in the last ${winRateWindowDays} days yet.`
-                          : `No scored panels in the last ${winRateWindowDays} days yet.`}
+                          : winRate.scored_exchanges === 0 && winRate.unattributed_exchanges > 0
+                            ? `No panels with recorded appearances in the last ${winRateWindowDays} days yet.`
+                            : winRate.min_appearances > 1
+                              ? `No persona reached the ${winRate.min_appearances}-appearance minimum in the last ${winRateWindowDays} days.`
+                              : `No scored panels in the last ${winRateWindowDays} days yet.`}
                     </p>
                   ) : (
                     <div role="group" aria-label="Persona win rates">
@@ -1654,7 +1692,10 @@ export function ProfileModal() {
                     onClick={async () => {
                       setActiveExport('win-rate');
                       try {
-                        const { blob, filename } = await exportAnalyticsPersonaWinRateCsv(winRateWindowDays);
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateCsv(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                        );
                         downloadBlobFile(blob, filename);
                       } catch {
                         // ignore error
@@ -1683,7 +1724,10 @@ export function ProfileModal() {
                     onClick={async () => {
                       setActiveExport('win-rate-md');
                       try {
-                        const { blob, filename } = await exportAnalyticsPersonaWinRateMarkdown(winRateWindowDays);
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateMarkdown(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                        );
                         downloadBlobFile(blob, filename);
                       } catch {
                         // ignore error
@@ -1712,7 +1756,10 @@ export function ProfileModal() {
                     onClick={async () => {
                       setActiveExport('win-rate-json');
                       try {
-                        const { blob, filename } = await exportAnalyticsPersonaWinRateJson(winRateWindowDays);
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateJson(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                        );
                         downloadBlobFile(blob, filename);
                       } catch {
                         // ignore error

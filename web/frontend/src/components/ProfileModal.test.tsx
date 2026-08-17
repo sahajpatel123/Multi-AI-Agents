@@ -375,7 +375,7 @@ describe('ProfileModal', () => {
     exportButton.click();
 
     await waitFor(() => {
-      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(7);
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(7, 1);
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-persona-win-rate-2026-08-11-to-2026-08-17.json',
@@ -546,7 +546,7 @@ describe('ProfileModal', () => {
     expect(within(group).getByText('75%')).toBeInTheDocument();
     expect(within(group).getByText(/best:/i)).toHaveTextContent('The Analyst');
     expect(within(group).getByText('low sample')).toBeInTheDocument();
-    expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenCalledWith(30);
+    expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenCalledWith(30, 1);
   });
 
   it('refreshes persona win rates when the analysis window changes', async () => {
@@ -564,9 +564,33 @@ describe('ProfileModal', () => {
     fireEvent.change(windowSelect, { target: { value: '7' } });
 
     await waitFor(() => {
-      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7);
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7, 1);
     });
     expect(screen.getByText('Persona win rates · 7 days')).toBeInTheDocument();
+  });
+
+  it('refreshes persona win rates and exports when the minimum sample changes', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const sampleSelect = await screen.findByRole('combobox', {
+      name: /persona win-rate minimum appearances/i,
+    });
+    expect(sampleSelect).toHaveValue('1');
+    fireEvent.change(sampleSelect, { target: { value: '5' } });
+
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(30, 5);
+    });
+
+    const exportButton = await screen.findByRole('button', { name: /win rates json export/i });
+    exportButton.click();
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(30, 5);
+    });
   });
 
   it('uses the selected window and server filename for the win-rate CSV export', async () => {
@@ -588,7 +612,7 @@ describe('ProfileModal', () => {
     exportButton.click();
 
     await waitFor(() => {
-      expect(hoistedMocks.exportAnalyticsPersonaWinRateCsv).toHaveBeenCalledWith(7);
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateCsv).toHaveBeenCalledWith(7, 1);
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-persona-win-rate-2026-08-11-to-2026-08-17.csv',
@@ -694,6 +718,23 @@ describe('ProfileModal', () => {
 
     expect(
       await screen.findByText('Could not load persona win rates'),
+    ).toBeInTheDocument();
+  });
+
+  it('explains when the minimum sample hides all personas', async () => {
+    hoistedMocks.getAnalyticsPersonaWinRate.mockResolvedValueOnce(
+      emptyWinRatePayload({ scored_exchanges: 4, min_appearances: 5 }),
+    );
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    expect(
+      await screen.findByText(
+        'No persona reached the 5-appearance minimum in the last 30 days.',
+      ),
     ).toBeInTheDocument();
   });
 

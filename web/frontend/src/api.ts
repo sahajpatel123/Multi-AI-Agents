@@ -3546,10 +3546,23 @@ export type AnalyticsPersonaWinRateCsvExport = {
   filename: string;
 };
 
+function personaWinRateExportQuery(windowDays: number, minAppearances: number): string {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  if (!Number.isInteger(minAppearances) || minAppearances < 1 || minAppearances > 200) {
+    throw new RangeError('minAppearances must be an integer between 1 and 200');
+  }
+  return `window_days=${encodeURIComponent(String(windowDays))}&min_appearances=${encodeURIComponent(String(minAppearances))}`;
+}
+
 export async function exportAnalyticsPersonaWinRateCsv(
   windowDays: number = 30,
+  minAppearances: number = 1,
 ): Promise<AnalyticsPersonaWinRateCsvExport> {
-  const response = await apiFetch(`/api/analytics/persona-win-rate/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate/export.csv?${personaWinRateExportQuery(windowDays, minAppearances)}`,
+  );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(getErrorMessage(err, 'Failed to export persona win rate CSV'), response.status, err);
@@ -3567,9 +3580,10 @@ export type AnalyticsPersonaWinRateJsonExport = {
 
 export async function exportAnalyticsPersonaWinRateJson(
   windowDays: number = 30,
+  minAppearances: number = 1,
 ): Promise<AnalyticsPersonaWinRateJsonExport> {
   const response = await apiFetch(
-    `/api/analytics/persona-win-rate/export.json?window_days=${encodeURIComponent(String(windowDays))}`,
+    `/api/analytics/persona-win-rate/export.json?${personaWinRateExportQuery(windowDays, minAppearances)}`,
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
@@ -3592,9 +3606,10 @@ export type AnalyticsPersonaWinRateMarkdownExport = {
 
 export async function exportAnalyticsPersonaWinRateMarkdown(
   windowDays: number = 30,
+  minAppearances: number = 1,
 ): Promise<AnalyticsPersonaWinRateMarkdownExport> {
   const response = await apiFetch(
-    `/api/analytics/persona-win-rate/export.md?window_days=${encodeURIComponent(String(windowDays))}`,
+    `/api/analytics/persona-win-rate/export.md?${personaWinRateExportQuery(windowDays, minAppearances)}`,
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);

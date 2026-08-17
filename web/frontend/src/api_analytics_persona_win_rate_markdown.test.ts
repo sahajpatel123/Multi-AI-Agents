@@ -29,9 +29,9 @@ describe('Analytics persona win-rate Markdown export frontend API helper', () =>
       }),
     );
 
-    const res = await exportAnalyticsPersonaWinRateMarkdown(14);
+    const res = await exportAnalyticsPersonaWinRateMarkdown(14, 10);
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
-      '/api/analytics/persona-win-rate/export.md?window_days=14',
+      '/api/analytics/persona-win-rate/export.md?window_days=14&min_appearances=10',
       {},
     );
     expectBlob(res.blob);
