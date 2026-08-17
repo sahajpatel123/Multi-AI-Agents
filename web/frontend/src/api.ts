@@ -2125,6 +2125,35 @@ export async function deleteAgentWatchlist(itemId: string): Promise<void> {
   }
 }
 
+export type AgentWatchlistBulkDeleteResult = {
+  success: boolean;
+  requested: number;
+  deleted: number;
+  deleted_ids: string[];
+  skipped_ids: string[];
+};
+
+export async function deleteAgentWatchlistBulk(
+  ids: string[],
+): Promise<AgentWatchlistBulkDeleteResult> {
+  const response = await apiFetch(`/api/agent/watchlist/bulk`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  const data = await parseJsonSafely<
+    AgentWatchlistBulkDeleteResult & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok || !data) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not remove selected watches'), response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
 export type AgentWatchlistHistoryRun = {
   task_id: string;
   title: string | null;

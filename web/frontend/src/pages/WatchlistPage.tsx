@@ -10,6 +10,7 @@ import { ExpertiseSelector } from '../components/ExpertiseSelector';
 import {
   ApiError,
   createAgentTaskShare,
+  deleteAgentWatchlistBulk,
   deleteAgentWatchlist,
   exportAgentWatchlistHistoryCsv,
   exportAgentWatchlistHistoryJson,
@@ -150,6 +151,9 @@ export function WatchlistPage() {
   const [runNowBusyId, setRunNowBusyId] = useState<string | null>(null);
   const [duplicateBusyId, setDuplicateBusyId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteArmed, setBulkDeleteArmed] = useState(false);
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
   const [editingItem, setEditingItem] = useState<AgentWatchlistItem | null>(null);
   const [editQuestion, setEditQuestion] = useState('');
   const [editLevel, setEditLevel] = useState('curious');
@@ -594,6 +598,12 @@ export function WatchlistPage() {
       setBulkNotice(null);
       await deleteAgentWatchlist(id);
       setItems((prev) => prev.filter((x) => x.id !== id));
+      setSelectedIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       setPendingDeleteId(null);
       const data = await getAgentWatchlist();
       setActiveCount(data.active_count);
@@ -601,6 +611,55 @@ export function WatchlistPage() {
       void refreshStats();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Delete failed');
+    }
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+    setBulkDeleteArmed(false);
+  };
+
+  const onBulkDeleteSelected = async () => {
+    if (bulkDeleteBusy || selectedIds.size === 0) return;
+    if (!bulkDeleteArmed) {
+      setBulkDeleteArmed(true);
+      return;
+    }
+    const ids = [...selectedIds];
+    setBulkDeleteBusy(true);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      const result = await deleteAgentWatchlistBulk(ids);
+      setItems((prev) => prev.filter((x) => !result.deleted_ids.includes(x.id)));
+      setSelectedIds(new Set());
+      setBulkDeleteArmed(false);
+      const skipped = result.requested - result.deleted;
+      setBulkNotice(
+        skipped > 0
+          ? `Removed ${result.deleted} of ${result.requested} selected ${
+              result.requested === 1 ? 'watch' : 'watches'
+            }; ${skipped} no longer existed.`
+          : `Removed ${result.deleted} selected ${
+              result.deleted === 1 ? 'watch' : 'watches'
+            }.`,
+      );
+      const data = await getAgentWatchlist();
+      setActiveCount(data.active_count);
+      setTotalCount(data.total);
+      void refreshStats();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Bulk delete failed');
+    } finally {
+      setBulkDeleteBusy(false);
     }
   };
 
@@ -1561,6 +1620,35 @@ export function WatchlistPage() {
             >
               {bulkBusy === 'resume_all' ? 'Resuming…' : `Resume paused (${pausedCount})`}
             </button>
+            {selectedIds.size > 0 ? (
+              <button
+                type="button"
+                onClick={() => void onBulkDeleteSelected()}
+                disabled={bulkDeleteBusy}
+                title={
+                  bulkDeleteArmed
+                    ? `Confirm removing ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'}`
+                    : `Remove ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'}`
+                }
+                aria-label={
+                  bulkDeleteArmed
+                    ? `Confirm remove ${selectedIds.size} selected watches`
+                    : `Remove ${selectedIds.size} selected watches`
+                }
+                className={[
+                  'watchlist-header-btn',
+                  bulkDeleteArmed ? 'watchlist-header-btn--danger' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                {bulkDeleteBusy
+                  ? 'Removing…'
+                  : bulkDeleteArmed
+                    ? `Remove ${selectedIds.size}?`
+                    : `Remove selected (${selectedIds.size})`}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void copyWatchlist()}
@@ -2182,6 +2270,18 @@ export function WatchlistPage() {
                     .filter(Boolean)
                     .join(' ')}
                 >
+                  <label className="watchlist-item__select">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={() => toggleSelected(item.id)}
+                      aria-label={
+                        selectedIds.has(item.id)
+                          ? `Deselect "${item.question}" for bulk remove`
+                          : `Select "${item.question}" for bulk remove`
+                      }
+                    />
+                  </label>
                   <div className="watchlist-item__badge">
                     <span className="watchlist-item__badge-num">{badge.num}</span>
                     <span className="watchlist-item__badge-unit">{badge.unit}</span>

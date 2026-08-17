@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Watchlist supports multi-select bulk removal: tick the checkboxes on several
+  watches and use "Remove selected (N)" to clear them in one confirmed request,
+  with honest partial-success reporting when some ids have already gone
 - Watchlist exports every completed latest result in the current view as a
   markdown digest file (Download digest, Shift+M), mirroring the existing
   Copy digest action with the same completed-only, filter-aware content

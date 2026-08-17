@@ -54,6 +54,7 @@ const tierState: {
 const navigateMock = vi.fn();
 const getAgentWatchlistMock = vi.fn();
 const patchAgentWatchlistBulkMock = vi.fn();
+const deleteAgentWatchlistBulkMock = vi.fn();
 const patchAgentWatchlistMock = vi.fn();
 const postAgentWatchlistRunMock = vi.fn();
 const postAgentWatchlistDuplicateMock = vi.fn();
@@ -100,6 +101,8 @@ vi.mock('../api', async () => {
     postAgentWatchlistDuplicate: (...args: unknown[]) =>
       postAgentWatchlistDuplicateMock(...args),
     patchAgentWatchlistBulk: (...args: unknown[]) => patchAgentWatchlistBulkMock(...args),
+    deleteAgentWatchlistBulk: (...args: unknown[]) =>
+      deleteAgentWatchlistBulkMock(...args),
     deleteAgentWatchlist: vi.fn().mockResolvedValue(undefined),
     ApiError: actual.ApiError,
   };
@@ -192,6 +195,14 @@ describe('WatchlistPage', () => {
       active_count: 0,
       paused_count: 2,
       active_cap: 10,
+    });
+    deleteAgentWatchlistBulkMock.mockReset();
+    deleteAgentWatchlistBulkMock.mockResolvedValue({
+      success: true,
+      requested: 2,
+      deleted: 2,
+      deleted_ids: ['item-1', 'item-2'],
+      skipped_ids: [],
     });
     patchAgentWatchlistMock.mockReset();
     patchAgentWatchlistMock.mockImplementation(
@@ -383,6 +394,130 @@ describe('WatchlistPage', () => {
       expect(patchAgentWatchlistBulkMock).toHaveBeenCalledWith('pause_all');
     });
     expect(await screen.findByText('Paused 1 active watch.')).toBeInTheDocument();
+  });
+
+  it('removes selected watches in bulk after confirming', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Select "How is the Indian IPO market evolving?" for bulk remove',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Select "Will the monsoon affect Indian agriculture exports?" for bulk remove',
+      }),
+    );
+
+    const removeButton = screen.getByRole('button', {
+      name: 'Remove 2 selected watches',
+    });
+    expect(removeButton).toHaveTextContent('Remove selected (2)');
+
+    // First click arms the destructive action; only the second click fires.
+    fireEvent.click(removeButton);
+    expect(
+      screen.getByRole('button', { name: 'Confirm remove 2 selected watches' }),
+    ).toHaveTextContent('Remove 2?');
+    expect(deleteAgentWatchlistBulkMock).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm remove 2 selected watches' }),
+    );
+    await waitFor(() => {
+      expect(deleteAgentWatchlistBulkMock).toHaveBeenCalledWith([
+        'item-1',
+        'item-2',
+      ]);
+    });
+
+    expect(
+      await screen.findByText('Removed 2 selected watches.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('How is the Indian IPO market evolving?'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Will the monsoon affect Indian agriculture exports?'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('reports partial bulk removal honestly when some ids no longer exist', async () => {
+    deleteAgentWatchlistBulkMock.mockResolvedValue({
+      success: true,
+      requested: 2,
+      deleted: 1,
+      deleted_ids: ['item-1'],
+      skipped_ids: ['item-2'],
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Select "How is the Indian IPO market evolving?" for bulk remove',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Select "Will the monsoon affect Indian agriculture exports?" for bulk remove',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove 2 selected watches' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm remove 2 selected watches' }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Removed 1 of 2 selected watches; 1 no longer existed.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('How is the Indian IPO market evolving?'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Will the monsoon affect Indian agriculture exports?'),
+    ).toBeInTheDocument();
+  });
+
+  it('surfaces bulk remove failures without dropping the selection', async () => {
+    deleteAgentWatchlistBulkMock.mockRejectedValueOnce(
+      new ApiError('Bulk delete failed', 500),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Select "How is the Indian IPO market evolving?" for bulk remove',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove 1 selected watches' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm remove 1 selected watches' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Bulk delete failed');
+    // The item and its selection survive a failed request so the user can retry.
+    expect(
+      screen.getByText('How is the Indian IPO market evolving?'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Confirm remove 1 selected watches' }),
+    ).toBeInTheDocument();
   });
 
   it('starts an immediate re-check through the run-now endpoint', async () => {

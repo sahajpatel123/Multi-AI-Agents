@@ -220,6 +220,12 @@
   color: #d85a30;
 }
 
+.watchlist-header-btn--danger {
+  color: #b85c38;
+  border-color: #c97a5c;
+  background: #f9efe8;
+}
+
 /* Filter pill row + pill (status / urgency / cadence) — 5x instances */
 .watchlist-pill-row {
   display: flex;
@@ -333,6 +339,21 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.watchlist-item__select {
+  width: 18px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding-top: 3px;
+}
+
+.watchlist-item__select input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #b85c38;
 }
 
 .watchlist-item__badge-num {

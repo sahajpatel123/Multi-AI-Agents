@@ -618,6 +618,26 @@ class WatchlistBulkBody(BaseModel):
     action: Literal["pause_all", "resume_all"]
 
 
+class WatchlistBulkDeleteBody(BaseModel):
+    """Body schema for bulk watchlist removal.
+
+    Mirrors the saved-library bulk delete contract: the client sends the
+    ids to remove, the server scopes them to the requesting user, and the
+    response reports requested/deleted/skipped so the UI can show an honest
+    partial-success message instead of pretending a stale id was removed.
+    """
+
+    ids: list[str] = Field(..., min_length=1, max_length=50)
+
+    @field_validator("ids")
+    @classmethod
+    def validate_watchlist_delete_ids(cls, values: list[str]) -> list[str]:
+        cleaned = [v.strip() for v in values if v and v.strip()]
+        if not cleaned:
+            raise ValueError("ids must contain at least one non-empty id")
+        return list(dict.fromkeys(cleaned))
+
+
 ANALYST_CHALLENGE_PROMPT = """
 You are The Analyst challenging an AI-generated answer.
 
@@ -3482,6 +3502,59 @@ async def duplicate_watchlist_item(
     db.commit()
     db.refresh(copy)
     return JSONResponse(content=_watchlist_item_api_dict(db, copy))
+
+
+@router.delete("/watchlist/bulk")
+async def delete_watchlist_bulk(
+    body: WatchlistBulkDeleteBody,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Bulk delete — for the 'clear several stale watches at once' cleanup.
+
+    Ids not owned by the caller are silently dropped from the delete set
+    (same ownership-scoping as the saved-library bulk delete). The response
+    reports requested / deleted counts plus the exact deleted and skipped
+    ids so the client can reconcile a mixed or partial request honestly.
+
+    ORM deletion is used per row (rather than a bulk ``Query.delete``) so
+    SQLAlchemy still nullifies each item's spawned ``AgentTask`` references
+    before the parent row goes away — matching the single-delete path and
+    keeping run history intact when a watch is removed.
+    """
+    _ensure_agent_watchlist_access(user)
+    # Destructive bulk mutation: bound the burst so a runaway client cannot
+    # mass-wipe a user's watchlist (and the scheduler entries that feed it).
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_bulk_delete",
+        limit=15,
+        window_seconds=3600,
+        message="Too many watchlist bulk deletions. Limit is 15 per hour.",
+    )
+
+    unique_ids = list(dict.fromkeys(body.ids))
+    requested = len(unique_ids)
+    owned = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id.in_(unique_ids), WatchlistItem.user_id == user.id)
+        .all()
+    )
+    deleted_ids = [item.id for item in owned]
+    for item in owned:
+        db.delete(item)
+    db.commit()
+
+    skipped_ids = [item_id for item_id in unique_ids if item_id not in deleted_ids]
+    return JSONResponse(
+        content={
+            "success": True,
+            "requested": requested,
+            "deleted": len(deleted_ids),
+            "deleted_ids": deleted_ids,
+            "skipped_ids": skipped_ids,
+        }
+    )
 
 
 @router.delete("/watchlist/{item_id}")
