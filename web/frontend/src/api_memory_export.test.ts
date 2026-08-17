@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { exportMemorySummaries, listMemorySummaries } from './api';
+import { deleteMemorySummaries, exportMemorySummaries, listMemorySummaries } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -157,6 +157,33 @@ describe('exportMemorySummaries', () => {
     await expect(exportMemorySummaries('csv')).rejects.toMatchObject({
       status: 429,
       message: 'Too many exports (Request ID: req-memory-export)',
+    });
+  });
+});
+
+describe('deleteMemorySummaries', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('deduplicates selected ids and returns the server reconciliation', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: 'deleted', requested: 2, deleted: 1, ids: [4] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(deleteMemorySummaries([4, 4, 9])).resolves.toEqual({
+      status: 'deleted',
+      requested: 2,
+      deleted: 1,
+      ids: [4],
+    });
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/memory/summaries/bulk', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [4, 9] }),
     });
   });
 });

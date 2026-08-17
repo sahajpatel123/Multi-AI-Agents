@@ -514,11 +514,61 @@ async def test_delete_403_for_free_tier(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_bulk_delete_removes_owned_ids_and_skips_foreign_ids(
+    app_client, make_user, db_session
+):
+    user = make_user(email="mem-bulk-del@test.com", tier=UserTier.PLUS)
+    first = _seed_summary(db_session, user_id=user.id, session_id="bulk-1")
+    second = _seed_summary(db_session, user_id=user.id, session_id="bulk-2")
+    foreign = _seed_summary(db_session, user_id=user.id + 999, session_id="bulk-foreign")
+    db_session.add_all([first, second, foreign])
+    db_session.commit()
+    db_session.refresh(first)
+    db_session.refresh(second)
+    db_session.refresh(foreign)
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/memory/summaries/bulk",
+        headers=_pro_headers(user),
+        json={"ids": [first.id, first.id, foreign.id, 9999999, second.id]},
+    )
+
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "deleted",
+        "requested": 4,
+        "deleted": 2,
+        "ids": [first.id, second.id],
+    }
+    assert db_session.query(SessionSummary).filter(SessionSummary.id == first.id).first() is None
+    assert db_session.query(SessionSummary).filter(SessionSummary.id == second.id).first() is None
+    assert db_session.query(SessionSummary).filter(SessionSummary.id == foreign.id).first() is not None
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_requires_memory_tier(app_client, make_user):
+    user = make_user(email="mem-bulk-del-free@test.com", tier=UserTier.FREE)
+    res = await app_client.request(
+        "DELETE",
+        "/api/memory/summaries/bulk",
+        headers=_pro_headers(user),
+        json={"ids": [1]},
+    )
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_summary_endpoints_require_auth(app_client):
     for method, path in [
         ("GET", "/api/memory/summaries"),
         ("GET", "/api/memory/summaries/1"),
+        ("DELETE", "/api/memory/summaries/bulk"),
         ("DELETE", "/api/memory/summaries/1"),
     ]:
-        res = await app_client.request(method, path)
+        res = await app_client.request(
+            method,
+            path,
+            json={"ids": [1]} if path.endswith("/bulk") else None,
+        )
         assert res.status_code == 401, f"{method} {path} returned {res.status_code}"

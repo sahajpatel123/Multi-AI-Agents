@@ -252,6 +252,53 @@
   margin-top: -8px;
 }
 
+.memory-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -4px auto 12px;
+  max-width: 680px;
+  min-height: 34px;
+  color: #8c7355;
+  font-size: 12px;
+}
+
+.memory-selection__toggle,
+.memory-card__identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.memory-selection__toggle input,
+.memory-card__identity input {
+  accent-color: #8c7355;
+  cursor: pointer;
+}
+
+.memory-bulk-confirm {
+  margin: -4px auto 14px;
+  max-width: 680px;
+  padding: 10px 12px;
+  border: 0.5px solid #c96f5e;
+  border-radius: 10px;
+  background: rgba(201, 111, 94, 0.08);
+}
+
+.memory-bulk-confirm p {
+  margin: 0 0 10px;
+  color: #8f4638;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.memory-bulk-confirm__actions {
+  display: flex;
+  gap: 8px;
+}
+
 .memory-list {
   list-style: none;
   margin: 0;
@@ -274,6 +321,10 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.memory-card__identity {
+  color: #8c7355;
 }
 
 .memory-card__category {

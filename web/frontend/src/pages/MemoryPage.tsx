@@ -7,6 +7,7 @@ import { MotionButton } from '../components/MotionButton';
 import {
   ApiError,
   deleteMemorySummary,
+  deleteMemorySummaries,
   exportMemorySummaries,
   getMemorySummary,
   listMemorySummaries,
@@ -150,6 +151,10 @@ export function MemoryPage() {
   const [deleteArmedId, setDeleteArmedId] = useState<number | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [bulkDeleteArmed, setBulkDeleteArmed] = useState(false);
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | 'md' | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -205,6 +210,9 @@ export function MemoryPage() {
         setError(null);
         setLoadMoreError(null);
         setExhausted(false);
+        setSelectedIds(new Set());
+        setBulkDeleteArmed(false);
+        setBulkDeleteError(null);
       }
       const epoch = loadEpochRef.current;
       try {
@@ -320,6 +328,12 @@ export function MemoryPage() {
         await deleteMemorySummary(id);
         setItems((prev) => prev.filter((x) => x.id !== id));
         setTotal((prev) => Math.max(0, prev - 1));
+        setSelectedIds((current) => {
+          if (!current.has(id)) return current;
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
         if (expandedId === id) setExpandedId(null);
         setDeleteArmedId(null);
       } catch (err) {
@@ -444,6 +458,54 @@ export function MemoryPage() {
     },
     [downloadingSummaryId],
   );
+
+  const toggleSelected = useCallback((id: number) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setBulkDeleteArmed(false);
+    setBulkDeleteError(null);
+  }, []);
+
+  const allVisibleSelected = items.length > 0 && items.every((item) => selectedIds.has(item.id));
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (items.length > 0 && items.every((item) => current.has(item.id))) {
+        items.forEach((item) => next.delete(item.id));
+      } else {
+        items.forEach((item) => next.add(item.id));
+      }
+      return next;
+    });
+    setBulkDeleteArmed(false);
+    setBulkDeleteError(null);
+  }, [items]);
+
+  const forgetSelected = useCallback(async () => {
+    if (selectedIds.size === 0 || bulkDeleteBusy) return;
+    setBulkDeleteBusy(true);
+    setBulkDeleteError(null);
+    try {
+      const result = await deleteMemorySummaries(Array.from(selectedIds));
+      const deletedIds = new Set(result.ids);
+      setItems((current) => current.filter((item) => !deletedIds.has(item.id)));
+      setTotal((current) => Math.max(0, current - result.deleted));
+      if (expandedId !== null && deletedIds.has(expandedId)) setExpandedId(null);
+      setSelectedIds(new Set());
+      setBulkDeleteArmed(false);
+    } catch (err) {
+      setBulkDeleteError(
+        err instanceof ApiError ? err.message : 'Could not forget selected memories',
+      );
+    } finally {
+      setBulkDeleteBusy(false);
+    }
+  }, [bulkDeleteBusy, expandedId, selectedIds]);
 
   const hasActiveFilters = Boolean(categoryFilter || personaFilter || fromDateFilter || toDateFilter);
 
@@ -657,6 +719,70 @@ export function MemoryPage() {
           </div>
         ) : null}
 
+        {items.length > 0 ? (
+          <div className="memory-selection" aria-label="Select memory summaries">
+            <label className="memory-selection__toggle">
+              <input
+                type="checkbox"
+                aria-label="Select all visible memories"
+                checked={allVisibleSelected}
+                onChange={toggleSelectAll}
+              />
+              <span>
+                {selectedIds.size > 0
+                  ? `${selectedIds.size} selected`
+                  : 'Select visible memories'}
+              </span>
+            </label>
+            {selectedIds.size > 0 && !bulkDeleteArmed ? (
+              <MotionButton
+                type="button"
+                variant="danger"
+                size="sm"
+                onClick={() => setBulkDeleteArmed(true)}
+              >
+                Forget selected
+              </MotionButton>
+            ) : null}
+          </div>
+        ) : null}
+
+        {bulkDeleteArmed ? (
+          <div className="memory-bulk-confirm" role="alert">
+            <p>
+              Forget {selectedIds.size}{' '}
+              {selectedIds.size === 1 ? 'selected memory' : 'selected memories'}? This cannot be
+              undone.
+            </p>
+            <div className="memory-bulk-confirm__actions">
+              <MotionButton
+                type="button"
+                variant="danger"
+                size="sm"
+                loading={bulkDeleteBusy}
+                onClick={() => void forgetSelected()}
+              >
+                Forget {selectedIds.size} {selectedIds.size === 1 ? 'memory' : 'memories'}
+              </MotionButton>
+              <MotionButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={bulkDeleteBusy}
+                onClick={() => setBulkDeleteArmed(false)}
+              >
+                Cancel
+              </MotionButton>
+            </div>
+          </div>
+        ) : null}
+
+        {bulkDeleteError ? (
+          <p className="memory-page__error" role="alert">
+            {bulkDeleteError}
+          </p>
+        ) : null}
+
         {exportError ? (
           <p className="memory-page__error memory-export__error" role="alert">
             {exportError}
@@ -747,7 +873,17 @@ export function MemoryPage() {
               return (
                 <li className="memory-card" key={item.id}>
                   <div className="memory-card__row">
-                    <span className="memory-card__category">{categoryLabel(item.dominant_category)}</span>
+                    <label className="memory-card__identity">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select memory summary ${item.id}`}
+                        checked={selectedIds.has(item.id)}
+                        onChange={() => toggleSelected(item.id)}
+                      />
+                      <span className="memory-card__category">
+                        {categoryLabel(item.dominant_category)}
+                      </span>
+                    </label>
                     <span className="memory-card__meta">
                       {item.exchange_count} {item.exchange_count === 1 ? 'exchange' : 'exchanges'}
                       {item.preferred_depth ? ` · ${item.preferred_depth} depth` : ''}

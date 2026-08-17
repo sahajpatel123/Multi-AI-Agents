@@ -438,6 +438,42 @@ export async function deleteMemorySummary(summaryId: number): Promise<void> {
   }
 }
 
+export type BulkDeleteMemorySummariesResult = {
+  status: 'deleted';
+  requested: number;
+  deleted: number;
+  ids: number[];
+};
+
+export async function deleteMemorySummaries(
+  summaryIds: number[],
+): Promise<BulkDeleteMemorySummariesResult> {
+  const ids = [...new Set(summaryIds)];
+  const res = await apiFetch('/api/memory/summaries/bulk', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  const data = await parseJsonSafely<Partial<BulkDeleteMemorySummariesResult> & {
+    detail?: string | { message?: string };
+  }>(res);
+  if (!res.ok || !data) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not forget selected memories'), res),
+      res.status,
+      data,
+    );
+  }
+  return {
+    status: 'deleted',
+    requested: typeof data.requested === 'number' ? data.requested : ids.length,
+    deleted: typeof data.deleted === 'number' ? data.deleted : 0,
+    ids: Array.isArray(data.ids)
+      ? data.ids.filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
+      : [],
+  };
+}
+
 export type MemorySummaryExportFormat = 'csv' | 'json' | 'md';
 
 export type MemorySummaryExport = {

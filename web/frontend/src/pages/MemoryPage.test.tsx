@@ -63,6 +63,7 @@ const navigateMock = vi.fn();
 const listMemorySummariesMock = vi.fn();
 const getMemorySummaryMock = vi.fn();
 const deleteMemorySummaryMock = vi.fn();
+const deleteMemorySummariesMock = vi.fn();
 const exportMemorySummariesMock = vi.fn();
 
 vi.mock('../context/TierContext', () => ({
@@ -84,6 +85,7 @@ vi.mock('../api', async () => {
     listMemorySummaries: (...args: unknown[]) => listMemorySummariesMock(...args),
     getMemorySummary: (...args: unknown[]) => getMemorySummaryMock(...args),
     deleteMemorySummary: (...args: unknown[]) => deleteMemorySummaryMock(...args),
+    deleteMemorySummaries: (...args: unknown[]) => deleteMemorySummariesMock(...args),
     exportMemorySummaries: (...args: unknown[]) => exportMemorySummariesMock(...args),
   };
 });
@@ -117,6 +119,7 @@ describe('MemoryPage', () => {
     listMemorySummariesMock.mockReset();
     getMemorySummaryMock.mockReset();
     deleteMemorySummaryMock.mockReset();
+    deleteMemorySummariesMock.mockReset();
     exportMemorySummariesMock.mockReset();
     vi.mocked(copyToClipboard).mockReset().mockResolvedValue(true);
     vi.mocked(downloadMarkdownFile).mockReset().mockReturnValue(true);
@@ -129,6 +132,12 @@ describe('MemoryPage', () => {
     );
     getMemorySummaryMock.mockResolvedValue(detailSummary);
     deleteMemorySummaryMock.mockResolvedValue(undefined);
+    deleteMemorySummariesMock.mockResolvedValue({
+      status: 'deleted',
+      requested: 2,
+      deleted: 2,
+      ids: [1, 2],
+    });
     exportMemorySummariesMock.mockResolvedValue({
       blob: new Blob(['export'], { type: 'text/csv' }),
       filename: 'arena-memory-summaries-1.csv',
@@ -687,6 +696,27 @@ describe('MemoryPage', () => {
     expect(await screen.findByText('delete boom')).toBeInTheDocument();
     expect(screen.getByText('Indian IPO market')).toBeInTheDocument();
     expect(screen.getByText('2 saved')).toBeInTheDocument();
+  });
+
+  it('forgets multiple selected visible summaries after confirmation', async () => {
+    listMemorySummariesMock.mockResolvedValueOnce(listResponse([baseSummary, olderSummary], 2, 1));
+    renderPage();
+    await screen.findByText('Indian IPO market');
+    await screen.findByText('Quantum computing');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select memory summary 1' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select memory summary 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Forget selected' }));
+
+    expect(screen.getByText(/Forget 2 selected memories\?/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Forget 2 memories' }));
+
+    await waitFor(() => {
+      expect(deleteMemorySummariesMock).toHaveBeenCalledWith([1, 2]);
+    });
+    expect(screen.queryByText('Indian IPO market')).not.toBeInTheDocument();
+    expect(screen.queryByText('Quantum computing')).not.toBeInTheDocument();
+    expect(screen.getByText('0 saved')).toBeInTheDocument();
   });
 
   it('retries a failed detail load when the summary is re-expanded', async () => {

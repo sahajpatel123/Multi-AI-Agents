@@ -32,6 +32,7 @@ memory_router = APIRouter(tags=["memory"])
 # can't pull the whole table in one request. The UI paginates; this is
 # the upper bound per page.
 MAX_SUMMARIES_PER_PAGE = 100
+MEMORY_BULK_DELETE_MAX = 50
 MemorySummarySort = Literal["newest", "oldest", "most_exchanges", "fewest_exchanges"]
 
 
@@ -208,6 +209,17 @@ class MemorySaveRequest(BaseModel):
     @classmethod
     def validate_session_id(cls, v: str) -> str:
         return sanitize_model_text(v, max_length=64, field_name="session_id")
+
+
+class MemoryBulkDeleteRequest(BaseModel):
+    """Ids selected for a bounded, ownership-scoped memory cleanup."""
+
+    ids: list[int] = Field(
+        ...,
+        min_length=1,
+        max_length=MEMORY_BULK_DELETE_MAX,
+        description="Summary ids to forget, capped to keep one request bounded.",
+    )
 
 
 @memory_router.post("/save")
@@ -787,6 +799,62 @@ async def get_summary(
             detail={"error": "not_found", "message": "Summary not found"},
         )
     return _serialize_summary(row, include_body=True)
+
+
+@memory_router.delete("/summaries/bulk")
+async def delete_summaries_bulk(
+    body: MemoryBulkDeleteRequest,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Forget selected summaries without exposing foreign-row existence.
+
+    Missing and foreign ids are silently skipped. Returning the exact owned
+    ids removed lets the UI reconcile a stale selection without claiming that
+    every requested row was deleted.
+    """
+    if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Memory requires a Plus tier."},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="memory_summary_bulk_delete",
+        limit=15,
+        window_seconds=3600,
+        message="Too many bulk summary deletes. Limit is 15 per hour.",
+    )
+
+    unique_ids = list(dict.fromkeys(body.ids))
+    owned_ids = [
+        row_id
+        for (row_id,) in db.query(SessionSummary.id)
+        .filter(
+            SessionSummary.id.in_(unique_ids),
+            SessionSummary.user_id == user.id,
+        )
+        .all()
+    ]
+    deleted = 0
+    if owned_ids:
+        deleted = (
+            db.query(SessionSummary)
+            .filter(
+                SessionSummary.id.in_(owned_ids),
+                SessionSummary.user_id == user.id,
+            )
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+
+    return {
+        "status": "deleted",
+        "requested": len(unique_ids),
+        "deleted": int(deleted or 0),
+        "ids": [summary_id for summary_id in unique_ids if summary_id in owned_ids],
+    }
 
 
 @memory_router.delete("/summaries/{summary_id}")
