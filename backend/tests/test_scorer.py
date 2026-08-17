@@ -170,3 +170,31 @@ class TestScorerScoringHappyPath:
 
         result = await Scorer().score_responses("p", [_make_response("agent_1")])
         assert result.reasoning is None
+
+    @pytest.mark.asyncio
+    async def test_rewrites_agent_slots_to_persona_names(self, stub_anthropic):
+        stub_anthropic.response_text = json.dumps({
+            "scores": {"agent_1": 88, "agent_2": 70},
+            "winner": "agent_1",
+            "reasoning": "agent_1 out-reasoned AGENT-2 while agent 1 stayed honest.",
+        })
+
+        result = await Scorer().score_responses(
+            "p",
+            [_make_response("agent_1"), _make_response("agent_2")],
+            persona_ids=["analyst", "philosopher", "pragmatist", "contrarian"],
+        )
+        assert result.reasoning == (
+            "The Analyst out-reasoned The Philosopher while The Analyst stayed honest."
+        )
+
+    @pytest.mark.asyncio
+    async def test_leaves_unmapped_words_untouched(self, stub_anthropic):
+        stub_anthropic.response_text = json.dumps({
+            "scores": {"agent_1": 88},
+            "winner": "agent_1",
+            "reasoning": "the agent's reply was direct and agent_5 never ran",
+        })
+
+        result = await Scorer().score_responses("p", [_make_response("agent_1")])
+        assert result.reasoning == "the agent's reply was direct and agent_5 never ran"

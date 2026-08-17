@@ -17,7 +17,7 @@ describe('WinnerReasoning', () => {
     render(<WinnerReasoning reasoning="Direct and honest." winnerName="Analyst" />);
     const toggle = screen.getByRole('button', { name: 'Why Analyst won' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('Direct and honest.')).not.toBeInTheDocument();
+    expect(screen.getByText('Direct and honest.')).not.toBeVisible();
   });
 
   it('expands to reveal the rationale and collapses again', () => {
@@ -26,11 +26,36 @@ describe('WinnerReasoning', () => {
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('Direct and honest.')).toBeInTheDocument();
+    expect(screen.getByText('Direct and honest.')).toBeVisible();
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('Direct and honest.')).not.toBeInTheDocument();
+    expect(screen.getByText('Direct and honest.')).not.toBeVisible();
+  });
+
+  it('keeps aria-controls wired to a live element while collapsed', () => {
+    render(<WinnerReasoning reasoning="Clear reasoning." winnerName="Analyst" />);
+    const toggle = screen.getByRole('button');
+    const body = document.getElementById(toggle.getAttribute('aria-controls') || '');
+
+    expect(body).not.toBeNull();
+    expect(body).toHaveTextContent('Clear reasoning.');
+    expect(body).not.toBeVisible();
+  });
+
+  it('uses a unique body id per disclosure instance', () => {
+    render(
+      <>
+        <WinnerReasoning reasoning="First rationale." winnerName="Analyst" />
+        <WinnerReasoning reasoning="Second rationale." winnerName="Skeptic" />
+      </>,
+    );
+    const toggles = screen.getAllByRole('button');
+    const ids = toggles.map((toggle) => toggle.getAttribute('aria-controls'));
+
+    expect(ids[0]).toBeTruthy();
+    expect(ids[1]).toBeTruthy();
+    expect(ids[0]).not.toEqual(ids[1]);
   });
 
   it('falls back to a generic label when the winner name is blank', () => {

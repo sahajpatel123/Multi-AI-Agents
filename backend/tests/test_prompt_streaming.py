@@ -9,6 +9,71 @@ import pytest
 import json
 
 
+class _RoutingStubClient:
+    """Anthropic-shaped stub that answers persona calls with agent JSON and
+    the judge call with scoring JSON, distinguished by the system prompt."""
+
+    PERSONA_JSON = json.dumps({
+        "verdict": "ok",
+        "one_liner": "ok",
+        "confidence": 80,
+        "key_assumption": "test",
+    })
+
+    def __init__(self, scoring_reasoning: str):
+        self._scoring_reasoning = scoring_reasoning
+        self.messages = _RoutingStubMessages(self)
+
+    def _payload_for(self, system: str) -> str:
+        if "impartial judge" in system:
+            return json.dumps({
+                "scores": {
+                    "agent_1": 90,
+                    "agent_2": 80,
+                    "agent_3": 70,
+                    "agent_4": 60,
+                },
+                "winner": "agent_1",
+                "reasoning": self._scoring_reasoning,
+            })
+        return self.PERSONA_JSON
+
+
+class _RoutingStubMessages:
+    def __init__(self, parent: "_RoutingStubClient"):
+        self._parent = parent
+
+    async def create(self, **kwargs):
+        text = self._parent._payload_for(kwargs.get("system") or "")
+        block = type("Block", (), {"text": text})()
+        return type("Resp", (), {
+            "content": [block],
+            "usage": type("Usage", (), {"input_tokens": 10, "output_tokens": 10})(),
+        })()
+
+    def stream(self, **kwargs):
+        text = self._parent._payload_for(kwargs.get("system") or "")
+        return _RoutingStubStream(text)
+
+
+class _RoutingStubStream:
+    def __init__(self, text: str):
+        self._text = text
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def _text_stream(self):
+        yield self._text
+
+    @property
+    def text_stream(self):
+        return self._text_stream()
+
+
 class TestPromptStreamingEndpoint:
     """Tests for POST /api/prompt/stream SSE endpoint."""
 
@@ -77,6 +142,51 @@ class TestPromptStreamingEndpoint:
         # At least one agent must respond successfully when stub_anthropic
         # is wired in. Other providers fall back without stubs.
         assert len(result["all_responses"]) >= 1
+        # The judge's rationale rides along on every payload, and stays null
+        # when the scorer produced no explanation (or fell back).
+        assert result.get("scoring_reasoning") is None
+
+    @pytest.mark.asyncio
+    async def test_stream_prompt_surfaces_judges_reasoning(
+        self, app_client, auth_headers, monkeypatch
+    ):
+        """The judge's winner rationale reaches the result event with slot ids
+        rewritten to the persona names users see on the cards."""
+        from arena.core import model_router
+
+        routing_client = _RoutingStubClient(
+            scoring_reasoning="agent_1 was the most honest and directly addressed the question.",
+        )
+        for key in ("claude_haiku", "claude_sonnet", "claude_opus"):
+            if key in model_router.MODEL_REGISTRY:
+                monkeypatch.setitem(
+                    model_router.MODEL_REGISTRY[key],
+                    "client",
+                    routing_client,
+                )
+        # Persona fallbacks resolve through the module-level Claude client,
+        # so patch that too — otherwise this test would dial the network.
+        monkeypatch.setattr(model_router, "claude_client", routing_client)
+
+        await app_client.post("/api/auth/register", json={
+            "email": "reasoning@test.com",
+            "password": "Strong1Pass",
+            "name": "Reasoning Test",
+        })
+        headers = auth_headers()
+
+        res = await app_client.post(
+            "/api/prompt/stream",
+            json={"prompt": "Which take is most honest?"},
+            headers=headers,
+        )
+
+        assert res.status_code == 200
+        events = self._parse_sse_events(res.text)
+        result = [e for e in events if e["event"] == "result"][0]["data"]
+        assert result["scoring_reasoning"] == (
+            "The Analyst was the most honest and directly addressed the question."
+        )
 
     @pytest.mark.asyncio
     async def test_stream_prompt_rejects_toxic_content(

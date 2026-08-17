@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -13,7 +14,7 @@ import anthropic
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
-from arena.core.agents import get_persona_id_for_agent
+from arena.core.agents import get_all_agents, get_persona_id_for_agent
 from arena.core.model_router import get_route_for_prompt
 from arena.core.observability import log_scoring_result
 from arena.models.schemas import AgentResponse, ScoredAgent, IntegrityReport
@@ -22,6 +23,11 @@ from arena.models.schemas import AgentResponse, ScoredAgent, IntegrityReport
 # The judge is asked for a "brief explanation" of the winner, so this bound is
 # generous without letting a misbehaving scorer bloat every round payload.
 MAX_REASONING_LENGTH = 600
+
+# Slot tokens the scorer sees (``agent_1``..``agent_4`` and small variants).
+# Rewritten to persona display names before the rationale reaches users so the
+# surfaced explanation matches the names shown on the cards.
+_SLOT_TOKEN_RE = re.compile(r"\bagent[\s_-]*([1-4])\b", re.IGNORECASE)
 
 
 @dataclass
@@ -38,17 +44,31 @@ class ScoringResult:
     fallback_used: bool = False
 
 
-def _normalize_scorer_reasoning(raw: Any) -> str | None:
+def _normalize_scorer_reasoning(
+    raw: Any,
+    agent_names: dict[str, str] | None = None,
+) -> str | None:
     """Trim the judge's rationale to a compact, single-paragraph string.
 
-    Collapses stray whitespace, drops empty/non-string values, and caps the
-    result at a word boundary so a verbose scorer cannot inflate the payload.
+    Collapses stray whitespace, drops empty/non-string values, rewrites
+    ``agent_1``-style slot tokens into persona display names when a mapping is
+    supplied, and caps the result at a word boundary so a verbose scorer
+    cannot inflate the payload.
     """
     if not isinstance(raw, str):
         return None
     text = " ".join(raw.split())
     if not text:
         return None
+    if agent_names:
+
+        def _replace_slot(match: re.Match[str]) -> str:
+            return agent_names.get(
+                f"agent_{match.group(1)}",
+                match.group(0),
+            )
+
+        text = _SLOT_TOKEN_RE.sub(_replace_slot, text)
     if len(text) > MAX_REASONING_LENGTH:
         cut = text[:MAX_REASONING_LENGTH].rsplit(" ", 1)[0]
         if not cut:
@@ -161,7 +181,19 @@ class Scorer:
             data = json.loads(content)
             scores = data.get("scores", {})
             winner_id = data.get("winner", "agent_1")
-            reasoning = _normalize_scorer_reasoning(data.get("reasoning"))
+            try:
+                agent_names = {
+                    agent.agent_id: str(agent.name)
+                    for agent in get_all_agents(persona_ids)
+                }
+            except ValueError:
+                # Invalid persona selections are rejected upstream; never let a
+                # cosmetic rewrite fail the whole scoring pass.
+                agent_names = None
+            reasoning = _normalize_scorer_reasoning(
+                data.get("reasoning"),
+                agent_names,
+            )
             criteria_breakdown = data.get("criteria_breakdown")
             
             # Build scored responses

@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plain-text rationale rides along on every round payload and appears as a
   collapsible "Why this mind won" disclosure under the cards grid, and stays
   hidden whenever scoring fell back so users never see an empty widget
+
+### Fixed
+- The judge's rationale now rewrites internal `agent_1`–`agent_4` slot ids to
+  the persona names shown on the cards, and the disclosure keeps its body in
+  the DOM (hidden while collapsed) with a per-instance id so `aria-controls`
+  always references a live, unique element
 - Arena Discuss threads can be sent into Agent Mode for deeper verification
   (Verify in Agent Mode or Shift+V): the focused mind's latest reply — or the
   seeded take before any replies — becomes a fresh research task with the

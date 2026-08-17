@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ChevronDown, Scale } from 'lucide-react';
 import { prefersReducedMotion } from '../lib/motion';
 
@@ -16,6 +16,7 @@ interface WinnerReasoningProps {
  */
 export function WinnerReasoning({ reasoning, winnerName }: WinnerReasoningProps) {
   const [open, setOpen] = useState(false);
+  const bodyId = useId();
   const text = (reasoning || '').trim();
   if (!text) return null;
 
@@ -30,7 +31,7 @@ export function WinnerReasoning({ reasoning, winnerName }: WinnerReasoningProps)
         type="button"
         className="winner-reasoning-toggle"
         aria-expanded={open}
-        aria-controls="winner-reasoning-body"
+        aria-controls={bodyId}
         onClick={() => setOpen((v) => !v)}
       >
         <Scale
@@ -49,11 +50,11 @@ export function WinnerReasoning({ reasoning, winnerName }: WinnerReasoningProps)
           aria-hidden
         />
       </button>
-      {open ? (
-        <p id="winner-reasoning-body" className="winner-reasoning-body">
-          {text}
-        </p>
-      ) : null}
+      {/* Keep mounted so aria-controls always points at a live element; the
+          hidden attribute keeps it out of the accessibility tree when closed. */}
+      <p id={bodyId} className="winner-reasoning-body" hidden={!open}>
+        {text}
+      </p>
     </div>
   );
 }
