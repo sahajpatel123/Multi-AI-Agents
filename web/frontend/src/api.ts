@@ -408,8 +408,11 @@ export async function listMemorySummaries(
   };
 }
 
-export async function getMemorySummary(summaryId: number): Promise<MemorySummary> {
-  const res = await apiFetch(`/api/memory/summaries/${encodeURIComponent(summaryId)}`);
+export async function getMemorySummary(
+  summaryId: number,
+  signal?: AbortSignal,
+): Promise<MemorySummary> {
+  const res = await apiFetch(`/api/memory/summaries/${encodeURIComponent(summaryId)}`, signal ? { signal } : {});
   const data = await parseJsonSafely<MemorySummary & {
     detail?: string | { message?: string };
   }>(res);

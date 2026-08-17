@@ -205,6 +205,7 @@ export function MemoryPage() {
   const copyResetTimerRef = useRef<number | null>(null);
   const downloadResetTimerRef = useRef<number | null>(null);
   const selectionExportRunRef = useRef(0);
+  const selectionExportAbortRef = useRef<AbortController | null>(null);
   /** True once an "older memories" page comes back empty — deletions can
    * shift the server's offset so an empty page means we've rendered every
    * remaining row. Without this the button would keep offering (and fetching)
@@ -217,6 +218,8 @@ export function MemoryPage() {
   const reducedMotion = prefersReducedMotion();
 
   const invalidateSelectionExport = useCallback(() => {
+    selectionExportAbortRef.current?.abort();
+    selectionExportAbortRef.current = null;
     selectionExportRunRef.current += 1;
     setSelectionExportAction(null);
     setSelectionExportStatus(null);
@@ -436,8 +439,10 @@ export function MemoryPage() {
   useEffect(
     () => () => {
       // A detail request can outlive the page (for example, when the user
-      // navigates away while preparing a JSON export). Invalidate the run so
-      // its completion cannot trigger a download or update page state.
+      // navigates away while preparing an export). Abort the request as well
+      // as invalidating the run so stale work does not occupy a connection.
+      selectionExportAbortRef.current?.abort();
+      selectionExportAbortRef.current = null;
       selectionExportRunRef.current += 1;
       if (copyResetTimerRef.current !== null) {
         window.clearTimeout(copyResetTimerRef.current);
@@ -525,6 +530,8 @@ export function MemoryPage() {
       setSelectionExportError(null);
       const runId = selectionExportRunRef.current + 1;
       selectionExportRunRef.current = runId;
+      const abortController = new AbortController();
+      selectionExportAbortRef.current = abortController;
       const isCurrentRun = () => selectionExportRunRef.current === runId;
       try {
         const detailedSummaries: MemorySummary[] = [];
@@ -534,7 +541,7 @@ export function MemoryPage() {
           const batch = await Promise.all(
             selectedItems
               .slice(index, index + 5)
-              .map((item) => getMemorySummary(item.id)),
+              .map((item) => getMemorySummary(item.id, abortController.signal)),
           );
           if (!isCurrentRun()) return;
           detailedSummaries.push(...batch);
@@ -591,7 +598,10 @@ export function MemoryPage() {
             : 'Could not prepare selected memories — try again.',
         );
       } finally {
-        if (isCurrentRun()) setSelectionExportAction(null);
+        if (isCurrentRun()) {
+          selectionExportAbortRef.current = null;
+          setSelectionExportAction(null);
+        }
       }
     },
     [items, selectedIds, selectionExportAction],

@@ -744,8 +744,8 @@ describe('MemoryPage', () => {
     expect(await screen.findByRole('button', { name: 'Selected memories copied' })).toHaveTextContent(
       'Copied',
     );
-    expect(getMemorySummaryMock).toHaveBeenNthCalledWith(1, 1);
-    expect(getMemorySummaryMock).toHaveBeenNthCalledWith(2, 2);
+    expect(getMemorySummaryMock).toHaveBeenNthCalledWith(1, 1, expect.any(AbortSignal));
+    expect(getMemorySummaryMock).toHaveBeenNthCalledWith(2, 2, expect.any(AbortSignal));
     const copied = vi.mocked(copyToClipboard).mock.calls[0]?.[0] as string;
     expect(copied).toContain('# Arena selected memories');
     expect(copied).toContain('- Memories: 2');
@@ -825,7 +825,7 @@ describe('MemoryPage', () => {
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select memory summary 1' }));
     fireEvent.click(screen.getByRole('button', { name: 'Copy selected memories' }));
-    await waitFor(() => expect(getMemorySummaryMock).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(getMemorySummaryMock).toHaveBeenCalledWith(1, expect.any(AbortSignal)));
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Filter memory by category' }), {
       target: { value: 'decision' },
@@ -841,20 +841,24 @@ describe('MemoryPage', () => {
 
   it('does not download a pending JSON export after the page unmounts', async () => {
     let resolveDetail: ((summary: MemorySummary) => void) | undefined;
+    let exportSignal: AbortSignal | undefined;
     getMemorySummaryMock.mockImplementationOnce(
-      () =>
-        new Promise<MemorySummary>((resolve) => {
+      (_id: number, signal: AbortSignal) => {
+        exportSignal = signal;
+        return new Promise<MemorySummary>((resolve) => {
           resolveDetail = resolve;
-        }),
+        });
+      },
     );
     const { unmount } = renderPage();
     await screen.findByText('Indian IPO market');
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select memory summary 1' }));
     fireEvent.click(screen.getByRole('button', { name: 'Download selected memories as JSON' }));
-    await waitFor(() => expect(getMemorySummaryMock).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(getMemorySummaryMock).toHaveBeenCalledWith(1, expect.any(AbortSignal)));
 
     unmount();
+    expect(exportSignal?.aborted).toBe(true);
     resolveDetail?.(detailSummary);
     await waitFor(() => expect(downloadJsonFile).not.toHaveBeenCalled());
   });
