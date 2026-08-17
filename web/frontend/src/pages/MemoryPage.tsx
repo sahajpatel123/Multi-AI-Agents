@@ -411,18 +411,26 @@ export function MemoryPage() {
 
       setDownloadingSummaryId(summary.id);
       setDownloadStatus(null);
-      const status: DownloadStatus = downloadMarkdownFile(
-        memoryMarkdown(summary),
-        `arena-memory-summary-${summary.id}`,
-      )
-        ? 'downloaded'
-        : 'failed';
-      setDownloadingSummaryId(null);
-      setDownloadStatus({ id: summary.id, status });
-      downloadResetTimerRef.current = window.setTimeout(() => {
-        setDownloadStatus((current) => (current?.id === summary.id ? null : current));
-        downloadResetTimerRef.current = null;
-      }, status === 'downloaded' ? 1800 : 2400);
+      let status: DownloadStatus = 'failed';
+      try {
+        status = downloadMarkdownFile(
+          memoryMarkdown(summary),
+          `arena-memory-summary-${summary.id}`,
+        )
+          ? 'downloaded'
+          : 'failed';
+      } catch {
+        // Keep the action recoverable if a browser-specific download failure
+        // escapes the helper's normal boolean return path.
+        status = 'failed';
+      } finally {
+        setDownloadingSummaryId(null);
+        setDownloadStatus({ id: summary.id, status });
+        downloadResetTimerRef.current = window.setTimeout(() => {
+          setDownloadStatus((current) => (current?.id === summary.id ? null : current));
+          downloadResetTimerRef.current = null;
+        }, status === 'downloaded' ? 1800 : 2400);
+      }
     },
     [downloadingSummaryId],
   );

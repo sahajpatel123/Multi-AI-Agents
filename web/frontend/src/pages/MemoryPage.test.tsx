@@ -523,6 +523,26 @@ describe('MemoryPage', () => {
     );
   });
 
+  it('recovers when the Markdown downloader throws unexpectedly', async () => {
+    vi.mocked(downloadMarkdownFile).mockImplementationOnce(() => {
+      throw new Error('browser download blocked');
+    });
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read summary' }));
+    await screen.findByText(/Indian IPOs stay frothy/);
+    fireEvent.click(screen.getByRole('button', { name: 'Download Markdown' }));
+
+    const downloadButton = await screen.findByRole('button', { name: 'Download failed' });
+    expect(downloadButton).toHaveTextContent('Download failed');
+
+    fireEvent.click(downloadButton);
+    expect(await screen.findByRole('button', { name: 'Summary downloaded' })).toHaveTextContent(
+      'Downloaded',
+    );
+  });
+
   it('shows a clear failure state when the clipboard is unavailable', async () => {
     vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
     renderPage();
