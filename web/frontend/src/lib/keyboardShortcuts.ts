@@ -100,6 +100,7 @@ const WATCHLIST: ShortcutHint[] = [
   { keys: 'Shift + E', action: 'Download the current watchlist as CSV' },
   { keys: 'Shift + J', action: 'Download the current watchlist as JSON' },
   { keys: 'Shift + O', action: 'Copy the current watchlist as JSON' },
+  { keys: 'Shift + M', action: 'Download completed results as a markdown digest' },
   { keys: 'Shift + F', action: 'Download watchlist statistics as CSV' },
   { keys: 'Esc', action: 'Cancel pending remove' },
   { keys: '?', action: 'Toggle this shortcuts list' },

@@ -187,6 +187,7 @@ describe('formatWatchlistResultsDigest', () => {
     expect(md).toContain('# Agent Watchlist — Results Digest');
     expect(md).toContain('**Active:** 2 / 10');
     expect(md).toContain('_Filtered view: sort: next_soon_');
+    expect(md).toContain('**Completed results:** 2 / 2');
     expect(md).toContain('## 1. How is the Indian IPO market evolving?');
     expect(md).toContain('**Latest run:** IPO market mid-year recap');
     expect(md).toContain('**Score:** 82/100');
@@ -208,6 +209,7 @@ describe('formatWatchlistResultsDigest', () => {
       ],
     });
     expect(md).toContain('## 1. How is the Indian IPO market evolving?');
+    expect(md).toContain('**Completed results:** 1 / 4');
     expect(md).not.toContain('No answer yet');
     expect(md).not.toContain('orphaned answer');
     expect(md).not.toContain('Still running');

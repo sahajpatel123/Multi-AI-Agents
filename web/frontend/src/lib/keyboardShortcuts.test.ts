@@ -296,6 +296,11 @@ describe('keyboardShortcuts', () => {
     ).toBe(true);
     expect(
       shortcutsForSurface('watchlist').some(
+        (s) => s.keys === 'Shift + M' && s.action.toLowerCase().includes('digest'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('watchlist').some(
         (s) => s.keys === 'Shift + F' && s.action.toLowerCase().includes('statistics'),
       ),
     ).toBe(true);

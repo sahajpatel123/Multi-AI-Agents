@@ -887,6 +887,7 @@ describe('WatchlistPage', () => {
     });
     const [markdown, stem] = vi.mocked(downloadMarkdownFile).mock.calls[0];
     expect(markdown).toContain('# Agent Watchlist — Results Digest');
+    expect(markdown).toContain('**Completed results:** 1 / 2');
     expect(markdown).toContain('## 1. How is the Indian IPO market evolving?');
     expect(markdown).toContain('IPO momentum is strong');
     expect(markdown).not.toContain('Is the semiconductor rally sustainable?');

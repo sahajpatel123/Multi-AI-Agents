@@ -213,7 +213,8 @@ export function formatWatchlistResultsDigest(opts: {
   activeCap?: number;
   filterNote?: string;
 }): string {
-  const results = (opts.items || [])
+  const inputItems = opts.items || [];
+  const results = inputItems
     .map((item) => ({
       question: digestInlineText(item.question),
       title: digestInlineText(item.title),
@@ -239,6 +240,8 @@ export function formatWatchlistResultsDigest(opts: {
     lines.push(`_Filtered view: ${filterNote}_`);
     lines.push('');
   }
+  lines.push(`**Completed results:** ${results.length} / ${inputItems.length}`);
+  lines.push('');
 
   results.forEach((item, i) => {
     lines.push(`## ${i + 1}. ${item.question}`);
