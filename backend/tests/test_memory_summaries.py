@@ -559,6 +559,27 @@ async def test_bulk_delete_requires_memory_tier(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_bulk_delete_rejects_empty_and_oversized_requests(app_client, make_user):
+    user = make_user(email="mem-bulk-del-boundary@test.com", tier=UserTier.PLUS)
+
+    empty = await app_client.request(
+        "DELETE",
+        "/api/memory/summaries/bulk",
+        headers=_pro_headers(user),
+        json={"ids": []},
+    )
+    oversized = await app_client.request(
+        "DELETE",
+        "/api/memory/summaries/bulk",
+        headers=_pro_headers(user),
+        json={"ids": list(range(1, 52))},
+    )
+
+    assert empty.status_code == 422
+    assert oversized.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_summary_endpoints_require_auth(app_client):
     for method, path in [
         ("GET", "/api/memory/summaries"),

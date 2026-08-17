@@ -445,10 +445,22 @@ export type BulkDeleteMemorySummariesResult = {
   ids: number[];
 };
 
+/** Keep the client-side contract aligned with the bounded server mutation. */
+export const MEMORY_BULK_DELETE_MAX = 50;
+
 export async function deleteMemorySummaries(
   summaryIds: number[],
 ): Promise<BulkDeleteMemorySummariesResult> {
   const ids = [...new Set(summaryIds)];
+  if (ids.length === 0) {
+    throw new ApiError('Select at least one memory to forget', 400);
+  }
+  if (ids.length > MEMORY_BULK_DELETE_MAX) {
+    throw new ApiError(
+      `You can forget up to ${MEMORY_BULK_DELETE_MAX} memories at a time`,
+      400,
+    );
+  }
   const res = await apiFetch('/api/memory/summaries/bulk', {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },

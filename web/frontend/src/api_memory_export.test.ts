@@ -186,4 +186,16 @@ describe('deleteMemorySummaries', () => {
       body: JSON.stringify({ ids: [4, 9] }),
     });
   });
+
+  it.each([
+    { label: 'empty', ids: [] as number[], message: 'Select at least one memory to forget' },
+    {
+      label: 'oversized',
+      ids: Array.from({ length: 51 }, (_, index) => index + 1),
+      message: 'You can forget up to 50 memories at a time',
+    },
+  ])('rejects a $label request before it reaches the server', async ({ ids, message }) => {
+    await expect(deleteMemorySummaries(ids)).rejects.toThrow(message);
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+  });
 });

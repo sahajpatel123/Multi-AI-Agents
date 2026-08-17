@@ -719,6 +719,27 @@ describe('MemoryPage', () => {
     expect(screen.getByText('0 saved')).toBeInTheDocument();
   });
 
+  it('caps select-all at the server bulk-delete limit', async () => {
+    const summaries = Array.from({ length: 51 }, (_, index) => ({
+      ...baseSummary,
+      id: index + 1,
+      main_topics: [`Topic ${index + 1}`],
+    }));
+    listMemorySummariesMock.mockResolvedValueOnce(listResponse(summaries, 51, 1));
+    renderPage();
+    await screen.findByText('Topic 51');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all visible memories' }));
+
+    expect(screen.getByText('50 selected · max 50')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select memory summary 50' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Select memory summary 51' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Select memory summary 51' })).toBeDisabled();
+    expect(
+      screen.getByText(/You can forget up to 50 memories at a time/),
+    ).toBeInTheDocument();
+  });
+
   it('retries a failed detail load when the summary is re-expanded', async () => {
     getMemorySummaryMock.mockRejectedValueOnce(new ApiError('detail boom', 500));
     renderPage();

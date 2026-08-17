@@ -11,6 +11,7 @@ import {
   exportMemorySummaries,
   getMemorySummary,
   listMemorySummaries,
+  MEMORY_BULK_DELETE_MAX,
 } from '../api';
 import type { MemorySummary, MemorySummarySort } from '../types';
 import { useTier } from '../context/TierContext';
@@ -460,6 +461,12 @@ export function MemoryPage() {
   );
 
   const toggleSelected = useCallback((id: number) => {
+    if (!selectedIds.has(id) && selectedIds.size >= MEMORY_BULK_DELETE_MAX) {
+      setBulkDeleteError(
+        `You can forget up to ${MEMORY_BULK_DELETE_MAX} memories at a time. Unselect some before selecting more.`,
+      );
+      return;
+    }
     setSelectedIds((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -468,9 +475,10 @@ export function MemoryPage() {
     });
     setBulkDeleteArmed(false);
     setBulkDeleteError(null);
-  }, []);
+  }, [selectedIds]);
 
   const allVisibleSelected = items.length > 0 && items.every((item) => selectedIds.has(item.id));
+  const selectionLimitReached = selectedIds.size >= MEMORY_BULK_DELETE_MAX;
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((current) => {
@@ -478,13 +486,25 @@ export function MemoryPage() {
       if (items.length > 0 && items.every((item) => current.has(item.id))) {
         items.forEach((item) => next.delete(item.id));
       } else {
-        items.forEach((item) => next.add(item.id));
+        items.forEach((item) => {
+          if (next.size < MEMORY_BULK_DELETE_MAX) next.add(item.id);
+        });
       }
       return next;
     });
+    const unselectedVisible = items.filter((item) => !selectedIds.has(item.id)).length;
+    if (
+      !allVisibleSelected &&
+      unselectedVisible > Math.max(0, MEMORY_BULK_DELETE_MAX - selectedIds.size)
+    ) {
+      setBulkDeleteError(
+        `You can forget up to ${MEMORY_BULK_DELETE_MAX} memories at a time. Unselect some before selecting more.`,
+      );
+    } else {
+      setBulkDeleteError(null);
+    }
     setBulkDeleteArmed(false);
-    setBulkDeleteError(null);
-  }, [items]);
+  }, [allVisibleSelected, items, selectedIds]);
 
   const forgetSelected = useCallback(async () => {
     if (selectedIds.size === 0 || bulkDeleteBusy) return;
@@ -730,7 +750,7 @@ export function MemoryPage() {
               />
               <span>
                 {selectedIds.size > 0
-                  ? `${selectedIds.size} selected`
+                  ? `${selectedIds.size} selected${selectionLimitReached ? ` · max ${MEMORY_BULK_DELETE_MAX}` : ''}`
                   : 'Select visible memories'}
               </span>
             </label>
@@ -878,6 +898,7 @@ export function MemoryPage() {
                         type="checkbox"
                         aria-label={`Select memory summary ${item.id}`}
                         checked={selectedIds.has(item.id)}
+                        disabled={!selectedIds.has(item.id) && selectionLimitReached}
                         onChange={() => toggleSelected(item.id)}
                       />
                       <span className="memory-card__category">
