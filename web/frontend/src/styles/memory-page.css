@@ -278,6 +278,25 @@
   cursor: pointer;
 }
 
+.memory-selection__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.memory-selection__error {
+  max-width: 680px;
+  margin: -4px auto 12px;
+  padding: 8px 12px;
+  border: 0.5px solid #c96f5e;
+  border-radius: 10px;
+  background: rgba(201, 111, 94, 0.08);
+  color: #8f4638;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .memory-bulk-confirm {
   margin: -4px auto 14px;
   max-width: 680px;
@@ -531,6 +550,15 @@
   }
 
   .memory-export__actions {
+    align-self: flex-end;
+  }
+
+  .memory-selection {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .memory-selection__actions {
     align-self: flex-end;
   }
 }

@@ -719,6 +719,58 @@ describe('MemoryPage', () => {
     expect(screen.getByText('0 saved')).toBeInTheDocument();
   });
 
+  it('copies and downloads selected summaries as one Markdown document', async () => {
+    listMemorySummariesMock.mockResolvedValueOnce(listResponse([baseSummary, olderSummary], 2, 1));
+    getMemorySummaryMock.mockImplementation(async (id: number) =>
+      id === 1
+        ? detailSummary
+        : {
+            ...olderSummary,
+            session_summary: 'Compared practical research paths for quantum computing.',
+          },
+    );
+    renderPage();
+    await screen.findByText('Indian IPO market');
+    await screen.findByText('Quantum computing');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select memory summary 1' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select memory summary 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy selected memories' }));
+
+    expect(await screen.findByRole('button', { name: 'Selected memories copied' })).toHaveTextContent(
+      'Copied',
+    );
+    expect(getMemorySummaryMock).toHaveBeenNthCalledWith(1, 1);
+    expect(getMemorySummaryMock).toHaveBeenNthCalledWith(2, 2);
+    const copied = vi.mocked(copyToClipboard).mock.calls[0]?.[0] as string;
+    expect(copied).toContain('# Arena selected memories');
+    expect(copied).toContain('- Memories: 2');
+    expect(copied).toContain('## Arena memory — Decision');
+    expect(copied).toContain('## Arena memory — Research');
+    expect(copied).toContain('Compared practical research paths for quantum computing.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download selected memories' }));
+    await waitFor(() => {
+      expect(downloadMarkdownFile).toHaveBeenCalledWith(
+        expect.stringContaining('# Arena selected memories'),
+        'arena-memory-selection-2',
+      );
+    });
+  });
+
+  it('keeps the selection and reports a detail failure during selected export', async () => {
+    getMemorySummaryMock.mockRejectedValueOnce(new ApiError('detail boom', 500));
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select memory summary 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy selected memories' }));
+
+    expect(await screen.findByText('detail boom')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select memory summary 1' })).toBeChecked();
+    expect(copyToClipboard).not.toHaveBeenCalled();
+  });
+
   it('caps select-all at the server bulk-delete limit', async () => {
     const summaries = Array.from({ length: 51 }, (_, index) => ({
       ...baseSummary,

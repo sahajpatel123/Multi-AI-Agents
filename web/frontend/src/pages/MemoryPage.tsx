@@ -55,6 +55,8 @@ type DetailState =
 
 type CopyStatus = 'copied' | 'failed';
 type DownloadStatus = 'downloaded' | 'failed';
+type SelectionExportAction = 'copy' | 'download' | null;
+type SelectionExportStatus = 'copied' | 'downloaded' | null;
 
 function personaName(personaId: string | null | undefined): string {
   if (!personaId) return '';
@@ -112,6 +114,16 @@ function memoryMarkdown(summary: MemorySummary): string {
   return lines.join('\n');
 }
 
+function memorySelectionMarkdown(summaries: MemorySummary[]): string {
+  const sections = summaries.map((summary) => memoryMarkdown(summary).replace(/^# /, '## '));
+  return [
+    '# Arena selected memories',
+    `- Memories: ${summaries.length}`,
+    '',
+    sections.join('\n\n'),
+  ].join('\n');
+}
+
 function memoryFilterParams(
   search: string,
   category: string,
@@ -159,6 +171,10 @@ export function MemoryPage() {
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | 'md' | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [selectionExportAction, setSelectionExportAction] = useState<SelectionExportAction>(null);
+  const [selectionExportStatus, setSelectionExportStatus] =
+    useState<SelectionExportStatus>(null);
+  const [selectionExportError, setSelectionExportError] = useState<string | null>(null);
   const [copyingSummaryId, setCopyingSummaryId] = useState<number | null>(null);
   const [copyStatus, setCopyStatus] = useState<{ id: number; status: CopyStatus } | null>(null);
   const [downloadingSummaryId, setDownloadingSummaryId] = useState<number | null>(null);
@@ -460,6 +476,60 @@ export function MemoryPage() {
     [downloadingSummaryId],
   );
 
+  const exportSelectedMemories = useCallback(
+    async (action: Exclude<SelectionExportAction, null>) => {
+      if (selectedIds.size === 0 || selectionExportAction) return;
+
+      const selectedItems = items.filter((item) => selectedIds.has(item.id));
+      if (selectedItems.length !== selectedIds.size) {
+        setSelectionExportError('Refresh Memory before exporting selected memories.');
+        return;
+      }
+
+      setSelectionExportAction(action);
+      setSelectionExportStatus(null);
+      setSelectionExportError(null);
+      try {
+        const detailedSummaries: MemorySummary[] = [];
+        // Keep the detail hydration bounded so a large selection does not
+        // create a burst of requests against the per-user memory limits.
+        for (let index = 0; index < selectedItems.length; index += 5) {
+          const batch = await Promise.all(
+            selectedItems
+              .slice(index, index + 5)
+              .map((item) => getMemorySummary(item.id)),
+          );
+          detailedSummaries.push(...batch);
+        }
+
+        const markdown = memorySelectionMarkdown(detailedSummaries);
+        if (action === 'copy') {
+          if (!(await copyToClipboard(markdown))) {
+            setSelectionExportError('Could not copy selected memories — try again.');
+            return;
+          }
+          setSelectionExportStatus('copied');
+        } else if (
+          !downloadMarkdownFile(markdown, `arena-memory-selection-${detailedSummaries.length}`)
+        ) {
+          setSelectionExportError('Could not download selected memories — try again.');
+          return;
+        } else {
+          setSelectionExportStatus('downloaded');
+        }
+      } catch (err) {
+        setSelectionExportError(
+          err instanceof ApiError
+            ? err.message
+            : 'Could not prepare selected memories — try again.',
+        );
+      } finally {
+        setSelectionExportAction(null);
+      }
+    },
+    [items, selectedIds, selectionExportAction],
+  );
+
   const toggleSelected = useCallback((id: number) => {
     if (!selectedIds.has(id) && selectedIds.size >= MEMORY_BULK_DELETE_MAX) {
       setBulkDeleteError(
@@ -475,6 +545,8 @@ export function MemoryPage() {
     });
     setBulkDeleteArmed(false);
     setBulkDeleteError(null);
+    setSelectionExportStatus(null);
+    setSelectionExportError(null);
   }, [selectedIds]);
 
   const allVisibleSelected = items.length > 0 && items.every((item) => selectedIds.has(item.id));
@@ -504,6 +576,8 @@ export function MemoryPage() {
       setBulkDeleteError(null);
     }
     setBulkDeleteArmed(false);
+    setSelectionExportStatus(null);
+    setSelectionExportError(null);
   }, [allVisibleSelected, items, selectedIds]);
 
   const forgetSelected = useCallback(async () => {
@@ -518,6 +592,8 @@ export function MemoryPage() {
       if (expandedId !== null && deletedIds.has(expandedId)) setExpandedId(null);
       setSelectedIds(new Set());
       setBulkDeleteArmed(false);
+      setSelectionExportStatus(null);
+      setSelectionExportError(null);
     } catch (err) {
       setBulkDeleteError(
         err instanceof ApiError ? err.message : 'Could not forget selected memories',
@@ -746,6 +822,7 @@ export function MemoryPage() {
                 type="checkbox"
                 aria-label="Select all visible memories"
                 checked={allVisibleSelected}
+                disabled={Boolean(selectionExportAction)}
                 onChange={toggleSelectAll}
               />
               <span>
@@ -755,16 +832,55 @@ export function MemoryPage() {
               </span>
             </label>
             {selectedIds.size > 0 && !bulkDeleteArmed ? (
-              <MotionButton
-                type="button"
-                variant="danger"
-                size="sm"
-                onClick={() => setBulkDeleteArmed(true)}
-              >
-                Forget selected
-              </MotionButton>
+              <div className="memory-selection__actions">
+                <MotionButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  loading={selectionExportAction === 'copy'}
+                  disabled={Boolean(selectionExportAction)}
+                  aria-label={
+                    selectionExportStatus === 'copied'
+                      ? 'Selected memories copied'
+                      : 'Copy selected memories'
+                  }
+                  onClick={() => void exportSelectedMemories('copy')}
+                >
+                  {selectionExportStatus === 'copied' ? 'Copied' : 'Copy selected'}
+                </MotionButton>
+                <MotionButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  loading={selectionExportAction === 'download'}
+                  disabled={Boolean(selectionExportAction)}
+                  aria-label={
+                    selectionExportStatus === 'downloaded'
+                      ? 'Selected memories downloaded'
+                      : 'Download selected memories'
+                  }
+                  onClick={() => void exportSelectedMemories('download')}
+                >
+                  {selectionExportStatus === 'downloaded' ? 'Downloaded' : 'Download Markdown'}
+                </MotionButton>
+                <MotionButton
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  disabled={Boolean(selectionExportAction)}
+                  onClick={() => setBulkDeleteArmed(true)}
+                >
+                  Forget selected
+                </MotionButton>
+              </div>
             ) : null}
           </div>
+        ) : null}
+
+        {selectionExportError ? (
+          <p className="memory-selection__error" role="alert">
+            {selectionExportError}
+          </p>
         ) : null}
 
         {bulkDeleteArmed ? (
@@ -898,7 +1014,10 @@ export function MemoryPage() {
                         type="checkbox"
                         aria-label={`Select memory summary ${item.id}`}
                         checked={selectedIds.has(item.id)}
-                        disabled={!selectedIds.has(item.id) && selectionLimitReached}
+                        disabled={
+                          Boolean(selectionExportAction) ||
+                          (!selectedIds.has(item.id) && selectionLimitReached)
+                        }
                         onChange={() => toggleSelected(item.id)}
                       />
                       <span className="memory-card__category">
