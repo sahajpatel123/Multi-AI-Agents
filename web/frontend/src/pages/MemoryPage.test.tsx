@@ -263,6 +263,46 @@ describe('MemoryPage', () => {
     await waitFor(() => expect(screen.queryByText('Quantum computing')).not.toBeInTheDocument());
   });
 
+  it('locks pagination while a new summary order is loading', async () => {
+    let resolveSortedPage: ((value: MemorySummariesResponse) => void) | undefined;
+    listMemorySummariesMock.mockImplementation(
+      (params: { page?: number; sort?: string } = {}) => {
+        if (params.sort === 'most_exchanges') {
+          return new Promise<MemorySummariesResponse>((resolve) => {
+            resolveSortedPage = resolve;
+          });
+        }
+        return params.page && params.page > 1
+          ? listResponse([olderSummary], 2, 2)
+          : listResponse([baseSummary], 2, 1);
+      },
+    );
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sort memory summaries' }), {
+      target: { value: 'most_exchanges' },
+    });
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 20,
+        search: '',
+        sort: 'most_exchanges',
+      });
+    });
+
+    const loadMoreButton = screen.getByRole('button', { name: 'Load more memories' });
+    expect(loadMoreButton).toHaveAttribute('disabled');
+    fireEvent.click(loadMoreButton);
+    expect(
+      listMemorySummariesMock.mock.calls.some(([params]) => params?.page === 2),
+    ).toBe(false);
+
+    resolveSortedPage?.(listResponse([baseSummary], 2, 1));
+    await waitFor(() => expect(loadMoreButton).not.toHaveAttribute('disabled'));
+  });
+
   it('sends the debounced search query to the list endpoint', async () => {
     renderPage();
     await screen.findByText('Indian IPO market');

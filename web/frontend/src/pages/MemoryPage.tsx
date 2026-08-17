@@ -224,7 +224,9 @@ export function MemoryPage() {
         if (loadEpochRef.current !== epoch) return;
         if (append) {
           setLoadMoreError(
-            err instanceof ApiError ? err.message : 'Could not load older memories',
+            err instanceof ApiError
+              ? err.message
+              : `Could not load ${sort === 'newest' ? 'older memories' : 'more memories'}`,
           );
         } else {
           setError(err instanceof ApiError ? err.message : 'Could not load memory');
@@ -446,6 +448,7 @@ export function MemoryPage() {
   const hasActiveFilters = Boolean(categoryFilter || personaFilter || fromDateFilter || toDateFilter);
 
   const hasMore = !exhausted && items.length < total;
+  const loadMoreLabel = sortOrder === 'newest' ? 'Load older memories' : 'Load more memories';
 
   if (!canMemory) {
     return (
@@ -910,6 +913,7 @@ export function MemoryPage() {
                   type="button"
                   variant="ghost"
                   size="sm"
+                  disabled={loading}
                   onClick={() =>
                     void loadPage(
                       currentPage + 1,
@@ -932,6 +936,7 @@ export function MemoryPage() {
               variant="secondary"
               size="md"
               loading={loadingMore}
+              disabled={loading}
               onClick={() =>
                 void loadPage(
                   currentPage + 1,
@@ -945,7 +950,7 @@ export function MemoryPage() {
                 )
               }
             >
-              Load older memories
+              {loadMoreLabel}
             </MotionButton>
           </div>
         ) : null}
