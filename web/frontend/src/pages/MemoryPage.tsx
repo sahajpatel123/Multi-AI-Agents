@@ -71,6 +71,12 @@ export function MemoryPage() {
   const [deleteArmedId, setDeleteArmedId] = useState<number | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  /** True once an "older memories" page comes back empty — deletions can
+   * shift the server's offset so an empty page means we've rendered every
+   * remaining row. Without this the button would keep offering (and fetching)
+   * empty pages forever. */
+  const [exhausted, setExhausted] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
   /** Bumped on every fresh list fetch so a stale in-flight response can never
    * overwrite a newer search/refresh. */
@@ -89,10 +95,13 @@ export function MemoryPage() {
     async (page: number, append: boolean, query: string) => {
       if (append) {
         setLoadingMore(true);
+        setLoadMoreError(null);
       } else {
         loadEpochRef.current += 1;
         setLoading(true);
         setError(null);
+        setLoadMoreError(null);
+        setExhausted(false);
       }
       const epoch = loadEpochRef.current;
       try {
@@ -101,10 +110,17 @@ export function MemoryPage() {
         setItems((prev) => (append ? [...prev, ...data.summaries] : data.summaries));
         setTotal(data.total);
         setCurrentPage(data.page);
+        if (append && data.summaries.length === 0) {
+          setExhausted(true);
+        }
       } catch (err) {
         if (loadEpochRef.current !== epoch) return;
-        setError(err instanceof ApiError ? err.message : 'Could not load memory');
-        if (!append) {
+        if (append) {
+          setLoadMoreError(
+            err instanceof ApiError ? err.message : 'Could not load older memories',
+          );
+        } else {
+          setError(err instanceof ApiError ? err.message : 'Could not load memory');
           setItems([]);
           setTotal(0);
         }
@@ -188,7 +204,7 @@ export function MemoryPage() {
     [expandedId],
   );
 
-  const hasMore = items.length < total;
+  const hasMore = !exhausted && items.length < total;
 
   if (!canMemory) {
     return (
@@ -457,6 +473,19 @@ export function MemoryPage() {
 
         {hasMore ? (
           <div className="memory-page__more">
+            {loadMoreError ? (
+              <div className="memory-page__more-error" role="alert">
+                <span>{loadMoreError}</span>
+                <MotionButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void loadPage(currentPage + 1, true, searchQuery)}
+                >
+                  Try again
+                </MotionButton>
+              </div>
+            ) : null}
             <MotionButton
               type="button"
               variant="secondary"

@@ -141,6 +141,48 @@ describe('MemoryPage', () => {
     });
   });
 
+  it('surfaces a failed older-memories load with a retry and keeps the first page', async () => {
+    let pageTwoCalls = 0;
+    listMemorySummariesMock.mockImplementation(async (params: { page?: number } = {}) => {
+      if (params.page && params.page > 1) {
+        pageTwoCalls += 1;
+        if (pageTwoCalls === 1) throw new ApiError('boom', 500);
+        return listResponse([olderSummary], 2, 2);
+      }
+      return listResponse([baseSummary], 2, 1);
+    });
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: /Load older memories/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('boom');
+    expect(screen.getByText('Indian IPO market')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Quantum computing')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('stops offering older pages once an append returns no rows', async () => {
+    listMemorySummariesMock.mockImplementation(async (params: { page?: number } = {}) =>
+      params.page && params.page > 1
+        ? listResponse([], 2, 2)
+        : listResponse([baseSummary], 2, 1),
+    );
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: /Load older memories/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: /Load older memories/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it('sends the debounced search query to the list endpoint', async () => {
     renderPage();
     await screen.findByText('Indian IPO market');
@@ -191,6 +233,33 @@ describe('MemoryPage', () => {
       expect(screen.queryByText('Indian IPO market')).not.toBeInTheDocument();
     });
     expect(screen.getByText('1 saved')).toBeInTheDocument();
+  });
+
+  it('keeps the summary and reports the error when a delete fails', async () => {
+    deleteMemorySummaryMock.mockRejectedValueOnce(new ApiError('delete boom', 500));
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Forget' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    expect(await screen.findByText('delete boom')).toBeInTheDocument();
+    expect(screen.getByText('Indian IPO market')).toBeInTheDocument();
+    expect(screen.getByText('2 saved')).toBeInTheDocument();
+  });
+
+  it('retries a failed detail load when the summary is re-expanded', async () => {
+    getMemorySummaryMock.mockRejectedValueOnce(new ApiError('detail boom', 500));
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read summary' }));
+    expect(await screen.findByText('detail boom')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide summary' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Read summary' }));
+
+    expect(await screen.findByText(/Indian IPOs stay frothy/)).toBeInTheDocument();
   });
 
   it('shows an upgrade gate when memory is not part of the tier', async () => {

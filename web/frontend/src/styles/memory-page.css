@@ -295,8 +295,25 @@
 
 .memory-page__more {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  gap: 10px;
   margin-top: 18px;
+}
+
+.memory-page__more-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 680px;
+  padding: 8px 12px;
+  border: 0.5px solid #c96f5e;
+  border-radius: 10px;
+  background: rgba(201, 111, 94, 0.08);
+  color: #8f4638;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .memory-page__privacy {

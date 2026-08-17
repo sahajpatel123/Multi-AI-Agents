@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never shows a hollow ranking
 
 ### Fixed
+- The Memory page no longer swallows pagination failures: a failed
+  "Load older memories" request now shows the error with a retry action
+  while keeping the already-loaded summaries on screen, and the page stops
+  offering older pages once an append returns no rows (deleting summaries
+  can shift the server's offset, which previously left the button offering
+  endless empty pages); failed deletes keep the summary visible and report
+  why, and a failed summary detail load retries when the card is re-expanded
 - The judge's scorecard crowns the same take the rest of the app does: an
   explicit winner flag first, then the round's winner id, then the top score,
   so imported rounds without flags no longer crown a different mind than the
