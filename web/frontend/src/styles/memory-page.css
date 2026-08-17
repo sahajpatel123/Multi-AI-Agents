@@ -405,6 +405,11 @@
   font-weight: 600;
 }
 
+.memory-card__detail-actions {
+  display: flex;
+  margin-top: 12px;
+}
+
 .memory-page__more {
   display: flex;
   flex-direction: column;

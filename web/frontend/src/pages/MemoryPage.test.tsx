@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MemoryPage } from './MemoryPage';
 import { ApiError, type MemorySummary, type MemorySummariesResponse } from '../api';
+import { copyToClipboard } from '../lib/clipboard';
 
 const baseSummary: MemorySummary = {
   id: 1,
@@ -96,6 +97,10 @@ vi.mock('../lib/downloadTextFile', async () => {
   };
 });
 
+vi.mock('../lib/clipboard', () => ({
+  copyToClipboard: vi.fn(),
+}));
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -111,6 +116,7 @@ describe('MemoryPage', () => {
     getMemorySummaryMock.mockReset();
     deleteMemorySummaryMock.mockReset();
     exportMemorySummariesMock.mockReset();
+    vi.mocked(copyToClipboard).mockReset().mockResolvedValue(true);
     tierState.canUseFeature.mockImplementation((feature: string) => feature === 'memory');
     listMemorySummariesMock.mockImplementation(
       async (params: { page?: number } = {}) =>
@@ -463,6 +469,36 @@ describe('MemoryPage', () => {
       'aria-expanded',
       'true',
     );
+  });
+
+  it('copies an expanded summary as Markdown with its key positions', async () => {
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read summary' }));
+    await screen.findByText(/Indian IPOs stay frothy/);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy summary' }));
+
+    expect(await screen.findByRole('button', { name: 'Summary copied' })).toHaveTextContent('Copied');
+    expect(copyToClipboard).toHaveBeenCalledWith(expect.stringContaining('# Arena memory — Decision'));
+    expect(copyToClipboard).toHaveBeenCalledWith(
+      expect.stringContaining('Explored whether Indian IPOs stay frothy through the next quarter.'),
+    );
+    expect(copyToClipboard).toHaveBeenCalledWith(
+      expect.stringContaining('- The Analyst — Indian IPOs: Cautiously optimistic'),
+    );
+  });
+
+  it('shows a clear failure state when the clipboard is unavailable', async () => {
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read summary' }));
+    await screen.findByText(/Indian IPOs stay frothy/);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy summary' }));
+
+    expect(await screen.findByRole('button', { name: 'Copy failed' })).toHaveTextContent('Copy failed');
   });
 
   it('forgets a summary after confirmation and updates the count', async () => {

@@ -16,6 +16,7 @@ import { useTier } from '../context/TierContext';
 import { formatRelativePast } from '../lib/relativeTime';
 import { prefersReducedMotion } from '../lib/motion';
 import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import { copyToClipboard } from '../lib/clipboard';
 import { downloadBlobFile } from '../lib/downloadTextFile';
 import { PERSONAS } from '../data/personas';
 
@@ -50,6 +51,8 @@ type DetailState =
   | { status: 'error'; message: string }
   | { status: 'ready'; data: MemorySummary };
 
+type CopyStatus = 'copied' | 'failed';
+
 function personaName(personaId: string | null | undefined): string {
   if (!personaId) return '';
   return PERSONA_NAMES[personaId] || personaId;
@@ -58,6 +61,33 @@ function personaName(personaId: string | null | undefined): string {
 function categoryLabel(category: string | null | undefined): string {
   if (!category) return 'Session';
   return category.charAt(0).toUpperCase() + category.slice(1).replace(/_/g, ' ');
+}
+
+function positionLabel(position: NonNullable<MemorySummary['key_positions_taken']>[number]): string {
+  const persona = position.persona_id ? personaName(position.persona_id) : '';
+  const topic = position.topic ? ` — ${position.topic}` : '';
+  const stance = position.stance ? `: ${position.stance}` : '';
+  return `${persona}${topic}${stance}`.trim() || 'Unspecified position';
+}
+
+function memoryMarkdown(summary: MemorySummary): string {
+  const lines = [`# Arena memory — ${categoryLabel(summary.dominant_category)}`];
+  const metadata = [
+    summary.compressed_at ? `- Saved: ${summary.compressed_at}` : '',
+    `- Exchanges: ${summary.exchange_count}`,
+    summary.preferred_depth ? `- Depth: ${summary.preferred_depth}` : '',
+    summary.trusted_persona ? `- Trusted mind: ${personaName(summary.trusted_persona)}` : '',
+    summary.main_topics.length > 0 ? `- Topics: ${summary.main_topics.join(', ')}` : '',
+  ].filter(Boolean);
+
+  if (metadata.length > 0) lines.push('', ...metadata);
+  lines.push('', '## Summary', summary.session_summary?.trim() || 'No summary text was saved.');
+
+  if (summary.key_positions_taken && summary.key_positions_taken.length > 0) {
+    lines.push('', '## Key positions', ...summary.key_positions_taken.map((position) => `- ${positionLabel(position)}`));
+  }
+
+  return lines.join('\n');
 }
 
 function memoryFilterParams(
@@ -100,6 +130,9 @@ export function MemoryPage() {
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | 'md' | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [copyingSummaryId, setCopyingSummaryId] = useState<number | null>(null);
+  const [copyStatus, setCopyStatus] = useState<{ id: number; status: CopyStatus } | null>(null);
+  const copyResetTimerRef = useRef<number | null>(null);
   /** True once an "older memories" page comes back empty — deletions can
    * shift the server's offset so an empty page means we've rendered every
    * remaining row. Without this the button would keep offering (and fetching)
@@ -301,6 +334,42 @@ export function MemoryPage() {
       searchQuery,
       toDateFilter,
     ],
+  );
+
+  useEffect(
+    () => () => {
+      if (copyResetTimerRef.current !== null) {
+        window.clearTimeout(copyResetTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const copySummary = useCallback(
+    async (summary: MemorySummary) => {
+      if (copyingSummaryId !== null) return;
+      if (copyResetTimerRef.current !== null) {
+        window.clearTimeout(copyResetTimerRef.current);
+        copyResetTimerRef.current = null;
+      }
+
+      setCopyingSummaryId(summary.id);
+      setCopyStatus(null);
+      let status: CopyStatus = 'failed';
+      try {
+        status = (await copyToClipboard(memoryMarkdown(summary))) ? 'copied' : 'failed';
+      } catch {
+        status = 'failed';
+      } finally {
+        setCopyingSummaryId(null);
+        setCopyStatus({ id: summary.id, status });
+        copyResetTimerRef.current = window.setTimeout(() => {
+          setCopyStatus((current) => (current?.id === summary.id ? null : current));
+          copyResetTimerRef.current = null;
+        }, status === 'copied' ? 1800 : 2400);
+      }
+    },
+    [copyingSummaryId],
   );
 
   const hasActiveFilters = Boolean(categoryFilter || personaFilter || fromDateFilter || toDateFilter);
@@ -685,15 +754,36 @@ export function MemoryPage() {
                             <ul className="memory-card__positions">
                               {detail.data.key_positions_taken.map((position, index) => (
                                 <li key={`${position.topic || index}-${index}`}>
-                                  {position.persona_id ? (
-                                    <strong>{personaName(position.persona_id)}</strong>
-                                  ) : null}
+                                  {position.persona_id ? <strong>{personaName(position.persona_id)}</strong> : null}
                                   {position.topic ? ` — ${position.topic}` : ''}
                                   {position.stance ? `: ${position.stance}` : ''}
                                 </li>
                               ))}
                             </ul>
                           ) : null}
+                          <div className="memory-card__detail-actions">
+                            <MotionButton
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              loading={copyingSummaryId === item.id}
+                              disabled={copyingSummaryId !== null}
+                              aria-label={
+                                copyStatus?.id === item.id && copyStatus.status === 'failed'
+                                  ? 'Copy failed'
+                                  : copyStatus?.id === item.id && copyStatus.status === 'copied'
+                                    ? 'Summary copied'
+                                    : 'Copy summary'
+                              }
+                              onClick={() => void copySummary(detail.data)}
+                            >
+                              {copyStatus?.id === item.id && copyStatus.status === 'failed'
+                                ? 'Copy failed'
+                                : copyStatus?.id === item.id && copyStatus.status === 'copied'
+                                  ? 'Copied'
+                                  : 'Copy summary'}
+                            </MotionButton>
+                          </div>
                         </>
                       )}
                     </div>
