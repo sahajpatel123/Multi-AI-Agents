@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import pytest
 
@@ -213,6 +214,46 @@ async def test_search_rejects_overlong_input(app_client, make_user):
         f"/api/memory/summaries?search={'x' * 200}", headers=_pro_headers(user)
     )
     assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_date_range_filter_is_inclusive_and_echoed(app_client, make_user, db_session):
+    """Memory date filters use inclusive UTC calendar days at both bounds."""
+    user = make_user(email="mem-date@test.com", tier=UserTier.PLUS)
+    before = _seed_summary(db_session, user_id=user.id, session_id="before")
+    in_range = _seed_summary(db_session, user_id=user.id, session_id="in-range")
+    final_moment = _seed_summary(db_session, user_id=user.id, session_id="final-moment")
+    after = _seed_summary(db_session, user_id=user.id, session_id="after")
+    before.compressed_at = datetime(2026, 8, 9, 23, 59, 59)
+    in_range.compressed_at = datetime(2026, 8, 10, 12, 0, 0)
+    final_moment.compressed_at = datetime(2026, 8, 12, 23, 59, 59, 999999)
+    after.compressed_at = datetime(2026, 8, 13, 0, 0, 0)
+    db_session.add_all([before, in_range, final_moment, after])
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries?from_date=2026-08-10&to_date=2026-08-12",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert {row["session_id"] for row in body["summaries"]} == {"in-range", "final-moment"}
+    assert body["filters"]["from_date"] == "2026-08-10"
+    assert body["filters"]["to_date"] == "2026-08-12"
+
+
+@pytest.mark.asyncio
+async def test_date_range_rejects_reversed_bounds(app_client, make_user):
+    user = make_user(email="mem-date-reversed@test.com", tier=UserTier.PLUS)
+
+    res = await app_client.get(
+        "/api/memory/summaries?from_date=2026-08-13&to_date=2026-08-12",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 422
+    assert res.json()["detail"]["error"] == "invalid_date_range"
 
 
 # ─── Pagination ─────────────────────────────────────────────────────────────

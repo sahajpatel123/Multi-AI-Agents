@@ -207,6 +207,8 @@ export interface MemorySummariesResponse {
     category: string | null;
     persona_id: string | null;
     search: string | null;
+    from_date: string | null;
+    to_date: string | null;
   };
 }
 

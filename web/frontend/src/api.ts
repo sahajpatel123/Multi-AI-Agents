@@ -357,6 +357,8 @@ export async function listMemorySummaries(
     search?: string;
     category?: string;
     personaId?: string;
+    fromDate?: string;
+    toDate?: string;
   } = {},
 ): Promise<MemorySummariesResponse> {
   const query = new URLSearchParams();
@@ -368,6 +370,10 @@ export async function listMemorySummaries(
   if (category) query.set('category', category);
   const personaId = (params.personaId || '').trim();
   if (personaId) query.set('persona_id', personaId);
+  const fromDate = (params.fromDate || '').trim();
+  if (fromDate) query.set('from_date', fromDate);
+  const toDate = (params.toDate || '').trim();
+  if (toDate) query.set('to_date', toDate);
   const suffix = query.toString() ? `?${query.toString()}` : '';
   const res = await apiFetch(`/api/memory/summaries${suffix}`);
   const data = await parseJsonSafely<Partial<MemorySummariesResponse> & {
@@ -391,6 +397,8 @@ export async function listMemorySummaries(
       category: data.filters?.category ?? null,
       persona_id: data.filters?.persona_id ?? null,
       search: data.filters?.search ?? (search || null),
+      from_date: data.filters?.from_date ?? (fromDate || null),
+      to_date: data.filters?.to_date ?? (toDate || null),
     },
   };
 }
@@ -435,7 +443,7 @@ export type MemorySummaryExport = {
 /** Export all summaries matching the current Memory search, with the server's filename. */
 export async function exportMemorySummaries(
   format: MemorySummaryExportFormat,
-  params: { search?: string; category?: string; personaId?: string } = {},
+  params: { search?: string; category?: string; personaId?: string; fromDate?: string; toDate?: string } = {},
 ): Promise<MemorySummaryExport> {
   const query = new URLSearchParams();
   const search = (params.search || '').trim();
@@ -444,6 +452,10 @@ export async function exportMemorySummaries(
   if (category) query.set('category', category);
   const personaId = (params.personaId || '').trim();
   if (personaId) query.set('persona_id', personaId);
+  const fromDate = (params.fromDate || '').trim();
+  if (fromDate) query.set('from_date', fromDate);
+  const toDate = (params.toDate || '').trim();
+  if (toDate) query.set('to_date', toDate);
   const suffix = query.toString() ? `?${query.toString()}` : '';
   const res = await apiFetch(`/api/memory/summaries/export.${format}${suffix}`);
   if (!res.ok) {

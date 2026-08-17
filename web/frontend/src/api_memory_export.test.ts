@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { exportMemorySummaries } from './api';
+import { exportMemorySummaries, listMemorySummaries } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -31,7 +31,7 @@ describe('exportMemorySummaries', () => {
     );
   });
 
-  it('serializes category and trusted-persona filters for exports', async () => {
+  it('serializes category, trusted-persona, and date filters for exports', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(new Blob(['[]'], { type: 'application/json' }), { status: 200 }),
     );
@@ -39,12 +39,44 @@ describe('exportMemorySummaries', () => {
     await exportMemorySummaries('json', {
       category: 'decision',
       personaId: 'analyst',
+      fromDate: '2026-08-01',
+      toDate: '2026-08-16',
     });
 
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
-      '/api/memory/summaries/export.json?category=decision&persona_id=analyst',
+      '/api/memory/summaries/export.json?category=decision&persona_id=analyst&from_date=2026-08-01&to_date=2026-08-16',
       {},
     );
+  });
+
+  it('serializes date filters when loading the Memory browser', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          summaries: [],
+          total: 0,
+          page: 1,
+          per_page: 20,
+          total_pages: 0,
+          filters: { from_date: '2026-08-01', to_date: '2026-08-16' },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const result = await listMemorySummaries({
+      fromDate: '2026-08-01',
+      toDate: '2026-08-16',
+    });
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/memory/summaries?from_date=2026-08-01&to_date=2026-08-16',
+      {},
+    );
+    expect(result.filters).toMatchObject({
+      from_date: '2026-08-01',
+      to_date: '2026-08-16',
+    });
   });
 
   it('supports Markdown exports with the server filename', async () => {

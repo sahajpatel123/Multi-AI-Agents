@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -56,6 +56,56 @@ def _apply_summary_search(query, search: Optional[str]):
             cast(SessionSummary.main_topics, Text).ilike(pattern, escape="\\"),
         )
     )
+
+
+def _apply_summary_date_range(query, from_date: date | None, to_date: date | None):
+    """Limit summaries to inclusive UTC calendar dates when requested.
+
+    ``compressed_at`` is stored as a timezone-naive UTC timestamp. Using a
+    half-open interval for the end date keeps the filter inclusive without
+    losing records created in the final microsecond of that day.
+    """
+    if from_date:
+        query = query.filter(
+            SessionSummary.compressed_at >= datetime.combine(from_date, time.min)
+        )
+    if to_date:
+        if to_date == date.max:
+            return query.filter(SessionSummary.compressed_at <= datetime.max)
+        end_exclusive = datetime.combine(to_date + timedelta(days=1), time.min)
+        query = query.filter(SessionSummary.compressed_at < end_exclusive)
+    return query
+
+
+def _apply_summary_filters(
+    query,
+    *,
+    category: Optional[str],
+    persona_id: Optional[str],
+    search: Optional[str],
+    from_date: date | None,
+    to_date: date | None,
+):
+    """Apply the caller-visible Memory filters consistently to every view."""
+    if category:
+        query = query.filter(SessionSummary.dominant_category == category)
+    if persona_id:
+        # Exact match — persona_id is a closed enum string.
+        query = query.filter(SessionSummary.trusted_persona == persona_id)
+    query = _apply_summary_search(query, search)
+    return _apply_summary_date_range(query, from_date, to_date)
+
+
+def _validate_summary_date_range(from_date: date | None, to_date: date | None) -> None:
+    """Reject reversed date ranges before querying or exporting data."""
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_date_range",
+                "message": "From date must be on or before to date.",
+            },
+        )
 
 
 def _decode_json_column(value, default):
@@ -304,6 +354,8 @@ async def list_summaries(
     category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+    from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
+    to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
 ) -> dict:
     """Paginated list of the caller's compressed session summaries.
 
@@ -330,18 +382,17 @@ async def list_summaries(
             "filters": {"category": None, "persona_id": None, "search": None},
         }
 
-    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
-
-    if category:
-        q = q.filter(SessionSummary.dominant_category == category)
-
-    if persona_id:
-        # Exact match — persona_id is a closed enum string.
-        q = q.filter(SessionSummary.trusted_persona == persona_id)
-
-    # Search the same visible memory fields used by exports. The list is
-    # still capped at the requested page size, so this remains bounded.
-    q = _apply_summary_search(q, search)
+    _validate_summary_date_range(from_date, to_date)
+    # Filters are shared by list and export routes so users can export the
+    # exact Memory view they are browsing.
+    q = _apply_summary_filters(
+        db.query(SessionSummary).filter(SessionSummary.user_id == user.id),
+        category=category,
+        persona_id=persona_id,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+    )
 
     total = q.count()
     rows = (
@@ -361,6 +412,8 @@ async def list_summaries(
             "category": category,
             "persona_id": persona_id,
             "search": search,
+            "from_date": from_date.isoformat() if from_date else None,
+            "to_date": to_date.isoformat() if to_date else None,
         },
     }
 
@@ -372,6 +425,8 @@ async def export_summaries_csv(
     category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+    from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
+    to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
 ):
     """CSV export of all session summaries for a user.
 
@@ -401,16 +456,16 @@ async def export_summaries_csv(
             return "'" + s
         return s
     
-    # Get all summaries (not paginated for CSV)
-    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
-    
-    if category:
-        q = q.filter(SessionSummary.dominant_category == category)
-    
-    if persona_id:
-        q = q.filter(SessionSummary.trusted_persona == persona_id)
-    
-    q = _apply_summary_search(q, search)
+    _validate_summary_date_range(from_date, to_date)
+    # Get all matching summaries (not paginated for CSV).
+    q = _apply_summary_filters(
+        db.query(SessionSummary).filter(SessionSummary.user_id == user.id),
+        category=category,
+        persona_id=persona_id,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+    )
     
     summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
     
@@ -471,6 +526,8 @@ async def export_summaries_json(
     category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+    from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
+    to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
 ):
     """JSON export of all session summaries for a user.
 
@@ -491,16 +548,16 @@ async def export_summaries_json(
             detail={"error": "feature_not_allowed", "message": "Memory export requires Plus or Pro."},
         )
     
-    # Get all summaries (not paginated for export)
-    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
-    
-    if category:
-        q = q.filter(SessionSummary.dominant_category == category)
-    
-    if persona_id:
-        q = q.filter(SessionSummary.trusted_persona == persona_id)
-    
-    q = _apply_summary_search(q, search)
+    _validate_summary_date_range(from_date, to_date)
+    # Get all matching summaries (not paginated for export).
+    q = _apply_summary_filters(
+        db.query(SessionSummary).filter(SessionSummary.user_id == user.id),
+        category=category,
+        persona_id=persona_id,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+    )
     
     summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
     
@@ -545,6 +602,8 @@ async def export_summaries_markdown(
     category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+    from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
+    to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
 ):
     """Export all matching session summaries as a portable Markdown document."""
     enforce_user_rate_limit(
@@ -561,12 +620,15 @@ async def export_summaries_markdown(
             detail={"error": "feature_not_allowed", "message": "Memory export requires Plus or Pro."},
         )
 
-    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
-    if category:
-        q = q.filter(SessionSummary.dominant_category == category)
-    if persona_id:
-        q = q.filter(SessionSummary.trusted_persona == persona_id)
-    q = _apply_summary_search(q, search)
+    _validate_summary_date_range(from_date, to_date)
+    q = _apply_summary_filters(
+        db.query(SessionSummary).filter(SessionSummary.user_id == user.id),
+        category=category,
+        persona_id=persona_id,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+    )
     summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
 
     def _date(value) -> str:
@@ -585,6 +647,10 @@ async def export_summaries_markdown(
         filters.append(f"Kind: {_markdown_inline(category)}")
     if persona_id:
         filters.append(f"Trusted mind: {_markdown_inline(persona_id)}")
+    if from_date:
+        filters.append(f"From: {from_date.isoformat()}")
+    if to_date:
+        filters.append(f"To: {to_date.isoformat()}")
     if filters:
         lines.extend(["", "Filters: " + " · ".join(filters)])
 

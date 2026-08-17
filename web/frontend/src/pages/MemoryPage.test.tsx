@@ -49,7 +49,7 @@ function listResponse(summaries: MemorySummary[], total: number, page: number): 
     page,
     per_page: 20,
     total_pages: 1,
-    filters: { category: null, persona_id: null, search: null },
+    filters: { category: null, persona_id: null, search: null, from_date: null, to_date: null },
   };
 }
 
@@ -271,7 +271,7 @@ describe('MemoryPage', () => {
     });
   });
 
-  it('filters summaries by kind and trusted mind, then clears both filters', async () => {
+  it('filters summaries by kind, trusted mind, and date range, then clears every filter', async () => {
     renderPage();
     await screen.findByText('Indian IPO market');
 
@@ -297,6 +297,35 @@ describe('MemoryPage', () => {
         search: '',
         category: 'decision',
         personaId: 'analyst',
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText('Filter memory from date'), {
+      target: { value: '2026-08-01' },
+    });
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 20,
+        search: '',
+        category: 'decision',
+        personaId: 'analyst',
+        fromDate: '2026-08-01',
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText('Filter memory to date'), {
+      target: { value: '2026-08-16' },
+    });
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 20,
+        search: '',
+        category: 'decision',
+        personaId: 'analyst',
+        fromDate: '2026-08-01',
+        toDate: '2026-08-16',
       });
     });
 
@@ -310,9 +339,11 @@ describe('MemoryPage', () => {
     });
     expect(screen.getByRole('combobox', { name: 'Filter memory by category' })).toHaveValue('');
     expect(screen.getByRole('combobox', { name: 'Filter memory by trusted mind' })).toHaveValue('');
+    expect(screen.getByLabelText('Filter memory from date')).toHaveValue('');
+    expect(screen.getByLabelText('Filter memory to date')).toHaveValue('');
   });
 
-  it('exports the active category and trusted-mind filters', async () => {
+  it('exports active category, trusted-mind, and date filters', async () => {
     renderPage();
     await screen.findByText('Indian IPO market');
 
@@ -322,6 +353,12 @@ describe('MemoryPage', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Filter memory by trusted mind' }), {
       target: { value: 'analyst' },
     });
+    fireEvent.change(screen.getByLabelText('Filter memory from date'), {
+      target: { value: '2026-08-01' },
+    });
+    fireEvent.change(screen.getByLabelText('Filter memory to date'), {
+      target: { value: '2026-08-16' },
+    });
     await waitFor(() => {
       expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
         page: 1,
@@ -329,6 +366,8 @@ describe('MemoryPage', () => {
         search: '',
         category: 'decision',
         personaId: 'analyst',
+        fromDate: '2026-08-01',
+        toDate: '2026-08-16',
       });
     });
 
@@ -339,6 +378,8 @@ describe('MemoryPage', () => {
         search: '',
         category: 'decision',
         personaId: 'analyst',
+        fromDate: '2026-08-01',
+        toDate: '2026-08-16',
       });
     });
   });

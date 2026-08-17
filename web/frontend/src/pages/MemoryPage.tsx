@@ -60,11 +60,19 @@ function categoryLabel(category: string | null | undefined): string {
   return category.charAt(0).toUpperCase() + category.slice(1).replace(/_/g, ' ');
 }
 
-function memoryFilterParams(search: string, category: string, personaId: string) {
+function memoryFilterParams(
+  search: string,
+  category: string,
+  personaId: string,
+  fromDate: string,
+  toDate: string,
+) {
   return {
     search,
     ...(category ? { category } : {}),
     ...(personaId ? { personaId } : {}),
+    ...(fromDate ? { fromDate } : {}),
+    ...(toDate ? { toDate } : {}),
   };
 }
 
@@ -76,6 +84,8 @@ export function MemoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [personaFilter, setPersonaFilter] = useState('');
+  const [fromDateFilter, setFromDateFilter] = useState('');
+  const [toDateFilter, setToDateFilter] = useState('');
   const [items, setItems] = useState<MemorySummary[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
@@ -110,7 +120,15 @@ export function MemoryPage() {
   }, [rawSearch]);
 
   const loadPage = useCallback(
-    async (page: number, append: boolean, query: string, category: string, personaId: string) => {
+    async (
+      page: number,
+      append: boolean,
+      query: string,
+      category: string,
+      personaId: string,
+      fromDate: string,
+      toDate: string,
+    ) => {
       if (append) {
         setLoadingMore(true);
         setLoadMoreError(null);
@@ -130,7 +148,7 @@ export function MemoryPage() {
         const data = await listMemorySummaries({
           page,
           perPage: PER_PAGE,
-          ...memoryFilterParams(query, category, personaId),
+          ...memoryFilterParams(query, category, personaId, fromDate, toDate),
         });
         if (loadEpochRef.current !== epoch) return;
         setItems((prev) => (append ? [...prev, ...data.summaries] : data.summaries));
@@ -169,8 +187,24 @@ export function MemoryPage() {
     setExpandedId(null);
     setDetailState({});
     setDeleteArmedId(null);
-    void loadPage(1, false, searchQuery, categoryFilter, personaFilter);
-  }, [canMemory, searchQuery, categoryFilter, personaFilter, loadPage]);
+    void loadPage(
+      1,
+      false,
+      searchQuery,
+      categoryFilter,
+      personaFilter,
+      fromDateFilter,
+      toDateFilter,
+    );
+  }, [
+    canMemory,
+    searchQuery,
+    categoryFilter,
+    personaFilter,
+    fromDateFilter,
+    toDateFilter,
+    loadPage,
+  ]);
 
   // `/` focuses the search box when the user is not typing elsewhere.
   useEffect(() => {
@@ -238,7 +272,13 @@ export function MemoryPage() {
       try {
         const { blob, filename } = await exportMemorySummaries(
           format,
-          memoryFilterParams(searchQuery, categoryFilter, personaFilter),
+          memoryFilterParams(
+            searchQuery,
+            categoryFilter,
+            personaFilter,
+            fromDateFilter,
+            toDateFilter,
+          ),
         );
         if (!downloadBlobFile(blob, filename)) {
           setExportError(`Could not download memory as ${format.toUpperCase()} — try again.`);
@@ -253,10 +293,17 @@ export function MemoryPage() {
         setExportingFormat(null);
       }
     },
-    [categoryFilter, exportingFormat, personaFilter, searchQuery],
+    [
+      categoryFilter,
+      exportingFormat,
+      fromDateFilter,
+      personaFilter,
+      searchQuery,
+      toDateFilter,
+    ],
   );
 
-  const hasActiveFilters = Boolean(categoryFilter || personaFilter);
+  const hasActiveFilters = Boolean(categoryFilter || personaFilter || fromDateFilter || toDateFilter);
 
   const hasMore = !exhausted && items.length < total;
 
@@ -370,6 +417,28 @@ export function MemoryPage() {
               ))}
             </select>
           </label>
+          <label className="memory-filter memory-filter--date">
+            <span className="memory-filter__label">From</span>
+            <input
+              className="memory-filter__date"
+              type="date"
+              aria-label="Filter memory from date"
+              value={fromDateFilter}
+              max={toDateFilter || undefined}
+              onChange={(event) => setFromDateFilter(event.target.value)}
+            />
+          </label>
+          <label className="memory-filter memory-filter--date">
+            <span className="memory-filter__label">To</span>
+            <input
+              className="memory-filter__date"
+              type="date"
+              aria-label="Filter memory to date"
+              value={toDateFilter}
+              min={fromDateFilter || undefined}
+              onChange={(event) => setToDateFilter(event.target.value)}
+            />
+          </label>
           {hasActiveFilters ? (
             <button
               type="button"
@@ -377,6 +446,8 @@ export function MemoryPage() {
               onClick={() => {
                 setCategoryFilter('');
                 setPersonaFilter('');
+                setFromDateFilter('');
+                setToDateFilter('');
               }}
             >
               Clear filters
@@ -459,7 +530,15 @@ export function MemoryPage() {
                 variant="primary"
                 size="md"
                 onClick={() =>
-                  void loadPage(1, false, searchQuery, categoryFilter, personaFilter)
+                  void loadPage(
+                    1,
+                    false,
+                    searchQuery,
+                    categoryFilter,
+                    personaFilter,
+                    fromDateFilter,
+                    toDateFilter,
+                  )
                 }
               >
                 Try again
@@ -635,7 +714,15 @@ export function MemoryPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() =>
-                    void loadPage(currentPage + 1, true, searchQuery, categoryFilter, personaFilter)
+                    void loadPage(
+                      currentPage + 1,
+                      true,
+                      searchQuery,
+                      categoryFilter,
+                      personaFilter,
+                      fromDateFilter,
+                      toDateFilter,
+                    )
                   }
                 >
                   Try again
@@ -648,7 +735,15 @@ export function MemoryPage() {
               size="md"
               loading={loadingMore}
               onClick={() =>
-                void loadPage(currentPage + 1, true, searchQuery, categoryFilter, personaFilter)
+                void loadPage(
+                  currentPage + 1,
+                  true,
+                  searchQuery,
+                  categoryFilter,
+                  personaFilter,
+                  fromDateFilter,
+                  toDateFilter,
+                )
               }
             >
               Load older memories

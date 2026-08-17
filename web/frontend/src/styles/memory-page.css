@@ -178,7 +178,19 @@
   font-size: 12px;
 }
 
-.memory-filter__select:focus-visible {
+.memory-filter__date {
+  min-width: 118px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #6b563f;
+  cursor: pointer;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  font-size: 12px;
+}
+
+.memory-filter__select:focus-visible,
+.memory-filter__date:focus-visible {
   outline: 2px solid rgba(140, 115, 85, 0.45);
   outline-offset: 2px;
   border-radius: 3px;
@@ -439,6 +451,15 @@
   .memory-filter__select {
     flex: 1;
     max-width: none;
+    text-align: right;
+  }
+
+  .memory-filter--date {
+    align-items: center;
+  }
+
+  .memory-filter__date {
+    flex: 1;
     text-align: right;
   }
 

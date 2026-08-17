@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 from arena.core.datetime_utils import utcnow_naive
 from arena.core.auth import create_access_token
@@ -117,6 +119,30 @@ async def test_memory_summaries_exports_search_main_topics(app_client, make_user
         )
         assert res.status_code == 200
         assert "sess-topic" in res.text
+
+
+@pytest.mark.asyncio
+async def test_memory_summaries_exports_apply_the_date_range(app_client, make_user, db_session):
+    """CSV, JSON, and Markdown exports mirror the visible date-filtered view."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    before = _seed_summary(db_session, user.id, "sess-before")
+    matching = _seed_summary(db_session, user.id, "sess-match")
+    after = _seed_summary(db_session, user.id, "sess-after")
+    before.compressed_at = datetime(2026, 8, 9, 23, 59, 59)
+    matching.compressed_at = datetime(2026, 8, 10, 12, 0, 0)
+    after.compressed_at = datetime(2026, 8, 11, 0, 0, 0)
+    db_session.commit()
+
+    for extension in ("csv", "json", "md"):
+        res = await app_client.get(
+            f"/api/memory/summaries/export.{extension}?from_date=2026-08-10&to_date=2026-08-10",
+            headers=_pro_headers(user),
+        )
+        assert res.status_code == 200
+        assert "sess-match" in res.text
+        assert "sess-before" not in res.text
+        assert "sess-after" not in res.text
 
 
 @pytest.mark.asyncio
