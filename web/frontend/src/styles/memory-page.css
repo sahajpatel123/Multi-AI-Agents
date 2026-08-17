@@ -208,6 +208,10 @@
   text-underline-offset: 3px;
 }
 
+.memory-filters__share {
+  margin-left: auto;
+}
+
 .memory-export {
   display: flex;
   align-items: center;
@@ -542,6 +546,11 @@
 
   .memory-filters__clear {
     align-self: flex-end;
+  }
+
+  .memory-filters__share {
+    align-self: flex-end;
+    margin-left: 0;
   }
 
   .memory-export {

@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Memory: copy the current filtered view link so shared searches and ordering reopen exactly as seen',
       '[NEW] Memory: download selected summaries as a spreadsheet-safe CSV alongside Markdown and JSON exports',
       '[NEW] Watchlist: download every completed latest result in the current view as one markdown digest file (Download digest or Shift+M), matching the Copy digest content',
       '[NEW] Agent history: pin important research tasks to the top (local, persists across visits)',

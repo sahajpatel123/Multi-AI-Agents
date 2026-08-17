@@ -383,6 +383,35 @@ describe('MemoryPage', () => {
     });
   });
 
+  it('copies the current filtered Memory view link', async () => {
+    renderPage('/memory?search=IPO+notes&category=decision&sort=oldest');
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy memory view link' }));
+
+    expect(await screen.findByRole('button', { name: 'Memory view link copied' })).toHaveTextContent(
+      'Link copied',
+    );
+    expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    const copiedUrl = new URL(vi.mocked(copyToClipboard).mock.calls[0]?.[0] as string);
+    expect(copiedUrl.pathname).toBe('/memory');
+    expect(copiedUrl.searchParams.get('search')).toBe('IPO notes');
+    expect(copiedUrl.searchParams.get('category')).toBe('decision');
+    expect(copiedUrl.searchParams.get('sort')).toBe('oldest');
+  });
+
+  it('reports when the current Memory view link cannot be copied', async () => {
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy memory view link' }));
+
+    expect(await screen.findByRole('button', { name: 'Copy memory view link failed' })).toHaveTextContent(
+      'Copy failed',
+    );
+  });
+
   it('canonicalizes malformed shared filters before querying', async () => {
     renderPage(
       `/memory?search=${'x'.repeat(101)}&category=unknown&persona_id=unknown&from_date=2026-08-16&to_date=2026-08-01&sort=unsupported`,

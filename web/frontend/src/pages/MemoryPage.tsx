@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import '../styles/memory-page.css';
 import MicroLoader from '../components/MicroLoader';
 import { EmptyState } from '../components/EmptyState';
@@ -250,6 +250,7 @@ function memoryFilterParams(
 }
 
 export function MemoryPage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialUrlFilters = readMemoryUrlFilters(searchParams);
@@ -284,6 +285,8 @@ export function MemoryPage() {
   const [selectionExportStatus, setSelectionExportStatus] =
     useState<SelectionExportStatus>(null);
   const [selectionExportError, setSelectionExportError] = useState<string | null>(null);
+  const [copyingMemoryViewLink, setCopyingMemoryViewLink] = useState(false);
+  const [memoryViewLinkStatus, setMemoryViewLinkStatus] = useState<CopyStatus | null>(null);
   const [copyingSummaryId, setCopyingSummaryId] = useState<number | null>(null);
   const [copyStatus, setCopyStatus] = useState<{ id: number; status: CopyStatus } | null>(null);
   const [downloadingSummaryId, setDownloadingSummaryId] = useState<number | null>(null);
@@ -293,6 +296,7 @@ export function MemoryPage() {
   } | null>(null);
   const copyResetTimerRef = useRef<number | null>(null);
   const downloadResetTimerRef = useRef<number | null>(null);
+  const memoryViewLinkResetTimerRef = useRef<number | null>(null);
   const selectionExportRunRef = useRef(0);
   const selectionExportAbortRef = useRef<AbortController | null>(null);
   /** True once an "older memories" page comes back empty — deletions can
@@ -585,6 +589,9 @@ export function MemoryPage() {
       if (downloadResetTimerRef.current !== null) {
         window.clearTimeout(downloadResetTimerRef.current);
       }
+      if (memoryViewLinkResetTimerRef.current !== null) {
+        window.clearTimeout(memoryViewLinkResetTimerRef.current);
+      }
     },
     [],
   );
@@ -615,6 +622,32 @@ export function MemoryPage() {
     },
     [copyingSummaryId],
   );
+
+  const copyMemoryViewLink = useCallback(async () => {
+    if (copyingMemoryViewLink) return;
+    if (memoryViewLinkResetTimerRef.current !== null) {
+      window.clearTimeout(memoryViewLinkResetTimerRef.current);
+      memoryViewLinkResetTimerRef.current = null;
+    }
+
+    setCopyingMemoryViewLink(true);
+    setMemoryViewLinkStatus(null);
+    let status: CopyStatus = 'failed';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const url = `${origin}${location.pathname}${location.search}${location.hash}`;
+    try {
+      status = (await copyToClipboard(url)) ? 'copied' : 'failed';
+    } catch {
+      status = 'failed';
+    } finally {
+      setCopyingMemoryViewLink(false);
+      setMemoryViewLinkStatus(status);
+      memoryViewLinkResetTimerRef.current = window.setTimeout(() => {
+        setMemoryViewLinkStatus(null);
+        memoryViewLinkResetTimerRef.current = null;
+      }, status === 'copied' ? 1800 : 2400);
+    }
+  }, [copyingMemoryViewLink, location.hash, location.pathname, location.search]);
 
   const downloadSummary = useCallback(
     (summary: MemorySummary) => {
@@ -1004,6 +1037,28 @@ export function MemoryPage() {
               Clear filters
             </button>
           ) : null}
+          <MotionButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="memory-filters__share"
+            loading={copyingMemoryViewLink}
+            disabled={copyingMemoryViewLink}
+            aria-label={
+              memoryViewLinkStatus === 'copied'
+                ? 'Memory view link copied'
+                : memoryViewLinkStatus === 'failed'
+                  ? 'Copy memory view link failed'
+                  : 'Copy memory view link'
+            }
+            onClick={() => void copyMemoryViewLink()}
+          >
+            {memoryViewLinkStatus === 'copied'
+              ? 'Link copied'
+              : memoryViewLinkStatus === 'failed'
+                ? 'Copy failed'
+                : 'Copy view link'}
+          </MotionButton>
         </div>
 
         {!loading && !error && total > 0 ? (
