@@ -297,6 +297,8 @@ export function MemoryPage() {
   const copyResetTimerRef = useRef<number | null>(null);
   const downloadResetTimerRef = useRef<number | null>(null);
   const memoryViewLinkResetTimerRef = useRef<number | null>(null);
+  const copyMemoryViewLinkInFlightRef = useRef(false);
+  const mountedRef = useRef(true);
   const selectionExportRunRef = useRef(0);
   const selectionExportAbortRef = useRef<AbortController | null>(null);
   /** True once an "older memories" page comes back empty — deletions can
@@ -575,8 +577,11 @@ export function MemoryPage() {
     ],
   );
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      copyMemoryViewLinkInFlightRef.current = false;
       // A detail request can outlive the page (for example, when the user
       // navigates away while preparing an export). Abort the request as well
       // as invalidating the run so stale work does not occupy a connection.
@@ -592,9 +597,8 @@ export function MemoryPage() {
       if (memoryViewLinkResetTimerRef.current !== null) {
         window.clearTimeout(memoryViewLinkResetTimerRef.current);
       }
-    },
-    [],
-  );
+    };
+  }, []);
 
   const copySummary = useCallback(
     async (summary: MemorySummary) => {
@@ -624,12 +628,16 @@ export function MemoryPage() {
   );
 
   const copyMemoryViewLink = useCallback(async () => {
-    if (copyingMemoryViewLink) return;
+    // Keep a synchronous guard as well as the state-backed disabled prop. A
+    // rapid keyboard activation can otherwise enter the handler twice before
+    // React has committed the first `setCopyingMemoryViewLink` update.
+    if (copyingMemoryViewLink || copyMemoryViewLinkInFlightRef.current) return;
     if (memoryViewLinkResetTimerRef.current !== null) {
       window.clearTimeout(memoryViewLinkResetTimerRef.current);
       memoryViewLinkResetTimerRef.current = null;
     }
 
+    copyMemoryViewLinkInFlightRef.current = true;
     setCopyingMemoryViewLink(true);
     setMemoryViewLinkStatus(null);
     let status: CopyStatus = 'failed';
@@ -640,12 +648,17 @@ export function MemoryPage() {
     } catch {
       status = 'failed';
     } finally {
-      setCopyingMemoryViewLink(false);
-      setMemoryViewLinkStatus(status);
-      memoryViewLinkResetTimerRef.current = window.setTimeout(() => {
-        setMemoryViewLinkStatus(null);
-        memoryViewLinkResetTimerRef.current = null;
-      }, status === 'copied' ? 1800 : 2400);
+      copyMemoryViewLinkInFlightRef.current = false;
+      // Clipboard implementations may resolve after navigation. Do not
+      // update state or schedule a feedback timer for an unmounted page.
+      if (mountedRef.current) {
+        setCopyingMemoryViewLink(false);
+        setMemoryViewLinkStatus(status);
+        memoryViewLinkResetTimerRef.current = window.setTimeout(() => {
+          setMemoryViewLinkStatus(null);
+          memoryViewLinkResetTimerRef.current = null;
+        }, status === 'copied' ? 1800 : 2400);
+      }
     }
   }, [copyingMemoryViewLink, location.hash, location.pathname, location.search]);
 

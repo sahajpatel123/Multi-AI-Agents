@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { MemoryPage } from './MemoryPage';
 import { ApiError, type MemorySummary, type MemorySummariesResponse } from '../api';
@@ -410,6 +410,33 @@ describe('MemoryPage', () => {
     expect(await screen.findByRole('button', { name: 'Copy memory view link failed' })).toHaveTextContent(
       'Copy failed',
     );
+  });
+
+  it('does not schedule link feedback when the page unmounts during copying', async () => {
+    let resolveCopy: ((value: boolean) => void) | undefined;
+    const pendingCopy = new Promise<boolean>((resolve) => {
+      resolveCopy = resolve;
+    });
+    vi.mocked(copyToClipboard).mockReturnValueOnce(pendingCopy);
+    const setTimeoutSpy = vi.spyOn(window, 'setTimeout');
+    try {
+      const view = renderPage('/memory?category=decision');
+      await screen.findByText('Indian IPO market');
+      const timerCallsBeforeCopy = setTimeoutSpy.mock.calls.length;
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copy memory view link' }));
+      expect(screen.getByRole('button', { name: 'Copy memory view link' })).toBeDisabled();
+
+      view.unmount();
+      await act(async () => {
+        resolveCopy?.(true);
+        await pendingCopy;
+      });
+
+      expect(setTimeoutSpy).toHaveBeenCalledTimes(timerCallsBeforeCopy);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   });
 
   it('canonicalizes malformed shared filters before querying', async () => {
