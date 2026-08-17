@@ -140,6 +140,50 @@
   background: rgba(245, 240, 232, 0.8);
 }
 
+.memory-export {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: -8px auto 18px;
+  max-width: 680px;
+  padding: 10px 12px;
+  border: 0.5px solid rgba(212, 196, 176, 0.82);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.memory-export__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.memory-export__title {
+  color: #6b563f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.memory-export__note {
+  overflow: hidden;
+  color: #a89070;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-export__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.memory-export__error {
+  margin-top: -8px;
+}
+
 .memory-list {
   list-style: none;
   margin: 0;
@@ -323,6 +367,17 @@
   font-size: 11px;
   color: #a89070;
   font-style: italic;
+}
+
+@media (max-width: 520px) {
+  .memory-export {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .memory-export__actions {
+    align-self: flex-end;
+  }
 }
 
 /* Tier gate */

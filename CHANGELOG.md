@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Memory summaries can now be exported from the Memory page as CSV or JSON;
+  exports follow the active search so users can take a focused slice or their
+  complete saved memory with them
 - Arena now has a Memory page (`/memory`, also linked from the in-app
   sidebar for Plus users): browse, search, and page through the compressed
   summaries Arena has saved about past sessions, open a summary to read the

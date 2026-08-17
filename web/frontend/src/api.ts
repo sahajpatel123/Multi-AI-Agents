@@ -415,6 +415,37 @@ export async function deleteMemorySummary(summaryId: number): Promise<void> {
   }
 }
 
+export type MemorySummaryExportFormat = 'csv' | 'json';
+
+export type MemorySummaryExport = {
+  blob: Blob;
+  filename: string;
+};
+
+/** Export all summaries matching the current Memory search, with the server's filename. */
+export async function exportMemorySummaries(
+  format: MemorySummaryExportFormat,
+  params: { search?: string } = {},
+): Promise<MemorySummaryExport> {
+  const query = new URLSearchParams();
+  const search = (params.search || '').trim();
+  if (search) query.set('search', search);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const res = await apiFetch(`/api/memory/summaries/export.${format}${suffix}`);
+  if (!res.ok) {
+    const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, `Could not export memory as ${format.toUpperCase()}`), res),
+      res.status,
+      data,
+    );
+  }
+  return {
+    blob: await res.blob(),
+    filename: contentDispositionFilename(res) ?? `arena-memory-summaries.${format}`,
+  };
+}
+
 export interface ApiPersona {
   persona_id: string;
   name: string;

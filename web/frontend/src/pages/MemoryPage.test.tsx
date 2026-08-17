@@ -61,6 +61,7 @@ const navigateMock = vi.fn();
 const listMemorySummariesMock = vi.fn();
 const getMemorySummaryMock = vi.fn();
 const deleteMemorySummaryMock = vi.fn();
+const exportMemorySummariesMock = vi.fn();
 
 vi.mock('../context/TierContext', () => ({
   useTier: () => tierState,
@@ -81,6 +82,17 @@ vi.mock('../api', async () => {
     listMemorySummaries: (...args: unknown[]) => listMemorySummariesMock(...args),
     getMemorySummary: (...args: unknown[]) => getMemorySummaryMock(...args),
     deleteMemorySummary: (...args: unknown[]) => deleteMemorySummaryMock(...args),
+    exportMemorySummaries: (...args: unknown[]) => exportMemorySummariesMock(...args),
+  };
+});
+
+vi.mock('../lib/downloadTextFile', async () => {
+  const actual = await vi.importActual<typeof import('../lib/downloadTextFile')>(
+    '../lib/downloadTextFile',
+  );
+  return {
+    ...actual,
+    downloadBlobFile: vi.fn().mockReturnValue(true),
   };
 });
 
@@ -98,6 +110,7 @@ describe('MemoryPage', () => {
     listMemorySummariesMock.mockReset();
     getMemorySummaryMock.mockReset();
     deleteMemorySummaryMock.mockReset();
+    exportMemorySummariesMock.mockReset();
     tierState.canUseFeature.mockImplementation((feature: string) => feature === 'memory');
     listMemorySummariesMock.mockImplementation(
       async (params: { page?: number } = {}) =>
@@ -107,6 +120,10 @@ describe('MemoryPage', () => {
     );
     getMemorySummaryMock.mockResolvedValue(detailSummary);
     deleteMemorySummaryMock.mockResolvedValue(undefined);
+    exportMemorySummariesMock.mockResolvedValue({
+      blob: new Blob(['export'], { type: 'text/csv' }),
+      filename: 'arena-memory-summaries-1.csv',
+    });
   });
 
   it('renders saved summaries with topics, category, persona, and count', async () => {
@@ -198,6 +215,59 @@ describe('MemoryPage', () => {
         search: 'IPO',
       });
     });
+  });
+
+  it('exports the active search as CSV and disables the other format while busy', async () => {
+    const { downloadBlobFile } = await import('../lib/downloadTextFile');
+    let resolveExport: ((value: { blob: Blob; filename: string }) => void) | undefined;
+    exportMemorySummariesMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveExport = resolve;
+        }),
+    );
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search memory summaries' }), {
+      target: { value: 'IPO' },
+    });
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 20,
+        search: 'IPO',
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
+
+    await waitFor(() => {
+      expect(exportMemorySummariesMock).toHaveBeenCalledWith('csv', { search: 'IPO' });
+    });
+    expect(screen.getByRole('button', { name: 'JSON' })).toBeDisabled();
+
+    resolveExport?.({
+      blob: new Blob(['export'], { type: 'text/csv' }),
+      filename: 'arena-memory-summaries-1.csv',
+    });
+    await waitFor(() => {
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-memory-summaries-1.csv',
+      );
+    });
+  });
+
+  it('reports an export failure without losing the memory list', async () => {
+    exportMemorySummariesMock.mockRejectedValueOnce(new ApiError('export boom', 500));
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
+
+    expect(await screen.findByText('export boom')).toBeInTheDocument();
+    expect(screen.getByText('Indian IPO market')).toBeInTheDocument();
   });
 
   it('hydrates the full summary body when expanded', async () => {

@@ -7,6 +7,7 @@ import { MotionButton } from '../components/MotionButton';
 import {
   ApiError,
   deleteMemorySummary,
+  exportMemorySummaries,
   getMemorySummary,
   listMemorySummaries,
 } from '../api';
@@ -15,6 +16,7 @@ import { useTier } from '../context/TierContext';
 import { formatRelativePast } from '../lib/relativeTime';
 import { prefersReducedMotion } from '../lib/motion';
 import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import { downloadBlobFile } from '../lib/downloadTextFile';
 
 const PER_PAGE = 20;
 
@@ -72,6 +74,8 @@ export function MemoryPage() {
   const [deleteBusyId, setDeleteBusyId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   /** True once an "older memories" page comes back empty — deletions can
    * shift the server's offset so an empty page means we've rendered every
    * remaining row. Without this the button would keep offering (and fetching)
@@ -204,6 +208,29 @@ export function MemoryPage() {
     [expandedId],
   );
 
+  const exportMemory = useCallback(
+    async (format: 'csv' | 'json') => {
+      if (exportingFormat) return;
+      setExportingFormat(format);
+      setExportError(null);
+      try {
+        const { blob, filename } = await exportMemorySummaries(format, { search: searchQuery });
+        if (!downloadBlobFile(blob, filename)) {
+          setExportError(`Could not download memory as ${format.toUpperCase()} — try again.`);
+        }
+      } catch (err) {
+        setExportError(
+          err instanceof ApiError
+            ? err.message
+            : `Could not export memory as ${format.toUpperCase()} — try again.`,
+        );
+      } finally {
+        setExportingFormat(null);
+      }
+    },
+    [exportingFormat, searchQuery],
+  );
+
   const hasMore = !exhausted && items.length < total;
 
   if (!canMemory) {
@@ -282,6 +309,45 @@ export function MemoryPage() {
             /
           </kbd>
         </div>
+
+        {!loading && !error && total > 0 ? (
+          <div className="memory-export" aria-label="Export memory summaries">
+            <div className="memory-export__copy">
+              <span className="memory-export__title">Take your memory with you</span>
+              <span className="memory-export__note">
+                {searchQuery ? `Exporting matches for “${searchQuery}”.` : 'Export all saved summaries.'}
+              </span>
+            </div>
+            <div className="memory-export__actions">
+              <MotionButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                loading={exportingFormat === 'csv'}
+                disabled={Boolean(exportingFormat)}
+                onClick={() => void exportMemory('csv')}
+              >
+                CSV
+              </MotionButton>
+              <MotionButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                loading={exportingFormat === 'json'}
+                disabled={Boolean(exportingFormat)}
+                onClick={() => void exportMemory('json')}
+              >
+                JSON
+              </MotionButton>
+            </div>
+          </div>
+        ) : null}
+
+        {exportError ? (
+          <p className="memory-page__error memory-export__error" role="alert">
+            {exportError}
+          </p>
+        ) : null}
 
         {deleteError ? (
           <p className="memory-page__error" role="alert">
