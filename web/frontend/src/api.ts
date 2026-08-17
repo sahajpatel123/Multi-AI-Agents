@@ -2131,6 +2131,8 @@ export type AgentWatchlistBulkDeleteResult = {
   deleted: number;
   deleted_ids: string[];
   skipped_ids: string[];
+  active_count?: number;
+  total?: number;
 };
 
 export async function deleteAgentWatchlistBulk(

@@ -57,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Watchlist bulk removal now re-syncs header counters from the delete
+  response instead of a follow-up list fetch, so a successful deletion can
+  never be misreported as a failure when the refetch flakes, and the
+  partial-success message says "could not be removed" to cover both vanished
+  and non-owned ids honestly
 - Watchlist cards only offer to publish or copy a link for completed latest
   runs, so in-progress or failed results no longer show a share action the
   API would reject

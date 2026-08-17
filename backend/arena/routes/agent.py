@@ -3516,6 +3516,10 @@ async def delete_watchlist_bulk(
     (same ownership-scoping as the saved-library bulk delete). The response
     reports requested / deleted counts plus the exact deleted and skipped
     ids so the client can reconcile a mixed or partial request honestly.
+    It also carries the caller's fresh ``active_count`` / ``total`` so the
+    client can re-sync its counters without a second list round-trip (and
+    without a post-delete refetch failure being misreported as a failed
+    deletion).
 
     ORM deletion is used per row (rather than a bulk ``Query.delete``) so
     SQLAlchemy still nullifies each item's spawned ``AgentTask`` references
@@ -3545,6 +3549,17 @@ async def delete_watchlist_bulk(
         db.delete(item)
     db.commit()
 
+    # Counters are computed after the commit so they reflect exactly what a
+    # subsequent list call would return — no stale snapshot of the pre-delete
+    # session state, and no client-side guessing at skipped-row side effects.
+    total = (
+        db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).count()
+    )
+    active_count = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
+        .count()
+    )
     skipped_ids = [item_id for item_id in unique_ids if item_id not in deleted_ids]
     return JSONResponse(
         content={
@@ -3553,6 +3568,8 @@ async def delete_watchlist_bulk(
             "deleted": len(deleted_ids),
             "deleted_ids": deleted_ids,
             "skipped_ids": skipped_ids,
+            "active_count": active_count,
+            "total": total,
         }
     )
 

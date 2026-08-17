@@ -50,6 +50,10 @@ async def test_bulk_delete_removes_owned_items_and_reports_counts(
     assert body["deleted"] == 2
     assert set(body["deleted_ids"]) == {drop_one.id, drop_two.id}
     assert body["skipped_ids"] == []
+    # Counters ride back on the delete response (post-delete, post-commit)
+    # so the client never needs a second list round-trip to re-sync.
+    assert body["total"] == 1
+    assert body["active_count"] == 1
 
     remaining = {
         row_id
@@ -81,6 +85,8 @@ async def test_bulk_delete_scopes_to_owner_and_reports_skips(
     assert body["deleted"] == 1
     assert body["deleted_ids"] == [alice_item.id]
     assert set(body["skipped_ids"]) == {bob_item.id, "does-not-exist"}
+    assert body["total"] == 0
+    assert body["active_count"] == 0
 
     # Foreign and missing rows are untouched.
     assert (

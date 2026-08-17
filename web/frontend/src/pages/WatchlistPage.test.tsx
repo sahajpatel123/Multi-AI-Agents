@@ -203,6 +203,8 @@ describe('WatchlistPage', () => {
       deleted: 2,
       deleted_ids: ['item-1', 'item-2'],
       skipped_ids: [],
+      active_count: 0,
+      total: 0,
     });
     patchAgentWatchlistMock.mockReset();
     patchAgentWatchlistMock.mockImplementation(
@@ -417,6 +419,7 @@ describe('WatchlistPage', () => {
       name: 'Remove 2 selected watches',
     });
     expect(removeButton).toHaveTextContent('Remove selected (2)');
+    const initialListFetches = getAgentWatchlistMock.mock.calls.length;
 
     // First click arms the destructive action; only the second click fires.
     fireEvent.click(removeButton);
@@ -444,6 +447,11 @@ describe('WatchlistPage', () => {
     expect(
       screen.queryByText('Will the monsoon affect Indian agriculture exports?'),
     ).not.toBeInTheDocument();
+    // Server-reported post-delete counters replace the list refetch: the
+    // header resyncs without a second round-trip, so a flaky refetch can
+    // never turn a successful removal into an error.
+    expect(screen.getByText('0/10 active')).toBeInTheDocument();
+    expect(getAgentWatchlistMock.mock.calls.length).toBe(initialListFetches);
   });
 
   it('reports partial bulk removal honestly when some ids no longer exist', async () => {
@@ -453,6 +461,8 @@ describe('WatchlistPage', () => {
       deleted: 1,
       deleted_ids: ['item-1'],
       skipped_ids: ['item-2'],
+      active_count: 0,
+      total: 1,
     });
     renderPage();
     await waitFor(() => {
@@ -478,7 +488,7 @@ describe('WatchlistPage', () => {
 
     expect(
       await screen.findByText(
-        'Removed 1 of 2 selected watches; 1 no longer existed.',
+        'Removed 1 of 2 selected watches; 1 could not be removed.',
       ),
     ).toBeInTheDocument();
     expect(
@@ -518,6 +528,79 @@ describe('WatchlistPage', () => {
     expect(
       screen.getByRole('button', { name: 'Confirm remove 1 selected watches' }),
     ).toBeInTheDocument();
+  });
+
+  it('keeps the success notice when a legacy backend refetch fails', async () => {
+    deleteAgentWatchlistBulkMock.mockResolvedValue({
+      success: true,
+      requested: 1,
+      deleted: 1,
+      deleted_ids: ['item-1'],
+      skipped_ids: [],
+      // Legacy response: no counters, forcing the fallback refetch.
+    });
+    // First once-call is the initial load (must succeed); the second is the
+    // post-delete refetch forced by the legacy response, which must fail to
+    // prove the success notice survives it.
+    getAgentWatchlistMock.mockResolvedValueOnce({
+      items: [baseItem, pausedItem],
+      active_count: 1,
+      active_cap: 10,
+      total: 2,
+    });
+    getAgentWatchlistMock.mockRejectedValueOnce(new ApiError('Refetch failed', 500));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Select "How is the Indian IPO market evolving?" for bulk remove',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove 1 selected watches' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm remove 1 selected watches' }),
+    );
+
+    expect(await screen.findByText('Removed 1 selected watch.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('How is the Indian IPO market evolving?'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('deselecting a watch disarms a pending bulk removal confirmation', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    const firstCheckbox = screen.getByRole('checkbox', {
+      name: 'Select "How is the Indian IPO market evolving?" for bulk remove',
+    });
+    const secondCheckbox = screen.getByRole('checkbox', {
+      name: 'Select "Will the monsoon affect Indian agriculture exports?" for bulk remove',
+    });
+    fireEvent.click(firstCheckbox);
+    fireEvent.click(secondCheckbox);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove 2 selected watches' }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Confirm remove 2 selected watches' }),
+    ).toHaveTextContent('Remove 2?');
+
+    // Toggling any selection cancels the armed state instead of leaving a
+    // stale confirmation armed against a now-different selection.
+    fireEvent.click(secondCheckbox);
+    expect(
+      screen.getByRole('button', { name: 'Remove 1 selected watches' }),
+    ).toHaveTextContent('Remove selected (1)');
+    expect(deleteAgentWatchlistBulkMock).not.toHaveBeenCalled();
   });
 
   it('starts an immediate re-check through the run-now endpoint', async () => {

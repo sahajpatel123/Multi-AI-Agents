@@ -642,19 +642,36 @@ export function WatchlistPage() {
       setItems((prev) => prev.filter((x) => !result.deleted_ids.includes(x.id)));
       setSelectedIds(new Set());
       setBulkDeleteArmed(false);
+      // Newer backends report the post-delete counters on the delete
+      // response itself. Prefer those (they are computed in the same
+      // transaction as the delete); fall back to a refetch only for older
+      // backends, and never let a failed refetch misreport a deletion that
+      // already succeeded as a failure.
+      if (
+        typeof result.active_count === 'number' &&
+        typeof result.total === 'number'
+      ) {
+        setActiveCount(result.active_count);
+        setTotalCount(result.total);
+      } else {
+        try {
+          const data = await getAgentWatchlist();
+          setActiveCount(data.active_count);
+          setTotalCount(data.total);
+        } catch {
+          // Counters re-sync on the next load; the deletion itself succeeded.
+        }
+      }
       const skipped = result.requested - result.deleted;
       setBulkNotice(
         skipped > 0
           ? `Removed ${result.deleted} of ${result.requested} selected ${
               result.requested === 1 ? 'watch' : 'watches'
-            }; ${skipped} no longer existed.`
+            }; ${skipped} could not be removed.`
           : `Removed ${result.deleted} selected ${
               result.deleted === 1 ? 'watch' : 'watches'
             }.`,
       );
-      const data = await getAgentWatchlist();
-      setActiveCount(data.active_count);
-      setTotalCount(data.total);
       void refreshStats();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Bulk delete failed');
