@@ -379,7 +379,13 @@ async def list_summaries(
             "page": 1,
             "per_page": per_page,
             "total_pages": 0,
-            "filters": {"category": None, "persona_id": None, "search": None},
+            "filters": {
+                "category": None,
+                "persona_id": None,
+                "search": None,
+                "from_date": None,
+                "to_date": None,
+            },
         }
 
     _validate_summary_date_range(from_date, to_date)

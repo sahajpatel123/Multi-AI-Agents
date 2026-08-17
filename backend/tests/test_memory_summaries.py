@@ -91,6 +91,13 @@ async def test_list_empty_envelope_for_free_tier(app_client, make_user):
     body = res.json()
     assert body["summaries"] == []
     assert body["total"] == 0
+    assert body["filters"] == {
+        "category": None,
+        "persona_id": None,
+        "search": None,
+        "from_date": None,
+        "to_date": None,
+    }
 
 
 @pytest.mark.asyncio
