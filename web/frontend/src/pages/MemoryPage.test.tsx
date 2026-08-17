@@ -823,6 +823,26 @@ describe('MemoryPage', () => {
     expect(screen.getByRole('button', { name: 'Copy selected memories' })).toBeInTheDocument();
   });
 
+  it('does not download a pending JSON export after the page unmounts', async () => {
+    let resolveDetail: ((summary: MemorySummary) => void) | undefined;
+    getMemorySummaryMock.mockImplementationOnce(
+      () =>
+        new Promise<MemorySummary>((resolve) => {
+          resolveDetail = resolve;
+        }),
+    );
+    const { unmount } = renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select memory summary 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Download selected memories as JSON' }));
+    await waitFor(() => expect(getMemorySummaryMock).toHaveBeenCalledWith(1));
+
+    unmount();
+    resolveDetail?.(detailSummary);
+    await waitFor(() => expect(downloadJsonFile).not.toHaveBeenCalled());
+  });
+
   it('caps select-all at the server bulk-delete limit', async () => {
     const summaries = Array.from({ length: 51 }, (_, index) => ({
       ...baseSummary,

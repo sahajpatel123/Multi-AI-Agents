@@ -428,6 +428,10 @@ export function MemoryPage() {
 
   useEffect(
     () => () => {
+      // A detail request can outlive the page (for example, when the user
+      // navigates away while preparing a JSON export). Invalidate the run so
+      // its completion cannot trigger a download or update page state.
+      selectionExportRunRef.current += 1;
       if (copyResetTimerRef.current !== null) {
         window.clearTimeout(copyResetTimerRef.current);
       }
