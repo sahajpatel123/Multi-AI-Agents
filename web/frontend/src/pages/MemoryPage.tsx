@@ -184,6 +184,7 @@ export function MemoryPage() {
   } | null>(null);
   const copyResetTimerRef = useRef<number | null>(null);
   const downloadResetTimerRef = useRef<number | null>(null);
+  const selectionExportRunRef = useRef(0);
   /** True once an "older memories" page comes back empty — deletions can
    * shift the server's offset so an empty page means we've rendered every
    * remaining row. Without this the button would keep offering (and fetching)
@@ -194,6 +195,13 @@ export function MemoryPage() {
    * overwrite a newer search/refresh. */
   const loadEpochRef = useRef(0);
   const reducedMotion = prefersReducedMotion();
+
+  const invalidateSelectionExport = useCallback(() => {
+    selectionExportRunRef.current += 1;
+    setSelectionExportAction(null);
+    setSelectionExportStatus(null);
+    setSelectionExportError(null);
+  }, []);
 
   // Debounce the raw search box into the query actually sent to the API.
   useEffect(() => {
@@ -227,6 +235,7 @@ export function MemoryPage() {
         setError(null);
         setLoadMoreError(null);
         setExhausted(false);
+        invalidateSelectionExport();
         setSelectedIds(new Set());
         setBulkDeleteArmed(false);
         setBulkDeleteError(null);
@@ -265,7 +274,7 @@ export function MemoryPage() {
         }
       }
     },
-    [],
+    [invalidateSelectionExport],
   );
 
   // Fresh list whenever the tier gate, filters, or ordering changes.
@@ -343,6 +352,7 @@ export function MemoryPage() {
       setDeleteError(null);
       try {
         await deleteMemorySummary(id);
+        invalidateSelectionExport();
         setItems((prev) => prev.filter((x) => x.id !== id));
         setTotal((prev) => Math.max(0, prev - 1));
         setSelectedIds((current) => {
@@ -359,7 +369,7 @@ export function MemoryPage() {
         setDeleteBusyId(null);
       }
     },
-    [expandedId],
+    [expandedId, invalidateSelectionExport],
   );
 
   const exportMemory = useCallback(
@@ -489,6 +499,9 @@ export function MemoryPage() {
       setSelectionExportAction(action);
       setSelectionExportStatus(null);
       setSelectionExportError(null);
+      const runId = selectionExportRunRef.current + 1;
+      selectionExportRunRef.current = runId;
+      const isCurrentRun = () => selectionExportRunRef.current === runId;
       try {
         const detailedSummaries: MemorySummary[] = [];
         // Keep the detail hydration bounded so a large selection does not
@@ -499,32 +512,36 @@ export function MemoryPage() {
               .slice(index, index + 5)
               .map((item) => getMemorySummary(item.id)),
           );
+          if (!isCurrentRun()) return;
           detailedSummaries.push(...batch);
         }
 
         const markdown = memorySelectionMarkdown(detailedSummaries);
         if (action === 'copy') {
-          if (!(await copyToClipboard(markdown))) {
+          const copied = await copyToClipboard(markdown);
+          if (!isCurrentRun()) return;
+          if (!copied) {
             setSelectionExportError('Could not copy selected memories — try again.');
             return;
           }
           setSelectionExportStatus('copied');
-        } else if (
-          !downloadMarkdownFile(markdown, `arena-memory-selection-${detailedSummaries.length}`)
-        ) {
-          setSelectionExportError('Could not download selected memories — try again.');
-          return;
         } else {
+          if (!isCurrentRun()) return;
+          if (!downloadMarkdownFile(markdown, `arena-memory-selection-${detailedSummaries.length}`)) {
+            setSelectionExportError('Could not download selected memories — try again.');
+            return;
+          }
           setSelectionExportStatus('downloaded');
         }
       } catch (err) {
+        if (!isCurrentRun()) return;
         setSelectionExportError(
           err instanceof ApiError
             ? err.message
             : 'Could not prepare selected memories — try again.',
         );
       } finally {
-        setSelectionExportAction(null);
+        if (isCurrentRun()) setSelectionExportAction(null);
       }
     },
     [items, selectedIds, selectionExportAction],
@@ -545,9 +562,8 @@ export function MemoryPage() {
     });
     setBulkDeleteArmed(false);
     setBulkDeleteError(null);
-    setSelectionExportStatus(null);
-    setSelectionExportError(null);
-  }, [selectedIds]);
+    invalidateSelectionExport();
+  }, [invalidateSelectionExport, selectedIds]);
 
   const allVisibleSelected = items.length > 0 && items.every((item) => selectedIds.has(item.id));
   const selectionLimitReached = selectedIds.size >= MEMORY_BULK_DELETE_MAX;
@@ -576,9 +592,8 @@ export function MemoryPage() {
       setBulkDeleteError(null);
     }
     setBulkDeleteArmed(false);
-    setSelectionExportStatus(null);
-    setSelectionExportError(null);
-  }, [allVisibleSelected, items, selectedIds]);
+    invalidateSelectionExport();
+  }, [allVisibleSelected, invalidateSelectionExport, items, selectedIds]);
 
   const forgetSelected = useCallback(async () => {
     if (selectedIds.size === 0 || bulkDeleteBusy) return;
@@ -592,8 +607,7 @@ export function MemoryPage() {
       if (expandedId !== null && deletedIds.has(expandedId)) setExpandedId(null);
       setSelectedIds(new Set());
       setBulkDeleteArmed(false);
-      setSelectionExportStatus(null);
-      setSelectionExportError(null);
+      invalidateSelectionExport();
     } catch (err) {
       setBulkDeleteError(
         err instanceof ApiError ? err.message : 'Could not forget selected memories',
@@ -601,7 +615,7 @@ export function MemoryPage() {
     } finally {
       setBulkDeleteBusy(false);
     }
-  }, [bulkDeleteBusy, expandedId, selectedIds]);
+  }, [bulkDeleteBusy, expandedId, invalidateSelectionExport, selectedIds]);
 
   const hasActiveFilters = Boolean(categoryFilter || personaFilter || fromDateFilter || toDateFilter);
 

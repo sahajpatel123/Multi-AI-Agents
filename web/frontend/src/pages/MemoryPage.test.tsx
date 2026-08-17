@@ -771,6 +771,38 @@ describe('MemoryPage', () => {
     expect(copyToClipboard).not.toHaveBeenCalled();
   });
 
+  it('ignores a pending selected export after a filter refresh', async () => {
+    let resolveDetail: ((summary: MemorySummary) => void) | undefined;
+    getMemorySummaryMock.mockImplementationOnce(
+      () =>
+        new Promise<MemorySummary>((resolve) => {
+          resolveDetail = resolve;
+        }),
+    );
+    listMemorySummariesMock.mockImplementation(async (params: { category?: string } = {}) =>
+      params.category === 'decision'
+        ? listResponse([olderSummary], 1, 1)
+        : listResponse([baseSummary], 2, 1),
+    );
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select memory summary 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy selected memories' }));
+    await waitFor(() => expect(getMemorySummaryMock).toHaveBeenCalledWith(1));
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter memory by category' }), {
+      target: { value: 'decision' },
+    });
+    await screen.findByText('Quantum computing');
+
+    resolveDetail?.(detailSummary);
+    await waitFor(() => expect(copyToClipboard).not.toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select memory summary 2' }));
+    expect(screen.getByRole('button', { name: 'Copy selected memories' })).toBeInTheDocument();
+  });
+
   it('caps select-all at the server bulk-delete limit', async () => {
     const summaries = Array.from({ length: 51 }, (_, index) => ({
       ...baseSummary,
