@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfileModal } from './ProfileModal';
 import { ProfileModalProvider, useProfileModal } from '../context/ProfileModalContext';
@@ -511,6 +511,26 @@ describe('ProfileModal', () => {
     expect(within(group).getByText(/best:/i)).toHaveTextContent('The Analyst');
     expect(within(group).getByText('low sample')).toBeInTheDocument();
     expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenCalledWith(30);
+  });
+
+  it('refreshes persona win rates when the analysis window changes', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /persona win-rate window/i,
+    });
+    expect(windowSelect).toHaveValue('30');
+
+    fireEvent.change(windowSelect, { target: { value: '7' } });
+
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7);
+    });
+    expect(screen.getByText('Persona win rates · 7 days')).toBeInTheDocument();
   });
 
   it('renders an accessible weekly trend sparkline per persona', async () => {

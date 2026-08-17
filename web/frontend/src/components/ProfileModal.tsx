@@ -168,6 +168,7 @@ function TabIconHelp({ active }: { active: boolean }) {
 }
 
 const PLACEHOLDER_HISTORY = [8, 14, 11, 19, 15, 22, 17, 12, 25, 18, 14, 21, 10, 28];
+const PERSONA_WIN_RATE_WINDOWS = [7, 30, 90] as const;
 
 function UsageChart({
   data,
@@ -370,6 +371,7 @@ export function ProfileModal() {
   const [winRateLoading, setWinRateLoading] = useState(false);
   const [winRateErr, setWinRateErr] = useState<string | null>(null);
   const [winRateReload, setWinRateReload] = useState(0);
+  const [winRateWindowDays, setWinRateWindowDays] = useState(30);
   const [calStats, setCalStats] = useState<{
     total_ratings?: number;
     avg_delta?: number;
@@ -475,7 +477,7 @@ export function ProfileModal() {
     let cancelled = false;
     setWinRateLoading(true);
     setWinRateErr(null);
-    void getAnalyticsPersonaWinRate(30)
+    void getAnalyticsPersonaWinRate(winRateWindowDays)
       .then((w) => {
         if (!cancelled) setWinRate(w);
       })
@@ -491,7 +493,7 @@ export function ProfileModal() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, activeTab, winRateReload]);
+  }, [isOpen, activeTab, winRateReload, winRateWindowDays]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -1424,14 +1426,56 @@ export function ProfileModal() {
                 ) : null}
                 <div
                   style={{
-                    fontSize: 10,
-                    textTransform: 'uppercase',
-                    color: '#A0A39A',
-                    letterSpacing: '0.10em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
                     margin: '22px 0 10px',
                   }}
                 >
-                  Persona win rates · 30 days
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      color: '#A0A39A',
+                      letterSpacing: '0.10em',
+                    }}
+                  >
+                    Persona win rates · {winRateWindowDays} days
+                  </div>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    <span>Window</span>
+                    <select
+                      aria-label="Persona win-rate window"
+                      value={winRateWindowDays}
+                      onChange={(event) => setWinRateWindowDays(Number(event.target.value))}
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {PERSONA_WIN_RATE_WINDOWS.map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
                 {winRateLoading ? (
                   <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }} role="status">
@@ -1464,10 +1508,10 @@ export function ProfileModal() {
                   winRate.personas.length === 0 ? (
                     <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
                       {winRate.scored_exchanges === 0 && winRate.fallback_exchanges > 0
-                        ? 'No judged panels in the last 30 days yet — fallback scorings are excluded.'
+                        ? `No judged panels in the last ${winRateWindowDays} days yet — fallback scorings are excluded.`
                         : winRate.scored_exchanges === 0 && winRate.unattributed_exchanges > 0
-                          ? 'No panels with recorded appearances in the last 30 days yet.'
-                          : 'No scored panels in the last 30 days yet.'}
+                          ? `No panels with recorded appearances in the last ${winRateWindowDays} days yet.`
+                          : `No scored panels in the last ${winRateWindowDays} days yet.`}
                     </p>
                   ) : (
                     <div role="group" aria-label="Persona win rates">
@@ -1609,8 +1653,8 @@ export function ProfileModal() {
                     onClick={async () => {
                       setActiveExport('win-rate');
                       try {
-                        const blob = await exportAnalyticsPersonaWinRateCsv(30);
-                        downloadBlobFile(blob, 'arena-persona-win-rates-30d.csv');
+                        const blob = await exportAnalyticsPersonaWinRateCsv(winRateWindowDays);
+                        downloadBlobFile(blob, `arena-persona-win-rates-${winRateWindowDays}d.csv`);
                       } catch {
                         // ignore error
                       } finally {
@@ -1638,7 +1682,7 @@ export function ProfileModal() {
                     onClick={async () => {
                       setActiveExport('win-rate-md');
                       try {
-                        const { blob, filename } = await exportAnalyticsPersonaWinRateMarkdown(30);
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateMarkdown(winRateWindowDays);
                         downloadBlobFile(blob, filename);
                       } catch {
                         // ignore error
