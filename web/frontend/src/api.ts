@@ -351,13 +351,23 @@ export async function saveMemory(sessionId: string, trigger: 'session_end' | 'ne
 }
 
 export async function listMemorySummaries(
-  params: { page?: number; perPage?: number; search?: string } = {},
+  params: {
+    page?: number;
+    perPage?: number;
+    search?: string;
+    category?: string;
+    personaId?: string;
+  } = {},
 ): Promise<MemorySummariesResponse> {
   const query = new URLSearchParams();
   if (params.page && params.page > 1) query.set('page', String(params.page));
   if (params.perPage) query.set('per_page', String(params.perPage));
   const search = (params.search || '').trim();
   if (search) query.set('search', search);
+  const category = (params.category || '').trim();
+  if (category) query.set('category', category);
+  const personaId = (params.personaId || '').trim();
+  if (personaId) query.set('persona_id', personaId);
   const suffix = query.toString() ? `?${query.toString()}` : '';
   const res = await apiFetch(`/api/memory/summaries${suffix}`);
   const data = await parseJsonSafely<Partial<MemorySummariesResponse> & {
@@ -425,11 +435,15 @@ export type MemorySummaryExport = {
 /** Export all summaries matching the current Memory search, with the server's filename. */
 export async function exportMemorySummaries(
   format: MemorySummaryExportFormat,
-  params: { search?: string } = {},
+  params: { search?: string; category?: string; personaId?: string } = {},
 ): Promise<MemorySummaryExport> {
   const query = new URLSearchParams();
   const search = (params.search || '').trim();
   if (search) query.set('search', search);
+  const category = (params.category || '').trim();
+  if (category) query.set('category', category);
+  const personaId = (params.personaId || '').trim();
+  if (personaId) query.set('persona_id', personaId);
   const suffix = query.toString() ? `?${query.toString()}` : '';
   const res = await apiFetch(`/api/memory/summaries/export.${format}${suffix}`);
   if (!res.ok) {

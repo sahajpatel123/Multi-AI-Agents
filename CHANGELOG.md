@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Memory summaries can now be filtered by session kind or trusted mind from
+  the Memory page; CSV and JSON exports follow the active filters
 - Memory summaries can now be exported from the Memory page as CSV or JSON;
   exports follow the active search so users can take a focused slice or their
   complete saved memory with them

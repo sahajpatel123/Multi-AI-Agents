@@ -217,6 +217,78 @@ describe('MemoryPage', () => {
     });
   });
 
+  it('filters summaries by kind and trusted mind, then clears both filters', async () => {
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter memory by category' }), {
+      target: { value: 'decision' },
+    });
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 20,
+        search: '',
+        category: 'decision',
+      });
+    });
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter memory by trusted mind' }), {
+      target: { value: 'analyst' },
+    });
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 20,
+        search: '',
+        category: 'decision',
+        personaId: 'analyst',
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 20,
+        search: '',
+      });
+    });
+    expect(screen.getByRole('combobox', { name: 'Filter memory by category' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Filter memory by trusted mind' })).toHaveValue('');
+  });
+
+  it('exports the active category and trusted-mind filters', async () => {
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter memory by category' }), {
+      target: { value: 'decision' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter memory by trusted mind' }), {
+      target: { value: 'analyst' },
+    });
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 20,
+        search: '',
+        category: 'decision',
+        personaId: 'analyst',
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
+
+    await waitFor(() => {
+      expect(exportMemorySummariesMock).toHaveBeenCalledWith('csv', {
+        search: '',
+        category: 'decision',
+        personaId: 'analyst',
+      });
+    });
+  });
+
   it('exports the active search as CSV and disables the other format while busy', async () => {
     const { downloadBlobFile } = await import('../lib/downloadTextFile');
     let resolveExport: ((value: { blob: Blob; filename: string }) => void) | undefined;

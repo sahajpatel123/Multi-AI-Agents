@@ -17,8 +17,12 @@ import { formatRelativePast } from '../lib/relativeTime';
 import { prefersReducedMotion } from '../lib/motion';
 import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { downloadBlobFile } from '../lib/downloadTextFile';
+import { PERSONAS } from '../data/personas';
 
 const PER_PAGE = 20;
+// `decision` is kept for summaries created by earlier classifiers; current
+// Arena prompt classification uses the four categories above it.
+const CATEGORY_OPTIONS = ['question', 'task', 'statement', 'debate', 'decision'] as const;
 
 /** Persona display names for the `trusted_persona` field. The raw id stays the
  * source of truth; this is presentation-only with a graceful fallback. */
@@ -56,12 +60,22 @@ function categoryLabel(category: string | null | undefined): string {
   return category.charAt(0).toUpperCase() + category.slice(1).replace(/_/g, ' ');
 }
 
+function memoryFilterParams(search: string, category: string, personaId: string) {
+  return {
+    search,
+    ...(category ? { category } : {}),
+    ...(personaId ? { personaId } : {}),
+  };
+}
+
 export function MemoryPage() {
   const navigate = useNavigate();
   const { canUseFeature } = useTier();
   const canMemory = canUseFeature('memory');
   const [rawSearch, setRawSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [personaFilter, setPersonaFilter] = useState('');
   const [items, setItems] = useState<MemorySummary[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
@@ -96,7 +110,7 @@ export function MemoryPage() {
   }, [rawSearch]);
 
   const loadPage = useCallback(
-    async (page: number, append: boolean, query: string) => {
+    async (page: number, append: boolean, query: string, category: string, personaId: string) => {
       if (append) {
         setLoadingMore(true);
         setLoadMoreError(null);
@@ -109,7 +123,11 @@ export function MemoryPage() {
       }
       const epoch = loadEpochRef.current;
       try {
-        const data = await listMemorySummaries({ page, perPage: PER_PAGE, search: query });
+        const data = await listMemorySummaries({
+          page,
+          perPage: PER_PAGE,
+          ...memoryFilterParams(query, category, personaId),
+        });
         if (loadEpochRef.current !== epoch) return;
         setItems((prev) => (append ? [...prev, ...data.summaries] : data.summaries));
         setTotal(data.total);
@@ -147,8 +165,8 @@ export function MemoryPage() {
     setExpandedId(null);
     setDetailState({});
     setDeleteArmedId(null);
-    void loadPage(1, false, searchQuery);
-  }, [canMemory, searchQuery, loadPage]);
+    void loadPage(1, false, searchQuery, categoryFilter, personaFilter);
+  }, [canMemory, searchQuery, categoryFilter, personaFilter, loadPage]);
 
   // `/` focuses the search box when the user is not typing elsewhere.
   useEffect(() => {
@@ -214,7 +232,10 @@ export function MemoryPage() {
       setExportingFormat(format);
       setExportError(null);
       try {
-        const { blob, filename } = await exportMemorySummaries(format, { search: searchQuery });
+        const { blob, filename } = await exportMemorySummaries(
+          format,
+          memoryFilterParams(searchQuery, categoryFilter, personaFilter),
+        );
         if (!downloadBlobFile(blob, filename)) {
           setExportError(`Could not download memory as ${format.toUpperCase()} — try again.`);
         }
@@ -228,8 +249,10 @@ export function MemoryPage() {
         setExportingFormat(null);
       }
     },
-    [exportingFormat, searchQuery],
+    [categoryFilter, exportingFormat, personaFilter, searchQuery],
   );
+
+  const hasActiveFilters = Boolean(categoryFilter || personaFilter);
 
   const hasMore = !exhausted && items.length < total;
 
@@ -310,12 +333,61 @@ export function MemoryPage() {
           </kbd>
         </div>
 
+        <div className="memory-filters" aria-label="Memory filters">
+          <label className="memory-filter">
+            <span className="memory-filter__label">Kind</span>
+            <select
+              className="memory-filter__select"
+              aria-label="Filter memory by category"
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+            >
+              <option value="">All kinds</option>
+              {CATEGORY_OPTIONS.map((category) => (
+                <option key={category} value={category}>
+                  {categoryLabel(category)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="memory-filter">
+            <span className="memory-filter__label">Trusted mind</span>
+            <select
+              className="memory-filter__select"
+              aria-label="Filter memory by trusted mind"
+              value={personaFilter}
+              onChange={(event) => setPersonaFilter(event.target.value)}
+            >
+              <option value="">All minds</option>
+              {PERSONAS.map((persona) => (
+                <option key={persona.id} value={persona.id}>
+                  {persona.name.replace(/^The\s+/i, '')}
+                </option>
+              ))}
+            </select>
+          </label>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className="memory-filters__clear"
+              onClick={() => {
+                setCategoryFilter('');
+                setPersonaFilter('');
+              }}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+
         {!loading && !error && total > 0 ? (
           <div className="memory-export" aria-label="Export memory summaries">
             <div className="memory-export__copy">
               <span className="memory-export__title">Take your memory with you</span>
               <span className="memory-export__note">
-                {searchQuery ? `Exporting matches for “${searchQuery}”.` : 'Export all saved summaries.'}
+                {searchQuery || hasActiveFilters
+                  ? 'Exporting the summaries that match your filters.'
+                  : 'Export all saved summaries.'}
               </span>
             </div>
             <div className="memory-export__actions">
@@ -372,7 +444,9 @@ export function MemoryPage() {
                 type="button"
                 variant="primary"
                 size="md"
-                onClick={() => void loadPage(1, false, searchQuery)}
+                onClick={() =>
+                  void loadPage(1, false, searchQuery, categoryFilter, personaFilter)
+                }
               >
                 Try again
               </MotionButton>
@@ -382,10 +456,10 @@ export function MemoryPage() {
 
         {!loading && !error && items.length === 0 ? (
           <EmptyState
-            title={searchQuery ? 'No matching memories' : 'Nothing remembered yet'}
+            title={searchQuery || hasActiveFilters ? 'No matching memories' : 'Nothing remembered yet'}
             description={
-              searchQuery
-                ? `No summary matches “${searchQuery}”. Try a different phrase.`
+                searchQuery || hasActiveFilters
+                ? 'No summaries match these filters. Try a different combination.'
                 : 'Finish an Arena session to let memory compress what mattered. Sessions are saved automatically on Plus.'
             }
             actions={
@@ -546,7 +620,9 @@ export function MemoryPage() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => void loadPage(currentPage + 1, true, searchQuery)}
+                  onClick={() =>
+                    void loadPage(currentPage + 1, true, searchQuery, categoryFilter, personaFilter)
+                  }
                 >
                   Try again
                 </MotionButton>
@@ -557,7 +633,9 @@ export function MemoryPage() {
               variant="secondary"
               size="md"
               loading={loadingMore}
-              onClick={() => void loadPage(currentPage + 1, true, searchQuery)}
+              onClick={() =>
+                void loadPage(currentPage + 1, true, searchQuery, categoryFilter, personaFilter)
+              }
             >
               Load older memories
             </MotionButton>

@@ -31,6 +31,22 @@ describe('exportMemorySummaries', () => {
     );
   });
 
+  it('serializes category and trusted-persona filters for exports', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['[]'], { type: 'application/json' }), { status: 200 }),
+    );
+
+    await exportMemorySummaries('json', {
+      category: 'decision',
+      personaId: 'analyst',
+    });
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/memory/summaries/export.json?category=decision&persona_id=analyst',
+      {},
+    );
+  });
+
   it('falls back to a format-specific filename when the header is missing', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(new Blob(['[]'], { type: 'application/json' }), { status: 200 }),

@@ -140,6 +140,62 @@
   background: rgba(245, 240, 232, 0.8);
 }
 
+.memory-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 680px;
+  margin: -8px auto 20px;
+}
+
+.memory-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0.5px solid #d4c4b0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.memory-filter__label {
+  color: #a89070;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.memory-filter__select {
+  max-width: 150px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #6b563f;
+  cursor: pointer;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  font-size: 12px;
+}
+
+.memory-filter__select:focus-visible {
+  outline: 2px solid rgba(140, 115, 85, 0.45);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.memory-filters__clear {
+  padding: 5px 4px;
+  border: none;
+  background: transparent;
+  color: #8c7355;
+  cursor: pointer;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .memory-export {
   display: flex;
   align-items: center;
@@ -370,6 +426,26 @@
 }
 
 @media (max-width: 520px) {
+  .memory-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .memory-filter {
+    justify-content: space-between;
+    border-radius: 10px;
+  }
+
+  .memory-filter__select {
+    flex: 1;
+    max-width: none;
+    text-align: right;
+  }
+
+  .memory-filters__clear {
+    align-self: flex-end;
+  }
+
   .memory-export {
     align-items: flex-start;
     flex-direction: column;
