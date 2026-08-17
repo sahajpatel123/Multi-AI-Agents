@@ -393,6 +393,33 @@ describe('MemoryPage', () => {
     });
   });
 
+  it('reloads and exports with the selected summary order', async () => {
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sort memory summaries' }), {
+      target: { value: 'most_exchanges' },
+    });
+
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 20,
+        search: '',
+        sort: 'most_exchanges',
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
+
+    await waitFor(() => {
+      expect(exportMemorySummariesMock).toHaveBeenCalledWith('csv', {
+        search: '',
+        sort: 'most_exchanges',
+      });
+    });
+  });
+
   it('exports the active search as CSV and disables the other format while busy', async () => {
     const { downloadBlobFile } = await import('../lib/downloadTextFile');
     let resolveExport: ((value: { blob: Blob; filename: string }) => void) | undefined;

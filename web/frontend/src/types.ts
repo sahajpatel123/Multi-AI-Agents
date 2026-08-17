@@ -181,6 +181,8 @@ export interface MemorySummaryKeyPosition {
   confidence?: number;
 }
 
+export type MemorySummarySort = 'newest' | 'oldest' | 'most_exchanges' | 'fewest_exchanges';
+
 export interface MemorySummary {
   id: number;
   session_id: string;
@@ -209,6 +211,7 @@ export interface MemorySummariesResponse {
     search: string | null;
     from_date: string | null;
     to_date: string | null;
+    sort?: MemorySummarySort;
   };
 }
 

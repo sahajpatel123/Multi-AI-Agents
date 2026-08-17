@@ -79,6 +79,40 @@ describe('exportMemorySummaries', () => {
     });
   });
 
+  it('serializes a non-default sort for the Memory browser and exports', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          summaries: [],
+          total: 0,
+          page: 1,
+          per_page: 20,
+          total_pages: 0,
+          filters: { sort: 'most_exchanges' },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const result = await listMemorySummaries({ sort: 'most_exchanges' });
+
+    expect(result.filters.sort).toBe('most_exchanges');
+    expect(apiFetchModule.apiFetch).toHaveBeenLastCalledWith(
+      '/api/memory/summaries?sort=most_exchanges',
+      {},
+    );
+
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['[]'], { type: 'application/json' }), { status: 200 }),
+    );
+    await exportMemorySummaries('json', { sort: 'oldest' });
+
+    expect(apiFetchModule.apiFetch).toHaveBeenLastCalledWith(
+      '/api/memory/summaries/export.json?sort=oldest',
+      {},
+    );
+  });
+
   it('supports Markdown exports with the server filename', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(new Blob(['# Arena Memory\n'], { type: 'text/markdown' }), {

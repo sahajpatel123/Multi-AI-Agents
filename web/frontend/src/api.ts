@@ -16,6 +16,7 @@ import {
   ScoringAuditResponse,
   MemorySummary,
   MemorySummariesResponse,
+  MemorySummarySort,
 } from './types';
 import type { ImportedChat } from './lib/arenaChatsImport';
 
@@ -359,6 +360,7 @@ export async function listMemorySummaries(
     personaId?: string;
     fromDate?: string;
     toDate?: string;
+    sort?: MemorySummarySort;
   } = {},
 ): Promise<MemorySummariesResponse> {
   const query = new URLSearchParams();
@@ -374,6 +376,8 @@ export async function listMemorySummaries(
   if (fromDate) query.set('from_date', fromDate);
   const toDate = (params.toDate || '').trim();
   if (toDate) query.set('to_date', toDate);
+  const sort = params.sort || 'newest';
+  if (sort !== 'newest') query.set('sort', sort);
   const suffix = query.toString() ? `?${query.toString()}` : '';
   const res = await apiFetch(`/api/memory/summaries${suffix}`);
   const data = await parseJsonSafely<Partial<MemorySummariesResponse> & {
@@ -399,6 +403,7 @@ export async function listMemorySummaries(
       search: data.filters?.search ?? (search || null),
       from_date: data.filters?.from_date ?? (fromDate || null),
       to_date: data.filters?.to_date ?? (toDate || null),
+      sort: data.filters?.sort ?? sort,
     },
   };
 }
@@ -443,7 +448,14 @@ export type MemorySummaryExport = {
 /** Export all summaries matching the current Memory search, with the server's filename. */
 export async function exportMemorySummaries(
   format: MemorySummaryExportFormat,
-  params: { search?: string; category?: string; personaId?: string; fromDate?: string; toDate?: string } = {},
+  params: {
+    search?: string;
+    category?: string;
+    personaId?: string;
+    fromDate?: string;
+    toDate?: string;
+    sort?: MemorySummarySort;
+  } = {},
 ): Promise<MemorySummaryExport> {
   const query = new URLSearchParams();
   const search = (params.search || '').trim();
@@ -456,6 +468,8 @@ export async function exportMemorySummaries(
   if (fromDate) query.set('from_date', fromDate);
   const toDate = (params.toDate || '').trim();
   if (toDate) query.set('to_date', toDate);
+  const sort = params.sort || 'newest';
+  if (sort !== 'newest') query.set('sort', sort);
   const suffix = query.toString() ? `?${query.toString()}` : '';
   const res = await apiFetch(`/api/memory/summaries/export.${format}${suffix}`);
   if (!res.ok) {

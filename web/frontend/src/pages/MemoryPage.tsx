@@ -11,7 +11,7 @@ import {
   getMemorySummary,
   listMemorySummaries,
 } from '../api';
-import type { MemorySummary } from '../types';
+import type { MemorySummary, MemorySummarySort } from '../types';
 import { useTier } from '../context/TierContext';
 import { formatRelativePast } from '../lib/relativeTime';
 import { prefersReducedMotion } from '../lib/motion';
@@ -116,6 +116,7 @@ function memoryFilterParams(
   personaId: string,
   fromDate: string,
   toDate: string,
+  sort: MemorySummarySort,
 ) {
   return {
     search,
@@ -123,6 +124,7 @@ function memoryFilterParams(
     ...(personaId ? { personaId } : {}),
     ...(fromDate ? { fromDate } : {}),
     ...(toDate ? { toDate } : {}),
+    ...(sort !== 'newest' ? { sort } : {}),
   };
 }
 
@@ -136,6 +138,7 @@ export function MemoryPage() {
   const [personaFilter, setPersonaFilter] = useState('');
   const [fromDateFilter, setFromDateFilter] = useState('');
   const [toDateFilter, setToDateFilter] = useState('');
+  const [sortOrder, setSortOrder] = useState<MemorySummarySort>('newest');
   const [items, setItems] = useState<MemorySummary[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
@@ -187,6 +190,7 @@ export function MemoryPage() {
       personaId: string,
       fromDate: string,
       toDate: string,
+      sort: MemorySummarySort,
     ) => {
       if (append) {
         setLoadingMore(true);
@@ -207,7 +211,7 @@ export function MemoryPage() {
         const data = await listMemorySummaries({
           page,
           perPage: PER_PAGE,
-          ...memoryFilterParams(query, category, personaId, fromDate, toDate),
+          ...memoryFilterParams(query, category, personaId, fromDate, toDate, sort),
         });
         if (loadEpochRef.current !== epoch) return;
         setItems((prev) => (append ? [...prev, ...data.summaries] : data.summaries));
@@ -237,7 +241,7 @@ export function MemoryPage() {
     [],
   );
 
-  // Fresh list whenever the tier gate or debounced query changes.
+  // Fresh list whenever the tier gate, filters, or ordering changes.
   useEffect(() => {
     if (!canMemory) {
       setLoading(false);
@@ -254,6 +258,7 @@ export function MemoryPage() {
       personaFilter,
       fromDateFilter,
       toDateFilter,
+      sortOrder,
     );
   }, [
     canMemory,
@@ -262,6 +267,7 @@ export function MemoryPage() {
     personaFilter,
     fromDateFilter,
     toDateFilter,
+    sortOrder,
     loadPage,
   ]);
 
@@ -337,6 +343,7 @@ export function MemoryPage() {
             personaFilter,
             fromDateFilter,
             toDateFilter,
+            sortOrder,
           ),
         );
         if (!downloadBlobFile(blob, filename)) {
@@ -359,6 +366,7 @@ export function MemoryPage() {
       personaFilter,
       searchQuery,
       toDateFilter,
+      sortOrder,
     ],
   );
 
@@ -571,6 +579,20 @@ export function MemoryPage() {
               onChange={(event) => setToDateFilter(event.target.value)}
             />
           </label>
+          <label className="memory-filter">
+            <span className="memory-filter__label">Order</span>
+            <select
+              className="memory-filter__select"
+              aria-label="Sort memory summaries"
+              value={sortOrder}
+              onChange={(event) => setSortOrder(event.target.value as MemorySummarySort)}
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="most_exchanges">Most exchanges</option>
+              <option value="fewest_exchanges">Fewest exchanges</option>
+            </select>
+          </label>
           {hasActiveFilters ? (
             <button
               type="button"
@@ -670,6 +692,7 @@ export function MemoryPage() {
                     personaFilter,
                     fromDateFilter,
                     toDateFilter,
+                    sortOrder,
                   )
                 }
               >
@@ -896,6 +919,7 @@ export function MemoryPage() {
                       personaFilter,
                       fromDateFilter,
                       toDateFilter,
+                      sortOrder,
                     )
                   }
                 >
@@ -917,6 +941,7 @@ export function MemoryPage() {
                   personaFilter,
                   fromDateFilter,
                   toDateFilter,
+                  sortOrder,
                 )
               }
             >

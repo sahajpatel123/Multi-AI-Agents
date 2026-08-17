@@ -32,6 +32,7 @@ memory_router = APIRouter(tags=["memory"])
 # can't pull the whole table in one request. The UI paginates; this is
 # the upper bound per page.
 MAX_SUMMARIES_PER_PAGE = 100
+MemorySummarySort = Literal["newest", "oldest", "most_exchanges", "fewest_exchanges"]
 
 
 def _apply_summary_search(query, search: Optional[str]):
@@ -94,6 +95,29 @@ def _apply_summary_filters(
         query = query.filter(SessionSummary.trusted_persona == persona_id)
     query = _apply_summary_search(query, search)
     return _apply_summary_date_range(query, from_date, to_date)
+
+
+def _order_summary_query(query, sort: MemorySummarySort):
+    """Apply a safe, deterministic order to a filtered summary query.
+
+    The id tie-breaker keeps pagination stable when two summaries were
+    compressed in the same second (common in tests and quick sessions).
+    """
+    if sort == "oldest":
+        return query.order_by(SessionSummary.compressed_at.asc(), SessionSummary.id.asc())
+    if sort == "most_exchanges":
+        return query.order_by(
+            SessionSummary.exchange_count.desc(),
+            SessionSummary.compressed_at.desc(),
+            SessionSummary.id.desc(),
+        )
+    if sort == "fewest_exchanges":
+        return query.order_by(
+            SessionSummary.exchange_count.asc(),
+            SessionSummary.compressed_at.desc(),
+            SessionSummary.id.desc(),
+        )
+    return query.order_by(SessionSummary.compressed_at.desc(), SessionSummary.id.desc())
 
 
 def _validate_summary_date_range(from_date: date | None, to_date: date | None) -> None:
@@ -356,6 +380,7 @@ async def list_summaries(
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
     from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
     to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
+    sort: MemorySummarySort = Query("newest", description="Summary order."),
 ) -> dict:
     """Paginated list of the caller's compressed session summaries.
 
@@ -385,6 +410,7 @@ async def list_summaries(
                 "search": None,
                 "from_date": None,
                 "to_date": None,
+                "sort": sort,
             },
         }
 
@@ -401,12 +427,7 @@ async def list_summaries(
     )
 
     total = q.count()
-    rows = (
-        q.order_by(SessionSummary.compressed_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
+    rows = _order_summary_query(q, sort).offset((page - 1) * per_page).limit(per_page).all()
 
     return {
         "summaries": [_serialize_summary(r, include_body=False) for r in rows],
@@ -420,6 +441,7 @@ async def list_summaries(
             "search": search,
             "from_date": from_date.isoformat() if from_date else None,
             "to_date": to_date.isoformat() if to_date else None,
+            "sort": sort,
         },
     }
 
@@ -433,6 +455,7 @@ async def export_summaries_csv(
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
     from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
     to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
+    sort: MemorySummarySort = Query("newest", description="Summary order."),
 ):
     """CSV export of all session summaries for a user.
 
@@ -473,7 +496,7 @@ async def export_summaries_csv(
         to_date=to_date,
     )
     
-    summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
+    summaries = _order_summary_query(q, sort).all()
     
     import csv
     import io
@@ -534,6 +557,7 @@ async def export_summaries_json(
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
     from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
     to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
+    sort: MemorySummarySort = Query("newest", description="Summary order."),
 ):
     """JSON export of all session summaries for a user.
 
@@ -565,7 +589,7 @@ async def export_summaries_json(
         to_date=to_date,
     )
     
-    summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
+    summaries = _order_summary_query(q, sort).all()
     
     import json
     from arena.core.datetime_utils import utcnow_naive
@@ -610,6 +634,7 @@ async def export_summaries_markdown(
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
     from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
     to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
+    sort: MemorySummarySort = Query("newest", description="Summary order."),
 ):
     """Export all matching session summaries as a portable Markdown document."""
     enforce_user_rate_limit(
@@ -635,7 +660,7 @@ async def export_summaries_markdown(
         from_date=from_date,
         to_date=to_date,
     )
-    summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
+    summaries = _order_summary_query(q, sort).all()
 
     def _date(value) -> str:
         return value.strftime("%Y-%m-%d") if value else "Unknown date"
@@ -657,6 +682,8 @@ async def export_summaries_markdown(
         filters.append(f"From: {from_date.isoformat()}")
     if to_date:
         filters.append(f"To: {to_date.isoformat()}")
+    if sort != "newest":
+        filters.append(f"Sort: {sort.replace('_', ' ')}")
     if filters:
         lines.extend(["", "Filters: " + " · ".join(filters)])
 

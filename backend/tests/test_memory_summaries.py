@@ -97,6 +97,7 @@ async def test_list_empty_envelope_for_free_tier(app_client, make_user):
         "search": None,
         "from_date": None,
         "to_date": None,
+        "sort": "newest",
     }
 
 
@@ -118,6 +119,55 @@ async def test_list_orders_newest_first(app_client, make_user, db_session):
     body = res.json()
     sids = [s["session_id"] for s in body["summaries"]]
     assert sids[0] == "s-new"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("sort", "expected"),
+    [
+        ("oldest", ["s-old", "s-mid", "s-new"]),
+        ("most_exchanges", ["s-mid", "s-new", "s-old"]),
+        ("fewest_exchanges", ["s-old", "s-new", "s-mid"]),
+    ],
+)
+async def test_list_supports_summary_sort_orders(
+    app_client, make_user, db_session, sort, expected
+):
+    user = make_user(email=f"mem-sort-{sort}@test.com", tier=UserTier.PLUS)
+    old = _seed_summary(
+        db_session, user_id=user.id, session_id="s-old", exchange_count=1
+    )
+    mid = _seed_summary(
+        db_session, user_id=user.id, session_id="s-mid", exchange_count=9
+    )
+    new = _seed_summary(
+        db_session, user_id=user.id, session_id="s-new", exchange_count=5
+    )
+    old.compressed_at = datetime(2026, 8, 1, 12, 0, 0)
+    mid.compressed_at = datetime(2026, 8, 2, 12, 0, 0)
+    new.compressed_at = datetime(2026, 8, 3, 12, 0, 0)
+    db_session.add_all([old, mid, new])
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/memory/summaries?sort={sort}", headers=_pro_headers(user)
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert [row["session_id"] for row in body["summaries"]] == expected
+    assert body["filters"]["sort"] == sort
+
+
+@pytest.mark.asyncio
+async def test_list_rejects_unknown_summary_sort(app_client, make_user):
+    user = make_user(email="mem-sort-invalid@test.com", tier=UserTier.PLUS)
+
+    res = await app_client.get(
+        "/api/memory/summaries?sort=popular", headers=_pro_headers(user)
+    )
+
+    assert res.status_code == 422
 
 
 # ─── Filters ────────────────────────────────────────────────────────────────
@@ -295,6 +345,33 @@ async def test_filters_echo_in_response(app_client, make_user, db_session):
     assert body["filters"]["category"] == "question"
     assert body["filters"]["persona_id"] == "analyst"
     assert body["filters"]["search"] == "hello"
+
+
+@pytest.mark.asyncio
+async def test_json_export_honors_summary_sort(app_client, make_user, db_session):
+    user = make_user(email="mem-sort-export@test.com", tier=UserTier.PLUS)
+    old = _seed_summary(
+        db_session, user_id=user.id, session_id="s-old", exchange_count=1
+    )
+    mid = _seed_summary(
+        db_session, user_id=user.id, session_id="s-mid", exchange_count=9
+    )
+    new = _seed_summary(
+        db_session, user_id=user.id, session_id="s-new", exchange_count=5
+    )
+    old.compressed_at = datetime(2026, 8, 1, 12, 0, 0)
+    mid.compressed_at = datetime(2026, 8, 2, 12, 0, 0)
+    new.compressed_at = datetime(2026, 8, 3, 12, 0, 0)
+    db_session.add_all([old, mid, new])
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries/export.json?sort=most_exchanges",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert [item["session_id"] for item in res.json()] == ["s-mid", "s-new", "s-old"]
 
 
 # ─── Tenant isolation ───────────────────────────────────────────────────────
