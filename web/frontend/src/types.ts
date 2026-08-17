@@ -174,6 +174,42 @@ export interface TierFeatures {
   scoring_audit: boolean;
 }
 
+export interface MemorySummaryKeyPosition {
+  persona_id?: string;
+  topic?: string;
+  stance?: string;
+  confidence?: number;
+}
+
+export interface MemorySummary {
+  id: number;
+  session_id: string;
+  dominant_category: string | null;
+  preferred_depth: string | null;
+  trusted_persona: string | null;
+  exchange_count: number;
+  main_topics: string[];
+  compressed_at: string | null;
+  created_at: string | null;
+  /** Only present on detail responses (list rows omit long-form fields). */
+  session_summary?: string;
+  key_positions_taken?: MemorySummaryKeyPosition[];
+  raw_exchanges_count?: number;
+}
+
+export interface MemorySummariesResponse {
+  summaries: MemorySummary[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  filters: {
+    category: string | null;
+    persona_id: string | null;
+    search: string | null;
+  };
+}
+
 export interface TierStatus {
   tier: UserTier;
   daily_limit: number;

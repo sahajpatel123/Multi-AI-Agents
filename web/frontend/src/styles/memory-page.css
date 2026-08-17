@@ -1,0 +1,374 @@
+/* ============================================================================
+   MEMORY PAGE — session summary browser
+   Search, cards, detail expansion, delete confirmation, tier gate.
+   ========================================================================== */
+
+.memory-page {
+  min-height: 100vh;
+  background: #f5f0e8;
+  display: flex;
+  flex-direction: column;
+}
+
+.memory-page__header {
+  height: 52px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  background: rgba(245, 240, 232, 0.72);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.memory-page__back {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #8c7355;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+}
+
+.memory-page__title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.memory-page__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.memory-page__title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1a1714;
+}
+
+.memory-page__title-count {
+  font-size: 11px;
+  color: #a89070;
+}
+
+.memory-page__lede {
+  font-size: 12px;
+  color: #8c7355;
+}
+
+.memory-page__main {
+  flex: 1;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.memory-page__loading {
+  display: flex;
+  justify-content: center;
+  padding: 56px 0;
+}
+
+.memory-page__error {
+  max-width: 680px;
+  margin: 0 auto 14px;
+  padding: 10px 12px;
+  border: 0.5px solid #c96f5e;
+  border-radius: 10px;
+  background: rgba(201, 111, 94, 0.08);
+  color: #8f4638;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.memory-search {
+  position: relative;
+  max-width: 680px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  height: 44px;
+  border: 0.5px solid #d4c4b0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.memory-search:focus-within {
+  border-color: #8c7355;
+  box-shadow: 0 0 0 3px rgba(140, 115, 85, 0.12);
+}
+
+.memory-search__icon {
+  color: #a89070;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.memory-search__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: #1a1714;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+}
+
+.memory-search__input::placeholder {
+  color: #a89070;
+}
+
+.memory-search__hint {
+  font-size: 10px;
+  color: #a89070;
+  border: 0.5px solid #d4c4b0;
+  border-radius: 5px;
+  padding: 2px 6px;
+  background: rgba(245, 240, 232, 0.8);
+}
+
+.memory-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.memory-card {
+  padding: 14px 16px;
+  border: 0.5px solid #d4c4b0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.memory-card__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.memory-card__category {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8c7355;
+}
+
+.memory-card__meta {
+  font-size: 11px;
+  color: #a89070;
+}
+
+.memory-card__topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.memory-card__topic {
+  font-size: 11px;
+  color: #6b563f;
+  background: rgba(140, 115, 85, 0.1);
+  border: 0.5px solid rgba(140, 115, 85, 0.18);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
+.memory-card__persona {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #6b563f;
+}
+
+.memory-card__persona-label {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a89070;
+}
+
+.memory-card__actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.memory-card__link {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+  color: #8c7355;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+}
+
+.memory-card__link--danger {
+  color: #b05f4e;
+}
+
+.memory-card__confirm {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 0.5px solid #c96f5e;
+  border-radius: 10px;
+  background: rgba(201, 111, 94, 0.08);
+}
+
+.memory-card__confirm p {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #8f4638;
+  line-height: 1.5;
+}
+
+.memory-card__confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.memory-card__detail {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(245, 240, 232, 0.72);
+}
+
+.memory-card__summary {
+  margin: 0;
+  font-size: 13px;
+  color: #3f362c;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.memory-card__detail-note {
+  margin: 0;
+  font-size: 12px;
+  color: #a89070;
+  font-style: italic;
+}
+
+.memory-card__positions {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.memory-card__positions li {
+  font-size: 12px;
+  color: #4a4035;
+  line-height: 1.5;
+}
+
+.memory-card__positions strong {
+  color: #6b563f;
+  font-weight: 600;
+}
+
+.memory-page__more {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.memory-page__privacy {
+  margin: 24px auto 0;
+  max-width: 520px;
+  text-align: center;
+  font-size: 11px;
+  color: #a89070;
+  font-style: italic;
+}
+
+/* Tier gate */
+
+.memory-page--gate {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.memory-gate {
+  max-width: 520px;
+  width: 100%;
+  text-align: center;
+  padding: 40px 28px;
+  border: 0.5px solid #d4c4b0;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.memory-gate__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 14px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #a89070;
+}
+
+.memory-gate__kicker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8c7355;
+}
+
+.memory-gate__title {
+  margin: 0 0 10px;
+  font-size: 28px;
+  font-weight: 500;
+  color: #1a1714;
+}
+
+.memory-gate__body {
+  margin: 0 auto 22px;
+  max-width: 400px;
+  font-size: 14px;
+  color: #6b563f;
+  line-height: 1.65;
+}
+
+.memory-gate__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-page__header {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

@@ -252,7 +252,7 @@ export function Sidebar({
   const { user } = useAuth();
   const { openModal } = useProfileModal();
   const { isDefaultPanel, resetPanel, panel } = usePanel();
-  const { messagesRemaining, dailyLimit, tier, isFree } = useTier();
+  const { messagesRemaining, dailyLimit, tier, isFree, canUseFeature } = useTier();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
   /** Tick every 60s so relative timestamps stay accurate without a full reload. */
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -2048,6 +2048,17 @@ export function Sidebar({
                 navigate('/agent/watchlist');
               }}
             />
+            {canUseFeature('memory') ? (
+              <MenuAction
+                icon={<Sparkles style={{ width: '14px', height: '14px', color: '#6E8FA3' }} />}
+                label="Memory"
+                onClick={() => {
+                  void track('memory_nav_from_sidebar');
+                  onClose();
+                  navigate('/memory');
+                }}
+              />
+            ) : null}
             <MenuAction
               icon={<LayoutGrid style={{ width: '14px', height: '14px', color: '#A98CF8' }} />}
               label="Personas"

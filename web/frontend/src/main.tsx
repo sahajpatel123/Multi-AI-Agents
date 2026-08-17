@@ -188,6 +188,9 @@ const RoomPage = lazy(() =>
 const WatchlistPage = lazy(() =>
   import('./pages/WatchlistPage').then((m) => ({ default: m.WatchlistPage })),
 )
+const MemoryPage = lazy(() =>
+  import('./pages/MemoryPage').then((m) => ({ default: m.MemoryPage })),
+)
 const SharePage = lazy(() =>
   import('./pages/SharePage').then((m) => ({ default: m.SharePage })),
 )
@@ -383,6 +386,11 @@ if (!rootElement) {
                   <Route path="/agent/watchlist" element={
                     <ProtectedRoute>
                       <WatchlistPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/memory" element={
+                    <ProtectedRoute>
+                      <MemoryPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/agent/history" element={

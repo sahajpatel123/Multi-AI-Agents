@@ -14,6 +14,8 @@ import {
   SavedResponseItem,
   TierStatus,
   ScoringAuditResponse,
+  MemorySummary,
+  MemorySummariesResponse,
 } from './types';
 import type { ImportedChat } from './lib/arenaChatsImport';
 
@@ -345,6 +347,71 @@ export async function saveMemory(sessionId: string, trigger: 'session_end' | 'ne
 
   if (!res.ok) {
     throw new Error(withRequestId('Failed to save memory', res));
+  }
+}
+
+export async function listMemorySummaries(
+  params: { page?: number; perPage?: number; search?: string } = {},
+): Promise<MemorySummariesResponse> {
+  const query = new URLSearchParams();
+  if (params.page && params.page > 1) query.set('page', String(params.page));
+  if (params.perPage) query.set('per_page', String(params.perPage));
+  const search = (params.search || '').trim();
+  if (search) query.set('search', search);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const res = await apiFetch(`/api/memory/summaries${suffix}`);
+  const data = await parseJsonSafely<Partial<MemorySummariesResponse> & {
+    detail?: string | { message?: string };
+  }>(res);
+  if (!res.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not load memory summaries'), res),
+      res.status,
+      data,
+    );
+  }
+  if (!data) throw new Error(withRequestId('Empty memory summaries response', res));
+  return {
+    summaries: data.summaries || [],
+    total: data.total ?? data.summaries?.length ?? 0,
+    page: data.page ?? params.page ?? 1,
+    per_page: data.per_page ?? params.perPage ?? 20,
+    total_pages: data.total_pages ?? 0,
+    filters: {
+      category: data.filters?.category ?? null,
+      persona_id: data.filters?.persona_id ?? null,
+      search: data.filters?.search ?? (search || null),
+    },
+  };
+}
+
+export async function getMemorySummary(summaryId: number): Promise<MemorySummary> {
+  const res = await apiFetch(`/api/memory/summaries/${encodeURIComponent(summaryId)}`);
+  const data = await parseJsonSafely<MemorySummary & {
+    detail?: string | { message?: string };
+  }>(res);
+  if (!res.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not load memory summary'), res),
+      res.status,
+      data,
+    );
+  }
+  if (!data) throw new Error(withRequestId('Empty memory summary response', res));
+  return data;
+}
+
+export async function deleteMemorySummary(summaryId: number): Promise<void> {
+  const res = await apiFetch(`/api/memory/summaries/${encodeURIComponent(summaryId)}`, {
+    method: 'DELETE',
+  });
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
+  if (!res.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not delete memory summary'), res),
+      res.status,
+      data,
+    );
   }
 }
 

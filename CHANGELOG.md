@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arena now has a Memory page (`/memory`, also linked from the in-app
+  sidebar for Plus users): browse, search, and page through the compressed
+  summaries Arena has saved about past sessions, open a summary to read the
+  full session text and the key positions you took, and forget individual
+  memories with a confirmed delete — surfacing the existing memory store
+  that previously had no user-facing view
 - Arena rounds now show why the judge picked the winner: the scorer's
   plain-text rationale rides along on every round payload and appears as a
   collapsible "Why this mind won" disclosure under the cards grid, and stays
