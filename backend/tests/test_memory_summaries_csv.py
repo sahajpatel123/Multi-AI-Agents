@@ -100,6 +100,26 @@ async def test_memory_summaries_csv_with_search_filter(app_client, make_user, db
 
 
 @pytest.mark.asyncio
+async def test_memory_summaries_exports_search_main_topics(app_client, make_user, db_session):
+    """Exports use the same topic-aware search as the paginated Memory list."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_summary(db_session, user.id, "sess-topic", summary_text="Unrelated summary")
+    row = db_session.query(SessionSummary).filter(SessionSummary.session_id == "sess-topic").one()
+    row.main_topics = ["rare topic"]
+    db_session.commit()
+
+    for extension in ("csv", "json"):
+        res = await app_client.get(
+            f"/api/memory/summaries/export.{extension}?search=rare%20topic",
+            headers=_pro_headers(user),
+        )
+        assert res.status_code == 200
+        assert "sess-topic" in res.text
+
+
+@pytest.mark.asyncio
 async def test_memory_summaries_csv_formula_injection_defense(app_client, make_user, db_session):
     """Test CSV export defends against formula injection."""
     user = _make_pro(make_user)

@@ -164,6 +164,32 @@ async def test_search_matches_summary_text(app_client, make_user, db_session):
 
 
 @pytest.mark.asyncio
+async def test_search_matches_main_topics(app_client, make_user, db_session):
+    user = make_user(email="mem-topic-search@test.com", tier=UserTier.PLUS)
+    db_session.add(_seed_summary(
+        db_session,
+        user_id=user.id,
+        session_id="s1",
+        summary_text="A general discussion",
+        topics=["rare topic"],
+    ))
+    db_session.add(_seed_summary(
+        db_session,
+        user_id=user.id,
+        session_id="s2",
+        summary_text="Another discussion",
+        topics=["different topic"],
+    ))
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries?search=rare%20topic", headers=_pro_headers(user)
+    )
+    body = res.json()
+    assert {s["session_id"] for s in body["summaries"]} == {"s1"}
+
+
+@pytest.mark.asyncio
 async def test_search_escapes_like_wildcards(app_client, make_user, db_session):
     user = make_user(email="mem-wild@test.com", tier=UserTier.PLUS)
     db_session.add(_seed_summary(db_session, user_id=user.id, session_id="s1",

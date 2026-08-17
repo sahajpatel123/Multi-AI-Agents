@@ -9,6 +9,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import Text, cast, or_
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
@@ -30,6 +31,30 @@ memory_router = APIRouter(tags=["memory"])
 # can't pull the whole table in one request. The UI paginates; this is
 # the upper bound per page.
 MAX_SUMMARIES_PER_PAGE = 100
+
+
+def _apply_summary_search(query, search: Optional[str]):
+    """Apply the Memory search consistently across list and export routes.
+
+    ``main_topics`` is a JSON column on PostgreSQL, so cast it to text before
+    using ``ILIKE``. Escaping the LIKE wildcards keeps a literal search such
+    as ``100%`` from turning into a broad query.
+    """
+    if not search:
+        return query
+
+    safe = sanitize_model_optional_text(search, max_length=100, field_name="search")
+    if not safe:
+        return query
+
+    escaped = safe.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f"%{escaped}%"
+    return query.filter(
+        or_(
+            SessionSummary.session_summary.ilike(pattern, escape="\\"),
+            cast(SessionSummary.main_topics, Text).ilike(pattern, escape="\\"),
+        )
+    )
 
 
 def _decode_json_column(value, default):
@@ -288,12 +313,9 @@ async def list_summaries(
         # Exact match — persona_id is a closed enum string.
         q = q.filter(SessionSummary.trusted_persona == persona_id)
 
-    if search:
-        # ILIKE on the long-form text. We could index a tsvector for
-        # production scale, but the column is small enough per-row that
-        # SQLite ILIKE + an n=20 page cap keeps the scan tolerable.
-        safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        q = q.filter(SessionSummary.session_summary.ilike(f"%{safe}%", escape="\\"))
+    # Search the same visible memory fields used by exports. The list is
+    # still capped at the requested page size, so this remains bounded.
+    q = _apply_summary_search(q, search)
 
     total = q.count()
     rows = (
@@ -362,16 +384,7 @@ async def export_summaries_csv(
     if persona_id:
         q = q.filter(SessionSummary.trusted_persona == persona_id)
     
-    if search:
-        from sqlalchemy import or_
-        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
-        if safe_search:
-            q = q.filter(
-                or_(
-                    SessionSummary.session_summary.ilike(f"%{safe_search}%", escape="\\"),
-                    SessionSummary.main_topics.ilike(f"%{safe_search}%", escape="\\"),
-                )
-            )
+    q = _apply_summary_search(q, search)
     
     summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
     
@@ -461,16 +474,7 @@ async def export_summaries_json(
     if persona_id:
         q = q.filter(SessionSummary.trusted_persona == persona_id)
     
-    if search:
-        from sqlalchemy import or_
-        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
-        if safe_search:
-            q = q.filter(
-                or_(
-                    SessionSummary.session_summary.ilike(f"%{safe_search}%", escape="\\"),
-                    SessionSummary.main_topics.ilike(f"%{safe_search}%", escape="\\"),
-                )
-            )
+    q = _apply_summary_search(q, search)
     
     summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
     
@@ -581,5 +585,3 @@ async def delete_summary(
     db.delete(row)
     db.commit()
     return {"status": "deleted", "id": summary_id}
-
-
