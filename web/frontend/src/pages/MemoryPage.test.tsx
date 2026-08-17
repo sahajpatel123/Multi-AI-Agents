@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { MemoryPage } from './MemoryPage';
 import { ApiError, type MemorySummary, type MemorySummariesResponse } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 
 const baseSummary: MemorySummary = {
   id: 1,
@@ -97,6 +97,7 @@ vi.mock('../lib/downloadTextFile', async () => {
   return {
     ...actual,
     downloadBlobFile: vi.fn().mockReturnValue(true),
+    downloadJsonFile: vi.fn().mockReturnValue(true),
     downloadMarkdownFile: vi.fn().mockReturnValue(true),
   };
 });
@@ -122,6 +123,7 @@ describe('MemoryPage', () => {
     deleteMemorySummariesMock.mockReset();
     exportMemorySummariesMock.mockReset();
     vi.mocked(copyToClipboard).mockReset().mockResolvedValue(true);
+    vi.mocked(downloadJsonFile).mockReset().mockReturnValue(true);
     vi.mocked(downloadMarkdownFile).mockReset().mockReturnValue(true);
     tierState.canUseFeature.mockImplementation((feature: string) => feature === 'memory');
     listMemorySummariesMock.mockImplementation(
@@ -756,6 +758,24 @@ describe('MemoryPage', () => {
         'arena-memory-selection-2',
       );
     });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download selected memories as JSON' }));
+    await waitFor(() => {
+      expect(downloadJsonFile).toHaveBeenCalledWith(
+        expect.stringContaining('"exported_from": "arena"'),
+        'arena-memory-selection-2',
+      );
+    });
+    const json = vi.mocked(downloadJsonFile).mock.calls[0]?.[0] as string;
+    const archive = JSON.parse(json) as {
+      exported_from: string;
+      format_version: number;
+      memories: MemorySummary[];
+    };
+    expect(archive.exported_from).toBe('arena');
+    expect(archive.format_version).toBe(1);
+    expect(archive.memories).toHaveLength(2);
+    expect(archive.memories[0]?.session_summary).toContain('Indian IPOs');
   });
 
   it('keeps the selection and reports a detail failure during selected export', async () => {

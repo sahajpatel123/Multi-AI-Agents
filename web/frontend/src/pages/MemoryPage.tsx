@@ -19,7 +19,7 @@ import { formatRelativePast } from '../lib/relativeTime';
 import { prefersReducedMotion } from '../lib/motion';
 import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadBlobFile, downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadBlobFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import { PERSONAS } from '../data/personas';
 
 const PER_PAGE = 20;
@@ -55,8 +55,8 @@ type DetailState =
 
 type CopyStatus = 'copied' | 'failed';
 type DownloadStatus = 'downloaded' | 'failed';
-type SelectionExportAction = 'copy' | 'download' | null;
-type SelectionExportStatus = 'copied' | 'downloaded' | null;
+type SelectionExportAction = 'copy' | 'download' | 'json' | null;
+type SelectionExportStatus = 'copied' | 'downloaded' | 'json-downloaded' | null;
 
 function personaName(personaId: string | null | undefined): string {
   if (!personaId) return '';
@@ -122,6 +122,19 @@ function memorySelectionMarkdown(summaries: MemorySummary[]): string {
     '',
     sections.join('\n\n'),
   ].join('\n');
+}
+
+function memorySelectionJson(summaries: MemorySummary[]): string {
+  return `${JSON.stringify(
+    {
+      exported_from: 'arena',
+      format_version: 1,
+      exported_at: new Date().toISOString(),
+      memories: summaries,
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 function memoryFilterParams(
@@ -525,13 +538,25 @@ export function MemoryPage() {
             return;
           }
           setSelectionExportStatus('copied');
-        } else {
+        } else if (action === 'download') {
           if (!isCurrentRun()) return;
           if (!downloadMarkdownFile(markdown, `arena-memory-selection-${detailedSummaries.length}`)) {
             setSelectionExportError('Could not download selected memories — try again.');
             return;
           }
           setSelectionExportStatus('downloaded');
+        } else {
+          if (!isCurrentRun()) return;
+          if (
+            !downloadJsonFile(
+              memorySelectionJson(detailedSummaries),
+              `arena-memory-selection-${detailedSummaries.length}`,
+            )
+          ) {
+            setSelectionExportError('Could not download selected memories as JSON — try again.');
+            return;
+          }
+          setSelectionExportStatus('json-downloaded');
         }
       } catch (err) {
         if (!isCurrentRun()) return;
@@ -876,6 +901,21 @@ export function MemoryPage() {
                   onClick={() => void exportSelectedMemories('download')}
                 >
                   {selectionExportStatus === 'downloaded' ? 'Downloaded' : 'Download Markdown'}
+                </MotionButton>
+                <MotionButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  loading={selectionExportAction === 'json'}
+                  disabled={Boolean(selectionExportAction)}
+                  aria-label={
+                    selectionExportStatus === 'json-downloaded'
+                      ? 'Selected memories JSON downloaded'
+                      : 'Download selected memories as JSON'
+                  }
+                  onClick={() => void exportSelectedMemories('json')}
+                >
+                  {selectionExportStatus === 'json-downloaded' ? 'Downloaded JSON' : 'Download JSON'}
                 </MotionButton>
                 <MotionButton
                   type="button"
