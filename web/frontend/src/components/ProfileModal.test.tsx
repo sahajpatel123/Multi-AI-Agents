@@ -120,6 +120,14 @@ const hoistedMocks = vi.hoisted(() => ({
     blob: new Blob(['{"window_days":30,"personas":[]}'], { type: 'application/json' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.json',
   }),
+  getCalibrationHistory: vi.fn().mockResolvedValue({
+    ratings: [],
+    total: 0,
+    page: 1,
+    per_page: 5,
+    total_pages: 0,
+    filters: { min_delta: null, max_delta: null, sort: 'newest' },
+  }),
   getCalibrationStats: vi.fn().mockResolvedValue({
     score: null,
     coverage: 0,
@@ -196,6 +204,7 @@ vi.mock('../api', () => ({
     blob: new Blob(['# Arena — persona win rates'], { type: 'text/markdown' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
   }),
+  getCalibrationHistory: hoistedMocks.getCalibrationHistory,
   exportCalibrationHistoryCsv: vi.fn().mockResolvedValue(
     {
       blob: new Blob(['task_id,user_rating'], { type: 'text/csv' }),
@@ -261,6 +270,7 @@ describe('ProfileModal', () => {
     refreshTierMock.mockClear();
     vi.mocked(hoistedMocks.getAnalyticsActivity).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
+    vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(downloadBlobFile).mockClear();
@@ -406,6 +416,71 @@ describe('ProfileModal', () => {
     expect(
       screen.getByRole('button', { name: /calibration json export/i }),
     ).toBeInTheDocument();
+  });
+
+  it('views and paginates recent calibration history', async () => {
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 6,
+      avg_delta: 2.0,
+      trend: 'stable',
+      calibration_score: 92,
+      recent_ratings: [{ delta: 5, created_at: '2026-08-11T10:00:00Z' }],
+    });
+    hoistedMocks.getCalibrationHistory.mockResolvedValueOnce({
+      ratings: [
+        {
+          id: 11,
+          task_id: 'task-history-1',
+          user_rating: 4,
+          system_score: 95,
+          delta: 15,
+          verdict: 'You underestimated this answer',
+          created_at: '2026-08-11T10:00:00Z',
+        },
+      ],
+      total: 6,
+      page: 1,
+      per_page: 5,
+      total_pages: 2,
+      filters: { min_delta: null, max_delta: null, sort: 'newest' },
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const openHistory = await screen.findByRole('button', {
+      name: /view calibration history \(6\)/i,
+    });
+    openHistory.click();
+
+    const history = await screen.findByRole('region', { name: /calibration history/i });
+    expect(within(history).getByText('2026-08-11')).toBeInTheDocument();
+    expect(within(history).getByText('You underestimated this answer')).toBeInTheDocument();
+    expect(hoistedMocks.getCalibrationHistory).toHaveBeenCalledWith({
+      page: 1,
+      perPage: 5,
+      sort: 'newest',
+    });
+
+    hoistedMocks.getCalibrationHistory.mockResolvedValueOnce({
+      ratings: [],
+      total: 6,
+      page: 2,
+      per_page: 5,
+      total_pages: 2,
+      filters: { min_delta: null, max_delta: null, sort: 'newest' },
+    });
+    screen.getByRole('button', { name: /next calibration history page/i }).click();
+    await waitFor(() => {
+      expect(hoistedMocks.getCalibrationHistory).toHaveBeenLastCalledWith({
+        page: 2,
+        perPage: 5,
+        sort: 'newest',
+      });
+    });
+    expect(await screen.findByText('No calibration ratings found.')).toBeInTheDocument();
   });
 
   it('downloads calibration history CSV with the server filename', async () => {

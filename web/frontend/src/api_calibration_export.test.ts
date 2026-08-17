@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { exportCalibrationHistoryCsv, exportCalibrationHistoryJson } from './api';
+import {
+  exportCalibrationHistoryCsv,
+  exportCalibrationHistoryJson,
+  getCalibrationHistory,
+} from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -106,6 +110,54 @@ describe('Calibration history export helpers', () => {
     await expect(exportCalibrationHistoryJson()).rejects.toMatchObject({
       status: 429,
       message: 'boom (Request ID: req-cal-json)',
+    });
+  });
+
+  it('loads a typed, paginated history page with the requested sort', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ratings: [
+            {
+              id: 3,
+              task_id: 'task-3',
+              user_rating: 4,
+              system_score: 90,
+              delta: 10,
+              verdict: 'Well calibrated',
+              created_at: '2026-08-11T10:00:00Z',
+            },
+          ],
+          total: 6,
+          page: 2,
+          per_page: 5,
+          total_pages: 2,
+          filters: { min_delta: null, max_delta: null, sort: 'delta_desc' },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const result = await getCalibrationHistory({ page: 2, perPage: 5, sort: 'delta_desc' });
+    expect(result.ratings[0].task_id).toBe('task-3');
+    expect(result.total_pages).toBe(2);
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/calibration/history?page=2&per_page=5&sort=delta_desc',
+      {},
+    );
+  });
+
+  it('surfaces request IDs when history loading fails', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'history unavailable' }), {
+        status: 503,
+        headers: { 'x-request-id': 'req-cal-history' },
+      }),
+    );
+
+    await expect(getCalibrationHistory()).rejects.toMatchObject({
+      status: 503,
+      message: 'history unavailable (Request ID: req-cal-history)',
     });
   });
 });

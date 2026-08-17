@@ -22,6 +22,7 @@ import {
   exportUserUsageJson,
   getAnalyticsActivity,
   getAnalyticsPersonaWinRate,
+  getCalibrationHistory,
   getCalibrationStats,
   getMcpIntegrations,
   getRecentAgentFeedback,
@@ -35,6 +36,7 @@ import {
   type AnalyticsPersonaWinRateResponse,
   type AnalyticsPersonaWinRateTrendPoint,
   type AnswerFeedbackStats,
+  type CalibrationHistoryResponse,
   type RecentFeedbackItem,
   type SubscriptionStatusResponse,
   type UserUsageResponse,
@@ -84,6 +86,15 @@ function formatInrPaise(paise: number): string {
 
 function formatRelativeConnected(iso: string | null): string {
   return formatRelativePast(iso, { fallback: 'recently', localeAfterDays: 14 });
+}
+
+function formatCalibrationDate(iso: string | null): string {
+  if (!iso) return 'Unknown date';
+  return iso.slice(0, 10);
+}
+
+function formatSignedDelta(delta: number): string {
+  return delta > 0 ? `+${delta}` : String(delta);
 }
 
 function TabIconAccount({ active }: { active: boolean }) {
@@ -386,6 +397,12 @@ export function ProfileModal() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [calLoading, setCalLoading] = useState(false);
   const [calErr, setCalErr] = useState<string | null>(null);
+  const [calHistory, setCalHistory] = useState<CalibrationHistoryResponse | null>(null);
+  const [calHistoryLoading, setCalHistoryLoading] = useState(false);
+  const [calHistoryErr, setCalHistoryErr] = useState<string | null>(null);
+  const [calHistoryOpen, setCalHistoryOpen] = useState(false);
+  const [calHistoryPage, setCalHistoryPage] = useState(1);
+  const [calHistoryReload, setCalHistoryReload] = useState(0);
   const [fbAcc, setFbAcc] = useState<AnswerFeedbackStats | null>(null);
   const [fbAccLoading, setFbAccLoading] = useState(false);
   const [fbAccErr, setFbAccErr] = useState<string | null>(null);
@@ -452,6 +469,29 @@ export function ProfileModal() {
       cancelled = true;
     };
   }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage' || !calHistoryOpen) return;
+    let cancelled = false;
+    setCalHistoryLoading(true);
+    setCalHistoryErr(null);
+    void getCalibrationHistory({ page: calHistoryPage, perPage: 5, sort: 'newest' })
+      .then((history) => {
+        if (!cancelled) setCalHistory(history);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCalHistoryErr('Could not load calibration history');
+          setCalHistory(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCalHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, calHistoryOpen, calHistoryPage, calHistoryReload]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -2117,6 +2157,172 @@ export function ProfileModal() {
                         );
                       })}
                     </div>
+                    <button
+                      type="button"
+                      aria-expanded={calHistoryOpen}
+                      onClick={() => {
+                        setCalHistoryOpen((open) => {
+                          if (!open) {
+                            setCalHistoryPage(1);
+                            setCalHistoryErr(null);
+                          }
+                          return !open;
+                        });
+                      }}
+                      style={{
+                        marginTop: 14,
+                        padding: 0,
+                        border: 'none',
+                        background: 'none',
+                        color: '#F0B84E',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontFamily: 'var(--vp-font-sans)',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      {calHistoryOpen
+                        ? 'Hide calibration history'
+                        : `View calibration history (${calStats.total_ratings ?? 0})`}
+                    </button>
+                    {calHistoryOpen ? (
+                      <div
+                        role="region"
+                        aria-label="Calibration history"
+                        style={{
+                          marginTop: 12,
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          background: '#F8F2EA',
+                          border: '0.5px solid #E0D5C5',
+                        }}
+                      >
+                        {calHistoryLoading ? (
+                          <div style={{ padding: 8, display: 'flex', justifyContent: 'center' }}>
+                            <MicroLoader />
+                          </div>
+                        ) : calHistoryErr ? (
+                          <div style={{ fontSize: 12, color: '#8C7355' }}>
+                            <span>{calHistoryErr}</span>{' '}
+                            <button
+                              type="button"
+                              onClick={() => setCalHistoryReload((reload) => reload + 1)}
+                              style={{
+                                padding: 0,
+                                border: 'none',
+                                background: 'none',
+                                color: '#F0B84E',
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                              }}
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        ) : calHistory?.ratings.length ? (
+                          <>
+                            <div style={{ fontSize: 10, color: '#A0A39A', marginBottom: 6 }}>
+                              Newest first · {calHistory.total} total rating{calHistory.total === 1 ? '' : 's'}
+                            </div>
+                            <div style={{ display: 'grid', gap: 6 }}>
+                              {calHistory.ratings.map((rating) => {
+                                const delta = Number(rating.delta ?? 0);
+                                return (
+                                  <div
+                                    key={rating.id}
+                                    title={`Task ${rating.task_id}`}
+                                    aria-label={`${formatCalibrationDate(rating.created_at)}: rated ${rating.user_rating} out of 5, delta ${formatSignedDelta(delta)}, ${rating.verdict}`}
+                                    style={{
+                                      display: 'grid',
+                                      gridTemplateColumns: '72px 42px 48px minmax(0, 1fr)',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                      fontSize: 11,
+                                      color: '#4A3728',
+                                    }}
+                                  >
+                                    <span>{formatCalibrationDate(rating.created_at)}</span>
+                                    <span>{rating.user_rating}/5</span>
+                                    <span
+                                      style={{
+                                        color: Math.abs(delta) <= 10 ? '#639922' : delta > 0 ? '#BA7517' : '#C0392B',
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      Δ {formatSignedDelta(delta)}
+                                    </span>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {rating.verdict}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                                marginTop: 10,
+                              }}
+                            >
+                              <span style={{ fontSize: 10, color: '#A0A39A' }}>
+                                Page {calHistory.page} of {Math.max(1, calHistory.total_pages)}
+                              </span>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button
+                                  type="button"
+                                  aria-label="Previous calibration history page"
+                                  disabled={calHistoryPage <= 1}
+                                  onClick={() => setCalHistoryPage((page) => Math.max(1, page - 1))}
+                                  style={{
+                                    padding: '4px 8px',
+                                    border: '0.5px solid #E0D5C5',
+                                    borderRadius: 5,
+                                    background: '#F0E8DC',
+                                    color: '#4A3728',
+                                    cursor: calHistoryPage <= 1 ? 'not-allowed' : 'pointer',
+                                    opacity: calHistoryPage <= 1 ? 0.5 : 1,
+                                  }}
+                                >
+                                  Previous
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label="Next calibration history page"
+                                  disabled={calHistoryPage >= Math.max(1, calHistory.total_pages)}
+                                  onClick={() =>
+                                    setCalHistoryPage((page) =>
+                                      Math.min(Math.max(1, calHistory.total_pages), page + 1),
+                                    )
+                                  }
+                                  style={{
+                                    padding: '4px 8px',
+                                    border: '0.5px solid #E0D5C5',
+                                    borderRadius: 5,
+                                    background: '#F0E8DC',
+                                    color: '#4A3728',
+                                    cursor:
+                                      calHistoryPage >= Math.max(1, calHistory.total_pages)
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                                    opacity:
+                                      calHistoryPage >= Math.max(1, calHistory.total_pages) ? 0.5 : 1,
+                                  }}
+                                >
+                                  Next
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                            No calibration ratings found.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
                     <div
                       style={{
                         marginTop: 14,

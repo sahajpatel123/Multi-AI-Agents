@@ -2641,6 +2641,66 @@ export async function getCalibrationStats(): Promise<unknown> {
   return data;
 }
 
+export type CalibrationHistoryRating = {
+  id: number;
+  task_id: string;
+  user_rating: number;
+  system_score: number;
+  delta: number;
+  verdict: string;
+  created_at: string | null;
+};
+
+export type CalibrationHistoryResponse = {
+  ratings: CalibrationHistoryRating[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  filters: {
+    min_delta: number | null;
+    max_delta: number | null;
+    sort: string;
+  };
+};
+
+export async function getCalibrationHistory(
+  params: {
+    page?: number;
+    perPage?: number;
+    sort?: 'newest' | 'oldest' | 'delta_asc' | 'delta_desc';
+  } = {},
+): Promise<CalibrationHistoryResponse> {
+  const query = new URLSearchParams();
+  query.set('page', String(Math.max(1, params.page ?? 1)));
+  query.set('per_page', String(Math.min(100, Math.max(1, params.perPage ?? 5))));
+  if (params.sort && params.sort !== 'newest') query.set('sort', params.sort);
+  const response = await apiFetch(`/api/calibration/history?${query.toString()}`);
+  const data = await parseJsonSafely<Partial<CalibrationHistoryResponse> & {
+    detail?: string | { message?: string };
+  }>(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Calibration history failed'), response),
+      response.status,
+      data,
+    );
+  }
+  if (!data) throw new Error(withRequestId('Empty calibration history', response));
+  return {
+    ratings: data.ratings ?? [],
+    total: data.total ?? data.ratings?.length ?? 0,
+    page: data.page ?? params.page ?? 1,
+    per_page: data.per_page ?? params.perPage ?? 5,
+    total_pages: data.total_pages ?? 0,
+    filters: {
+      min_delta: data.filters?.min_delta ?? null,
+      max_delta: data.filters?.max_delta ?? null,
+      sort: data.filters?.sort ?? params.sort ?? 'newest',
+    },
+  };
+}
+
 export type CalibrationHistoryCsvExport = {
   blob: Blob;
   filename: string;
