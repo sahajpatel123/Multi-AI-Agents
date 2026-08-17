@@ -1111,6 +1111,10 @@ def _persona_win_rate_report(
         .filter(
             ScoringAudit.user_id == user_id,
             ScoringAudit.created_at >= window_start,
+            # The report window ends at the current UTC instant. A future-
+            # dated row (from clock skew or corrupted data) must not land in
+            # the latest trend bucket and inflate the current win rates.
+            ScoringAudit.created_at <= now_utc,
         )
         .all()
     )

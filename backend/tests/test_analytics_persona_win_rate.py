@@ -442,6 +442,45 @@ async def test_window_excludes_older_exchanges(app_client, make_user, db_session
 
 
 @pytest.mark.asyncio
+async def test_window_excludes_future_dated_exchanges(
+    app_client, make_user, db_session
+):
+    """A report ending now must not count corrupted future audit rows."""
+    user = make_user(email="pwr-future@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst"],
+        hours_ago=1,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=["philosopher"],
+        hours_ago=-24,
+    )
+    db_session.commit()
+
+    headers = _pro_headers(user)
+    dashboard = await app_client.get(
+        "/api/analytics/persona-win-rate?window_days=7", headers=headers
+    )
+    export = await app_client.get(
+        "/api/analytics/persona-win-rate/export.json?window_days=7",
+        headers=headers,
+    )
+
+    assert dashboard.status_code == 200
+    assert export.status_code == 200
+    assert dashboard.json()["scored_exchanges"] == 1
+    assert json.loads(export.text)["scored_exchanges"] == 1
+    assert _row(dashboard.json(), "philosopher") is None
+    assert _row(json.loads(export.text), "philosopher") is None
+
+
+@pytest.mark.asyncio
 async def test_window_bounds_rejected(app_client, make_user):
     user = make_user(email="pwr-bounds@test.com", tier=UserTier.PRO)
     # Both bounds are pinned: min_appearances has le=200 (4-slot panels
