@@ -260,3 +260,33 @@ async def test_memory_summaries_markdown_export_includes_filters_and_positions(
     assert "Filters: Search: launch · Kind: decision" in res.text
     assert "Compared two paths for the launch." in res.text
     assert "Launch timing — Wait for evidence — confidence 84%" in res.text
+
+
+@pytest.mark.asyncio
+async def test_memory_summaries_markdown_flattens_malformed_position_metadata(
+    app_client, make_user, db_session
+):
+    """Legacy or model-derived position fields cannot inject Markdown lines."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    summary = _seed_summary(db_session, user.id, "sess-markdown-safe")
+    summary.key_positions_taken = [
+        {
+            "persona_id": "analyst",
+            "topic": "Topic\nwith a break",
+            "stance": "Keep `format`",
+            "confidence": "84\n\n- forged list item",
+        }
+    ]
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries/export.md",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert "Topic with a break" in res.text
+    assert "Keep \\`format\\`" in res.text
+    assert "confidence 84  - forged list item%" in res.text
+    assert "\n- forged list item%" not in res.text

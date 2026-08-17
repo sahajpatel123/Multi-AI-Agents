@@ -76,6 +76,31 @@ def _decode_json_column(value, default):
     return default
 
 
+def _markdown_inline(value) -> str:
+    """Keep exported metadata on one safe Markdown line.
+
+    Summary metadata can contain model-derived values, and legacy rows may
+    contain arbitrary JSON. Escaping backslashes/backticks and flattening all
+    line separators prevents one malformed value from changing the structure
+    of the rest of the portable document. The summary body is deliberately
+    left untouched by the Markdown exporter so users can keep its formatting.
+    """
+    if value is None:
+        return ""
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("`", "\\`")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\n", " ")
+        .replace("\u2028", " ")
+        .replace("\u2029", " ")
+        .replace("\t", " ")
+        .strip()
+    )
+
+
 def _serialize_summary(row: SessionSummary, *, include_body: bool) -> dict:
     """Project a SessionSummary row to its public dict.
 
@@ -544,12 +569,6 @@ async def export_summaries_markdown(
     q = _apply_summary_search(q, search)
     summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
 
-    # Keep user-controlled metadata on one Markdown line. Summary bodies are
-    # intentionally preserved as Markdown so the export remains useful in
-    # notes apps and Git repositories.
-    def _inline(value) -> str:
-        return str(value or "").replace("`", "\\`").replace("\r", " ").replace("\n", " ").strip()
-
     def _date(value) -> str:
         return value.strftime("%Y-%m-%d") if value else "Unknown date"
 
@@ -561,11 +580,11 @@ async def export_summaries_markdown(
     ]
     filters = []
     if search:
-        filters.append(f"Search: {_inline(search)}")
+        filters.append(f"Search: {_markdown_inline(search)}")
     if category:
-        filters.append(f"Kind: {_inline(category)}")
+        filters.append(f"Kind: {_markdown_inline(category)}")
     if persona_id:
-        filters.append(f"Trusted mind: {_inline(persona_id)}")
+        filters.append(f"Trusted mind: {_markdown_inline(persona_id)}")
     if filters:
         lines.extend(["", "Filters: " + " · ".join(filters)])
 
@@ -575,21 +594,25 @@ async def export_summaries_markdown(
                 "",
                 "---",
                 "",
-                f"## {_inline(row.dominant_category or 'Session')} · {_date(row.compressed_at)}",
+                f"## {_markdown_inline(row.dominant_category or 'Session')} · {_date(row.compressed_at)}",
                 "",
-                f"- Session ID: `{_inline(row.session_id)}`",
+                f"- Session ID: `{_markdown_inline(row.session_id)}`",
                 f"- Exchanges: {int(row.exchange_count or 0)}",
             ]
         )
         if row.preferred_depth:
-            lines.append(f"- Depth: {_inline(row.preferred_depth)}")
+            lines.append(f"- Depth: {_markdown_inline(row.preferred_depth)}")
         if row.trusted_persona:
-            lines.append(f"- Trusted mind: {_inline(row.trusted_persona)}")
+            lines.append(f"- Trusted mind: {_markdown_inline(row.trusted_persona)}")
 
         topics = _decode_json_column(row.main_topics, [])
         if isinstance(topics, list) and topics:
             lines.extend(["", "### Topics", ""])
-            lines.extend(f"- {_inline(topic)}" for topic in topics if _inline(topic))
+            lines.extend(
+                f"- {_markdown_inline(topic)}"
+                for topic in topics
+                if _markdown_inline(topic)
+            )
 
         lines.extend(["", "### Summary", "", row.session_summary or "_No summary text was saved._"])
 
@@ -601,13 +624,13 @@ async def export_summaries_markdown(
                     continue
                 parts = []
                 if position.get("persona_id"):
-                    parts.append(_inline(position["persona_id"]))
+                    parts.append(_markdown_inline(position["persona_id"]))
                 if position.get("topic"):
-                    parts.append(_inline(position["topic"]))
+                    parts.append(_markdown_inline(position["topic"]))
                 if position.get("stance"):
-                    parts.append(_inline(position["stance"]))
+                    parts.append(_markdown_inline(position["stance"]))
                 if position.get("confidence") is not None:
-                    parts.append(f"confidence {position['confidence']}%")
+                    parts.append(f"confidence {_markdown_inline(position['confidence'])}%")
                 if parts:
                     position_lines.append("- " + " — ".join(parts))
             if position_lines:
