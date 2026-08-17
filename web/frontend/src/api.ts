@@ -3541,13 +3541,23 @@ export async function exportAnalyticsSummaryCsv(windowDays: number = 30): Promis
   return response.blob();
 }
 
-export async function exportAnalyticsPersonaWinRateCsv(windowDays: number = 30): Promise<Blob> {
+export type AnalyticsPersonaWinRateCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaWinRateCsv(
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaWinRateCsvExport> {
   const response = await apiFetch(`/api/analytics/persona-win-rate/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(getErrorMessage(err, 'Failed to export persona win rate CSV'), response.status, err);
   }
-  return response.blob();
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-persona-win-rates-${windowDays}d.csv`,
+  };
 }
 
 export type AnalyticsPersonaWinRateMarkdownExport = {

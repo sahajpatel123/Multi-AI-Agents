@@ -112,6 +112,10 @@ const hoistedMocks = vi.hoisted(() => ({
     best_persona_id: 'analyst',
     best_win_rate: 0.75,
   }),
+  exportAnalyticsPersonaWinRateCsv: vi.fn().mockResolvedValue({
+    blob: new Blob(['persona_id,name'], { type: 'text/csv' }),
+    filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.csv',
+  }),
   getCalibrationStats: vi.fn().mockResolvedValue({
     score: null,
     coverage: 0,
@@ -182,9 +186,7 @@ vi.mock('../api', () => ({
     blob: new Blob(['# Arena — activity timeline'], { type: 'text/markdown' }),
     filename: 'arena-activity-2026-08-05-to-2026-08-11.md',
   }),
-  exportAnalyticsPersonaWinRateCsv: vi.fn().mockResolvedValue(
-    new Blob(['persona_id,name'], { type: 'text/csv' }),
-  ),
+  exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateMarkdown: vi.fn().mockResolvedValue({
     blob: new Blob(['# Arena — persona win rates'], { type: 'text/markdown' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
@@ -254,6 +256,7 @@ describe('ProfileModal', () => {
     refreshTierMock.mockClear();
     vi.mocked(hoistedMocks.getAnalyticsActivity).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(downloadBlobFile).mockClear();
     (window as { __profileModalOpened?: boolean }).__profileModalOpened = false;
   });
@@ -531,6 +534,33 @@ describe('ProfileModal', () => {
       expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7);
     });
     expect(screen.getByText('Persona win rates · 7 days')).toBeInTheDocument();
+  });
+
+  it('uses the selected window and server filename for the win-rate CSV export', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /persona win-rate window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '7' } });
+    hoistedMocks.exportAnalyticsPersonaWinRateCsv.mockResolvedValueOnce({
+      blob: new Blob(['persona_id,name'], { type: 'text/csv' }),
+      filename: 'arena-persona-win-rate-2026-08-11-to-2026-08-17.csv',
+    });
+    const exportButton = await screen.findByRole('button', { name: /win rates export/i });
+    exportButton.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateCsv).toHaveBeenCalledWith(7);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-persona-win-rate-2026-08-11-to-2026-08-17.csv',
+      );
+    });
   });
 
   it('renders an accessible weekly trend sparkline per persona', async () => {

@@ -1653,8 +1653,8 @@ export function ProfileModal() {
                     onClick={async () => {
                       setActiveExport('win-rate');
                       try {
-                        const blob = await exportAnalyticsPersonaWinRateCsv(winRateWindowDays);
-                        downloadBlobFile(blob, `arena-persona-win-rates-${winRateWindowDays}d.csv`);
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateCsv(winRateWindowDays);
+                        downloadBlobFile(blob, filename);
                       } catch {
                         // ignore error
                       } finally {

@@ -42,18 +42,35 @@ describe('Analytics CSV export frontend API helpers', () => {
     );
   });
 
-  it('exportAnalyticsPersonaWinRateCsv fetches expected endpoint', async () => {
+  it('exportAnalyticsPersonaWinRateCsv returns the server filename', async () => {
     const mockBlob = new Blob(['persona_id,win_rate'], { type: 'text/csv' });
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
-      new Response(mockBlob, { status: 200 })
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-persona-win-rate-2026-08-01-to-2026-08-14.csv"',
+        },
+      })
     );
 
     const res = await exportAnalyticsPersonaWinRateCsv(14);
-    expectBlob(res);
+    expectBlob(res.blob);
+    expect(res.filename).toBe('arena-persona-win-rate-2026-08-01-to-2026-08-14.csv');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/analytics/persona-win-rate/export.csv?window_days=14',
       {}
     );
+  });
+
+  it('falls back to a window-based filename when the CSV response omits one', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['persona_id,win_rate'], { type: 'text/csv' }), { status: 200 }),
+    );
+
+    const res = await exportAnalyticsPersonaWinRateCsv(7);
+    expectBlob(res.blob);
+    expect(res.filename).toBe('arena-persona-win-rates-7d.csv');
   });
 
   it('exportAnalyticsCategoryStatsCsv fetches expected endpoint', async () => {
