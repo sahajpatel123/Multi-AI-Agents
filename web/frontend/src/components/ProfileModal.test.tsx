@@ -620,6 +620,23 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('surfaces a blocked persona win-rate download and releases the export lock', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    vi.mocked(downloadBlobFile).mockReturnValueOnce(false);
+    const exportButton = await screen.findByRole('button', { name: /win rates export/i });
+    exportButton.click();
+
+    expect(
+      await screen.findByText('Could not download persona win-rate CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(exportButton).not.toBeDisabled();
+  });
+
   it('renders an accessible weekly trend sparkline per persona', async () => {
     renderModal();
     await waitFor(() => {

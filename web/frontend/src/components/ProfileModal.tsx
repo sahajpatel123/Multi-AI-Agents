@@ -383,6 +383,7 @@ export function ProfileModal() {
     recent_ratings?: Array<{ delta?: number; created_at?: string }>;
   } | null>(null);
   const [activeExport, setActiveExport] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [calLoading, setCalLoading] = useState(false);
   const [calErr, setCalErr] = useState<string | null>(null);
   const [fbAcc, setFbAcc] = useState<AnswerFeedbackStats | null>(null);
@@ -1462,7 +1463,10 @@ export function ProfileModal() {
                       <select
                         aria-label="Persona win-rate window"
                         value={winRateWindowDays}
-                        onChange={(event) => setWinRateWindowDays(Number(event.target.value))}
+                        onChange={(event) => {
+                          setExportError(null);
+                          setWinRateWindowDays(Number(event.target.value));
+                        }}
                         style={{
                           border: '0.5px solid #E0D5C5',
                           borderRadius: 5,
@@ -1494,7 +1498,10 @@ export function ProfileModal() {
                       <select
                         aria-label="Persona win-rate minimum appearances"
                         value={winRateMinAppearances}
-                        onChange={(event) => setWinRateMinAppearances(Number(event.target.value))}
+                        onChange={(event) => {
+                          setExportError(null);
+                          setWinRateMinAppearances(Number(event.target.value));
+                        }}
                         style={{
                           border: '0.5px solid #E0D5C5',
                           borderRadius: 5,
@@ -1644,6 +1651,15 @@ export function ProfileModal() {
                 >
                   Data exports
                 </div>
+                {exportError ? (
+                  <p
+                    role="alert"
+                    aria-live="polite"
+                    style={{ fontSize: 12, color: '#993C1D', margin: '0 0 10px' }}
+                  >
+                    {exportError}
+                  </p>
+                ) : null}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
                   <button
                     type="button"
@@ -1691,14 +1707,21 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('win-rate');
+                      setExportError(null);
                       try {
                         const { blob, filename } = await exportAnalyticsPersonaWinRateCsv(
                           winRateWindowDays,
                           winRateMinAppearances,
                         );
-                        downloadBlobFile(blob, filename);
-                      } catch {
-                        // ignore error
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate CSV — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
@@ -1723,14 +1746,21 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('win-rate-md');
+                      setExportError(null);
                       try {
                         const { blob, filename } = await exportAnalyticsPersonaWinRateMarkdown(
                           winRateWindowDays,
                           winRateMinAppearances,
                         );
-                        downloadBlobFile(blob, filename);
-                      } catch {
-                        // ignore error
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate Markdown — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
@@ -1755,14 +1785,21 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('win-rate-json');
+                      setExportError(null);
                       try {
                         const { blob, filename } = await exportAnalyticsPersonaWinRateJson(
                           winRateWindowDays,
                           winRateMinAppearances,
                         );
-                        downloadBlobFile(blob, filename);
-                      } catch {
-                        // ignore error
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate JSON — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
