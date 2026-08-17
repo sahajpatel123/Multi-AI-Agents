@@ -501,6 +501,40 @@ describe('MemoryPage', () => {
     expect(await screen.findByRole('button', { name: 'Copy failed' })).toHaveTextContent('Copy failed');
   });
 
+  it('keeps copied Markdown metadata safe and preserves position confidence', async () => {
+    getMemorySummaryMock.mockResolvedValueOnce({
+      ...detailSummary,
+      dominant_category: 'decision\n# forged heading',
+      preferred_depth: 'deep\tdepth',
+      trusted_persona: 'analyst\n- forged item',
+      main_topics: ['Topic\nwith a break', 'Keep `format`'],
+      session_summary: 'Line one\n\nLine two',
+      key_positions_taken: [
+        {
+          persona_id: 'analyst',
+          topic: 'Launch\nwindow',
+          stance: 'Keep `format`',
+          confidence: 84,
+        },
+      ],
+    });
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read summary' }));
+    await screen.findByText(/Line one/);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy summary' }));
+    await screen.findByRole('button', { name: 'Summary copied' });
+
+    const copied = vi.mocked(copyToClipboard).mock.calls[0]?.[0] as string;
+    expect(copied).toContain('# Arena memory — Decision # forged heading');
+    expect(copied).toContain('- Topics: Topic with a break, Keep \\`format\\`');
+    expect(copied).toContain('- The Analyst — Launch window: Keep \\`format\\` (confidence 84%)');
+    expect(copied).toContain('Line one\n\nLine two');
+    expect(copied).not.toContain('\n# forged heading');
+    expect(copied).not.toContain('\n- forged item');
+  });
+
   it('forgets a summary after confirmation and updates the count', async () => {
     renderPage();
     await screen.findByText('Indian IPO market');

@@ -63,21 +63,40 @@ function categoryLabel(category: string | null | undefined): string {
   return category.charAt(0).toUpperCase() + category.slice(1).replace(/_/g, ' ');
 }
 
+function markdownInline(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/`/g, '\\`')
+    .replace(/\r\n|\r|\n|\u2028|\u2029/g, ' ')
+    .replace(/\t/g, ' ')
+    .trim();
+}
+
 function positionLabel(position: NonNullable<MemorySummary['key_positions_taken']>[number]): string {
-  const persona = position.persona_id ? personaName(position.persona_id) : '';
-  const topic = position.topic ? ` — ${position.topic}` : '';
-  const stance = position.stance ? `: ${position.stance}` : '';
-  return `${persona}${topic}${stance}`.trim() || 'Unspecified position';
+  const persona = markdownInline(position.persona_id ? personaName(position.persona_id) : '');
+  const topic = markdownInline(position.topic);
+  const stance = markdownInline(position.stance);
+  const confidence =
+    position.confidence === null || position.confidence === undefined
+      ? ''
+      : ` (confidence ${markdownInline(position.confidence)}%)`;
+  return `${persona}${topic ? ` — ${topic}` : ''}${stance ? `: ${stance}` : ''}${confidence}`.trim() || 'Unspecified position';
 }
 
 function memoryMarkdown(summary: MemorySummary): string {
-  const lines = [`# Arena memory — ${categoryLabel(summary.dominant_category)}`];
+  const topics = (Array.isArray(summary.main_topics) ? summary.main_topics : [])
+    .map((topic) => markdownInline(topic))
+    .filter(Boolean);
+  const lines = [`# Arena memory — ${markdownInline(categoryLabel(summary.dominant_category))}`];
   const metadata = [
-    summary.compressed_at ? `- Saved: ${summary.compressed_at}` : '',
+    summary.compressed_at ? `- Saved: ${markdownInline(summary.compressed_at)}` : '',
     `- Exchanges: ${summary.exchange_count}`,
-    summary.preferred_depth ? `- Depth: ${summary.preferred_depth}` : '',
-    summary.trusted_persona ? `- Trusted mind: ${personaName(summary.trusted_persona)}` : '',
-    summary.main_topics.length > 0 ? `- Topics: ${summary.main_topics.join(', ')}` : '',
+    summary.preferred_depth ? `- Depth: ${markdownInline(summary.preferred_depth)}` : '',
+    summary.trusted_persona
+      ? `- Trusted mind: ${markdownInline(personaName(summary.trusted_persona))}`
+      : '',
+    topics.length > 0 ? `- Topics: ${topics.join(', ')}` : '',
   ].filter(Boolean);
 
   if (metadata.length > 0) lines.push('', ...metadata);
