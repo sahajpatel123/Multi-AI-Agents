@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import time
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,44 @@ from arena.core.agents import get_persona_id_for_agent
 from arena.core.model_router import get_route_for_prompt
 from arena.core.observability import log_scoring_result
 from arena.models.schemas import AgentResponse, ScoredAgent, IntegrityReport
+
+
+# The judge is asked for a "brief explanation" of the winner, so this bound is
+# generous without letting a misbehaving scorer bloat every round payload.
+MAX_REASONING_LENGTH = 600
+
+
+@dataclass
+class ScoringResult:
+    """Outcome of a scoring run: ranked takes plus the judge's rationale.
+
+    ``reasoning`` is the scorer's own plain-text explanation of why the winner
+    was chosen and is safe to surface to users. It is ``None`` when the scorer
+    produced no rationale or fell back to default scores.
+    """
+
+    scored_responses: list[ScoredAgent]
+    reasoning: str | None = None
+    fallback_used: bool = False
+
+
+def _normalize_scorer_reasoning(raw: Any) -> str | None:
+    """Trim the judge's rationale to a compact, single-paragraph string.
+
+    Collapses stray whitespace, drops empty/non-string values, and caps the
+    result at a word boundary so a verbose scorer cannot inflate the payload.
+    """
+    if not isinstance(raw, str):
+        return None
+    text = " ".join(raw.split())
+    if not text:
+        return None
+    if len(text) > MAX_REASONING_LENGTH:
+        cut = text[:MAX_REASONING_LENGTH].rsplit(" ", 1)[0]
+        if not cut:
+            cut = text[:MAX_REASONING_LENGTH]
+        text = f"{cut}…"
+    return text
 
 
 SCORER_SYSTEM_PROMPT = """You are an impartial judge evaluating multiple AI responses to a user's prompt.
@@ -85,12 +124,17 @@ class Scorer:
         persona_ids: list[str] | None = None,
         db: Session | None = None,
         scoring_duration_ms: int | None = None,
-    ) -> list[ScoredAgent]:
-        """Score all responses and determine winner"""
+    ) -> ScoringResult:
+        """Score all responses and determine winner.
+
+        Returns the ranked takes together with the judge's winner rationale
+        so callers can surface it without a second scoring pass.
+        """
         
         scoring_prompt = self._format_responses_for_scoring(prompt, responses, integrity)
         started = time.monotonic()
         fallback_used = False
+        reasoning: str | None = None
         criteria_breakdown: dict[str, Any] | None = None
         route = get_route_for_prompt(prompt=prompt, task="scoring", category=prompt_category)
         
@@ -117,6 +161,7 @@ class Scorer:
             data = json.loads(content)
             scores = data.get("scores", {})
             winner_id = data.get("winner", "agent_1")
+            reasoning = _normalize_scorer_reasoning(data.get("reasoning"))
             criteria_breakdown = data.get("criteria_breakdown")
             
             # Build scored responses
@@ -169,7 +214,11 @@ class Scorer:
                 except Exception:
                     logger.warning("Failed to log scoring audit", exc_info=True)
 
-        return result_scored
+        return ScoringResult(
+            scored_responses=result_scored,
+            reasoning=reasoning,
+            fallback_used=fallback_used,
+        )
     
     def get_winner(self, scored_responses: list[ScoredAgent]) -> ScoredAgent | None:
         """Get the winning response from scored list"""

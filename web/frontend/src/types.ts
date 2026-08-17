@@ -36,6 +36,7 @@ export interface PromptResponse {
   winner: AgentResponse;
   winner_agent_id: string;
   all_responses: ScoredAgent[];
+  scoring_reasoning?: string | null;
   integrity: IntegrityReport | null;
   tools_used: string[];
   timestamp: string;

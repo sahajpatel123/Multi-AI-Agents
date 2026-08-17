@@ -12555,3 +12555,81 @@ canvas {
     transform: none !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   Winner reasoning — collapsible judge's rationale under the Arena grid
+   ------------------------------------------------------------------ */
+.winner-reasoning {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto 10px;
+  border: 0.5px solid var(--cream-border, #e0d8d0);
+  border-radius: 12px;
+  background: var(--cream-surface-raised, #fdfaf6);
+}
+
+.winner-reasoning-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--cream-body, #4a3728);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease);
+}
+
+.winner-reasoning-icon {
+  flex-shrink: 0;
+  color: var(--cream-gold, #c4956a);
+}
+
+.winner-reasoning-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.winner-reasoning-chevron {
+  flex-shrink: 0;
+  color: var(--cream-faint, #a89070);
+  transition: transform var(--motion-micro-ms, 170ms) var(--ease-out-premium, ease);
+}
+
+.winner-reasoning-chevron--open {
+  transform: rotate(180deg);
+}
+
+.winner-reasoning--static .winner-reasoning-chevron {
+  transition: none !important;
+}
+
+.winner-reasoning-body {
+  margin: 0;
+  padding: 0 12px 12px 35px;
+  color: var(--cream-muted, #6b6460);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .winner-reasoning-toggle:hover {
+    background: var(--cream-surface-tint, #faf3ea);
+    color: var(--cream-ink, #1a1714);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .winner-reasoning-toggle,
+  .winner-reasoning-chevron {
+    transition: none !important;
+  }
+}

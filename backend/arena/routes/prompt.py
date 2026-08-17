@@ -364,7 +364,7 @@ async def submit_prompt(
         )
         tracker.mark("integrity_done")
 
-        scored_responses = await scorer.score_responses(
+        scoring_result = await scorer.score_responses(
             body.prompt,
             responses,
             integrity_report,
@@ -375,6 +375,7 @@ async def submit_prompt(
             db=db,
             scoring_duration_ms=None,
         )
+        scored_responses = scoring_result.scored_responses
         tracker.mark("scoring_done")
 
         winner = scorer.get_winner(scored_responses)
@@ -406,6 +407,7 @@ async def submit_prompt(
             integrity=integrity_report,
             tools_used=tools_used,
             request_id=request_id,
+            scoring_reasoning=scoring_result.reasoning,
         )
         tracker.mark("response_shaped")
 
@@ -699,7 +701,7 @@ async def stream_prompt(
                 db=db,
             )
             tracker.mark("integrity_done")
-            scored_responses = await scorer.score_responses(
+            scoring_result = await scorer.score_responses(
                 body.prompt,
                 responses,
                 integrity_report,
@@ -709,6 +711,7 @@ async def stream_prompt(
                 persona_ids=body.persona_ids,
                 db=db,
             )
+            scored_responses = scoring_result.scored_responses
             tracker.mark("scoring_done")
             winner = scorer.get_winner(scored_responses)
             if not winner:
@@ -728,6 +731,7 @@ async def stream_prompt(
                 integrity=integrity_report,
                 tools_used=tools_used,
                 request_id=request_id,
+                scoring_reasoning=scoring_result.reasoning,
             )
             tracker.mark("response_shaped")
 

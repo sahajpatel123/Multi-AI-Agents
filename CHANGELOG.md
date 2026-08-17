@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arena rounds now show why the judge picked the winner: the scorer's
+  plain-text rationale rides along on every round payload and appears as a
+  collapsible "Why this mind won" disclosure under the cards grid, and stays
+  hidden whenever scoring fell back so users never see an empty widget
 - Arena Discuss threads can be sent into Agent Mode for deeper verification
   (Verify in Agent Mode or Shift+V): the focused mind's latest reply — or the
   seeded take before any replies — becomes a fresh research task with the
