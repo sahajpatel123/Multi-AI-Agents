@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Profile analytics: download the selected persona win-rate window as the canonical JSON report alongside CSV and Markdown',
       '[NEW] Memory: copy the current filtered view link so shared searches and ordering reopen exactly as seen',
       '[NEW] Memory: download selected summaries as a spreadsheet-safe CSV alongside Markdown and JSON exports',
       '[NEW] Watchlist: download every completed latest result in the current view as one markdown digest file (Download digest or Shift+M), matching the Copy digest content',

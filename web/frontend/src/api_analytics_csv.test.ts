@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   exportAnalyticsSummaryCsv,
   exportAnalyticsPersonaWinRateCsv,
+  exportAnalyticsPersonaWinRateJson,
   exportAnalyticsCategoryStatsCsv,
   exportAnalyticsActivityCsv,
   exportAnalyticsPersonaStatsOverviewCsv,
@@ -71,6 +72,39 @@ describe('Analytics CSV export frontend API helpers', () => {
     const res = await exportAnalyticsPersonaWinRateCsv(7);
     expectBlob(res.blob);
     expect(res.filename).toBe('arena-persona-win-rates-7d.csv');
+  });
+
+  it('exportAnalyticsPersonaWinRateJson returns the server filename', async () => {
+    const mockBlob = new Blob(['{"window_days":14,"personas":[]}'], {
+      type: 'application/json',
+    });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-persona-win-rate-2026-08-01-to-2026-08-14.json"',
+        },
+      }),
+    );
+
+    const res = await exportAnalyticsPersonaWinRateJson(14);
+    expectBlob(res.blob);
+    expect(res.filename).toBe('arena-persona-win-rate-2026-08-01-to-2026-08-14.json');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/analytics/persona-win-rate/export.json?window_days=14',
+      {},
+    );
+  });
+
+  it('falls back to a window-based filename when the JSON response omits one', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['{}'], { type: 'application/json' }), { status: 200 }),
+    );
+
+    const res = await exportAnalyticsPersonaWinRateJson(7);
+    expectBlob(res.blob);
+    expect(res.filename).toBe('arena-persona-win-rates-7d.json');
   });
 
   it('exportAnalyticsCategoryStatsCsv fetches expected endpoint', async () => {

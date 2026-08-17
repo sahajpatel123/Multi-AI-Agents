@@ -1466,6 +1466,64 @@ async def analytics_persona_win_rate_csv(
     )
 
 
+@router.get("/analytics/persona-win-rate/export.json")
+async def analytics_persona_win_rate_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+) -> Response:
+    """JSON download of the canonical persona win-rate report.
+
+    This intentionally returns the same envelope as the dashboard endpoint,
+    including honesty counters and weekly trend data. Keeping the export on
+    the shared aggregation helper means scripts and the UI cannot drift apart
+    as the report evolves. Its own rate-limit scope keeps a file download from
+    consuming the interactive dashboard budget.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate JSON exports. Please slow down.",
+    )
+
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=False,
+    )
+
+    import json
+
+    filename = (
+        f"arena-persona-win-rate-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n",
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-win-rate/export.md")
 async def analytics_persona_win_rate_markdown(
     user: UserResponse = Depends(get_current_user_required),

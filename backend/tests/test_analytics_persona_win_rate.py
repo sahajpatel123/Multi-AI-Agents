@@ -488,6 +488,34 @@ async def test_empty_for_new_user(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_json_export_matches_canonical_report(app_client, make_user, db_session):
+    """The downloadable JSON keeps the dashboard envelope intact."""
+    user = make_user(email="pwr-json-export@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst", "philosopher"],
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-win-rate/export.json?window_days=7",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("application/json")
+    assert res.headers["content-disposition"].endswith(".json\"")
+    body = json.loads(res.text)
+    assert body["window_days"] == 7
+    assert body["include_fallback"] is False
+    assert body["scored_exchanges"] == 1
+    assert _row(body, "analyst")["wins"] == 1
+    assert _row(body, "philosopher")["appearances"] == 1
+
+
+@pytest.mark.asyncio
 async def test_scoped_to_caller(app_client, make_user, db_session):
     alice = make_user(email="pwr-alice@test.com", tier=UserTier.PRO)
     bob = make_user(email="pwr-bob@test.com", tier=UserTier.PRO)

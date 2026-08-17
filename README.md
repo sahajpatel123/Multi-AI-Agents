@@ -140,6 +140,7 @@ GET  /api/analytics/activity/export.csv   CSV export of the same activity timeli
 GET  /api/analytics/activity/export.json   Machine-readable JSON download of the same activity timeline
 GET  /api/analytics/activity/export.md   Human-readable Markdown report of the same activity timeline (summary + daily table)
 GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
+GET  /api/analytics/persona-win-rate/export.json   Download the canonical persona win-rate report as JSON
 GET  /api/analytics/persona-stats/:persona_id   Deep-dive on one persona (avg winning score, last activity, best category)
 GET  /api/analytics/persona-stats   All-personas summary (full 16-persona grid in one call, sorted strongest-first)
 GET  /api/analytics/persona-stats/:persona_id/by-category   Full per-category breakdown for one persona (one row per category with appearances/wins/win_rate)

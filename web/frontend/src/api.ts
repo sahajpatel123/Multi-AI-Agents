@@ -3560,6 +3560,31 @@ export async function exportAnalyticsPersonaWinRateCsv(
   };
 }
 
+export type AnalyticsPersonaWinRateJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaWinRateJson(
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaWinRateJsonExport> {
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate/export.json?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona win rate JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-persona-win-rates-${windowDays}d.json`,
+  };
+}
+
 export type AnalyticsPersonaWinRateMarkdownExport = {
   blob: Blob;
   filename: string;

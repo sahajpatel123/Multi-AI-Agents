@@ -116,6 +116,10 @@ const hoistedMocks = vi.hoisted(() => ({
     blob: new Blob(['persona_id,name'], { type: 'text/csv' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.csv',
   }),
+  exportAnalyticsPersonaWinRateJson: vi.fn().mockResolvedValue({
+    blob: new Blob(['{"window_days":30,"personas":[]}'], { type: 'application/json' }),
+    filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.json',
+  }),
   getCalibrationStats: vi.fn().mockResolvedValue({
     score: null,
     coverage: 0,
@@ -187,6 +191,7 @@ vi.mock('../api', () => ({
     filename: 'arena-activity-2026-08-05-to-2026-08-11.md',
   }),
   exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
+  exportAnalyticsPersonaWinRateJson: hoistedMocks.exportAnalyticsPersonaWinRateJson,
   exportAnalyticsPersonaWinRateMarkdown: vi.fn().mockResolvedValue({
     blob: new Blob(['# Arena — persona win rates'], { type: 'text/markdown' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
@@ -257,6 +262,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getAnalyticsActivity).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(downloadBlobFile).mockClear();
     (window as { __profileModalOpened?: boolean }).__profileModalOpened = false;
   });
@@ -346,6 +352,33 @@ describe('ProfileModal', () => {
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
+      );
+    });
+  });
+
+  it('uses the selected window and server filename for the win-rate JSON export', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /persona win-rate window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '7' } });
+    hoistedMocks.exportAnalyticsPersonaWinRateJson.mockResolvedValueOnce({
+      blob: new Blob(['{"window_days":7,"personas":[]}'], { type: 'application/json' }),
+      filename: 'arena-persona-win-rate-2026-08-11-to-2026-08-17.json',
+    });
+    const exportButton = await screen.findByRole('button', { name: /win rates json export/i });
+    exportButton.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(7);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-persona-win-rate-2026-08-11-to-2026-08-17.json',
       );
     });
   });
