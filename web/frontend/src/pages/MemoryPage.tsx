@@ -17,7 +17,7 @@ import { formatRelativePast } from '../lib/relativeTime';
 import { prefersReducedMotion } from '../lib/motion';
 import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadBlobFile } from '../lib/downloadTextFile';
+import { downloadBlobFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import { PERSONAS } from '../data/personas';
 
 const PER_PAGE = 20;
@@ -52,6 +52,7 @@ type DetailState =
   | { status: 'ready'; data: MemorySummary };
 
 type CopyStatus = 'copied' | 'failed';
+type DownloadStatus = 'downloaded' | 'failed';
 
 function personaName(personaId: string | null | undefined): string {
   if (!personaId) return '';
@@ -151,7 +152,13 @@ export function MemoryPage() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [copyingSummaryId, setCopyingSummaryId] = useState<number | null>(null);
   const [copyStatus, setCopyStatus] = useState<{ id: number; status: CopyStatus } | null>(null);
+  const [downloadingSummaryId, setDownloadingSummaryId] = useState<number | null>(null);
+  const [downloadStatus, setDownloadStatus] = useState<{
+    id: number;
+    status: DownloadStatus;
+  } | null>(null);
   const copyResetTimerRef = useRef<number | null>(null);
+  const downloadResetTimerRef = useRef<number | null>(null);
   /** True once an "older memories" page comes back empty — deletions can
    * shift the server's offset so an empty page means we've rendered every
    * remaining row. Without this the button would keep offering (and fetching)
@@ -360,6 +367,9 @@ export function MemoryPage() {
       if (copyResetTimerRef.current !== null) {
         window.clearTimeout(copyResetTimerRef.current);
       }
+      if (downloadResetTimerRef.current !== null) {
+        window.clearTimeout(downloadResetTimerRef.current);
+      }
     },
     [],
   );
@@ -389,6 +399,32 @@ export function MemoryPage() {
       }
     },
     [copyingSummaryId],
+  );
+
+  const downloadSummary = useCallback(
+    (summary: MemorySummary) => {
+      if (downloadingSummaryId !== null) return;
+      if (downloadResetTimerRef.current !== null) {
+        window.clearTimeout(downloadResetTimerRef.current);
+        downloadResetTimerRef.current = null;
+      }
+
+      setDownloadingSummaryId(summary.id);
+      setDownloadStatus(null);
+      const status: DownloadStatus = downloadMarkdownFile(
+        memoryMarkdown(summary),
+        `arena-memory-summary-${summary.id}`,
+      )
+        ? 'downloaded'
+        : 'failed';
+      setDownloadingSummaryId(null);
+      setDownloadStatus({ id: summary.id, status });
+      downloadResetTimerRef.current = window.setTimeout(() => {
+        setDownloadStatus((current) => (current?.id === summary.id ? null : current));
+        downloadResetTimerRef.current = null;
+      }, status === 'downloaded' ? 1800 : 2400);
+    },
+    [downloadingSummaryId],
   );
 
   const hasActiveFilters = Boolean(categoryFilter || personaFilter || fromDateFilter || toDateFilter);
@@ -801,6 +837,27 @@ export function MemoryPage() {
                                 : copyStatus?.id === item.id && copyStatus.status === 'copied'
                                   ? 'Copied'
                                   : 'Copy summary'}
+                            </MotionButton>
+                            <MotionButton
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              loading={downloadingSummaryId === item.id}
+                              disabled={downloadingSummaryId !== null}
+                              aria-label={
+                                downloadStatus?.id === item.id && downloadStatus.status === 'failed'
+                                  ? 'Download failed'
+                                  : downloadStatus?.id === item.id && downloadStatus.status === 'downloaded'
+                                    ? 'Summary downloaded'
+                                    : 'Download Markdown'
+                              }
+                              onClick={() => downloadSummary(detail.data)}
+                            >
+                              {downloadStatus?.id === item.id && downloadStatus.status === 'failed'
+                                ? 'Download failed'
+                                : downloadStatus?.id === item.id && downloadStatus.status === 'downloaded'
+                                  ? 'Downloaded'
+                                  : 'Download Markdown'}
                             </MotionButton>
                           </div>
                         </>

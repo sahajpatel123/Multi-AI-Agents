@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { MemoryPage } from './MemoryPage';
 import { ApiError, type MemorySummary, type MemorySummariesResponse } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 
 const baseSummary: MemorySummary = {
   id: 1,
@@ -94,6 +95,7 @@ vi.mock('../lib/downloadTextFile', async () => {
   return {
     ...actual,
     downloadBlobFile: vi.fn().mockReturnValue(true),
+    downloadMarkdownFile: vi.fn().mockReturnValue(true),
   };
 });
 
@@ -117,6 +119,7 @@ describe('MemoryPage', () => {
     deleteMemorySummaryMock.mockReset();
     exportMemorySummariesMock.mockReset();
     vi.mocked(copyToClipboard).mockReset().mockResolvedValue(true);
+    vi.mocked(downloadMarkdownFile).mockReset().mockReturnValue(true);
     tierState.canUseFeature.mockImplementation((feature: string) => feature === 'memory');
     listMemorySummariesMock.mockImplementation(
       async (params: { page?: number } = {}) =>
@@ -486,6 +489,37 @@ describe('MemoryPage', () => {
     );
     expect(copyToClipboard).toHaveBeenCalledWith(
       expect.stringContaining('- The Analyst — Indian IPOs: Cautiously optimistic'),
+    );
+  });
+
+  it('downloads an expanded summary as a dated Markdown file', async () => {
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read summary' }));
+    await screen.findByText(/Indian IPOs stay frothy/);
+    fireEvent.click(screen.getByRole('button', { name: 'Download Markdown' }));
+
+    expect(await screen.findByRole('button', { name: 'Summary downloaded' })).toHaveTextContent(
+      'Downloaded',
+    );
+    expect(downloadMarkdownFile).toHaveBeenCalledWith(
+      expect.stringContaining('# Arena memory — Decision'),
+      'arena-memory-summary-1',
+    );
+  });
+
+  it('reports when an individual Markdown download cannot start', async () => {
+    vi.mocked(downloadMarkdownFile).mockReturnValueOnce(false);
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read summary' }));
+    await screen.findByText(/Indian IPOs stay frothy/);
+    fireEvent.click(screen.getByRole('button', { name: 'Download Markdown' }));
+
+    expect(await screen.findByRole('button', { name: 'Download failed' })).toHaveTextContent(
+      'Download failed',
     );
   });
 
