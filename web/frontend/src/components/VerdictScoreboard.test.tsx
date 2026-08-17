@@ -110,6 +110,91 @@ describe('VerdictScoreboard', () => {
     expect(winnerRow).toHaveTextContent('Analyst');
   });
 
+  it('falls back to the payload winner id before the top score', () => {
+    render(
+      <VerdictScoreboard
+        winnerAgentId="agent_2"
+        entries={[
+          entry('agent_1', 'Analyst', 94),
+          entry('agent_2', 'Skeptic', 83),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: "Judge's scorecard" }));
+
+    const winnerRow = screen.getByText(', winner').closest('li');
+    expect(winnerRow).toHaveTextContent('Skeptic');
+    expect(winnerRow).toHaveClass('verdict-scoreboard-row--winner');
+    expect(winnerRow?.querySelector('.verdict-scoreboard-crown')).not.toBeNull();
+  });
+
+  it('keeps an explicit winner flag ahead of the payload winner id', () => {
+    render(
+      <VerdictScoreboard
+        winnerAgentId="agent_1"
+        entries={[
+          entry('agent_1', 'Analyst', 94),
+          entry('agent_2', 'Skeptic', 83, true),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: "Judge's scorecard" }));
+
+    const winnerRow = screen.getByText(', winner').closest('li');
+    expect(winnerRow).toHaveTextContent('Skeptic');
+  });
+
+  it('coerces string scores and clamps out-of-range values for label and bar', () => {
+    render(
+      <VerdictScoreboard
+        entries={[
+          entry('agent_1', 'Analyst', '88' as unknown as number),
+          entry('agent_2', 'Skeptic', 140),
+          entry('agent_3', 'Strategist', -3),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: "Judge's scorecard" }));
+
+    const fills = document.querySelectorAll('.verdict-scoreboard-fill');
+    expect(fills).toHaveLength(3);
+    expect(fills[0]).toHaveStyle({ width: '100%' });
+    expect(fills[1]).toHaveStyle({ width: '88%' });
+    expect(fills[2]).toHaveStyle({ width: '0%' });
+    expect(screen.getByText('100')).toHaveTextContent('100 out of 100');
+    expect(screen.getByText('88')).toHaveTextContent('88 out of 100');
+    expect(screen.getByText('0')).toHaveTextContent('0 out of 100');
+  });
+
+  it('drops takes whose score cannot be normalized instead of misranking them', () => {
+    render(
+      <VerdictScoreboard
+        entries={[
+          entry('agent_1', 'Analyst', Number.NaN),
+          entry('agent_2', 'Skeptic', 71),
+          entry('agent_3', 'Strategist', 64),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: "Judge's scorecard" }));
+
+    expect(screen.queryByText('Analyst')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('announces each take rank and score unit for screen readers', () => {
+    render(
+      <VerdictScoreboard
+        entries={[entry('agent_1', 'Analyst', 80, true), entry('agent_2', 'Skeptic', 40)]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: "Judge's scorecard" }));
+
+    expect(screen.getByText('1st place')).toBeInTheDocument();
+    expect(screen.getByText('2nd place')).toBeInTheDocument();
+    expect(screen.getByText('40')).toHaveTextContent('40 out of 100');
+  });
+
   it('sizes each score bar from the score and keeps aria-controls wired', () => {
     render(
       <VerdictScoreboard
@@ -127,6 +212,6 @@ describe('VerdictScoreboard', () => {
     expect(fills).toHaveLength(2);
     expect(fills?.[0]).toHaveStyle({ width: '80%' });
     expect(fills?.[1]).toHaveStyle({ width: '40%' });
-    expect(screen.getByLabelText('Analyst scored 80 out of 100')).toHaveTextContent('80');
+    expect(screen.getByText('80')).toHaveTextContent('80 out of 100');
   });
 });

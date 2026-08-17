@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never shows a hollow ranking
 
 ### Fixed
+- The judge's scorecard crowns the same take the rest of the app does: an
+  explicit winner flag first, then the round's winner id, then the top score,
+  so imported rounds without flags no longer crown a different mind than the
+  rationale below; raw scores are coerced and clamped to 0-100 so the label
+  and bar can never disagree, unusable scores are dropped instead of
+  misranked, and each row announces its place and score unit to screen readers
 - The judge's rationale now rewrites internal `agent_1`–`agent_4` slot ids to
   the persona names shown on the cards, and the disclosure keeps its body in
   the DOM (hidden while collapsed) with a per-instance id so `aria-controls`

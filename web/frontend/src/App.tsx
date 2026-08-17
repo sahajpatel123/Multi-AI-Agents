@@ -3477,6 +3477,7 @@ function App() {
               {isDone && currentResponses && (
                 <>
                   <VerdictScoreboard
+                    winnerAgentId={currentResponses.winner_agent_id}
                     entries={sortedResponses.map((scored) => {
                       const persona = resolveArenaPersona(scored.response.agent_id);
                       return {
