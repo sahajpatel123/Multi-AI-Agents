@@ -383,6 +383,43 @@ describe('MemoryPage', () => {
     });
   });
 
+  it('canonicalizes malformed shared filters before querying', async () => {
+    renderPage(
+      `/memory?search=${'x'.repeat(101)}&category=unknown&persona_id=unknown&from_date=2026-08-16&to_date=2026-08-01&sort=unsupported`,
+    );
+
+    expect(screen.getByRole('searchbox', { name: 'Search memory summaries' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Filter memory by category' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Filter memory by trusted mind' })).toHaveValue('');
+    expect(screen.getByLabelText('Filter memory from date')).toHaveValue('');
+    expect(screen.getByLabelText('Filter memory to date')).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Sort memory summaries' })).toHaveValue('newest');
+
+    expect(await screen.findByText('Indian IPO market')).toBeInTheDocument();
+    expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+      page: 1,
+      perPage: 20,
+      search: '',
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('memory-location')).toHaveTextContent('');
+    });
+  });
+
+  it('drops only an invalid shared date while keeping a valid date bound', async () => {
+    renderPage('/memory?from_date=2026-02-30&to_date=2026-03-01');
+
+    expect(await screen.findByText('Indian IPO market')).toBeInTheDocument();
+    expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+      page: 1,
+      perPage: 20,
+      search: '',
+      toDate: '2026-03-01',
+    });
+    expect(screen.getByLabelText('Filter memory from date')).toHaveValue('');
+    expect(screen.getByLabelText('Filter memory to date')).toHaveValue('2026-03-01');
+  });
+
   it('filters summaries by kind, trusted mind, and date range, then clears every filter', async () => {
     renderPage();
     await screen.findByText('Indian IPO market');

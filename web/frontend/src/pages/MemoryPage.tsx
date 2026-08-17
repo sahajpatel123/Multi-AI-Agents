@@ -34,6 +34,7 @@ const PER_PAGE = 20;
 // Arena prompt classification uses the four categories above it.
 const CATEGORY_OPTIONS = ['question', 'task', 'statement', 'debate', 'decision'] as const;
 const MEMORY_DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/;
+const MEMORY_SEARCH_MAX_LENGTH = 100;
 
 type MemoryUrlFilters = {
   search: string;
@@ -53,23 +54,71 @@ function isMemorySort(value: string | null): value is MemorySummarySort {
   );
 }
 
+function isMemoryDate(value: string): boolean {
+  if (!MEMORY_DATE_PARAM.test(value)) return false;
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= daysInMonth[month - 1];
+}
+
+function normalizeMemorySearch(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.includes('\u0000')) return '';
+  // The API rejects longer searches. Drop an overlong shared value instead of
+  // sending a link that can only render an error response.
+  return Array.from(trimmed).length <= MEMORY_SEARCH_MAX_LENGTH ? trimmed : '';
+}
+
 function readMemoryUrlFilters(searchParams: URLSearchParams): MemoryUrlFilters {
   const read = (key: string) => searchParams.get(key)?.trim() || '';
   const category = read('category');
   const personaId = read('persona_id');
-  const fromDate = read('from_date');
-  const toDate = read('to_date');
-  const sort = searchParams.get('sort');
+  let fromDate = read('from_date');
+  let toDate = read('to_date');
+  const sort = searchParams.get('sort')?.trim() || null;
+  if (!isMemoryDate(fromDate)) fromDate = '';
+  if (!isMemoryDate(toDate)) toDate = '';
+  // The date inputs prevent this interactively, but a shared URL can bypass
+  // those constraints. Ignore both ends rather than making the API reject
+  // the entire view with an invalid range.
+  if (fromDate && toDate && fromDate > toDate) {
+    fromDate = '';
+    toDate = '';
+  }
   return {
-    search: read('search'),
+    search: normalizeMemorySearch(read('search')),
     category: CATEGORY_OPTIONS.includes(category as (typeof CATEGORY_OPTIONS)[number])
       ? category
       : '',
     personaId: PERSONAS.some((persona) => persona.id === personaId) ? personaId : '',
-    fromDate: MEMORY_DATE_PARAM.test(fromDate) ? fromDate : '',
-    toDate: MEMORY_DATE_PARAM.test(toDate) ? toDate : '',
+    fromDate,
+    toDate,
     sort: isMemorySort(sort) ? sort : 'newest',
   };
+}
+
+function canonicalMemoryUrlParams(
+  searchParams: URLSearchParams,
+  filters: MemoryUrlFilters,
+): URLSearchParams {
+  const next = new URLSearchParams(searchParams);
+  const values: Array<[string, string]> = [
+    ['search', filters.search],
+    ['category', filters.category],
+    ['persona_id', filters.personaId],
+    ['from_date', filters.fromDate],
+    ['to_date', filters.toDate],
+    ['sort', filters.sort === 'newest' ? '' : filters.sort],
+  ];
+  values.forEach(([key, value]) => {
+    if (value) next.set(key, value);
+    else next.delete(key);
+  });
+  return next;
 }
 
 /** Persona display names for the `trusted_persona` field. The raw id stays the
@@ -306,7 +355,11 @@ export function MemoryPage() {
     setFromDateFilter((current) => (current === next.fromDate ? current : next.fromDate));
     setToDateFilter((current) => (current === next.toDate ? current : next.toDate));
     setSortOrder((current) => (current === next.sort ? current : next.sort));
-  }, [searchParams]);
+    const canonical = canonicalMemoryUrlParams(searchParams, next);
+    if (canonical.toString() !== searchParams.toString()) {
+      setSearchParams(canonical, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Debounce the raw search box into the query actually sent to the API.
   useEffect(() => {
@@ -833,6 +886,7 @@ export function MemoryPage() {
             type="search"
             className="memory-search__input"
             value={rawSearch}
+            maxLength={MEMORY_SEARCH_MAX_LENGTH}
             onChange={(event) => {
               const value = event.target.value;
               setRawSearch(value);
