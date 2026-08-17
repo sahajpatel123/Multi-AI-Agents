@@ -200,6 +200,60 @@ describe('MemoryPage', () => {
     });
   });
 
+  it('releases a pending older-page state when a filter refresh starts', async () => {
+    let resolvePageTwo: ((value: MemorySummariesResponse) => void) | undefined;
+    let resolveFilteredPage: ((value: MemorySummariesResponse) => void) | undefined;
+    listMemorySummariesMock.mockImplementation(
+      (params: { page?: number; category?: string } = {}) => {
+        if (params.page && params.page > 1) {
+          return new Promise<MemorySummariesResponse>((resolve) => {
+            resolvePageTwo = resolve;
+          });
+        }
+        if (params.category === 'decision') {
+          return new Promise<MemorySummariesResponse>((resolve) => {
+            resolveFilteredPage = resolve;
+          });
+        }
+        return Promise.resolve(listResponse([baseSummary], 2, 1));
+      },
+    );
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: /Load older memories/i }));
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 2,
+        perPage: 20,
+        search: '',
+      });
+    });
+    expect(screen.getByRole('button', { name: /Load older memories/i })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter memory by category' }), {
+      target: { value: 'decision' },
+    });
+    await waitFor(() => {
+      expect(listMemorySummariesMock).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 20,
+        search: '',
+        category: 'decision',
+      });
+    });
+    expect(screen.getByRole('button', { name: /Load older memories/i })).not.toHaveAttribute(
+      'aria-busy',
+    );
+
+    resolveFilteredPage?.(listResponse([baseSummary], 2, 1));
+    resolvePageTwo?.(listResponse([olderSummary], 2, 2));
+    await waitFor(() => expect(screen.queryByText('Quantum computing')).not.toBeInTheDocument());
+  });
+
   it('sends the debounced search query to the list endpoint', async () => {
     renderPage();
     await screen.findByText('Indian IPO market');

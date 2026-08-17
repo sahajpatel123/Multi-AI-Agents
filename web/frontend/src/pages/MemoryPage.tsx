@@ -117,6 +117,10 @@ export function MemoryPage() {
       } else {
         loadEpochRef.current += 1;
         setLoading(true);
+        // A fresh query supersedes any older-page request. Clear its busy
+        // state immediately so stale pagination cannot disable the new view
+        // while the filtered first page is still arriving.
+        setLoadingMore(false);
         setError(null);
         setLoadMoreError(null);
         setExhausted(false);

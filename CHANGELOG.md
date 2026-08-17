@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never shows a hollow ranking
 
 ### Fixed
+- Memory filter changes now release a pending older-page spinner immediately,
+  so a stale pagination request cannot make the refreshed view look disabled
 - The Memory page no longer swallows pagination failures: a failed
   "Load older memories" request now shows the error with a retry action
   while keeping the already-loaded summaries on screen, and the page stops
