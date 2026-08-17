@@ -13,6 +13,7 @@ from sqlalchemy import Text, cast, or_
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
+from arena.core.datetime_utils import utcnow_naive
 from arena.core.input_validation import sanitize_model_text, sanitize_model_optional_text
 from arena.core.memory import get_memory_manager
 from arena.core.preferences import infer_preferences_from_session
@@ -508,6 +509,122 @@ async def export_summaries_json(
     return Response(
         content=json.dumps(items, indent=2, default=str),
         media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
+
+
+@memory_router.get("/summaries/export.md")
+async def export_summaries_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
+    persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
+    search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+):
+    """Export all matching session summaries as a portable Markdown document."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="memory_summaries_markdown",
+        limit=30,
+        window_seconds=60,
+        message="Too many Markdown exports. Please wait.",
+    )
+
+    if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Memory export requires Plus or Pro."},
+        )
+
+    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
+    if category:
+        q = q.filter(SessionSummary.dominant_category == category)
+    if persona_id:
+        q = q.filter(SessionSummary.trusted_persona == persona_id)
+    q = _apply_summary_search(q, search)
+    summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
+
+    # Keep user-controlled metadata on one Markdown line. Summary bodies are
+    # intentionally preserved as Markdown so the export remains useful in
+    # notes apps and Git repositories.
+    def _inline(value) -> str:
+        return str(value or "").replace("`", "\\`").replace("\r", " ").replace("\n", " ").strip()
+
+    def _date(value) -> str:
+        return value.strftime("%Y-%m-%d") if value else "Unknown date"
+
+    lines = [
+        "# Arena Memory",
+        "",
+        f"Exported: {utcnow_naive().strftime('%Y-%m-%d')}",
+        f"Summaries: {len(summaries)}",
+    ]
+    filters = []
+    if search:
+        filters.append(f"Search: {_inline(search)}")
+    if category:
+        filters.append(f"Kind: {_inline(category)}")
+    if persona_id:
+        filters.append(f"Trusted mind: {_inline(persona_id)}")
+    if filters:
+        lines.extend(["", "Filters: " + " · ".join(filters)])
+
+    for row in summaries:
+        lines.extend(
+            [
+                "",
+                "---",
+                "",
+                f"## {_inline(row.dominant_category or 'Session')} · {_date(row.compressed_at)}",
+                "",
+                f"- Session ID: `{_inline(row.session_id)}`",
+                f"- Exchanges: {int(row.exchange_count or 0)}",
+            ]
+        )
+        if row.preferred_depth:
+            lines.append(f"- Depth: {_inline(row.preferred_depth)}")
+        if row.trusted_persona:
+            lines.append(f"- Trusted mind: {_inline(row.trusted_persona)}")
+
+        topics = _decode_json_column(row.main_topics, [])
+        if isinstance(topics, list) and topics:
+            lines.extend(["", "### Topics", ""])
+            lines.extend(f"- {_inline(topic)}" for topic in topics if _inline(topic))
+
+        lines.extend(["", "### Summary", "", row.session_summary or "_No summary text was saved._"])
+
+        positions = _decode_json_column(row.key_positions_taken, [])
+        if isinstance(positions, list) and positions:
+            position_lines = []
+            for position in positions:
+                if not isinstance(position, dict):
+                    continue
+                parts = []
+                if position.get("persona_id"):
+                    parts.append(_inline(position["persona_id"]))
+                if position.get("topic"):
+                    parts.append(_inline(position["topic"]))
+                if position.get("stance"):
+                    parts.append(_inline(position["stance"]))
+                if position.get("confidence") is not None:
+                    parts.append(f"confidence {position['confidence']}%")
+                if parts:
+                    position_lines.append("- " + " — ".join(parts))
+            if position_lines:
+                lines.extend(["", "### Positions", "", *position_lines])
+
+    from fastapi.responses import Response
+    from arena.core.http_headers import content_disposition_attachment
+
+    filename = f"arena-memory-summaries-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.md"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content="\n".join(lines).rstrip() + "\n",
+        media_type="text/markdown; charset=utf-8",
         headers=headers,
     )
 

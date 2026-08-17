@@ -425,7 +425,7 @@ export async function deleteMemorySummary(summaryId: number): Promise<void> {
   }
 }
 
-export type MemorySummaryExportFormat = 'csv' | 'json';
+export type MemorySummaryExportFormat = 'csv' | 'json' | 'md';
 
 export type MemorySummaryExport = {
   blob: Blob;

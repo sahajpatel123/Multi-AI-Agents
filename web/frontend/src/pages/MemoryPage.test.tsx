@@ -385,6 +385,19 @@ describe('MemoryPage', () => {
     });
   });
 
+  it('offers Markdown as a portable memory export', async () => {
+    renderPage();
+    await screen.findByText('Indian IPO market');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Markdown' }));
+
+    await waitFor(() => {
+      expect(exportMemorySummariesMock).toHaveBeenCalledWith('md', {
+        search: '',
+      });
+    });
+  });
+
   it('reports an export failure without losing the memory list', async () => {
     exportMemorySummariesMock.mockRejectedValueOnce(new ApiError('export boom', 500));
     renderPage();

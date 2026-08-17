@@ -47,6 +47,25 @@ describe('exportMemorySummaries', () => {
     );
   });
 
+  it('supports Markdown exports with the server filename', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['# Arena Memory\n'], { type: 'text/markdown' }), {
+        status: 200,
+        headers: {
+          'Content-Disposition': 'attachment; filename="arena-memory-summaries-1.md"',
+        },
+      }),
+    );
+
+    const result = await exportMemorySummaries('md', { category: 'decision' });
+
+    expect(result.filename).toBe('arena-memory-summaries-1.md');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/memory/summaries/export.md?category=decision',
+      {},
+    );
+  });
+
   it('falls back to a format-specific filename when the header is missing', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(new Blob(['[]'], { type: 'application/json' }), { status: 200 }),

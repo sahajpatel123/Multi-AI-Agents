@@ -88,7 +88,7 @@ export function MemoryPage() {
   const [deleteBusyId, setDeleteBusyId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | 'md' | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   /** True once an "older memories" page comes back empty — deletions can
    * shift the server's offset so an empty page means we've rendered every
@@ -231,7 +231,7 @@ export function MemoryPage() {
   );
 
   const exportMemory = useCallback(
-    async (format: 'csv' | 'json') => {
+    async (format: 'csv' | 'json' | 'md') => {
       if (exportingFormat) return;
       setExportingFormat(format);
       setExportError(null);
@@ -414,6 +414,16 @@ export function MemoryPage() {
                 onClick={() => void exportMemory('json')}
               >
                 JSON
+              </MotionButton>
+              <MotionButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                loading={exportingFormat === 'md'}
+                disabled={Boolean(exportingFormat)}
+                onClick={() => void exportMemory('md')}
+              >
+                Markdown
               </MotionButton>
             </div>
           </div>

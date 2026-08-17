@@ -222,3 +222,41 @@ async def test_memory_summaries_json_403_for_guest(app_client, make_user, db_ses
     )
     # Guest users should get 403 (Forbidden) - memory requires Plus/Pro
     assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_memory_summaries_markdown_export_includes_filters_and_positions(
+    app_client, make_user, db_session
+):
+    """Markdown export is portable while preserving the active memory view."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    summary = _seed_summary(
+        db_session,
+        user.id,
+        "sess-markdown",
+        summary_text="Compared two paths for the launch.",
+        category="decision",
+    )
+    summary.key_positions_taken = [
+        {
+            "persona_id": "analyst",
+            "topic": "Launch timing",
+            "stance": "Wait for evidence",
+            "confidence": 84,
+        }
+    ]
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries/export.md?category=decision&search=launch",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert "text/markdown" in res.headers["content-type"]
+    assert ".md" in res.headers["content-disposition"]
+    assert "# Arena Memory" in res.text
+    assert "Filters: Search: launch · Kind: decision" in res.text
+    assert "Compared two paths for the launch." in res.text
+    assert "Launch timing — Wait for evidence — confidence 84%" in res.text
