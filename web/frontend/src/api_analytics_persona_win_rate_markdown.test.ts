@@ -40,6 +40,18 @@ describe('Analytics persona win-rate Markdown export frontend API helper', () =>
     );
   });
 
+  it('includes fallback scorings only when explicitly requested', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['# Arena — persona win rates']), { status: 200 }),
+    );
+
+    await exportAnalyticsPersonaWinRateMarkdown(30, 1, true);
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/analytics/persona-win-rate/export.md?window_days=30&min_appearances=1&include_fallback=true',
+      {},
+    );
+  });
+
   it('falls back to a window-based filename when the header is missing', async () => {
     const mockBlob = new Blob(['# Arena — persona win rates'], {
       type: 'text/markdown',

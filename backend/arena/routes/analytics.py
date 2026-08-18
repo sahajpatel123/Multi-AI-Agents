@@ -1388,6 +1388,13 @@ async def analytics_persona_win_rate_csv(
         le=200,
         description="Drop personas that appeared on fewer than N panels.",
     ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
 ) -> Response:
     """CSV export of the persona win-rate table.
 
@@ -1420,7 +1427,7 @@ async def analytics_persona_win_rate_csv(
         user.id,
         window_days=window_days,
         min_appearances=min_appearances,
-        include_fallback=False,
+        include_fallback=include_fallback,
     )
 
     import csv
@@ -1486,6 +1493,13 @@ async def analytics_persona_win_rate_json(
         le=200,
         description="Drop personas that appeared on fewer than N panels.",
     ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
 ) -> Response:
     """JSON download of the canonical persona win-rate report.
 
@@ -1508,7 +1522,7 @@ async def analytics_persona_win_rate_json(
         user.id,
         window_days=window_days,
         min_appearances=min_appearances,
-        include_fallback=False,
+        include_fallback=include_fallback,
     )
 
     import json
@@ -1544,6 +1558,13 @@ async def analytics_persona_win_rate_markdown(
         le=200,
         description="Drop personas that appeared on fewer than N panels.",
     ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
 ) -> Response:
     """Markdown export of the persona win-rate report.
 
@@ -1568,7 +1589,7 @@ async def analytics_persona_win_rate_markdown(
         user.id,
         window_days=window_days,
         min_appearances=min_appearances,
-        include_fallback=False,
+        include_fallback=include_fallback,
     )
 
     best_row = None

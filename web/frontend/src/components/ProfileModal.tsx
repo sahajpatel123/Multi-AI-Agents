@@ -1879,6 +1879,7 @@ export function ProfileModal() {
                         const { blob, filename } = await exportAnalyticsPersonaWinRateCsv(
                           winRateWindowDays,
                           winRateMinAppearances,
+                          winRateIncludeFallback,
                         );
                         if (!downloadBlobFile(blob, filename)) {
                           setExportError('Could not download persona win-rate CSV — try again.');
@@ -1918,6 +1919,7 @@ export function ProfileModal() {
                         const { blob, filename } = await exportAnalyticsPersonaWinRateMarkdown(
                           winRateWindowDays,
                           winRateMinAppearances,
+                          winRateIncludeFallback,
                         );
                         if (!downloadBlobFile(blob, filename)) {
                           setExportError('Could not download persona win-rate Markdown — try again.');
@@ -1957,6 +1959,7 @@ export function ProfileModal() {
                         const { blob, filename } = await exportAnalyticsPersonaWinRateJson(
                           winRateWindowDays,
                           winRateMinAppearances,
+                          winRateIncludeFallback,
                         );
                         if (!downloadBlobFile(blob, filename)) {
                           setExportError('Could not download persona win-rate JSON — try again.');

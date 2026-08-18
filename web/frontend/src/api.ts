@@ -3610,22 +3610,28 @@ export type AnalyticsPersonaWinRateCsvExport = {
   filename: string;
 };
 
-function personaWinRateExportQuery(windowDays: number, minAppearances: number): string {
+function personaWinRateExportQuery(
+  windowDays: number,
+  minAppearances: number,
+  includeFallback: boolean = false,
+): string {
   if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
     throw new RangeError('windowDays must be an integer between 1 and 365');
   }
   if (!Number.isInteger(minAppearances) || minAppearances < 1 || minAppearances > 200) {
     throw new RangeError('minAppearances must be an integer between 1 and 200');
   }
-  return `window_days=${encodeURIComponent(String(windowDays))}&min_appearances=${encodeURIComponent(String(minAppearances))}`;
+  const fallbackQuery = includeFallback ? '&include_fallback=true' : '';
+  return `window_days=${encodeURIComponent(String(windowDays))}&min_appearances=${encodeURIComponent(String(minAppearances))}${fallbackQuery}`;
 }
 
 export async function exportAnalyticsPersonaWinRateCsv(
   windowDays: number = 30,
   minAppearances: number = 1,
+  includeFallback: boolean = false,
 ): Promise<AnalyticsPersonaWinRateCsvExport> {
   const response = await apiFetch(
-    `/api/analytics/persona-win-rate/export.csv?${personaWinRateExportQuery(windowDays, minAppearances)}`,
+    `/api/analytics/persona-win-rate/export.csv?${personaWinRateExportQuery(windowDays, minAppearances, includeFallback)}`,
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
@@ -3645,9 +3651,10 @@ export type AnalyticsPersonaWinRateJsonExport = {
 export async function exportAnalyticsPersonaWinRateJson(
   windowDays: number = 30,
   minAppearances: number = 1,
+  includeFallback: boolean = false,
 ): Promise<AnalyticsPersonaWinRateJsonExport> {
   const response = await apiFetch(
-    `/api/analytics/persona-win-rate/export.json?${personaWinRateExportQuery(windowDays, minAppearances)}`,
+    `/api/analytics/persona-win-rate/export.json?${personaWinRateExportQuery(windowDays, minAppearances, includeFallback)}`,
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
@@ -3671,9 +3678,10 @@ export type AnalyticsPersonaWinRateMarkdownExport = {
 export async function exportAnalyticsPersonaWinRateMarkdown(
   windowDays: number = 30,
   minAppearances: number = 1,
+  includeFallback: boolean = false,
 ): Promise<AnalyticsPersonaWinRateMarkdownExport> {
   const response = await apiFetch(
-    `/api/analytics/persona-win-rate/export.md?${personaWinRateExportQuery(windowDays, minAppearances)}`,
+    `/api/analytics/persona-win-rate/export.md?${personaWinRateExportQuery(windowDays, minAppearances, includeFallback)}`,
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);

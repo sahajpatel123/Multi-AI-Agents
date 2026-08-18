@@ -555,6 +555,57 @@ async def test_json_export_matches_canonical_report(app_client, make_user, db_se
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "export_path",
+    [
+        "/api/analytics/persona-win-rate/export.csv",
+        "/api/analytics/persona-win-rate/export.json",
+        "/api/analytics/persona-win-rate/export.md",
+    ],
+)
+async def test_all_exports_honor_fallback_opt_in(
+    app_client, make_user, db_session, export_path
+):
+    """Downloads must match the fallback mode shown in the dashboard."""
+    user = make_user(
+        email=f"pwr-fallback-export-{export_path[-3:]}@test.com",
+        tier=UserTier.PRO,
+    )
+    panel = ["analyst", "philosopher"]
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=panel,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        fallback_used=True,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        f"{export_path}?include_fallback=true",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    if export_path.endswith(".json"):
+        body = json.loads(res.text)
+        assert body["include_fallback"] is True
+        assert body["scored_exchanges"] == 2
+        assert _row(body, "analyst")["appearances"] == 2
+    elif export_path.endswith(".csv"):
+        assert "analyst,The Analyst,2,1," in res.text
+    else:
+        assert "**Scored exchanges:** 2" in res.text
+        assert "| The Analyst | 2 | 1 |" in res.text
+
+
+@pytest.mark.asyncio
 async def test_scoped_to_caller(app_client, make_user, db_session):
     alice = make_user(email="pwr-alice@test.com", tier=UserTier.PRO)
     bob = make_user(email="pwr-bob@test.com", tier=UserTier.PRO)

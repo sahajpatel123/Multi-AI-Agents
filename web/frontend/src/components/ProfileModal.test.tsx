@@ -385,7 +385,7 @@ describe('ProfileModal', () => {
     exportButton.click();
 
     await waitFor(() => {
-      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(7, 1);
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(7, 1, false);
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-persona-win-rate-2026-08-11-to-2026-08-17.json',
@@ -757,7 +757,7 @@ describe('ProfileModal', () => {
     const exportButton = await screen.findByRole('button', { name: /win rates json export/i });
     exportButton.click();
     await waitFor(() => {
-      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(30, 5);
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(30, 5, false);
     });
   });
 
@@ -789,6 +789,12 @@ describe('ProfileModal', () => {
         'Includes 2 fallback scorings; those winners are provisional because the panel was not judged.',
       ),
     ).toBeInTheDocument();
+
+    const exportButton = await screen.findByRole('button', { name: /win rates json export/i });
+    exportButton.click();
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(30, 1, true);
+    });
   });
 
   it('uses the selected window and server filename for the win-rate CSV export', async () => {
@@ -810,7 +816,7 @@ describe('ProfileModal', () => {
     exportButton.click();
 
     await waitFor(() => {
-      expect(hoistedMocks.exportAnalyticsPersonaWinRateCsv).toHaveBeenCalledWith(7, 1);
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateCsv).toHaveBeenCalledWith(7, 1, false);
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-persona-win-rate-2026-08-11-to-2026-08-17.csv',
