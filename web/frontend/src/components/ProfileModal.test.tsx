@@ -505,6 +505,29 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('surfaces a blocked answer feedback JSON download and releases the export lock', async () => {
+    hoistedMocks.getUserAnswerFeedbackStats.mockResolvedValueOnce({
+      total: 1,
+      correct_pct: 100,
+      partial_pct: 0,
+      wrong_pct: 0,
+    });
+    vi.mocked(downloadBlobFile).mockReturnValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /answer feedback json export/i });
+    button.click();
+
+    expect(
+      await screen.findByText('Could not download answer feedback JSON — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
   it('views and paginates recent calibration history', async () => {
     hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
       total_ratings: 6,
