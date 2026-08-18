@@ -10,9 +10,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from arena.core import agent_metrics
 from arena.core.agent_metrics import compute_user_feedback_summary
 from arena.core.auth import create_access_token
 from arena.db_models import AgentTask, AnswerFeedback, UserTier
+from arena.routes import agent as agent_routes
 
 
 def _make_feedback(*, user_id, suffix, verdict, days_ago=0):
@@ -175,6 +177,29 @@ async def test_feedback_summary_csv_export_preserves_the_selected_window(
     assert rows[-1]["feedback_count"] == "1"
     assert rows[-2]["feedback_count"] == "1"
     assert all(row["date"] for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_csv_filename_matches_window_end_at_utc_midnight(
+    app_client, make_user, monkeypatch
+):
+    user = make_user(email="fb-sum-csv-midnight@test.com", tier=UserTier.PRO)
+    aggregation_now = datetime(2026, 8, 18, 23, 59, 59)
+    next_day = datetime(2026, 8, 19, 0, 0, 1)
+    monkeypatch.setattr(agent_metrics, "utcnow_naive", lambda: aggregation_now)
+    monkeypatch.setattr(agent_routes, "utcnow_naive", lambda: next_day)
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.csv?window_days=7",
+        headers=headers,
+    )
+
+    assert res.status_code == 200
+    assert (
+        'filename="arena-feedback-activity-'
+        f'{user.id}-7d-20260818.csv"'
+    ) in res.headers["content-disposition"]
 
 
 @pytest.mark.asyncio

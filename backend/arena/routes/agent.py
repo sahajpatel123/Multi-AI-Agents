@@ -4039,10 +4039,11 @@ async def export_feedback_summary_csv(
     for point in payload["daily_trend"]:
         writer.writerow([point["date"], point["count"]])
 
-    filename = (
-        f"arena-feedback-activity-{user.id}-{window_days}d-"
-        f"{utcnow_naive().strftime('%Y%m%d')}.csv"
-    )
+    # Derive the date in the filename from the exported payload rather than
+    # taking a second wall-clock reading. If a request crosses UTC midnight,
+    # the filename must still describe the final day present in the CSV.
+    window_end = payload["daily_trend"][-1]["date"].replace("-", "")
+    filename = f"arena-feedback-activity-{user.id}-{window_days}d-{window_end}.csv"
     return Response(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
