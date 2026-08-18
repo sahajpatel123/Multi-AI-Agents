@@ -95,6 +95,9 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['# Arena — activity timeline'], { type: 'text/markdown' }),
     filename: 'arena-activity-2026-08-05-to-2026-08-11.md',
   }),
+  exportAnalyticsSummaryCsv: vi.fn().mockResolvedValue(
+    new Blob(['metric,value\ntotal_prompts,42\n'], { type: 'text/csv' }),
+  ),
   exportAnalyticsSummaryJson: vi.fn().mockResolvedValue({
     blob: new Blob(['{"window_days":30,"total_prompts":42}'], { type: 'application/json' }),
     filename: 'arena-summary-2026-07-13-to-2026-08-11.json',
@@ -291,6 +294,7 @@ vi.mock('../api', () => ({
   exportAnalyticsActivityCsv: hoistedMocks.exportAnalyticsActivityCsv,
   exportAnalyticsActivityJson: hoistedMocks.exportAnalyticsActivityJson,
   exportAnalyticsActivityMarkdown: hoistedMocks.exportAnalyticsActivityMarkdown,
+  exportAnalyticsSummaryCsv: hoistedMocks.exportAnalyticsSummaryCsv,
   exportAnalyticsSummaryJson: hoistedMocks.exportAnalyticsSummaryJson,
   exportAnalyticsSummaryMarkdown: hoistedMocks.exportAnalyticsSummaryMarkdown,
   exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
@@ -372,6 +376,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsActivityCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityMarkdown).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsSummaryCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsSummaryJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsSummaryMarkdown).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
@@ -458,6 +463,38 @@ describe('ProfileModal', () => {
         expect.any(Blob),
         'arena-summary-2026-07-13-to-2026-08-11.md',
       );
+    });
+  });
+
+  it('uses the selected window for every analytics summary export', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /analytics summary export window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '90' } });
+
+    fireEvent.click(await screen.findByRole('button', { name: /^📊 summary export$/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsSummaryCsv).toHaveBeenCalledWith(90);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-analytics-summary-90d.csv',
+      );
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /^📊 summary json export$/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsSummaryJson).toHaveBeenCalledWith(90);
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /^📊 summary markdown export$/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsSummaryMarkdown).toHaveBeenCalledWith(90);
     });
   });
 
