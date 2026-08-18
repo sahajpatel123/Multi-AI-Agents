@@ -577,8 +577,11 @@ describe('ProfileModal', () => {
     const filter = await screen.findByRole('combobox', {
       name: /answer feedback export filter/i,
     });
+    expect(filter).toHaveStyle({ color: '#4A3728' });
     fireEvent.change(filter, { target: { value: 'partial' } });
-    screen.getByRole('button', { name: /answer feedback csv export/i }).click();
+    const exportButton = screen.getByRole('button', { name: /answer feedback csv export/i });
+    expect(exportButton).toHaveStyle({ color: '#4A3728' });
+    exportButton.click();
 
     await waitFor(() => {
       expect(hoistedMocks.exportAgentFeedbackCsv).toHaveBeenCalledWith('partial');
