@@ -438,12 +438,24 @@ function FeedbackActivityTrend({
   const activeDays = trend.filter((point) => point.count > 0).length;
   const windowTotal = trend.reduce((total, point) => total + point.count, 0);
   const peakCount = Math.max(...trend.map((point) => point.count), 0);
+  const windowVerdicts = trend.reduce(
+    (totals, point) => ({
+      correct: totals.correct + point.verdicts.correct,
+      partial: totals.partial + point.verdicts.partial,
+      wrong: totals.wrong + point.verdicts.wrong,
+    }),
+    { correct: 0, partial: 0, wrong: 0 },
+  );
+  const knownVerdictTotal =
+    windowVerdicts.correct + windowVerdicts.partial + windowVerdicts.wrong;
+  const otherTotal = Math.max(windowTotal - knownVerdictTotal, 0);
   const slotWidth = width / Math.max(trend.length, 1);
   const barWidth = Math.max(1, slotWidth - (trend.length >= 30 ? 0.8 : 2));
   const ariaLabel =
     `Feedback activity over the last ${summary.window_days} days: ` +
     `${windowTotal} rating${windowTotal === 1 ? '' : 's'} across ${activeDays} active day${activeDays === 1 ? '' : 's'}; ` +
-    `peak ${peakCount} in one day.`;
+    `peak ${peakCount} in one day; ${windowVerdicts.correct} correct, ` +
+    `${windowVerdicts.partial} partial, ${windowVerdicts.wrong} wrong.`;
 
   return (
     <div>
@@ -462,20 +474,84 @@ function FeedbackActivityTrend({
           const barHeight = point.count > 0
             ? Math.max(3, (point.count / maxCount) * (height - 10))
             : 1;
+          const pointVerdictTotal =
+            point.verdicts.correct + point.verdicts.partial + point.verdicts.wrong;
+          const segments = [
+            { key: 'correct', count: point.verdicts.correct, color: '#639922' },
+            { key: 'partial', count: point.verdicts.partial, color: '#BA7517' },
+            { key: 'wrong', count: point.verdicts.wrong, color: '#C0392B' },
+            { key: 'other', count: Math.max(point.count - pointVerdictTotal, 0), color: '#A0A39A' },
+          ].filter((segment) => segment.count > 0);
+          let renderedHeight = 0;
           return (
-            <rect
-              key={point.date}
-              x={index * slotWidth + (slotWidth - barWidth) / 2}
-              y={height - 3 - barHeight}
-              width={barWidth}
-              height={barHeight}
-              rx={Math.min(1.5, barWidth / 2)}
-              fill={index === trend.length - 1 ? '#F0B84E' : '#8C7355'}
-              opacity={point.count > 0 ? 0.9 : 0.28}
-            />
+            <g key={point.date}>
+              <title>
+                {`${point.date}: ${point.count} rating${point.count === 1 ? '' : 's'}; ` +
+                  `${point.verdicts.correct} correct, ${point.verdicts.partial} partial, ` +
+                  `${point.verdicts.wrong} wrong.`}
+              </title>
+              <rect
+                x={index * slotWidth + (slotWidth - barWidth) / 2}
+                y={height - 3 - barHeight}
+                width={barWidth}
+                height={barHeight}
+                rx={Math.min(1.5, barWidth / 2)}
+                fill="#8C7355"
+                opacity={point.count > 0 ? 0.12 : 0.28}
+              />
+              {segments.map((segment) => {
+                const segmentHeight = (segment.count / point.count) * barHeight;
+                const segmentY = height - 3 - renderedHeight - segmentHeight;
+                renderedHeight += segmentHeight;
+                return (
+                  <rect
+                    key={`${point.date}-${segment.key}`}
+                    x={index * slotWidth + (slotWidth - barWidth) / 2}
+                    y={segmentY}
+                    width={barWidth}
+                    height={segmentHeight}
+                    rx={Math.min(1.5, barWidth / 2)}
+                    fill={segment.color}
+                    opacity={index === trend.length - 1 ? 1 : 0.9}
+                  />
+                );
+              })}
+            </g>
           );
         })}
       </svg>
+      <div
+        role="list"
+        aria-label="Feedback activity verdict breakdown"
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '5px 10px',
+          marginTop: 7,
+          color: '#A0A39A',
+          fontSize: 10,
+        }}
+      >
+        {[
+          { label: 'Correct', count: windowVerdicts.correct, color: '#639922' },
+          { label: 'Partial', count: windowVerdicts.partial, color: '#BA7517' },
+          { label: 'Wrong', count: windowVerdicts.wrong, color: '#C0392B' },
+          ...(otherTotal > 0 ? [{ label: 'Other', count: otherTotal, color: '#A0A39A' }] : []),
+        ].map((item) => (
+          <span
+            key={item.label}
+            role="listitem"
+            aria-label={`${item.label}: ${item.count}`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <span
+              aria-hidden="true"
+              style={{ width: 6, height: 6, borderRadius: 2, background: item.color }}
+            />
+            {item.label} {item.count}
+          </span>
+        ))}
+      </div>
       <div
         style={{
           display: 'flex',

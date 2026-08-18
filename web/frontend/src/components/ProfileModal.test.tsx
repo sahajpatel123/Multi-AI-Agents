@@ -142,6 +142,11 @@ const hoistedMocks = vi.hoisted(() => ({
     daily_trend: Array.from({ length: 30 }, (_, index) => ({
       date: `2026-08-${String(index + 1).padStart(2, '0')}`,
       count: index === 29 ? 2 : index === 28 ? 1 : 0,
+      verdicts: {
+        correct: index === 29 ? 2 : 0,
+        partial: index === 28 ? 1 : 0,
+        wrong: 0,
+      },
     })),
   }),
   getUserAnswerFeedbackStats: vi.fn().mockResolvedValue({
@@ -658,6 +663,8 @@ describe('ProfileModal', () => {
     expect(
       await screen.findByRole('img', { name: /feedback activity over the last 30 days/i }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: /feedback activity verdict breakdown/i })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: 'Correct: 2' })).toBeInTheDocument();
     const windowSelect = screen.getByRole('combobox', { name: /feedback activity window/i });
     fireEvent.change(windowSelect, { target: { value: '7' } });
 

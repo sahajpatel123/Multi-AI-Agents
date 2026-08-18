@@ -240,6 +240,9 @@ def test_summary_daily_trend_buckets_into_correct_day() -> None:
     trend_by_date = {d["date"]: d["count"] for d in out["daily_trend"]}
     assert trend_by_date["2026-07-18"] == 2
     assert trend_by_date["2026-07-20"] == 1
+    trend_verdicts = {d["date"]: d["verdicts"] for d in out["daily_trend"]}
+    assert trend_verdicts["2026-07-18"] == {"correct": 2, "partial": 0, "wrong": 0}
+    assert trend_verdicts["2026-07-20"] == {"correct": 0, "partial": 0, "wrong": 1}
     # All other days in the window have 0
     assert all(v == 0 for k, v in trend_by_date.items() if k not in {"2026-07-18", "2026-07-20"})
 
@@ -325,6 +328,8 @@ def test_summary_daily_trend_entry_shape() -> None:
         db=_FakeSession(rows), user=_user(), window_days=30
     )
     for entry in out["daily_trend"]:
-        assert set(entry.keys()) == {"date", "count"}
+        assert set(entry.keys()) == {"date", "count", "verdicts"}
         assert isinstance(entry["date"], str)
         assert isinstance(entry["count"], int)
+        assert set(entry["verdicts"].keys()) == {"correct", "partial", "wrong"}
+        assert all(isinstance(value, int) for value in entry["verdicts"].values())

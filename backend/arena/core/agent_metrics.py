@@ -151,7 +151,9 @@ def compute_user_feedback_summary(
     is stored in a separate ``answer_feedbacks`` table (one row per
     verdict, no per-task dedup). Lifetime totals are split by verdict;
     the daily trend is bucketed by UTC day like the agent metrics
-    payload so the dashboard can render one consistent heatmap.
+    payload so the dashboard can render one consistent heatmap. Each day
+    also carries a canonical correct/partial/wrong mix for stacked charts;
+    the legacy ``count`` remains the authoritative total for that day.
     """
     rows = (
         db.query(AnswerFeedback)
@@ -164,6 +166,7 @@ def compute_user_feedback_summary(
     now = utcnow_naive()
     cutoff = _utc_day_floor(now) - timedelta(days=max(0, window_days - 1))
     counts_by_day: dict[Any, int] = defaultdict(int)
+    verdicts_by_day: dict[Any, Counter[str]] = defaultdict(Counter)
     for row in rows:
         if row.created_at is None:
             continue
@@ -172,13 +175,25 @@ def compute_user_feedback_summary(
             ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
         if ts < cutoff:
             continue
-        counts_by_day[_utc_day_floor(ts).date()] += 1
+        day = _utc_day_floor(ts).date()
+        counts_by_day[day] += 1
+        if row.verdict in {"correct", "partial", "wrong"}:
+            verdicts_by_day[day][row.verdict] += 1
 
     daily_trend: list[dict[str, Any]] = []
     for offset in range(window_days):
         day = cutoff.date() + timedelta(days=offset)
+        day_verdicts = verdicts_by_day.get(day, Counter())
         daily_trend.append(
-            {"date": day.isoformat(), "count": counts_by_day.get(day, 0)}
+            {
+                "date": day.isoformat(),
+                "count": counts_by_day.get(day, 0),
+                "verdicts": {
+                    "correct": int(day_verdicts.get("correct", 0)),
+                    "partial": int(day_verdicts.get("partial", 0)),
+                    "wrong": int(day_verdicts.get("wrong", 0)),
+                },
+            }
         )
 
     return {

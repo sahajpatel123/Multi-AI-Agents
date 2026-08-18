@@ -175,7 +175,12 @@ async def test_feedback_summary_csv_export_preserves_the_selected_window(
     assert len(rows) == 7
     assert rows[-1]["date"] == utcnow_naive().date().isoformat()
     assert rows[-1]["feedback_count"] == "1"
+    assert rows[-1]["correct_count"] == "1"
+    assert rows[-1]["partial_count"] == "0"
+    assert rows[-1]["wrong_count"] == "0"
     assert rows[-2]["feedback_count"] == "1"
+    assert rows[-2]["correct_count"] == "0"
+    assert rows[-2]["wrong_count"] == "1"
     assert all(row["date"] for row in rows)
 
 
@@ -224,6 +229,11 @@ async def test_feedback_summary_json_export_matches_summary_contract(
     assert body["verdicts"] == {"correct": 1, "partial": 0, "wrong": 0}
     assert len(body["daily_trend"]) == 7
     assert body["daily_trend"][-1]["count"] == 1
+    assert body["daily_trend"][-1]["verdicts"] == {
+        "correct": 1,
+        "partial": 0,
+        "wrong": 0,
+    }
     assert res.headers["x-content-type-options"] == "nosniff"
     assert res.headers["cache-control"] == "no-store, no-cache, must-revalidate, private"
 
@@ -275,6 +285,8 @@ async def test_feedback_summary_markdown_export_contains_summary_and_daily_trend
     assert "| Wrong | 1 |" in res.text
     assert "Accuracy: **50.0%**" in res.text
     assert "## Daily activity (7-day window, UTC)" in res.text
+    assert "| Date | Ratings | Correct | Partial | Wrong |" in res.text
+    assert "| 2026-" in res.text
     assert "_Exported from Arena_" in res.text
     assert res.headers["x-content-type-options"] == "nosniff"
 
@@ -326,7 +338,11 @@ def test_feedback_summary_markdown_escapes_table_values():
         "verdicts": {"correct": 1, "partial": 0, "wrong": 0},
         "total": 1,
         "rate": 1.0,
-        "daily_trend": [{"date": "2026-08-18|injected", "count": "1\n| forged"}],
+        "daily_trend": [{
+            "date": "2026-08-18|injected",
+            "count": "1\n| forged",
+            "verdicts": {"correct": 1, "partial": 0, "wrong": 0},
+        }],
     }
 
     report = agent_routes._feedback_summary_markdown(payload)

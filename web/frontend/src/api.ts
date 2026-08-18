@@ -1432,9 +1432,16 @@ export type RecentFeedbackItem = {
   task_text: string | null;
 };
 
+export type AgentFeedbackVerdictCounts = {
+  correct: number;
+  partial: number;
+  wrong: number;
+};
+
 export type AgentFeedbackTrendPoint = {
   date: string;
   count: number;
+  verdicts: AgentFeedbackVerdictCounts;
 };
 
 export type AgentFeedbackSummary = {
@@ -1468,9 +1475,21 @@ export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedback
 function isAgentFeedbackTrendPoint(value: unknown): value is AgentFeedbackTrendPoint {
   if (!value || typeof value !== 'object') return false;
   const point = value as Record<string, unknown>;
+  const verdicts = point.verdicts;
+  if (!verdicts || typeof verdicts !== 'object') return false;
+  const counts = verdicts as Record<string, unknown>;
+  const count = point.count;
+  const verdictTotal = [counts.correct, counts.partial, counts.wrong].reduce<number>(
+    (sum, count) => sum + (typeof count === 'number' ? count : 0),
+    0,
+  );
   return (
     isIsoDateString(point.date) &&
-    isNonNegativeInteger(point.count)
+    isNonNegativeInteger(count) &&
+    isNonNegativeInteger(counts.correct) &&
+    isNonNegativeInteger(counts.partial) &&
+    isNonNegativeInteger(counts.wrong) &&
+    verdictTotal <= count
   );
 }
 

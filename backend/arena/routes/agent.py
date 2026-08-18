@@ -4006,8 +4006,9 @@ async def export_feedback_summary_csv(
     """Download the caller's UTC-bucketed feedback activity as CSV.
 
     This is the spreadsheet-friendly companion to ``/feedback/summary``.
-    It exports exactly the selected window, including zero-activity days, so
-    a chart can be recreated without guessing which dates were omitted.
+    It exports exactly the selected window, including zero-activity days and
+    the per-day canonical verdict mix, so a stacked chart can be recreated
+    without guessing which dates or verdicts were omitted.
     """
     payload, filename_stem = _prepare_feedback_summary_export(
         user=user,
@@ -4020,9 +4021,20 @@ async def export_feedback_summary_csv(
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\r\n")
-    writer.writerow(["date", "feedback_count"])
+    writer.writerow(
+        ["date", "feedback_count", "correct_count", "partial_count", "wrong_count"]
+    )
     for point in payload["daily_trend"]:
-        writer.writerow([point["date"], point["count"]])
+        verdicts = point["verdicts"]
+        writer.writerow(
+            [
+                point["date"],
+                point["count"],
+                verdicts["correct"],
+                verdicts["partial"],
+                verdicts["wrong"],
+            ]
+        )
 
     # The shared preparation step derives the date from the exported payload
     # rather than taking a second wall-clock reading.
@@ -4138,13 +4150,16 @@ def _feedback_summary_markdown(payload: dict) -> str:
         "",
         f"## Daily activity ({_feedback_markdown_inline(payload['window_days'])}-day window, UTC)",
         "",
-        "| Date | Ratings |",
-        "| --- | ---: |",
+        "| Date | Ratings | Correct | Partial | Wrong |",
+        "| --- | ---: | ---: | ---: | ---: |",
     ]
     lines.extend(
         "| "
         f"{_feedback_markdown_inline(point['date'])} | "
-        f"{_feedback_markdown_inline(point['count'])} |"
+        f"{_feedback_markdown_inline(point['count'])} | "
+        f"{_feedback_markdown_inline(point['verdicts']['correct'])} | "
+        f"{_feedback_markdown_inline(point['verdicts']['partial'])} | "
+        f"{_feedback_markdown_inline(point['verdicts']['wrong'])} |"
         for point in daily_trend
     )
     lines.extend(["", "---", "_Exported from Arena_", ""])

@@ -21,6 +21,11 @@ function summaryPayload(windowDays = 7) {
     daily_trend: Array.from({ length: windowDays }, (_, index) => ({
       date: new Date(Date.UTC(2026, 7, 12 + index)).toISOString().slice(0, 10),
       count: index === windowDays - 1 ? 2 : index === windowDays - 2 ? 1 : 0,
+      verdicts: {
+        correct: index === windowDays - 1 ? 2 : 0,
+        partial: index === windowDays - 2 ? 1 : 0,
+        wrong: 0,
+      },
     })),
   };
 }
@@ -69,6 +74,27 @@ describe('Agent feedback summary frontend API helper', () => {
     await expect(getAgentFeedbackSummary()).rejects.toMatchObject({
       status: 200,
       message: 'Malformed feedback activity response (Request ID: req-feedback-summary)',
+    });
+  });
+
+  it('rejects a daily verdict mix that exceeds the daily rating count', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...summaryPayload(),
+          daily_trend: summaryPayload().daily_trend.map((point, index) =>
+            index === 6
+              ? { ...point, count: 1, verdicts: { correct: 2, partial: 0, wrong: 0 } }
+              : point,
+          ),
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(getAgentFeedbackSummary()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed feedback activity response',
     });
   });
 
