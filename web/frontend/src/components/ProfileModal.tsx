@@ -277,6 +277,7 @@ const PERSONA_WIN_RATE_SORT_LABELS: Record<PersonaWinRateSort, string> = {
   wins: 'Wins',
   name: 'Name',
 };
+const ACTIVITY_HIGHLIGHT_WINDOWS = [7, 30, 90] as const;
 const FEEDBACK_ACTIVITY_WINDOWS = [7, 30, 90] as const;
 
 function sortPersonaWinRateRows(
@@ -643,6 +644,7 @@ export function ProfileModal() {
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityErr, setActivityErr] = useState<string | null>(null);
   const [activityReload, setActivityReload] = useState(0);
+  const [activityWindowDays, setActivityWindowDays] = useState(30);
   const [winRate, setWinRate] = useState<AnalyticsPersonaWinRateResponse | null>(null);
   const [winRateLoading, setWinRateLoading] = useState(false);
   const [winRateErr, setWinRateErr] = useState<string | null>(null);
@@ -813,7 +815,7 @@ export function ProfileModal() {
     let cancelled = false;
     setActivityLoading(true);
     setActivityErr(null);
-    void getAnalyticsActivity(30)
+    void getAnalyticsActivity(activityWindowDays)
       .then((a) => {
         if (!cancelled) setActivity(a);
       })
@@ -829,7 +831,7 @@ export function ProfileModal() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, activeTab, activityReload]);
+  }, [isOpen, activeTab, activityReload, activityWindowDays]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -1729,14 +1731,59 @@ export function ProfileModal() {
                 </div>
                 <div
                   style={{
-                    fontSize: 10,
-                    textTransform: 'uppercase',
-                    color: '#A0A39A',
-                    letterSpacing: '0.10em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
                     margin: '22px 0 10px',
                   }}
                 >
-                  Activity highlights · 30 days
+                  <span
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      color: '#A0A39A',
+                      letterSpacing: '0.10em',
+                    }}
+                  >
+                    Activity highlights · {activityWindowDays} days
+                  </span>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    <span>Window</span>
+                    <select
+                      aria-label="Activity highlights window"
+                      value={activityWindowDays}
+                      onChange={(event) => {
+                        clearExportFeedback();
+                        setActivityWindowDays(Number(event.target.value));
+                      }}
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {ACTIVITY_HIGHLIGHT_WINDOWS.map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
                 {activityLoading ? (
                   <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }} role="status">
@@ -2379,8 +2426,8 @@ export function ProfileModal() {
                     onClick={async () => {
                       setActiveExport('activity');
                       try {
-                        const blob = await exportAnalyticsActivityCsv(30);
-                        downloadBlobFile(blob, 'arena-activity-30d.csv');
+                        const blob = await exportAnalyticsActivityCsv(activityWindowDays);
+                        downloadBlobFile(blob, `arena-activity-${activityWindowDays}d.csv`);
                       } catch {
                         // ignore error
                       } finally {
@@ -2388,7 +2435,9 @@ export function ProfileModal() {
                       }
                     }}
                   >
-                    {activeExport === 'activity' ? '⏳ Downloading…' : '🗓️ Activity Export'}
+                    {activeExport === 'activity'
+                      ? '⏳ Downloading…'
+                      : `🗓️ Activity Export · ${activityWindowDays}d`}
                   </button>
                   <button
                     type="button"

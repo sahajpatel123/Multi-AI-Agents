@@ -84,6 +84,9 @@ const hoistedMocks = vi.hoisted(() => {
     busiest_day: '2026-08-10',
     busiest_day_count: 8,
   }),
+  exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(
+    new Blob(['date,prompts'], { type: 'text/csv' }),
+  ),
   getAnalyticsPersonaWinRate: vi.fn().mockResolvedValue({
     window_days: 30,
     window_start: '2026-07-13',
@@ -269,7 +272,7 @@ vi.mock('../api', () => ({
   exportAgentFeedbackSummaryJson: hoistedMocks.exportAgentFeedbackSummaryJson,
   exportAgentFeedbackSummaryMarkdown: hoistedMocks.exportAgentFeedbackSummaryMarkdown,
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
-  exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(new Blob(['date,prompts'], { type: 'text/csv' })),
+  exportAnalyticsActivityCsv: hoistedMocks.exportAnalyticsActivityCsv,
   exportAnalyticsActivityJson: vi.fn().mockResolvedValue({
     blob: new Blob(['{"activity":[]}'], { type: 'application/json' }),
     filename: 'arena-activity-2026-08-05-to-2026-08-11.json',
@@ -354,6 +357,7 @@ describe('ProfileModal', () => {
     refreshUserMock.mockClear();
     refreshTierMock.mockClear();
     vi.mocked(hoistedMocks.getAnalyticsActivity).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsActivityCsv).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
@@ -1342,6 +1346,47 @@ describe('ProfileModal', () => {
       screen.getByRole('group', { name: /activity highlights/i }),
     ).toBeInTheDocument();
     expect(hoistedMocks.getAnalyticsActivity).toHaveBeenCalledWith(30);
+  });
+
+  it('reloads activity highlights when the window changes', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /activity highlights window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '7' } });
+
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsActivity).toHaveBeenLastCalledWith(7);
+      expect(screen.getByText('Activity highlights · 7 days')).toBeInTheDocument();
+    });
+  });
+
+  it('exports activity for the selected highlights window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /activity highlights window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '90' } });
+    const exportButton = await screen.findByRole('button', { name: /activity export/i });
+    fireEvent.click(exportButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsActivityCsv).toHaveBeenCalledWith(90);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-activity-90d.csv',
+      );
+    });
   });
 
   it('shows a fallback message when activity highlights fail to load', async () => {
