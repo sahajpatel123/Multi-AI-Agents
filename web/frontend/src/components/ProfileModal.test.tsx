@@ -31,7 +31,15 @@ const tierState = {
   refreshTier: refreshTierMock,
 };
 
-const hoistedMocks = vi.hoisted(() => ({
+const hoistedMocks = vi.hoisted(() => {
+  const personaWinRateMarkdownBlob = new Blob(['# Arena — persona win rates'], {
+    type: 'text/markdown',
+  });
+  Object.defineProperty(personaWinRateMarkdownBlob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — persona win rates'),
+  });
+
+  return {
   getSubscriptionStatus: vi.fn().mockResolvedValue({
     active: true,
     status: 'active',
@@ -120,6 +128,11 @@ const hoistedMocks = vi.hoisted(() => ({
     blob: new Blob(['{"window_days":30,"personas":[]}'], { type: 'application/json' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.json',
   }),
+  exportAnalyticsPersonaWinRateMarkdown: vi.fn().mockResolvedValue({
+    blob: personaWinRateMarkdownBlob,
+    filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
+  }),
+  copyToClipboard: vi.fn().mockResolvedValue(true),
   getCalibrationHistory: vi.fn().mockResolvedValue({
     ratings: [],
     total: 0,
@@ -188,7 +201,8 @@ const hoistedMocks = vi.hoisted(() => ({
       filename: `arena-feedback-activity-1-${windowDays}d-20260818.md`,
     })),
   getMcpIntegrations: vi.fn().mockResolvedValue({ integrations: [] }),
-}));
+  };
+});
 
 function emptyWinRatePayload(overrides: Record<string, unknown> = {}) {
   return {
@@ -253,10 +267,7 @@ vi.mock('../api', () => ({
   }),
   exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateJson: hoistedMocks.exportAnalyticsPersonaWinRateJson,
-  exportAnalyticsPersonaWinRateMarkdown: vi.fn().mockResolvedValue({
-    blob: new Blob(['# Arena — persona win rates'], { type: 'text/markdown' }),
-    filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
-  }),
+  exportAnalyticsPersonaWinRateMarkdown: hoistedMocks.exportAnalyticsPersonaWinRateMarkdown,
   getCalibrationHistory: hoistedMocks.getCalibrationHistory,
   exportCalibrationHistoryCsv: vi.fn().mockResolvedValue(
     {
@@ -293,6 +304,10 @@ vi.mock('../lib/downloadTextFile', () => ({
   downloadBlobFile: vi.fn(() => true),
 }));
 
+vi.mock('../lib/clipboard', () => ({
+  copyToClipboard: hoistedMocks.copyToClipboard,
+}));
+
 /** Test helper that mounts the modal already open via the context. */
 function ModalHarness() {
   const { openModal } = useProfileModal();
@@ -326,6 +341,8 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateMarkdown).mockClear();
+    vi.mocked(hoistedMocks.copyToClipboard).mockClear().mockResolvedValue(true);
     vi.mocked(hoistedMocks.exportAgentFeedbackCsv).mockClear();
     vi.mocked(hoistedMocks.exportAgentFeedbackJson).mockClear();
     vi.mocked(hoistedMocks.exportAgentFeedbackMarkdown).mockClear();
@@ -422,6 +439,57 @@ describe('ProfileModal', () => {
         'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
       );
     });
+  });
+
+  it('copies persona win-rate Markdown with the selected filters', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate window/i }),
+      { target: { value: '7' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate minimum appearances/i }),
+      { target: { value: '5' } },
+    );
+    fireEvent.click(await screen.findByRole('checkbox', { name: /include fallback scorings/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7, 5, true);
+    });
+
+    const button = await screen.findByRole('button', { name: /copy win rates markdown/i });
+    button.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateMarkdown).toHaveBeenCalledWith(7, 5, true);
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('# Arena — persona win rates');
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied persona win rates Markdown to the clipboard.',
+      );
+    });
+  });
+
+  it('surfaces clipboard failures and releases the persona win-rate copy lock', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy win rates markdown/i });
+    button.click();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Could not copy persona win-rate Markdown — try again.'),
+      ).toBeInTheDocument();
+    });
+    expect(button).not.toBeDisabled();
   });
 
   it('uses the selected window and server filename for the win-rate JSON export', async () => {

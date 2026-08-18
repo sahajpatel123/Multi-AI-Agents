@@ -53,6 +53,7 @@ import {
   type UserUsageResponse,
 } from '../api';
 import { downloadBlobFile } from '../lib/downloadTextFile';
+import { copyToClipboard } from '../lib/clipboard';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { safeLocalStorage } from '../lib/safeStorage';
@@ -658,6 +659,7 @@ export function ProfileModal() {
   } | null>(null);
   const [activeExport, setActiveExport] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [calLoading, setCalLoading] = useState(false);
   const [calErr, setCalErr] = useState<string | null>(null);
   const [calHistory, setCalHistory] = useState<CalibrationHistoryResponse | null>(null);
@@ -2117,6 +2119,15 @@ export function ProfileModal() {
                     {exportError}
                   </p>
                 ) : null}
+                {exportNotice ? (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    style={{ fontSize: 12, color: '#3F6B4A', margin: '0 0 10px' }}
+                  >
+                    {exportNotice}
+                  </p>
+                ) : null}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
                   <button
                     type="button"
@@ -2226,6 +2237,50 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'win-rate-md' ? '⏳ Downloading…' : '🏆 Win Rates Markdown Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-copy');
+                      setExportError(null);
+                      setExportNotice(null);
+                      try {
+                        const { blob } = await exportAnalyticsPersonaWinRateMarkdown(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona win rates Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona win-rate Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona win-rate Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-copy' ? '⏳ Copying…' : '🏆 Copy Win Rates Markdown'}
                   </button>
                   <button
                     type="button"
