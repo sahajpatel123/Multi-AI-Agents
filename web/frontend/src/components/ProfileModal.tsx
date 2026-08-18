@@ -2928,6 +2928,51 @@ export function ProfileModal() {
                           ? '⏳ Downloading…'
                           : '🎯 Calibration Markdown Export'}
                       </button>
+                      <button
+                        type="button"
+                        disabled={activeExport !== null}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 6,
+                          border: '0.5px solid #E0D5C5',
+                          background:
+                            activeExport === 'calibration-copy' ? '#EDE4D8' : '#F0E8DC',
+                          color: '#4A3728',
+                          fontSize: 12,
+                          cursor: activeExport !== null ? 'wait' : 'pointer',
+                          textAlign: 'left',
+                          fontFamily: 'var(--vp-font-sans)',
+                          opacity:
+                            activeExport !== null && activeExport !== 'calibration-copy'
+                              ? 0.6
+                              : 1,
+                        }}
+                        onClick={async () => {
+                          setActiveExport('calibration-copy');
+                          clearExportFeedback();
+                          try {
+                            const { blob } = await exportCalibrationHistoryMarkdown();
+                            const copied = await copyToClipboard(await blob.text());
+                            if (copied) {
+                              setExportNotice('Copied calibration Markdown to the clipboard.');
+                            } else {
+                              setExportError('Could not copy calibration Markdown — try again.');
+                            }
+                          } catch (error) {
+                            setExportError(
+                              error instanceof ApiError
+                                ? error.message
+                                : 'Could not copy calibration Markdown — try again.',
+                            );
+                          } finally {
+                            setActiveExport(null);
+                          }
+                        }}
+                      >
+                        {activeExport === 'calibration-copy'
+                          ? '⏳ Copying…'
+                          : '🎯 Copy Calibration Markdown'}
+                      </button>
                     </div>
                   </div>
                 ) : (

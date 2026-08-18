@@ -44,8 +44,15 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(feedbackSummaryMarkdownBlob, 'text', {
     value: vi.fn().mockResolvedValue('# Arena — feedback activity\n'),
   });
+  const calibrationMarkdownBlob = new Blob(['# Arena — confidence calibration'], {
+    type: 'text/markdown',
+  });
+  Object.defineProperty(calibrationMarkdownBlob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — confidence calibration'),
+  });
 
   return {
+  calibrationMarkdownBlob,
   getSubscriptionStatus: vi.fn().mockResolvedValue({
     active: true,
     status: 'active',
@@ -286,7 +293,7 @@ vi.mock('../api', () => ({
     filename: 'arena-calibration-7-20260812.json',
   }),
   exportCalibrationHistoryMarkdown: vi.fn().mockResolvedValue({
-    blob: new Blob(['# Arena — confidence calibration'], { type: 'text/markdown' }),
+    blob: hoistedMocks.calibrationMarkdownBlob,
     filename: 'arena-calibration-7-20260812.md',
   }),
   exportUserUsageCsv: vi.fn().mockResolvedValue(new Blob(['date,tokens'], { type: 'text/csv' })),
@@ -1211,6 +1218,60 @@ describe('ProfileModal', () => {
         'arena-calibration-7-20260812.md',
       );
     });
+  });
+
+  it('copies calibration history Markdown and reports success', async () => {
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 1,
+      avg_delta: 0,
+      trend: 'stable',
+      calibration_score: 100,
+      recent_ratings: [{ delta: 0, created_at: '2026-08-11T10:00:00Z' }],
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', {
+      name: /copy calibration markdown/i,
+    });
+    button.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith(
+        '# Arena — confidence calibration',
+      );
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied calibration Markdown to the clipboard.',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces calibration Markdown clipboard failures and releases the copy lock', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 1,
+      avg_delta: 0,
+      trend: 'stable',
+      calibration_score: 100,
+      recent_ratings: [{ delta: 0, created_at: '2026-08-11T10:00:00Z' }],
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', {
+      name: /copy calibration markdown/i,
+    });
+    button.click();
+
+    expect(
+      await screen.findByText('Could not copy calibration Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
   });
 
   it('renders the usage history export button', async () => {
