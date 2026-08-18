@@ -38,6 +38,7 @@ import {
   type AnalyticsActivityResponse,
   type AnalyticsPersonaWinRateResponse,
   type AnalyticsPersonaWinRateTrendPoint,
+  type AgentFeedbackExportDateRange,
   type AgentFeedbackVerdict,
   type AnswerFeedbackStats,
   type CalibrationHistoryResponse,
@@ -492,6 +493,20 @@ export function ProfileModal() {
   const [recentFbLoading, setRecentFbLoading] = useState(false);
   const [recentFbErr, setRecentFbErr] = useState<string | null>(null);
   const [feedbackExportVerdict, setFeedbackExportVerdict] = useState<AgentFeedbackVerdict | ''>('');
+  const [feedbackExportFromDate, setFeedbackExportFromDate] = useState('');
+  const [feedbackExportToDate, setFeedbackExportToDate] = useState('');
+
+  const feedbackExportDateRange: AgentFeedbackExportDateRange | undefined =
+    feedbackExportFromDate || feedbackExportToDate
+      ? {
+          fromDate: feedbackExportFromDate || undefined,
+          toDate: feedbackExportToDate || undefined,
+        }
+      : undefined;
+  const feedbackExportDateRangeInvalid =
+    !!feedbackExportFromDate &&
+    !!feedbackExportToDate &&
+    feedbackExportFromDate > feedbackExportToDate;
 
   const [sub, setSub] = useState<SubscriptionStatusResponse | null>(null);
   const [subLoading, setSubLoading] = useState(false);
@@ -2781,9 +2796,94 @@ export function ProfileModal() {
                       <option value="partial">Partial only</option>
                       <option value="wrong">Wrong only</option>
                     </select>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: 8,
+                        marginTop: 8,
+                      }}
+                    >
+                      <label
+                        htmlFor="profile-feedback-export-from-date"
+                        style={{
+                          display: 'block',
+                          fontSize: 10,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          color: '#A0A39A',
+                        }}
+                      >
+                        From (UTC)
+                        <input
+                          id="profile-feedback-export-from-date"
+                          aria-label="Answer feedback export start date"
+                          type="date"
+                          value={feedbackExportFromDate}
+                          max={feedbackExportToDate || undefined}
+                          disabled={activeExport !== null}
+                          onChange={(event) => setFeedbackExportFromDate(event.target.value)}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            marginTop: 4,
+                            padding: '7px 8px',
+                            borderRadius: 6,
+                            border: '0.5px solid #E0D5C5',
+                            background: '#F0E8DC',
+                            color: '#4A3728',
+                            fontSize: 12,
+                            fontFamily: 'var(--vp-font-sans)',
+                            opacity: activeExport !== null ? 0.7 : 1,
+                          }}
+                        />
+                      </label>
+                      <label
+                        htmlFor="profile-feedback-export-to-date"
+                        style={{
+                          display: 'block',
+                          fontSize: 10,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          color: '#A0A39A',
+                        }}
+                      >
+                        To (UTC)
+                        <input
+                          id="profile-feedback-export-to-date"
+                          aria-label="Answer feedback export end date"
+                          type="date"
+                          value={feedbackExportToDate}
+                          min={feedbackExportFromDate || undefined}
+                          disabled={activeExport !== null}
+                          onChange={(event) => setFeedbackExportToDate(event.target.value)}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            marginTop: 4,
+                            padding: '7px 8px',
+                            borderRadius: 6,
+                            border: '0.5px solid #E0D5C5',
+                            background: '#F0E8DC',
+                            color: '#4A3728',
+                            fontSize: 12,
+                            fontFamily: 'var(--vp-font-sans)',
+                            opacity: activeExport !== null ? 0.7 : 1,
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {feedbackExportDateRangeInvalid ? (
+                      <p
+                        role="alert"
+                        style={{ fontSize: 11, color: '#9C2F2A', margin: '6px 0 0' }}
+                      >
+                        From date must be on or before the To date.
+                      </p>
+                    ) : null}
                     <button
                       type="button"
-                      disabled={activeExport !== null}
+                      disabled={activeExport !== null || feedbackExportDateRangeInvalid}
                       style={{
                         width: '100%',
                         marginTop: 12,
@@ -2802,9 +2902,12 @@ export function ProfileModal() {
                         setActiveExport('feedback-csv');
                         setExportError(null);
                         try {
-                          const { blob, filename } = await exportAgentFeedbackCsv(
-                            feedbackExportVerdict || undefined,
-                          );
+                          const { blob, filename } = feedbackExportDateRange
+                            ? await exportAgentFeedbackCsv(
+                                feedbackExportVerdict || undefined,
+                                feedbackExportDateRange,
+                              )
+                            : await exportAgentFeedbackCsv(feedbackExportVerdict || undefined);
                           if (!downloadBlobFile(blob, filename)) {
                             setExportError('Could not download answer feedback CSV — try again.');
                           }
@@ -2825,7 +2928,7 @@ export function ProfileModal() {
                     </button>
                     <button
                       type="button"
-                      disabled={activeExport !== null}
+                      disabled={activeExport !== null || feedbackExportDateRangeInvalid}
                       style={{
                         width: '100%',
                         marginTop: 8,
@@ -2844,9 +2947,12 @@ export function ProfileModal() {
                         setActiveExport('feedback-json');
                         setExportError(null);
                         try {
-                          const { blob, filename } = await exportAgentFeedbackJson(
-                            feedbackExportVerdict || undefined,
-                          );
+                          const { blob, filename } = feedbackExportDateRange
+                            ? await exportAgentFeedbackJson(
+                                feedbackExportVerdict || undefined,
+                                feedbackExportDateRange,
+                              )
+                            : await exportAgentFeedbackJson(feedbackExportVerdict || undefined);
                           if (!downloadBlobFile(blob, filename)) {
                             setExportError('Could not download answer feedback JSON — try again.');
                           }
@@ -2867,7 +2973,7 @@ export function ProfileModal() {
                     </button>
                     <button
                       type="button"
-                      disabled={activeExport !== null}
+                      disabled={activeExport !== null || feedbackExportDateRangeInvalid}
                       style={{
                         width: '100%',
                         marginTop: 8,
@@ -2886,9 +2992,12 @@ export function ProfileModal() {
                         setActiveExport('feedback-markdown');
                         setExportError(null);
                         try {
-                          const { blob, filename } = await exportAgentFeedbackMarkdown(
-                            feedbackExportVerdict || undefined,
-                          );
+                          const { blob, filename } = feedbackExportDateRange
+                            ? await exportAgentFeedbackMarkdown(
+                                feedbackExportVerdict || undefined,
+                                feedbackExportDateRange,
+                              )
+                            : await exportAgentFeedbackMarkdown(feedbackExportVerdict || undefined);
                           if (!downloadBlobFile(blob, filename)) {
                             setExportError('Could not download answer feedback Markdown — try again.');
                           }

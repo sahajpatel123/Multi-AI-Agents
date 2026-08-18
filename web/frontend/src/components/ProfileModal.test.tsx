@@ -588,6 +588,33 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('applies the selected UTC date range when exporting answer feedback', async () => {
+    hoistedMocks.getUserAnswerFeedbackStats.mockResolvedValueOnce({
+      total: 2,
+      correct_pct: 50,
+      partial_pct: 50,
+      wrong_pct: 0,
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const fromDate = await screen.findByLabelText('Answer feedback export start date');
+    const toDate = screen.getByLabelText('Answer feedback export end date');
+    fireEvent.change(fromDate, { target: { value: '2026-08-01' } });
+    fireEvent.change(toDate, { target: { value: '2026-08-18' } });
+    screen.getByRole('button', { name: /answer feedback csv export/i }).click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAgentFeedbackCsv).toHaveBeenCalledWith(undefined, {
+        fromDate: '2026-08-01',
+        toDate: '2026-08-18',
+      });
+    });
+  });
+
   it('views and paginates recent calibration history', async () => {
     hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
       total_ratings: 6,

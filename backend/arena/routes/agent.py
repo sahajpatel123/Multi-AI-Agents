@@ -5,7 +5,7 @@ import os
 import secrets
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, time as datetime_time, timedelta
 from typing import Optional
 from arena.core.datetime_utils import utcnow_naive
 
@@ -4092,11 +4092,61 @@ async def get_feedback_calibration(
     )
 
 
+def _validate_feedback_export_date_range(
+    from_date: date | None,
+    to_date: date | None,
+) -> None:
+    """Reject reversed inclusive UTC date ranges before querying feedback."""
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_date_range",
+                "message": "From date must be on or before to date.",
+            },
+        )
+
+
+def _apply_feedback_export_filters(
+    query,
+    *,
+    verdict: str | None,
+    from_date: date | None,
+    to_date: date | None,
+):
+    """Keep verdict and inclusive UTC date filtering identical across exports."""
+    if verdict is not None:
+        if verdict in {"correct", "partial", "wrong"}:
+            query = query.filter(AnswerFeedback.verdict == verdict)
+        else:
+            query = query.filter(False)
+    if from_date:
+        query = query.filter(
+            AnswerFeedback.created_at >= datetime.combine(from_date, datetime_time.min)
+        )
+    if to_date:
+        if to_date == date.max:
+            return query.filter(AnswerFeedback.created_at <= datetime.max)
+        end_exclusive = datetime.combine(
+            to_date + timedelta(days=1), datetime_time.min
+        )
+        query = query.filter(AnswerFeedback.created_at < end_exclusive)
+    return query
+
+
 @router.get("/feedback/export.csv")
 async def export_feedback_csv(
     verdict: Optional[str] = Query(
         None,
         description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
+    ),
+    from_date: date | None = Query(
+        None,
+        description="Include ratings created on or after this inclusive UTC date.",
+    ),
+    to_date: date | None = Query(
+        None,
+        description="Include ratings created on or before this inclusive UTC date.",
     ),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -4104,9 +4154,10 @@ async def export_feedback_csv(
     """CSV export of all feedback for a user.
 
     Streams feedback data with formula-injection defense.
-    Supports filtering by verdict.
+    Supports filtering by verdict and inclusive UTC date range.
     """
     _ensure_agent_access(user, db)
+    _validate_feedback_export_date_range(from_date, to_date)
     enforce_user_rate_limit(
         user.id,
         scope="agent_feedback_csv",
@@ -4138,11 +4189,12 @@ async def export_feedback_csv(
         .filter(AnswerFeedback.user_id == user.id)
     )
     
-    if verdict is not None:
-        if verdict in {"correct", "partial", "wrong"}:
-            q = q.filter(AnswerFeedback.verdict == verdict)
-        else:
-            q = q.filter(False)  # Return empty result for unknown verdict
+    q = _apply_feedback_export_filters(
+        q,
+        verdict=verdict,
+        from_date=from_date,
+        to_date=to_date,
+    )
     
     rows = q.order_by(AnswerFeedback.created_at.desc()).all()
     
@@ -4201,15 +4253,24 @@ async def export_feedback_json(
         None,
         description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
     ),
+    from_date: date | None = Query(
+        None,
+        description="Include ratings created on or after this inclusive UTC date.",
+    ),
+    to_date: date | None = Query(
+        None,
+        description="Include ratings created on or before this inclusive UTC date.",
+    ),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     """JSON export of all feedback for a user.
 
     Returns all feedback as a JSON array.
-    Supports filtering by verdict.
+    Supports filtering by verdict and inclusive UTC date range.
     """
     _ensure_agent_access(user, db)
+    _validate_feedback_export_date_range(from_date, to_date)
     enforce_user_rate_limit(
         user.id,
         scope="agent_feedback_json",
@@ -4231,11 +4292,12 @@ async def export_feedback_json(
         .filter(AnswerFeedback.user_id == user.id)
     )
     
-    if verdict is not None:
-        if verdict in {"correct", "partial", "wrong"}:
-            q = q.filter(AnswerFeedback.verdict == verdict)
-        else:
-            q = q.filter(False)  # Return empty result for unknown verdict
+    q = _apply_feedback_export_filters(
+        q,
+        verdict=verdict,
+        from_date=from_date,
+        to_date=to_date,
+    )
     
     rows = q.order_by(AnswerFeedback.created_at.desc()).all()
     
@@ -4304,16 +4366,25 @@ async def export_feedback_markdown(
         None,
         description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
     ),
+    from_date: date | None = Query(
+        None,
+        description="Include ratings created on or after this inclusive UTC date.",
+    ),
+    to_date: date | None = Query(
+        None,
+        description="Include ratings created on or before this inclusive UTC date.",
+    ),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     """Download a human-readable Markdown report of the caller's feedback.
 
     This is the portable sibling of the CSV and JSON exports. It keeps the
-    same owner scope and verdict filtering while escaping metadata so a title
-    or note cannot change the structure of the downloaded report.
+    same owner scope, verdict filtering, and date range while escaping metadata
+    so a title or note cannot change the structure of the downloaded report.
     """
     _ensure_agent_access(user, db)
+    _validate_feedback_export_date_range(from_date, to_date)
     enforce_user_rate_limit(
         user.id,
         scope="agent_feedback_markdown",
@@ -4331,11 +4402,12 @@ async def export_feedback_markdown(
         )
         .filter(AnswerFeedback.user_id == user.id)
     )
-    if verdict is not None:
-        if verdict in {"correct", "partial", "wrong"}:
-            q = q.filter(AnswerFeedback.verdict == verdict)
-        else:
-            q = q.filter(False)
+    q = _apply_feedback_export_filters(
+        q,
+        verdict=verdict,
+        from_date=from_date,
+        to_date=to_date,
+    )
 
     rows = q.order_by(AnswerFeedback.created_at.desc()).all()
     items = [
@@ -4363,6 +4435,12 @@ async def export_feedback_markdown(
     ]
     if verdict is not None:
         lines.append(f"**Filter:** {_feedback_markdown_inline(verdict) or 'none'}")
+    if from_date or to_date:
+        lines.append(
+            "**Date range (UTC):** "
+            f"{from_date.isoformat() if from_date else 'beginning'} → "
+            f"{to_date.isoformat() if to_date else 'latest'}"
+        )
     lines.extend(
         [
             "",

@@ -1455,15 +1455,31 @@ export type AgentFeedbackCsvExport = {
 
 export type AgentFeedbackVerdict = 'correct' | 'partial' | 'wrong';
 
-function agentFeedbackExportPath(format: 'csv' | 'json' | 'md', verdict?: AgentFeedbackVerdict): string {
-  const query = verdict ? `?verdict=${encodeURIComponent(verdict)}` : '';
-  return `/api/agent/feedback/export.${format}${query}`;
+export type AgentFeedbackExportDateRange = {
+  fromDate?: string;
+  toDate?: string;
+};
+
+function agentFeedbackExportPath(
+  format: 'csv' | 'json' | 'md',
+  verdict?: AgentFeedbackVerdict,
+  dateRange: AgentFeedbackExportDateRange = {},
+): string {
+  const query = new URLSearchParams();
+  if (verdict) query.set('verdict', verdict);
+  const fromDate = (dateRange.fromDate || '').trim();
+  if (fromDate) query.set('from_date', fromDate);
+  const toDate = (dateRange.toDate || '').trim();
+  if (toDate) query.set('to_date', toDate);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return `/api/agent/feedback/export.${format}${suffix}`;
 }
 
 export async function exportAgentFeedbackCsv(
   verdict?: AgentFeedbackVerdict,
+  dateRange: AgentFeedbackExportDateRange = {},
 ): Promise<AgentFeedbackCsvExport> {
-  const response = await apiFetch(agentFeedbackExportPath('csv', verdict));
+  const response = await apiFetch(agentFeedbackExportPath('csv', verdict, dateRange));
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
     throw new ApiError(
@@ -1485,8 +1501,9 @@ export type AgentFeedbackJsonExport = {
 
 export async function exportAgentFeedbackJson(
   verdict?: AgentFeedbackVerdict,
+  dateRange: AgentFeedbackExportDateRange = {},
 ): Promise<AgentFeedbackJsonExport> {
-  const response = await apiFetch(agentFeedbackExportPath('json', verdict));
+  const response = await apiFetch(agentFeedbackExportPath('json', verdict, dateRange));
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
     throw new ApiError(
@@ -1508,8 +1525,9 @@ export type AgentFeedbackMarkdownExport = {
 
 export async function exportAgentFeedbackMarkdown(
   verdict?: AgentFeedbackVerdict,
+  dateRange: AgentFeedbackExportDateRange = {},
 ): Promise<AgentFeedbackMarkdownExport> {
-  const response = await apiFetch(agentFeedbackExportPath('md', verdict));
+  const response = await apiFetch(agentFeedbackExportPath('md', verdict, dateRange));
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
     throw new ApiError(
