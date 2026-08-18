@@ -673,6 +673,37 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('announces unclassified feedback in the activity chart', async () => {
+    vi.mocked(hoistedMocks.getAgentFeedbackSummary).mockResolvedValueOnce({
+      total: 5,
+      verdicts: { correct: 2, partial: 1, wrong: 1 },
+      rate: 0.4,
+      window_days: 30,
+      daily_trend: Array.from({ length: 30 }, (_, index) => ({
+        date: `2026-08-${String(index + 1).padStart(2, '0')}`,
+        count: index === 29 ? 3 : index === 28 ? 1 : 0,
+        verdicts: {
+          correct: index === 29 ? 2 : 0,
+          partial: index === 28 ? 1 : 0,
+          wrong: 0,
+        },
+      })),
+    });
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    expect(
+      await screen.findByRole('img', {
+        name: /feedback activity over the last 30 days.*1 other/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: 'Other: 1' })).toBeInTheDocument();
+  });
+
   it('downloads feedback activity CSV for the selected window', async () => {
     renderModal();
     await waitFor(() => {

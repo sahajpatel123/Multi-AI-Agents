@@ -98,6 +98,20 @@ describe('Agent feedback summary frontend API helper', () => {
     });
   });
 
+  it('accepts legacy lifetime feedback outside the canonical verdict buckets', async () => {
+    const payload = summaryPayload();
+    payload.total = 5;
+    payload.rate = 0.4;
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(payload), { status: 200 }),
+    );
+
+    const result = await getAgentFeedbackSummary();
+
+    expect(result.total).toBe(5);
+    expect(result.verdicts).toEqual({ correct: 2, partial: 1, wrong: 1 });
+  });
+
   it('surfaces request IDs on endpoint failure and validates the client range', async () => {
     await expect(getAgentFeedbackSummary(91)).rejects.toThrow(
       'windowDays must be an integer between 1 and 90',

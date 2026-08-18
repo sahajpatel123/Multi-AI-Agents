@@ -1504,7 +1504,9 @@ function isAgentFeedbackSummary(value: unknown): value is AgentFeedbackSummary {
     isNonNegativeInteger(counts.correct) &&
     isNonNegativeInteger(counts.partial) &&
     isNonNegativeInteger(counts.wrong) &&
-    counts.correct + counts.partial + counts.wrong === data.total &&
+    // Keep legacy/non-canonical verdict rows in the lifetime total. The
+    // dashboard renders those rows as "Other" rather than dropping them.
+    counts.correct + counts.partial + counts.wrong <= data.total &&
     typeof data.rate === 'number' &&
     Number.isFinite(data.rate) &&
     data.rate >= 0 &&

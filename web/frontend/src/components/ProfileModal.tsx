@@ -449,13 +449,14 @@ function FeedbackActivityTrend({
   const knownVerdictTotal =
     windowVerdicts.correct + windowVerdicts.partial + windowVerdicts.wrong;
   const otherTotal = Math.max(windowTotal - knownVerdictTotal, 0);
+  const otherLabel = otherTotal > 0 ? `, ${otherTotal} other` : '';
   const slotWidth = width / Math.max(trend.length, 1);
   const barWidth = Math.max(1, slotWidth - (trend.length >= 30 ? 0.8 : 2));
   const ariaLabel =
     `Feedback activity over the last ${summary.window_days} days: ` +
     `${windowTotal} rating${windowTotal === 1 ? '' : 's'} across ${activeDays} active day${activeDays === 1 ? '' : 's'}; ` +
     `peak ${peakCount} in one day; ${windowVerdicts.correct} correct, ` +
-    `${windowVerdicts.partial} partial, ${windowVerdicts.wrong} wrong.`;
+    `${windowVerdicts.partial} partial, ${windowVerdicts.wrong} wrong${otherLabel}.`;
 
   return (
     <div>
@@ -476,11 +477,12 @@ function FeedbackActivityTrend({
             : 1;
           const pointVerdictTotal =
             point.verdicts.correct + point.verdicts.partial + point.verdicts.wrong;
+          const pointOther = Math.max(point.count - pointVerdictTotal, 0);
           const segments = [
             { key: 'correct', count: point.verdicts.correct, color: '#639922' },
             { key: 'partial', count: point.verdicts.partial, color: '#BA7517' },
             { key: 'wrong', count: point.verdicts.wrong, color: '#C0392B' },
-            { key: 'other', count: Math.max(point.count - pointVerdictTotal, 0), color: '#A0A39A' },
+            { key: 'other', count: pointOther, color: '#A0A39A' },
           ].filter((segment) => segment.count > 0);
           let renderedHeight = 0;
           return (
@@ -488,7 +490,7 @@ function FeedbackActivityTrend({
               <title>
                 {`${point.date}: ${point.count} rating${point.count === 1 ? '' : 's'}; ` +
                   `${point.verdicts.correct} correct, ${point.verdicts.partial} partial, ` +
-                  `${point.verdicts.wrong} wrong.`}
+                  `${point.verdicts.wrong} wrong${pointOther > 0 ? `, ${pointOther} other` : ''}.`}
               </title>
               <rect
                 x={index * slotWidth + (slotWidth - barWidth) / 2}
