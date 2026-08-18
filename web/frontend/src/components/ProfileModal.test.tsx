@@ -937,6 +937,16 @@ describe('ProfileModal', () => {
         screen.getByText('Copied feedback activity Markdown to the clipboard.'),
       ).toBeInTheDocument();
     });
+
+    fireEvent.change(
+      screen.getByRole('combobox', { name: /feedback activity window/i }),
+      { target: { value: '90' } },
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Copied feedback activity Markdown to the clipboard.'),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('surfaces feedback activity clipboard failures and releases the copy lock', async () => {

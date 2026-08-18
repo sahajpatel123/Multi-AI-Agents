@@ -3036,7 +3036,10 @@ export function ProfileModal() {
                         <select
                           aria-label="Feedback activity window"
                           value={feedbackSummaryWindowDays}
-                          onChange={(event) => setFeedbackSummaryWindowDays(Number(event.target.value))}
+                          onChange={(event) => {
+                            clearExportFeedback();
+                            setFeedbackSummaryWindowDays(Number(event.target.value));
+                          }}
                           style={{
                             border: '0.5px solid #E0D5C5',
                             borderRadius: 5,
