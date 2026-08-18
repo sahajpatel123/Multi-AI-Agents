@@ -52,6 +52,18 @@ async def test_feedback_summary_rate_limited(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_feedback_summary_export_rate_limited(app_client, make_user):
+    user = make_user(email="dash-fbsum-export-rl@test.com", tier=UserTier.PRO)
+    _fill_bucket("agent_feedback_summary_export", user.id, n=30)
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.csv", headers=_headers(user)
+    )
+    assert res.status_code == 429, res.text[:300]
+    assert res.json().get("detail", {}).get("error") == "rate_limit_exceeded"
+    _clear()
+
+
+@pytest.mark.asyncio
 async def test_temporal_evolution_rate_limited(app_client, make_user):
     user = make_user(email="dash-evo-rl@test.com", tier=UserTier.PRO)
     _fill_bucket("agent_temporal_evolution", user.id)

@@ -10,6 +10,7 @@ import {
   exportAgentFeedbackCsv,
   exportAgentFeedbackJson,
   exportAgentFeedbackMarkdown,
+  exportAgentFeedbackSummaryCsv,
   exportCalibrationHistoryCsv,
   exportCalibrationHistoryJson,
   exportAnalyticsActivityJson,
@@ -2827,6 +2828,48 @@ export function ProfileModal() {
                         No ratings in this window. Lifetime total: {feedbackSummary.total}.
                       </p>
                     ) : null}
+                    <button
+                      type="button"
+                      disabled={activeExport !== null}
+                      style={{
+                        width: '100%',
+                        marginTop: 10,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: activeExport === 'feedback-summary-csv' ? '#EDE4D8' : '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--vp-font-sans)',
+                        opacity: activeExport !== null && activeExport !== 'feedback-summary-csv' ? 0.6 : 1,
+                      }}
+                      onClick={async () => {
+                        setActiveExport('feedback-summary-csv');
+                        setExportError(null);
+                        try {
+                          const { blob, filename } = await exportAgentFeedbackSummaryCsv(
+                            feedbackSummaryWindowDays,
+                          );
+                          if (!downloadBlobFile(blob, filename)) {
+                            setExportError('Could not download feedback activity CSV — try again.');
+                          }
+                        } catch (error) {
+                          setExportError(
+                            error instanceof ApiError
+                              ? error.message
+                              : 'Could not download feedback activity CSV — try again.',
+                          );
+                        } finally {
+                          setActiveExport(null);
+                        }
+                      }}
+                    >
+                      {activeExport === 'feedback-summary-csv'
+                        ? '⏳ Downloading…'
+                        : '🧭 Feedback Activity CSV Export'}
+                    </button>
                   </div>
                 ) : null}
                 <div

@@ -3997,6 +3997,63 @@ async def get_feedback_summary(
     return JSONResponse(content=payload)
 
 
+@router.get("/feedback/summary/export.csv")
+async def export_feedback_summary_csv(
+    window_days: int = Query(30, ge=1, le=90),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download the caller's UTC-bucketed feedback activity as CSV.
+
+    This is the spreadsheet-friendly companion to ``/feedback/summary``.
+    It exports exactly the selected window, including zero-activity days, so
+    a chart can be recreated without guessing which dates were omitted.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_summary_export",
+        limit=30,
+        window_seconds=60,
+        message="Too many feedback activity exports. Please wait.",
+    )
+    orm_user = db.query(User).filter(User.id == user.id).first()
+    if orm_user is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
+        )
+
+    payload = compute_user_feedback_summary(
+        db=db,
+        user=orm_user,
+        window_days=window_days,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\r\n")
+    writer.writerow(["date", "feedback_count"])
+    for point in payload["daily_trend"]:
+        writer.writerow([point["date"], point["count"]])
+
+    filename = (
+        f"arena-feedback-activity-{user.id}-{window_days}d-"
+        f"{utcnow_naive().strftime('%Y%m%d')}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
+    )
+
+
 @router.get("/feedback/recent")
 async def list_recent_feedback(
     http_request: Request,

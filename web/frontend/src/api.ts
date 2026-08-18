@@ -1527,6 +1527,35 @@ export async function getAgentFeedbackSummary(
   return data;
 }
 
+export type AgentFeedbackActivityCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAgentFeedbackSummaryCsv(
+  windowDays: number = 30,
+): Promise<AgentFeedbackActivityCsvExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(
+    `/api/agent/feedback/summary/export.csv?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export feedback activity CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ?? `arena-feedback-activity-${windowDays}d.csv`,
+  };
+}
+
 export type AgentFeedbackCsvExport = {
   blob: Blob;
   filename: string;

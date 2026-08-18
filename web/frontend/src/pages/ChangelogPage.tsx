@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Profile analytics: download the selected feedback activity window as a UTC-bucketed CSV',
       '[NEW] Agent feedback: filter CSV, JSON, and Markdown exports by an inclusive UTC date range from Profile analytics',
       '[NEW] Agent feedback: download all rated answers as a human-readable Markdown report alongside CSV and JSON',
       '[NEW] Profile analytics: optionally include fallback scorer exchanges in persona win rates with an explicit provisional-data warning',

@@ -3,6 +3,8 @@
 from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
+import csv
+import io
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -141,6 +143,44 @@ async def test_feedback_summary_endpoint_window_is_clamped(app_client, make_user
     )
     assert res.status_code == 200
     assert len(res.json()["daily_trend"]) == 14
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_csv_export_preserves_the_selected_window(
+    app_client, make_user, db_session
+):
+    user = make_user(email="fb-sum-csv@test.com", tier=UserTier.PRO)
+    db_session.add(_make_feedback(user_id=user.id, suffix="today", verdict="correct"))
+    db_session.add(
+        _make_feedback(
+            user_id=user.id,
+            suffix="yesterday",
+            verdict="wrong",
+            days_ago=1,
+        )
+    )
+    db_session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.csv?window_days=7",
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert "text/csv" in res.headers["content-type"]
+    assert "arena-feedback-activity-" in res.headers["content-disposition"]
+    rows = list(csv.DictReader(io.StringIO(res.text)))
+    assert len(rows) == 7
+    assert rows[-1]["date"] == utcnow_naive().date().isoformat()
+    assert rows[-1]["feedback_count"] == "1"
+    assert rows[-2]["feedback_count"] == "1"
+    assert all(row["date"] for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_csv_export_requires_auth(app_client):
+    res = await app_client.get("/api/agent/feedback/summary/export.csv")
+    assert res.status_code == 401
 
 
 # ─── Accuracy rate pinning (cycle-34 bug) ────────────────────────────────────

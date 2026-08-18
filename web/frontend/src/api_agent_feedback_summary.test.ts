@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { ApiError, getAgentFeedbackSummary } from './api';
+import {
+  ApiError,
+  exportAgentFeedbackSummaryCsv,
+  getAgentFeedbackSummary,
+} from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -84,5 +88,38 @@ describe('Agent feedback summary frontend API helper', () => {
       message: 'Too many feedback-summary lookups (Request ID: req-feedback-rate)',
     });
     await expect(request).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('exports the selected feedback activity window and preserves the filename', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['date,feedback_count\n2026-08-17,1\n']), {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-feedback-activity-7-20260818.csv"',
+        },
+      }),
+    );
+
+    const result = await exportAgentFeedbackSummaryCsv(7);
+
+    expect(result.blob).toBeInstanceOf(Blob);
+    expect(result.filename).toBe('arena-feedback-activity-7-20260818.csv');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/feedback/summary/export.csv?window_days=7',
+      {},
+    );
+  });
+
+  it('uses a safe fallback filename and validates the export window', async () => {
+    await expect(exportAgentFeedbackSummaryCsv(91)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 90',
+    );
+
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['date,feedback_count\n']), { status: 200 }),
+    );
+    const result = await exportAgentFeedbackSummaryCsv();
+    expect(result.filename).toBe('arena-feedback-activity-30d.csv');
   });
 });
