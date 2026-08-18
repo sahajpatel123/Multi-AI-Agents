@@ -1432,6 +1432,23 @@ export type RecentFeedbackItem = {
   task_text: string | null;
 };
 
+export type AgentFeedbackTrendPoint = {
+  date: string;
+  count: number;
+};
+
+export type AgentFeedbackSummary = {
+  total: number;
+  verdicts: {
+    correct: number;
+    partial: number;
+    wrong: number;
+  };
+  rate: number;
+  window_days: number;
+  daily_trend: AgentFeedbackTrendPoint[];
+};
+
 export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedbackItem[]> {
   const response = await apiFetch(
     `/api/agent/feedback/recent?limit=${encodeURIComponent(String(limit))}`,
@@ -1446,6 +1463,68 @@ export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedback
     );
   }
   return data?.items ?? [];
+}
+
+function isAgentFeedbackTrendPoint(value: unknown): value is AgentFeedbackTrendPoint {
+  if (!value || typeof value !== 'object') return false;
+  const point = value as Record<string, unknown>;
+  return (
+    isIsoDateString(point.date) &&
+    isNonNegativeInteger(point.count)
+  );
+}
+
+function isAgentFeedbackSummary(value: unknown): value is AgentFeedbackSummary {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Record<string, unknown>;
+  const verdicts = data.verdicts;
+  if (!verdicts || typeof verdicts !== 'object') return false;
+  const counts = verdicts as Record<string, unknown>;
+  return (
+    isNonNegativeInteger(data.total) &&
+    isNonNegativeInteger(counts.correct) &&
+    isNonNegativeInteger(counts.partial) &&
+    isNonNegativeInteger(counts.wrong) &&
+    counts.correct + counts.partial + counts.wrong === data.total &&
+    typeof data.rate === 'number' &&
+    Number.isFinite(data.rate) &&
+    data.rate >= 0 &&
+    data.rate <= 1 &&
+    isPositiveInteger(data.window_days) &&
+    data.window_days <= 90 &&
+    Array.isArray(data.daily_trend) &&
+    data.daily_trend.length === data.window_days &&
+    data.daily_trend.every(isAgentFeedbackTrendPoint)
+  );
+}
+
+export async function getAgentFeedbackSummary(
+  windowDays: number = 30,
+): Promise<AgentFeedbackSummary> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(
+    `/api/agent/feedback/summary?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load feedback activity'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<AgentFeedbackSummary>(response);
+  if (!data) throw new Error(withRequestId('Empty feedback activity response', response));
+  if (!isAgentFeedbackSummary(data)) {
+    throw new ApiError(
+      withRequestId('Malformed feedback activity response', response),
+      response.status,
+      data,
+    );
+  }
+  return data;
 }
 
 export type AgentFeedbackCsvExport = {

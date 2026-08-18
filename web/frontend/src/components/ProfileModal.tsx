@@ -25,6 +25,7 @@ import {
   exportUserUsageJson,
   getAnalyticsActivity,
   getAnalyticsPersonaWinRate,
+  getAgentFeedbackSummary,
   getCalibrationHistory,
   getCalibrationStats,
   getMcpIntegrations,
@@ -38,6 +39,7 @@ import {
   type AnalyticsActivityResponse,
   type AnalyticsPersonaWinRateResponse,
   type AnalyticsPersonaWinRateTrendPoint,
+  type AgentFeedbackSummary,
   type AgentFeedbackExportDateRange,
   type AgentFeedbackVerdict,
   type AnswerFeedbackStats,
@@ -263,6 +265,7 @@ function TabIconHelp({ active }: { active: boolean }) {
 const PLACEHOLDER_HISTORY = [8, 14, 11, 19, 15, 22, 17, 12, 25, 18, 14, 21, 10, 28];
 const PERSONA_WIN_RATE_WINDOWS = [7, 30, 90] as const;
 const PERSONA_WIN_RATE_MIN_APPEARANCES = [1, 3, 5, 10] as const;
+const FEEDBACK_ACTIVITY_WINDOWS = [7, 30, 90] as const;
 
 function UsageChart({
   data,
@@ -420,6 +423,74 @@ function WinRateTrendSparkline({
   );
 }
 
+function FeedbackActivityTrend({
+  summary,
+}: {
+  summary: AgentFeedbackSummary;
+}) {
+  const width = 240;
+  const height = 56;
+  const trend = summary.daily_trend;
+  const maxCount = Math.max(...trend.map((point) => point.count), 1);
+  const activeDays = trend.filter((point) => point.count > 0).length;
+  const windowTotal = trend.reduce((total, point) => total + point.count, 0);
+  const peakCount = Math.max(...trend.map((point) => point.count), 0);
+  const slotWidth = width / Math.max(trend.length, 1);
+  const barWidth = Math.max(1, slotWidth - (trend.length >= 30 ? 0.8 : 2));
+  const ariaLabel =
+    `Feedback activity over the last ${summary.window_days} days: ` +
+    `${windowTotal} rating${windowTotal === 1 ? '' : 's'} across ${activeDays} active day${activeDays === 1 ? '' : 's'}; ` +
+    `peak ${peakCount} in one day.`;
+
+  return (
+    <div>
+      <svg
+        width="100%"
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={ariaLabel}
+        preserveAspectRatio="none"
+        style={{ display: 'block' }}
+      >
+        <title>{ariaLabel}</title>
+        <line x1="0" y1={height - 3} x2={width} y2={height - 3} stroke="#E0D5C5" strokeWidth="1" />
+        {trend.map((point, index) => {
+          const barHeight = point.count > 0
+            ? Math.max(3, (point.count / maxCount) * (height - 10))
+            : 1;
+          return (
+            <rect
+              key={point.date}
+              x={index * slotWidth + (slotWidth - barWidth) / 2}
+              y={height - 3 - barHeight}
+              width={barWidth}
+              height={barHeight}
+              rx={Math.min(1.5, barWidth / 2)}
+              fill={index === trend.length - 1 ? '#F0B84E' : '#8C7355'}
+              opacity={point.count > 0 ? 0.9 : 0.28}
+            />
+          );
+        })}
+      </svg>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginTop: 6,
+          color: '#A0A39A',
+          fontSize: 11,
+        }}
+      >
+        <span>{windowTotal} in window</span>
+        <span>{activeDays} active day{activeDays === 1 ? '' : 's'}</span>
+        <span>Peak {peakCount}/day</span>
+      </div>
+    </div>
+  );
+}
+
 function planFeatures(tier: string): string[] {
   const t = tier.toUpperCase();
   if (t === 'PRO') {
@@ -492,6 +563,11 @@ export function ProfileModal() {
   const [recentFb, setRecentFb] = useState<RecentFeedbackItem[]>([]);
   const [recentFbLoading, setRecentFbLoading] = useState(false);
   const [recentFbErr, setRecentFbErr] = useState<string | null>(null);
+  const [feedbackSummary, setFeedbackSummary] = useState<AgentFeedbackSummary | null>(null);
+  const [feedbackSummaryLoading, setFeedbackSummaryLoading] = useState(false);
+  const [feedbackSummaryErr, setFeedbackSummaryErr] = useState<string | null>(null);
+  const [feedbackSummaryWindowDays, setFeedbackSummaryWindowDays] = useState(30);
+  const [feedbackSummaryReload, setFeedbackSummaryReload] = useState(0);
   const [feedbackExportVerdict, setFeedbackExportVerdict] = useState<AgentFeedbackVerdict | ''>('');
   const [feedbackExportFromDate, setFeedbackExportFromDate] = useState('');
   const [feedbackExportToDate, setFeedbackExportToDate] = useState('');
@@ -567,6 +643,29 @@ export function ProfileModal() {
       cancelled = true;
     };
   }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
+    setFeedbackSummaryLoading(true);
+    setFeedbackSummaryErr(null);
+    void getAgentFeedbackSummary(feedbackSummaryWindowDays)
+      .then((summary) => {
+        if (!cancelled) setFeedbackSummary(summary);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFeedbackSummaryErr('Could not load feedback activity');
+          setFeedbackSummary(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setFeedbackSummaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, feedbackSummaryWindowDays, feedbackSummaryReload]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage' || !calHistoryOpen) return;
@@ -2624,6 +2723,112 @@ export function ProfileModal() {
                     Rate completed Agent answers as correct, partial, or wrong to see your accuracy mix here.
                   </p>
                 )}
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    color: '#A0A39A',
+                    letterSpacing: '0.10em',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  Feedback activity
+                </div>
+                {feedbackSummaryLoading ? (
+                  <div style={{ padding: 16, display: 'flex', justifyContent: 'center' }}>
+                    <MicroLoader label="Loading feedback activity" />
+                  </div>
+                ) : feedbackSummaryErr ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }} role="alert">
+                      {feedbackSummaryErr}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackSummaryReload((reload) => reload + 1)}
+                      style={{
+                        padding: 0,
+                        border: 'none',
+                        background: 'none',
+                        color: '#F0B84E',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontFamily: 'var(--vp-font-sans)',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : feedbackSummary ? (
+                  <div
+                    style={{
+                      background: '#F0E8DC',
+                      borderRadius: 10,
+                      padding: '14px 16px',
+                      border: '0.5px solid #E0D5C5',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        marginBottom: 10,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13, color: '#F3F0E7', fontWeight: 500 }}>
+                          Ratings over time
+                        </div>
+                        <div style={{ fontSize: 11, color: '#A0A39A', marginTop: 3 }}>
+                          Daily activity, bucketed in UTC
+                        </div>
+                      </div>
+                      <label
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          color: '#A0A39A',
+                          fontSize: 11,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        <span>Window</span>
+                        <select
+                          aria-label="Feedback activity window"
+                          value={feedbackSummaryWindowDays}
+                          onChange={(event) => setFeedbackSummaryWindowDays(Number(event.target.value))}
+                          style={{
+                            border: '0.5px solid #E0D5C5',
+                            borderRadius: 5,
+                            background: '#EDE4D8',
+                            color: '#4A3728',
+                            padding: '4px 6px',
+                            fontSize: 11,
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        >
+                          {FEEDBACK_ACTIVITY_WINDOWS.map((days) => (
+                            <option key={days} value={days}>
+                              {days} days
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <FeedbackActivityTrend summary={feedbackSummary} />
+                    {feedbackSummary.total > 0 &&
+                    feedbackSummary.daily_trend.every((point) => point.count === 0) ? (
+                      <p style={{ fontSize: 11, color: '#A0A39A', margin: '8px 0 0' }}>
+                        No ratings in this window. Lifetime total: {feedbackSummary.total}.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div
                   style={{
                     fontSize: 10,

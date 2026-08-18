@@ -134,6 +134,16 @@ const hoistedMocks = vi.hoisted(() => ({
     avg_gap: null,
   }),
   getRecentAgentFeedback: vi.fn().mockResolvedValue([]),
+  getAgentFeedbackSummary: vi.fn().mockResolvedValue({
+    total: 4,
+    verdicts: { correct: 2, partial: 1, wrong: 1 },
+    rate: 0.5,
+    window_days: 30,
+    daily_trend: Array.from({ length: 30 }, (_, index) => ({
+      date: `2026-08-${String(index + 1).padStart(2, '0')}`,
+      count: index === 29 ? 2 : index === 28 ? 1 : 0,
+    })),
+  }),
   getUserAnswerFeedbackStats: vi.fn().mockResolvedValue({
     total: 0,
     accurate: 0,
@@ -201,6 +211,7 @@ vi.mock('../api', () => ({
   getAnalyticsPersonaWinRate: hoistedMocks.getAnalyticsPersonaWinRate,
   getCalibrationStats: hoistedMocks.getCalibrationStats,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
+  getAgentFeedbackSummary: hoistedMocks.getAgentFeedbackSummary,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
   exportAgentFeedbackCsv: hoistedMocks.exportAgentFeedbackCsv,
   exportAgentFeedbackJson: hoistedMocks.exportAgentFeedbackJson,
@@ -612,6 +623,24 @@ describe('ProfileModal', () => {
         fromDate: '2026-08-01',
         toDate: '2026-08-18',
       });
+    });
+  });
+
+  it('shows feedback activity and reloads it for a different window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    expect(
+      await screen.findByRole('img', { name: /feedback activity over the last 30 days/i }),
+    ).toBeInTheDocument();
+    const windowSelect = screen.getByRole('combobox', { name: /feedback activity window/i });
+    fireEvent.change(windowSelect, { target: { value: '7' } });
+
+    await waitFor(() => {
+      expect(hoistedMocks.getAgentFeedbackSummary).toHaveBeenLastCalledWith(7);
     });
   });
 
