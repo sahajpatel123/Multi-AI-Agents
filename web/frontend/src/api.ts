@@ -1456,11 +1456,16 @@ export type AgentFeedbackSummary = {
   daily_trend: AgentFeedbackTrendPoint[];
 };
 
-export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedbackItem[]> {
+export async function getRecentAgentFeedback(
+  limit = 10,
+  verdict?: AgentFeedbackVerdict,
+): Promise<RecentFeedbackItem[]> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (verdict) query.set('verdict', verdict);
   const response = await apiFetch(
-    `/api/agent/feedback/recent?limit=${encodeURIComponent(String(limit))}`,
+    `/api/agent/feedback/recent?${query.toString()}`,
   );
-  const raw = parseJsonSafely<unknown>(response);
+  const raw = await parseJsonSafely<unknown>(response);
   const data = raw as { items?: RecentFeedbackItem[] } | null;
   if (!response.ok) {
     throw new ApiError(

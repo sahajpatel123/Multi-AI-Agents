@@ -644,6 +644,7 @@ export function ProfileModal() {
   const [recentFb, setRecentFb] = useState<RecentFeedbackItem[]>([]);
   const [recentFbLoading, setRecentFbLoading] = useState(false);
   const [recentFbErr, setRecentFbErr] = useState<string | null>(null);
+  const [recentFbVerdict, setRecentFbVerdict] = useState<AgentFeedbackVerdict | ''>('');
   const [feedbackSummary, setFeedbackSummary] = useState<AgentFeedbackSummary | null>(null);
   const [feedbackSummaryLoading, setFeedbackSummaryLoading] = useState(false);
   const [feedbackSummaryErr, setFeedbackSummaryErr] = useState<string | null>(null);
@@ -870,7 +871,7 @@ export function ProfileModal() {
       });
     setRecentFbLoading(true);
     setRecentFbErr(null);
-    void getRecentAgentFeedback(10)
+    void getRecentAgentFeedback(10, recentFbVerdict || undefined)
       .then((items) => {
         if (!cancelled) setRecentFb(items);
       })
@@ -886,7 +887,7 @@ export function ProfileModal() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, activeTab]);
+  }, [isOpen, activeTab, recentFbVerdict]);
 
   const refreshMcp = useCallback(async () => {
     setMcpLoading(true);
@@ -3043,9 +3044,50 @@ export function ProfileModal() {
                     color: '#A0A39A',
                     letterSpacing: '0.10em',
                     margin: '22px 0 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
                   }}
                 >
-                  Recent ratings
+                  <span>Recent ratings</span>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      letterSpacing: 'normal',
+                      textTransform: 'none',
+                      fontFamily: 'var(--vp-font-sans)',
+                      fontWeight: 400,
+                    }}
+                  >
+                    <span>Show</span>
+                    <select
+                      aria-label="Recent ratings filter"
+                      value={recentFbVerdict}
+                      onChange={(event) =>
+                        setRecentFbVerdict(event.target.value as AgentFeedbackVerdict | '')
+                      }
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#4A3728',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                        textTransform: 'none',
+                      }}
+                    >
+                      <option value="">All</option>
+                      <option value="correct">Correct</option>
+                      <option value="partial">Partial</option>
+                      <option value="wrong">Wrong</option>
+                    </select>
+                  </label>
                 </div>
                 {recentFbLoading ? (
                   <div style={{ padding: 12, display: 'flex', justifyContent: 'center' }}>
@@ -3055,7 +3097,9 @@ export function ProfileModal() {
                   <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>{recentFbErr}</p>
                 ) : recentFb.length === 0 ? (
                   <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>
-                    Your latest ratings will show here as you rate Agent answers.
+                    {recentFbVerdict
+                      ? `No ${recentFbVerdict} ratings in the latest ten.`
+                      : 'Your latest ratings will show here as you rate Agent answers.'}
                   </p>
                 ) : (
                   <ul

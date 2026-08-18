@@ -673,6 +673,48 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('filters recent ratings by verdict', async () => {
+    const recentRatings = [
+      {
+        task_id: 'task-correct',
+        verdict: 'correct',
+        note: null,
+        created_at: '2026-08-18T09:00:00Z',
+        title: 'Correct answer',
+        task_text: null,
+      },
+      {
+        task_id: 'task-wrong',
+        verdict: 'wrong',
+        note: null,
+        created_at: '2026-08-18T08:00:00Z',
+        title: 'Wrong answer',
+        task_text: null,
+      },
+    ];
+    vi.mocked(hoistedMocks.getRecentAgentFeedback)
+      .mockResolvedValueOnce(recentRatings)
+      .mockResolvedValueOnce([recentRatings[1]]);
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const filter = await screen.findByRole('combobox', { name: /recent ratings filter/i });
+    expect(await screen.findByRole('button', { name: 'Correct answer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Wrong answer' })).toBeInTheDocument();
+
+    fireEvent.change(filter, { target: { value: 'wrong' } });
+
+    await waitFor(() => {
+      expect(hoistedMocks.getRecentAgentFeedback).toHaveBeenLastCalledWith(10, 'wrong');
+    });
+    expect(await screen.findByRole('button', { name: 'Wrong answer' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Correct answer' })).not.toBeInTheDocument();
+  });
+
   it('announces unclassified feedback in the activity chart', async () => {
     vi.mocked(hoistedMocks.getAgentFeedbackSummary).mockResolvedValueOnce({
       total: 5,

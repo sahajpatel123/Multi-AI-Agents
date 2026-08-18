@@ -5,6 +5,7 @@ import {
   exportAgentFeedbackSummaryJson,
   exportAgentFeedbackSummaryMarkdown,
   getAgentFeedbackSummary,
+  getRecentAgentFeedback,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -33,6 +34,35 @@ function summaryPayload(windowDays = 7) {
 describe('Agent feedback summary frontend API helper', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('loads recent feedback with an optional verdict filter', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              task_id: 'task-wrong',
+              verdict: 'wrong',
+              note: null,
+              created_at: '2026-08-18T08:00:00Z',
+              title: 'Wrong answer',
+              task_text: null,
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await getRecentAgentFeedback(10, 'wrong');
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/feedback/recent?limit=10&verdict=wrong',
+      {},
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].verdict).toBe('wrong');
   });
 
   it('loads a typed daily trend for the requested window', async () => {
