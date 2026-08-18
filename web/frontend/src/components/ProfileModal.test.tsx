@@ -1192,6 +1192,10 @@ describe('ProfileModal', () => {
     const group = await screen.findByRole('group', { name: /persona win rates/i });
     const rowsBeforeSort = within(group).getAllByRole('row');
     expect(rowsBeforeSort[1]).toHaveTextContent('The Philosopher');
+    expect(within(group).getByRole('columnheader', { name: 'Rate' })).toHaveAttribute(
+      'aria-sort',
+      'descending',
+    );
 
     fireEvent.change(
       await screen.findByRole('combobox', { name: /persona win-rate sort/i }),
@@ -1201,6 +1205,13 @@ describe('ProfileModal', () => {
     await waitFor(() => {
       const rowsAfterSort = within(group).getAllByRole('row');
       expect(rowsAfterSort[1]).toHaveTextContent('The Analyst');
+      expect(within(group).getByRole('columnheader', { name: 'Appearances' })).toHaveAttribute(
+        'aria-sort',
+        'descending',
+      );
+      expect(within(group).getByRole('columnheader', { name: 'Rate' })).not.toHaveAttribute(
+        'aria-sort',
+      );
     });
   });
 

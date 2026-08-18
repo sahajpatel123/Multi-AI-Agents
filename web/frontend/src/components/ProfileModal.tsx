@@ -2019,11 +2019,31 @@ export function ProfileModal() {
                       >
                         <thead>
                           <tr>
-                            <th style={{ textAlign: 'left', color: '#A0A39A', fontWeight: 500, padding: '4px 8px 8px 0' }}>Persona</th>
+                            <th
+                              aria-sort={winRateSort === 'name' ? 'ascending' : undefined}
+                              style={{ textAlign: 'left', color: '#A0A39A', fontWeight: 500, padding: '4px 8px 8px 0' }}
+                            >
+                              Persona
+                            </th>
                             <th style={{ textAlign: 'left', color: '#A0A39A', fontWeight: 500, padding: '4px 8px 8px 0' }}>Trend</th>
-                            <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>Appearances</th>
-                            <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>Wins</th>
-                            <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>Rate</th>
+                            <th
+                              aria-sort={winRateSort === 'appearances' ? 'descending' : undefined}
+                              style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}
+                            >
+                              Appearances
+                            </th>
+                            <th
+                              aria-sort={winRateSort === 'wins' ? 'descending' : undefined}
+                              style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}
+                            >
+                              Wins
+                            </th>
+                            <th
+                              aria-sort={winRateSort === 'win_rate' ? 'descending' : undefined}
+                              style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}
+                            >
+                              Rate
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
