@@ -3910,6 +3910,9 @@ export type AnalyticsSummaryJsonExport = {
 };
 
 export async function exportAnalyticsSummaryJson(windowDays: number = 30): Promise<AnalyticsSummaryJsonExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
   const response = await apiFetch(`/api/analytics/summary/export.json?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
