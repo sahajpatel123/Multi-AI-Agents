@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   exportCalibrationHistoryCsv,
   exportCalibrationHistoryJson,
+  exportCalibrationHistoryMarkdown,
   getCalibrationHistory,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
@@ -83,6 +84,43 @@ describe('Calibration history export helpers', () => {
 
     const res = await exportCalibrationHistoryJson();
     expect(res.filename).toBe('arena-calibration.json');
+  });
+
+  it('fetches the calibration Markdown endpoint and returns the server filename', async () => {
+    const mockBlob = new Blob(['# Arena — confidence calibration'], {
+      type: 'text/markdown',
+    });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-calibration-7-20260812.md"',
+        },
+      }),
+    );
+
+    const res = await exportCalibrationHistoryMarkdown();
+    expect(res.blob).toBeInstanceOf(Blob);
+    expect(res.filename).toBe('arena-calibration-7-20260812.md');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/calibration/history/export.md',
+      {},
+    );
+  });
+
+  it('surfaces request IDs on Markdown failure', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'boom' }), {
+        status: 429,
+        headers: { 'x-request-id': 'req-cal-md' },
+      }),
+    );
+
+    await expect(exportCalibrationHistoryMarkdown()).rejects.toMatchObject({
+      status: 429,
+      message: 'boom (Request ID: req-cal-md)',
+    });
   });
 
   it('surfaces request IDs on CSV failure', async () => {

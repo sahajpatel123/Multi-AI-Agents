@@ -285,6 +285,10 @@ vi.mock('../api', () => ({
     blob: new Blob(['[{"task_id":"task-1"}]'], { type: 'application/json' }),
     filename: 'arena-calibration-7-20260812.json',
   }),
+  exportCalibrationHistoryMarkdown: vi.fn().mockResolvedValue({
+    blob: new Blob(['# Arena — confidence calibration'], { type: 'text/markdown' }),
+    filename: 'arena-calibration-7-20260812.md',
+  }),
   exportUserUsageCsv: vi.fn().mockResolvedValue(new Blob(['date,tokens'], { type: 'text/csv' })),
   exportUserUsageJson: vi.fn().mockResolvedValue({
     blob: new Blob(['{"history":[]}'], { type: 'application/json' }),
@@ -1178,6 +1182,32 @@ describe('ProfileModal', () => {
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-calibration-7-20260812.json',
+      );
+    });
+  });
+
+  it('downloads calibration history Markdown with the server filename', async () => {
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 1,
+      avg_delta: 0,
+      trend: 'stable',
+      calibration_score: 100,
+      recent_ratings: [{ delta: 0, created_at: '2026-08-11T10:00:00Z' }],
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', {
+      name: /calibration markdown export/i,
+    });
+    button.click();
+
+    await waitFor(() => {
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-calibration-7-20260812.md',
       );
     });
   });

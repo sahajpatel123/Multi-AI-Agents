@@ -689,3 +689,97 @@ async def export_calibration_history_json(
         media_type="application/json; charset=utf-8",
         headers=headers,
     )
+
+
+@router.get("/history/export.md")
+async def export_calibration_history_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Markdown export of calibration history for sharing and review.
+
+    Task ids are user-controlled strings, so escape Markdown table syntax
+    before putting them in the export. The route intentionally uses the same
+    clamped values and newest-first ordering as the CSV and JSON exports.
+    """
+    orm_user = db.query(User).filter(User.id == user.id).first()
+    if not orm_user:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="calibration_markdown_export",
+        limit=30,
+        window_seconds=60,
+        message="Too many Markdown exports. Please wait.",
+    )
+
+    ratings = (
+        db.query(ConfidenceRating)
+        .filter(ConfidenceRating.user_id == user.id)
+        .order_by(ConfidenceRating.created_at.desc())
+        .all()
+    )
+
+    def _markdown_cell(value: object) -> str:
+        if value is None:
+            return ""
+        return (
+            str(value)
+            .replace("\\", "\\\\")
+            .replace("|", "\\|")
+            .replace("\r", " ")
+            .replace("\n", " ")
+        )
+
+    lines = [
+        "# Arena — confidence calibration",
+        "",
+        f"Exported: {utcnow_naive().strftime('%Y-%m-%d')}",
+        f"Total ratings: {len(ratings)}",
+        "",
+        "| Date | Task | Self-rating | System score | Delta | Verdict |",
+        "| --- | --- | ---: | ---: | ---: | --- |",
+    ]
+
+    if ratings:
+        for row in ratings:
+            try:
+                sys_score = max(0, min(100, int(row.system_score or 0)))
+            except (TypeError, ValueError):
+                sys_score = 0
+            try:
+                delta = max(-100, min(100, int(row.delta or 0)))
+            except (TypeError, ValueError):
+                delta = 0
+            lines.append(
+                "| "
+                + " | ".join(
+                    (
+                        _markdown_cell(row.created_at.isoformat() if row.created_at else ""),
+                        _markdown_cell(row.task_id),
+                        _markdown_cell(row.user_rating),
+                        _markdown_cell(sys_score),
+                        _markdown_cell(delta),
+                        _markdown_cell(_verdict_for_delta(delta)),
+                    )
+                )
+                + " |"
+            )
+    else:
+        lines.append("| — | No ratings yet | — | — | — | — |")
+
+    filename = f"arena-calibration-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.md"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content="\n".join(lines) + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers=headers,
+    )

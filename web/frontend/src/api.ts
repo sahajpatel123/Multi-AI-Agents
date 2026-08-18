@@ -3023,6 +3023,27 @@ export async function exportCalibrationHistoryJson(): Promise<CalibrationHistory
   };
 }
 
+export type CalibrationHistoryMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportCalibrationHistoryMarkdown(): Promise<CalibrationHistoryMarkdownExport> {
+  const response = await apiFetch(`/api/calibration/history/export.md`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export calibration Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-calibration.md',
+  };
+}
+
 export async function getCalibrationRatingForTask(taskId: string): Promise<unknown> {
   const response = await apiFetch(
     `/api/calibration/rating/${encodeURIComponent(taskId)}`,
