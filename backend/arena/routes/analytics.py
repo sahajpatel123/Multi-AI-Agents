@@ -237,7 +237,40 @@ async def analytics_summary(
 ) -> dict:
     """Per-user analytics summary over a configurable window.
 
-    Adds three things over the previous shape:
+    The dashboard endpoint owns the dashboard rate-limit budget. Export
+    routes call the shared aggregation helper directly so downloading a
+    report does not unexpectedly consume dashboard refresh capacity.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_summary",
+        limit=60,
+        window_seconds=3600,
+        message="Too many analytics summary requests. Limit is 60 per hour.",
+    )
+    return _analytics_summary_payload(
+        user=user,
+        db=db,
+        window_days=window_days,
+        topic_limit=topic_limit,
+    )
+
+
+def _analytics_summary_payload(
+    *,
+    user: UserResponse,
+    db: Session,
+    window_days: int,
+    topic_limit: int,
+) -> dict:
+    """Build the summary payload without applying a route-level throttle.
+
+    ``analytics_summary`` and each export have separate user-scoped budgets,
+    but all of them must return the same aggregation. Keeping the database
+    work here prevents an export from calling the route handler and charging
+    two rate-limit scopes for one request.
+
+    The payload adds three things over the previous shape:
 
     - ?window_days=N (default 30, max 365): caps heavy full-history scans
       so a user with years of activity doesn't trigger a multi-second
@@ -255,16 +288,9 @@ async def analytics_summary(
       bounds the streak computation — a 365-day window can't return a
       streak longer than 365.
 
-    Bound call volume so a single account cannot use this as a cheap
-    DB-amplification DoS.
+    The route-level rate limiter above bounds call volume so a single account
+    cannot use this as a cheap DB-amplification DoS.
     """
-    enforce_user_rate_limit(
-        user.id,
-        scope="analytics_summary",
-        limit=60,
-        window_seconds=3600,
-        message="Too many analytics summary requests. Limit is 60 per hour.",
-    )
     user_id = user.id
 
     # Anchor the window in UTC to match the naive-UTC timestamps written
@@ -481,7 +507,7 @@ async def analytics_summary_json(
         message="Too many summary JSON exports. Please wait.",
     )
 
-    payload = await analytics_summary(
+    payload = _analytics_summary_payload(
         window_days=window_days,
         topic_limit=topic_limit,
         user=user,
@@ -524,9 +550,9 @@ async def analytics_summary_csv(
 ) -> Response:
     """CSV export of the analytics summary.
 
-    Reuses the JSON route so the CSV and the API response
-    cannot drift. Each metric becomes a row (metric, value)
-    with persona_wins and topic_distribution as sub-rows.
+    Reuses the shared summary aggregation so the CSV and the API response
+    cannot drift. Each metric becomes a row (metric, value) with
+    persona_wins and topic_distribution as sub-rows.
 
     Follows the same defenses as the other CSV exports:
     rate-limit scoped, security headers, RFC 4180 quoting,
@@ -540,7 +566,7 @@ async def analytics_summary_csv(
         message="Too many summary CSV exports. Limit is 60 per hour.",
     )
 
-    payload = await analytics_summary(
+    payload = _analytics_summary_payload(
         window_days=window_days,
         topic_limit=topic_limit,
         user=user,
@@ -633,8 +659,8 @@ async def analytics_summary_markdown(
     """Download the analytics summary as a portable Markdown report.
 
     The report is intended for notes, reviews, and issue trackers rather
-    than spreadsheets. It deliberately reuses ``analytics_summary`` so
-    every scalar and breakdown stays aligned with the JSON and CSV exports.
+    than spreadsheets. It reuses the shared summary aggregation so every
+    scalar and breakdown stays aligned with the JSON and CSV exports.
     Markdown-controlled cells are escaped before being placed in tables, and
     the download has its own user-scoped rate-limit budget.
     """
@@ -646,7 +672,7 @@ async def analytics_summary_markdown(
         message="Too many summary Markdown exports. Please wait.",
     )
 
-    payload = await analytics_summary(
+    payload = _analytics_summary_payload(
         window_days=window_days,
         topic_limit=topic_limit,
         user=user,

@@ -79,6 +79,39 @@ async def test_analytics_summary_rate_limited(app_client, make_user, monkeypatch
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "scope"),
+    [
+        ("/api/analytics/summary/export.json", "analytics_summary_json"),
+        ("/api/analytics/summary/export.csv", "analytics_summary_csv"),
+        ("/api/analytics/summary/export.md", "analytics_summary_markdown"),
+    ],
+)
+async def test_analytics_summary_exports_use_only_their_own_rate_budget(
+    app_client, make_user, monkeypatch, path, scope
+):
+    """A summary download must not also consume dashboard refresh capacity."""
+    from arena.core import rate_limits
+
+    keys: list[str] = []
+    real_hit = rate_limits.rate_limiter.hit
+
+    def recording_hit(key, *, limit, window_seconds, message):
+        keys.append(key)
+        return real_hit(key, limit=limit, window_seconds=window_seconds, message=message)
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", recording_hit)
+
+    user = make_user(email=f"{scope}-budget@test.com", tier=UserTier.PRO)
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(path, headers=headers)
+
+    assert res.status_code == 200, res.text
+    assert f"user:{scope}:{user.id}" in keys
+    assert f"user:analytics_summary:{user.id}" not in keys
+
+
+@pytest.mark.asyncio
 async def test_analytics_activity_csv_rate_limited(app_client, make_user, monkeypatch):
     """The CSV export has its own hourly budget and rejects when exhausted."""
     from arena.core import rate_limits

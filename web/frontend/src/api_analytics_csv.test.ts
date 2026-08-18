@@ -98,6 +98,13 @@ describe('Analytics CSV export frontend API helpers', () => {
     );
   });
 
+  it('rejects an invalid summary Markdown window before fetching', async () => {
+    await expect(exportAnalyticsSummaryMarkdown(366)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+  });
+
   it('exportAnalyticsPersonaWinRateCsv returns the server filename', async () => {
     const mockBlob = new Blob(['persona_id,win_rate'], { type: 'text/csv' });
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
