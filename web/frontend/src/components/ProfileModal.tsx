@@ -98,6 +98,13 @@ function formatSignedDelta(delta: number): string {
   return delta > 0 ? `+${delta}` : String(delta);
 }
 
+const CALIBRATION_HISTORY_SORT_LABELS: Record<CalibrationHistorySort, string> = {
+  newest: 'Newest first',
+  oldest: 'Oldest first',
+  delta_desc: 'Underestimates first',
+  delta_asc: 'Overestimates first',
+};
+
 function CalibrationHistoryPagination({
   page,
   totalPages,
@@ -2298,16 +2305,17 @@ export function ProfileModal() {
                                 border: '0.5px solid #E0D5C5',
                                 borderRadius: 5,
                                 background: '#F0E8DC',
-                                color: '#F3F0E7',
+                                color: '#4A3728',
                                 padding: '4px 6px',
                                 fontSize: 11,
                                 fontFamily: 'var(--vp-font-sans)',
                               }}
                             >
-                              <option value="newest">Newest first</option>
-                              <option value="oldest">Oldest first</option>
-                              <option value="delta_desc">Underestimates first</option>
-                              <option value="delta_asc">Overestimates first</option>
+                              {Object.entries(CALIBRATION_HISTORY_SORT_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              ))}
                             </select>
                           </label>
                         </div>
@@ -2338,7 +2346,8 @@ export function ProfileModal() {
                             {calHistory.ratings.length ? (
                               <>
                                 <div style={{ fontSize: 10, color: '#A0A39A', marginBottom: 6 }}>
-                                  Newest first · {calHistory.total} total rating{calHistory.total === 1 ? '' : 's'}
+                                  {CALIBRATION_HISTORY_SORT_LABELS[calHistorySort]} · {calHistory.total} total rating
+                                  {calHistory.total === 1 ? '' : 's'}
                                 </div>
                                 <div style={{ display: 'grid', gap: 6 }}>
                                   {calHistory.ratings.map((rating) => {

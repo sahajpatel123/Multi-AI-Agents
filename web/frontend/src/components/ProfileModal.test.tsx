@@ -572,6 +572,7 @@ describe('ProfileModal', () => {
       });
     });
     expect(within(history).getByDisplayValue('Underestimates first')).toBeInTheDocument();
+    expect(within(history).getByText('Underestimates first · 6 total ratings')).toBeInTheDocument();
     expect(await within(history).findByText('You underestimated this answer')).toBeInTheDocument();
   });
 
