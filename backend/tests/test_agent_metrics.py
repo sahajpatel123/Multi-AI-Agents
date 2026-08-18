@@ -275,18 +275,31 @@ def test_summary_excludes_rows_older_than_window() -> None:
     assert trend_by_date["2026-07-20"] == 1
 
 
-def test_summary_handles_naive_datetimes_as_primary_contract() -> None:
-    # The DB column is naive UTC; production rows are always naive.
-    # The function's tz-coercion block is defensive dead code given the
-    # cutoff comparison happens BEFORE the coercion — tz-aware rows would
-    # raise TypeError on the comparison. Lock the primary contract:
-    # naive UTC datetimes are the supported input.
+def test_summary_normalizes_aware_datetimes_before_cutoff_and_bucketing() -> None:
+    # A timestamp near midnight in IST belongs to the previous UTC day. It
+    # must be normalized before both the cutoff comparison and day bucket.
+    ist = timezone(timedelta(hours=5, minutes=30))
     rows = [_FakeFeedback("correct", datetime(2026, 7, 20, 12, 0, 0))]
+    rows.extend(
+        [
+            _FakeFeedback(
+                "correct", datetime(2026, 7, 20, 0, 30, tzinfo=ist)
+            ),
+            # This is July 13 in UTC, so it is outside a July 14–20 window
+            # even though its local calendar date is July 14.
+            _FakeFeedback(
+                "wrong", datetime(2026, 7, 14, 4, 0, tzinfo=ist)
+            ),
+        ]
+    )
     out = compute_user_feedback_summary(
-        db=_FakeSession(rows), user=_user(), window_days=30
+        db=_FakeSession(rows), user=_user(), window_days=7
     )
     trend_by_date = {d["date"]: d["count"] for d in out["daily_trend"]}
+    assert out["total"] == 3
+    assert trend_by_date["2026-07-19"] == 1
     assert trend_by_date["2026-07-20"] == 1
+    assert sum(trend_by_date.values()) == 2
 
 
 def test_summary_top_level_shape_is_stable() -> None:

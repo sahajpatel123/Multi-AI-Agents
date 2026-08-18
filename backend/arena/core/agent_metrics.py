@@ -165,11 +165,13 @@ def compute_user_feedback_summary(
     cutoff = _utc_day_floor(now) - timedelta(days=max(0, window_days - 1))
     counts_by_day: dict[Any, int] = defaultdict(int)
     for row in rows:
-        if row.created_at is None or row.created_at < cutoff:
+        if row.created_at is None:
             continue
         ts = row.created_at
         if ts.tzinfo is not None:
             ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+        if ts < cutoff:
+            continue
         counts_by_day[_utc_day_floor(ts).date()] += 1
 
     daily_trend: list[dict[str, Any]] = []
