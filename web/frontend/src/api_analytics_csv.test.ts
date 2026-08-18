@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   exportAnalyticsSummaryCsv,
+  exportAnalyticsSummaryJson,
   exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateJson,
   exportAnalyticsCategoryStatsCsv,
@@ -40,6 +41,29 @@ describe('Analytics CSV export frontend API helpers', () => {
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/analytics/summary/export.csv?window_days=30',
       {}
+    );
+  });
+
+  it('exportAnalyticsSummaryJson returns the server filename', async () => {
+    const mockBlob = new Blob(['{"window_days":30,"total_prompts":0}'], {
+      type: 'application/json',
+    });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-summary-2026-07-13-to-2026-08-11.json"',
+        },
+      }),
+    );
+
+    const res = await exportAnalyticsSummaryJson(30);
+    expectBlob(res.blob);
+    expect(res.filename).toBe('arena-summary-2026-07-13-to-2026-08-11.json');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/analytics/summary/export.json?window_days=30',
+      {},
     );
   });
 

@@ -25,6 +25,7 @@ import {
   exportAnalyticsPersonaWinRateJson,
   exportAnalyticsPersonaWinRateMarkdown,
   exportAnalyticsSummaryCsv,
+  exportAnalyticsSummaryJson,
   exportUserUsageCsv,
   exportUserUsageJson,
   getAnalyticsActivity,
@@ -2215,6 +2216,42 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'summary' ? '⏳ Downloading…' : '📊 Summary Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'summary-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'summary-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('summary-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsSummaryJson(30);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download analytics summary JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download analytics summary JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'summary-json' ? '⏳ Downloading…' : '📊 Summary JSON Export'}
                   </button>
                   <button
                     type="button"

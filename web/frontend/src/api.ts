@@ -3904,6 +3904,27 @@ export async function exportAnalyticsSummaryCsv(windowDays: number = 30): Promis
   return response.blob();
 }
 
+export type AnalyticsSummaryJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsSummaryJson(windowDays: number = 30): Promise<AnalyticsSummaryJsonExport> {
+  const response = await apiFetch(`/api/analytics/summary/export.json?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export analytics summary JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-summary-${windowDays}d.json`,
+  };
+}
+
 export type AnalyticsPersonaWinRateCsvExport = {
   blob: Blob;
   filename: string;

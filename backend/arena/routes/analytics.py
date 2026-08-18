@@ -450,6 +450,61 @@ async def analytics_summary(
     }
 
 
+@router.get("/analytics/summary/export.json")
+async def analytics_summary_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        30,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Must match the JSON endpoint.",
+    ),
+    topic_limit: int = Query(
+        10,
+        ge=1,
+        le=50,
+        description="Max number of topics in the topic_distribution section.",
+    ),
+) -> Response:
+    """Download the exact analytics summary payload as JSON.
+
+    Reuses the summary aggregation so an archive or BI script receives the
+    same metrics as /analytics/summary without scraping the UI. The export
+    has its own user-scoped budget and no-store download headers.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_summary_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many summary JSON exports. Please wait.",
+    )
+
+    payload = await analytics_summary(
+        window_days=window_days,
+        topic_limit=topic_limit,
+        user=user,
+        db=db,
+    )
+
+    import json
+
+    filename = (
+        f"arena-summary-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/summary/export.csv")
 async def analytics_summary_csv(
     user: UserResponse = Depends(get_current_user_required),

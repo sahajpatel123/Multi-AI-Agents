@@ -95,6 +95,10 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['# Arena — activity timeline'], { type: 'text/markdown' }),
     filename: 'arena-activity-2026-08-05-to-2026-08-11.md',
   }),
+  exportAnalyticsSummaryJson: vi.fn().mockResolvedValue({
+    blob: new Blob(['{"window_days":30,"total_prompts":42}'], { type: 'application/json' }),
+    filename: 'arena-summary-2026-07-13-to-2026-08-11.json',
+  }),
   getAnalyticsPersonaWinRate: vi.fn().mockResolvedValue({
     window_days: 30,
     window_start: '2026-07-13',
@@ -283,6 +287,7 @@ vi.mock('../api', () => ({
   exportAnalyticsActivityCsv: hoistedMocks.exportAnalyticsActivityCsv,
   exportAnalyticsActivityJson: hoistedMocks.exportAnalyticsActivityJson,
   exportAnalyticsActivityMarkdown: hoistedMocks.exportAnalyticsActivityMarkdown,
+  exportAnalyticsSummaryJson: hoistedMocks.exportAnalyticsSummaryJson,
   exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateJson: hoistedMocks.exportAnalyticsPersonaWinRateJson,
   exportAnalyticsPersonaWinRateMarkdown: hoistedMocks.exportAnalyticsPersonaWinRateMarkdown,
@@ -362,6 +367,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsActivityCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityMarkdown).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsSummaryJson).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
@@ -411,6 +417,24 @@ describe('ProfileModal', () => {
     expect(
       await screen.findByRole('button', { name: /^🗓️ activity json export$/i }),
     ).toBeInTheDocument();
+  });
+
+  it('renders and downloads the analytics summary JSON export', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', { name: /^📊 summary json export$/i });
+    button.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsSummaryJson).toHaveBeenCalledWith(30);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-summary-2026-07-13-to-2026-08-11.json',
+      );
+    });
   });
 
   it('renders and downloads the analytics activity JSON export', async () => {

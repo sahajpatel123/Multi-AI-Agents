@@ -68,6 +68,45 @@ async def test_summary_returns_empty_array_for_new_user(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_summary_json_matches_summary_and_has_download_headers(
+    app_client, make_user, db_session
+):
+    """The JSON export must be the same payload as the summary API."""
+    user = make_user(email="summary-json@test.com", tier=UserTier.PRO)
+    _seed_summary_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst", "philosopher"],
+    )
+    db_session.commit()
+
+    summary_res = await app_client.get(
+        "/api/analytics/summary?window_days=7&topic_limit=3",
+        headers=_pro_headers(user),
+    )
+    export_res = await app_client.get(
+        "/api/analytics/summary/export.json?window_days=7&topic_limit=3",
+        headers=_pro_headers(user),
+    )
+
+    assert summary_res.status_code == 200
+    assert export_res.status_code == 200
+    assert export_res.json() == summary_res.json()
+    assert export_res.headers.get("content-type", "").startswith("application/json")
+    assert export_res.headers.get("x-content-type-options") == "nosniff"
+    assert export_res.headers.get("cache-control") == "no-store"
+    expected_filename = (
+        f"arena-summary-{summary_res.json()['window_start']}-to-"
+        f"{summary_res.json()['window_end']}.json"
+    )
+    summary_body = summary_res.json()
+    assert export_res.headers.get("content-disposition") == (
+        f'attachment; filename="{expected_filename}"'
+    )
+
+
+@pytest.mark.asyncio
 async def test_summary_requires_auth(app_client):
     res = await app_client.get("/api/analytics/summary")
     assert res.status_code == 401
@@ -143,6 +182,13 @@ async def test_summary_csv_footer_matches_json(app_client, make_user, db_session
 async def test_summary_csv_requires_auth(app_client):
     """CSV export must enforce auth the same way the JSON endpoint does."""
     res = await app_client.get("/api/analytics/summary/export.csv")
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_summary_json_requires_auth(app_client):
+    """JSON export must enforce auth the same way as the summary endpoint."""
+    res = await app_client.get("/api/analytics/summary/export.json")
     assert res.status_code == 401
 
 
