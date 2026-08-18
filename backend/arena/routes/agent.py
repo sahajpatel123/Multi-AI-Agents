@@ -4108,36 +4108,47 @@ async def export_feedback_summary_json(
 
 
 def _feedback_summary_markdown(payload: dict) -> str:
-    """Render a feedback summary payload as a portable Markdown report."""
+    """Render a feedback summary payload as a portable Markdown report.
+
+    The current payload only contains server-generated dates and counters,
+    but route-level report helpers are deliberately defensive: escaping the
+    values at the Markdown boundary keeps a future payload change from
+    breaking the table or introducing raw Markdown/HTML into a download.
+    """
     verdicts = payload["verdicts"]
     daily_trend = payload["daily_trend"]
     window_end = daily_trend[-1]["date"]
+    accuracy = _feedback_markdown_inline(f"{payload['rate'] * 100:.1f}%")
     lines = [
         "# Arena — feedback activity",
         "",
-        f"- Window: last {payload['window_days']} days (UTC)",
-        f"- Window end: {window_end}",
+        f"- Window: last {_feedback_markdown_inline(payload['window_days'])} days (UTC)",
+        f"- Window end: {_feedback_markdown_inline(window_end)}",
         "",
         "## Lifetime verdict breakdown",
         "",
         "| Verdict | Ratings |",
         "| --- | ---: |",
-        f"| Correct | {verdicts['correct']} |",
-        f"| Partial | {verdicts['partial']} |",
-        f"| Wrong | {verdicts['wrong']} |",
-        f"| Total | {payload['total']} |",
+        f"| Correct | {_feedback_markdown_inline(verdicts['correct'])} |",
+        f"| Partial | {_feedback_markdown_inline(verdicts['partial'])} |",
+        f"| Wrong | {_feedback_markdown_inline(verdicts['wrong'])} |",
+        f"| Total | {_feedback_markdown_inline(payload['total'])} |",
         "",
-        f"Accuracy: **{payload['rate'] * 100:.1f}%** (correct / all ratings)",
+        f"Accuracy: **{accuracy}** (correct / all ratings)",
         "",
-        f"## Daily activity ({payload['window_days']}-day window, UTC)",
+        f"## Daily activity ({_feedback_markdown_inline(payload['window_days'])}-day window, UTC)",
         "",
         "| Date | Ratings |",
         "| --- | ---: |",
     ]
     lines.extend(
-        f"| {point['date']} | {point['count']} |" for point in daily_trend
+        "| "
+        f"{_feedback_markdown_inline(point['date'])} | "
+        f"{_feedback_markdown_inline(point['count'])} |"
+        for point in daily_trend
     )
-    return "\n".join(lines) + "\n"
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+    return "\n".join(lines).strip() + "\n"
 
 
 @router.get("/feedback/summary/export.md")
