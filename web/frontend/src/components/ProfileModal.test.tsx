@@ -1202,6 +1202,7 @@ describe('ProfileModal', () => {
     const button = await screen.findByRole('button', {
       name: /calibration markdown export/i,
     });
+    expect(button).toHaveStyle({ color: '#4A3728' });
     button.click();
 
     await waitFor(() => {

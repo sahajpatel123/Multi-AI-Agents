@@ -2832,7 +2832,7 @@ export function ProfileModal() {
                           border: '0.5px solid #E0D5C5',
                           background:
                             activeExport === 'calibration-csv' ? '#EDE4D8' : '#F0E8DC',
-                          color: '#F3F0E7',
+                          color: '#4A3728',
                           fontSize: 12,
                           cursor: activeExport !== null ? 'wait' : 'pointer',
                           textAlign: 'left',
@@ -2867,7 +2867,7 @@ export function ProfileModal() {
                           border: '0.5px solid #E0D5C5',
                           background:
                             activeExport === 'calibration-json' ? '#EDE4D8' : '#F0E8DC',
-                          color: '#F3F0E7',
+                          color: '#4A3728',
                           fontSize: 12,
                           cursor: activeExport !== null ? 'wait' : 'pointer',
                           textAlign: 'left',
@@ -2902,7 +2902,7 @@ export function ProfileModal() {
                           border: '0.5px solid #E0D5C5',
                           background:
                             activeExport === 'calibration-markdown' ? '#EDE4D8' : '#F0E8DC',
-                          color: '#F3F0E7',
+                          color: '#4A3728',
                           fontSize: 12,
                           cursor: activeExport !== null ? 'wait' : 'pointer',
                           textAlign: 'left',
