@@ -45,6 +45,16 @@ describe('Analytics CSV export frontend API helpers', () => {
     );
   });
 
+  it('rejects an invalid summary CSV window before fetching', async () => {
+    await expect(exportAnalyticsSummaryCsv(0)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    await expect(exportAnalyticsSummaryCsv(366)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+  });
+
   it('exportAnalyticsSummaryJson returns the server filename', async () => {
     const mockBlob = new Blob(['{"window_days":30,"total_prompts":0}'], {
       type: 'application/json',
