@@ -613,6 +613,142 @@ async def analytics_summary_csv(
     )
 
 
+@router.get("/analytics/summary/export.md")
+async def analytics_summary_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        30,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Must match the JSON endpoint.",
+    ),
+    topic_limit: int = Query(
+        10,
+        ge=1,
+        le=50,
+        description="Max number of topics in the topic_distribution section.",
+    ),
+) -> Response:
+    """Download the analytics summary as a portable Markdown report.
+
+    The report is intended for notes, reviews, and issue trackers rather
+    than spreadsheets. It deliberately reuses ``analytics_summary`` so
+    every scalar and breakdown stays aligned with the JSON and CSV exports.
+    Markdown-controlled cells are escaped before being placed in tables, and
+    the download has its own user-scoped rate-limit budget.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_summary_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many summary Markdown exports. Please wait.",
+    )
+
+    payload = await analytics_summary(
+        window_days=window_days,
+        topic_limit=topic_limit,
+        user=user,
+        db=db,
+    )
+
+    engagement_rate = payload["engagement_rate"]
+    drift_rate = payload["drift_rate"]
+    lines = [
+        "# Arena — analytics summary",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Total prompts:** {payload['total_prompts']}",
+        f"- **Total debates:** {payload['total_debates']}",
+        f"- **Total discusses:** {payload['total_discusses']}",
+        f"- **Total saved:** {payload['total_saved']}",
+        f"- **Top persona by wins:** {_markdown_cell(payload['top_persona_by_wins'] or 'none')}",
+        f"- **Most used event:** {_markdown_cell(payload['most_used_event'] or 'none')}",
+        f"- **Engagement rate:** {round(engagement_rate * 100, 1)}% ({engagement_rate})",
+        f"- **Current streak:** {payload['current_streak']} days",
+        f"- **Longest streak:** {payload['longest_streak']} days",
+        f"- **Average prompts per session:** {payload['avg_session_prompts']}",
+        f"- **Average winning score:** {payload['avg_winning_score']}",
+        f"- **Drift rate:** {round(drift_rate * 100, 1)}% ({drift_rate})",
+        "",
+        "## Persona wins",
+        "",
+        "| Persona | Wins |",
+        "| --- | ---: |",
+    ]
+    if payload["persona_wins"]:
+        for persona_id, wins in sorted(payload["persona_wins"].items()):
+            lines.append(
+                f"| {_markdown_cell(persona_id)} | {_markdown_cell(wins)} |"
+            )
+    else:
+        lines.append("| _None recorded_ | 0 |")
+
+    lines.extend(
+        [
+            "",
+            "## Topic distribution",
+            "",
+            "| Topic | Count |",
+            "| --- | ---: |",
+        ]
+    )
+    if payload["topic_distribution"]:
+        for topic in payload["topic_distribution"]:
+            lines.append(
+                f"| {_markdown_cell(topic['topic'])} | {_markdown_cell(topic['count'])} |"
+            )
+    else:
+        lines.append("| _None recorded_ | 0 |")
+
+    lines.extend(
+        [
+            "",
+            "## Persona engagement",
+            "",
+            "| Persona | Deeper opened | Liked | Saved | Debated |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    if payload["persona_engagement"]:
+        for persona_id, counts in sorted(payload["persona_engagement"].items()):
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        _markdown_cell(persona_id),
+                        _markdown_cell(counts["deeper_opened"]),
+                        _markdown_cell(counts["liked"]),
+                        _markdown_cell(counts["saved"]),
+                        _markdown_cell(counts["debated"]),
+                    ]
+                )
+                + " |"
+            )
+    else:
+        lines.append("| _None recorded_ | 0 | 0 | 0 | 0 |")
+
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+    filename = (
+        f"arena-summary-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/engagement")
 async def analytics_engagement(
     user: UserResponse = Depends(get_current_user_required),

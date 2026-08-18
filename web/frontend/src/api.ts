@@ -3928,6 +3928,30 @@ export async function exportAnalyticsSummaryJson(windowDays: number = 30): Promi
   };
 }
 
+export type AnalyticsSummaryMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsSummaryMarkdown(windowDays: number = 30): Promise<AnalyticsSummaryMarkdownExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(`/api/analytics/summary/export.md?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export analytics summary Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-summary-${windowDays}d.md`,
+  };
+}
+
 export type AnalyticsPersonaWinRateCsvExport = {
   blob: Blob;
   filename: string;

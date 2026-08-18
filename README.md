@@ -133,6 +133,7 @@ GET  /api/calibration/stats | /api/calibration/rating/:task
 
 GET  /api/analytics/summary        Per-user analytics summary (prompts, debates, streaks, engagement)
 GET  /api/analytics/summary/export.csv  CSV export of the summary (mirrors the JSON shape)
+GET  /api/analytics/summary/export.md   Human-readable Markdown report of the summary (metrics + breakdown tables)
 GET  /api/analytics/category-stats   All-categories aggregate (which categories do I engage with most, per-category best persona)
 GET  /api/analytics/category-stats/export.csv   CSV export of the same (mirrors the JSON shape, footer rollup included)
 GET  /api/analytics/activity   GitHub-style activity timeline with daily buckets, totals, and streak metrics

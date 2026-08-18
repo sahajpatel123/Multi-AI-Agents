@@ -11,7 +11,7 @@ from datetime import timedelta
 import pytest
 
 from arena.core.datetime_utils import utcnow_naive
-from arena.db_models import ScoringAudit, SessionSummary, UserTier
+from arena.db_models import ScoringAudit, SessionSummary, UXEvent, UserTier
 
 
 def _parse_csv(text: str) -> list[list[str]]:
@@ -190,6 +190,81 @@ async def test_summary_json_requires_auth(app_client):
     """JSON export must enforce auth the same way as the summary endpoint."""
     res = await app_client.get("/api/analytics/summary/export.json")
     assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_summary_markdown_renders_summary_breakdowns_and_headers(
+    app_client, make_user, db_session
+):
+    """Markdown exports keep the summary metrics and nested sections readable."""
+    user = make_user(email="summary-md@test.com", tier=UserTier.PRO)
+    _seed_summary_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst", "philosopher"],
+    )
+    db_session.add(
+        SessionSummary(
+            session_id=str(uuid.uuid4()),
+            user_id=user.id,
+            main_topics=["road | map"],
+            dominant_category="question",
+            preferred_depth="deep",
+            key_positions_taken=[],
+            session_summary="Test summary",
+            compressed_at=utcnow_naive(),
+        )
+    )
+    db_session.add(
+        UXEvent(
+            user_id=user.id,
+            session_id=str(uuid.uuid4()),
+            event_type="response_liked",
+            persona_id="analyst",
+            created_at=utcnow_naive(),
+        )
+    )
+    db_session.commit()
+
+    summary_res = await app_client.get(
+        "/api/analytics/summary?window_days=7&topic_limit=3",
+        headers=_pro_headers(user),
+    )
+    markdown_res = await app_client.get(
+        "/api/analytics/summary/export.md?window_days=7&topic_limit=3",
+        headers=_pro_headers(user),
+    )
+
+    assert summary_res.status_code == 200
+    assert markdown_res.status_code == 200
+    body = summary_res.json()
+    text = markdown_res.text
+    assert "# Arena — analytics summary" in text
+    assert f"**Window:** {body['window_start']} → {body['window_end']}" in text
+    assert f"- **Total prompts:** {body['total_prompts']}" in text
+    assert f"- **Average winning score:** {body['avg_winning_score']}" in text
+    assert "## Persona wins" in text
+    assert "| analyst | 1 |" in text
+    assert "## Topic distribution" in text
+    assert "road \\| map" in text
+    assert "## Persona engagement" in text
+    assert "| analyst | 0 | 1 | 0 | 0 |" in text
+    assert markdown_res.headers.get("content-type", "").startswith("text/markdown")
+    assert markdown_res.headers.get("x-content-type-options") == "nosniff"
+    assert markdown_res.headers.get("cache-control") == "no-store"
+    assert markdown_res.headers.get("content-disposition", "").endswith(".md\"")
+
+
+@pytest.mark.asyncio
+async def test_summary_markdown_requires_auth_and_valid_window(app_client, make_user):
+    assert (await app_client.get("/api/analytics/summary/export.md")).status_code == 401
+    user = make_user(email="summary-md-validation@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/summary/export.md?window_days=0",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422
 
 
 # ── Hardening tests for symmetry (polish pass) ──
