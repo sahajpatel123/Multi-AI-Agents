@@ -232,10 +232,10 @@ async def test_feedback_markdown_export_includes_summary_and_escapes_metadata(
         user.id,
         "task-md",
         verdict="correct",
-        note="Keep `format`\n- forged list item",
+        note="Keep `format`\n- forged list item <script>alert(1)</script> ~~strike~~",
     )
     task = db_session.query(AgentTask).filter(AgentTask.task_id == feedback.task_id).one()
-    task.title = "# Hidden [link]"
+    task.title = "# Hidden [link] <https://example.com>"
     db_session.commit()
 
     res = await app_client.get(
@@ -249,9 +249,12 @@ async def test_feedback_markdown_export_includes_summary_and_escapes_metadata(
     assert "# Arena — answer feedback" in res.text
     assert "**Ratings:** 1" in res.text
     assert "- **Correct:** 1" in res.text
-    assert "### 1. correct — \\# Hidden \\[link\\]" in res.text
+    assert "### 1. correct — \\# Hidden \\[link\\] \\<https://example.com\\>" in res.text
     assert "- **Task ID:** task-md" in res.text
-    assert "Keep \\`format\\` - forged list item" in res.text
+    assert (
+        "Keep \\`format\\` - forged list item \\<script\\>alert(1)\\</script\\> "
+        "\\~\\~strike\\~\\~"
+    ) in res.text
     assert "\n- forged list item\n" not in res.text
 
 

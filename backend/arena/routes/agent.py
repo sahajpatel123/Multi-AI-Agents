@@ -4265,14 +4265,24 @@ async def export_feedback_json(
 
 
 def _feedback_markdown_inline(value: object) -> str:
-    """Flatten and escape user-controlled feedback metadata for Markdown."""
+    """Flatten and escape user-controlled feedback metadata for Markdown.
+
+    Feedback titles and notes are inserted into a fixed report structure. In
+    addition to the usual Markdown punctuation, escape angle brackets and
+    ampersands so a report viewer cannot interpret raw HTML or autolinks, and
+    tildes so GitHub-style strikethrough markers remain plain text.
+    """
     if value is None:
         return ""
     return (
         str(value)
         .replace("\\", "\\\\")
+        .replace("&", "\\&")
+        .replace("<", "\\<")
+        .replace(">", "\\>")
         .replace("`", "\\`")
         .replace("*", "\\*")
+        .replace("~", "\\~")
         .replace("_", "\\_")
         .replace("#", "\\#")
         .replace("[", "\\[")
