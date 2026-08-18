@@ -4107,6 +4107,59 @@ async def export_feedback_summary_json(
     )
 
 
+def _feedback_summary_markdown(payload: dict) -> str:
+    """Render a feedback summary payload as a portable Markdown report."""
+    verdicts = payload["verdicts"]
+    daily_trend = payload["daily_trend"]
+    window_end = daily_trend[-1]["date"]
+    lines = [
+        "# Arena — feedback activity",
+        "",
+        f"- Window: last {payload['window_days']} days (UTC)",
+        f"- Window end: {window_end}",
+        "",
+        "## Lifetime verdict breakdown",
+        "",
+        "| Verdict | Ratings |",
+        "| --- | ---: |",
+        f"| Correct | {verdicts['correct']} |",
+        f"| Partial | {verdicts['partial']} |",
+        f"| Wrong | {verdicts['wrong']} |",
+        f"| Total | {payload['total']} |",
+        "",
+        f"Accuracy: **{payload['rate'] * 100:.1f}%** (correct / all ratings)",
+        "",
+        f"## Daily activity ({payload['window_days']}-day window, UTC)",
+        "",
+        "| Date | Ratings |",
+        "| --- | ---: |",
+    ]
+    lines.extend(
+        f"| {point['date']} | {point['count']} |" for point in daily_trend
+    )
+    return "\n".join(lines) + "\n"
+
+
+@router.get("/feedback/summary/export.md")
+async def export_feedback_summary_markdown(
+    window_days: int = Query(30, ge=1, le=90),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download the selected feedback-activity window as Markdown."""
+    payload, filename_stem = _prepare_feedback_summary_export(
+        user=user,
+        db=db,
+        window_days=window_days,
+    )
+    filename = f"{filename_stem}.md"
+    return Response(
+        content=_feedback_summary_markdown(payload),
+        media_type="text/markdown; charset=utf-8",
+        headers=_feedback_summary_export_headers(filename),
+    )
+
+
 @router.get("/feedback/recent")
 async def list_recent_feedback(
     http_request: Request,

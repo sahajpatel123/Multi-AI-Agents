@@ -3,6 +3,7 @@ import {
   ApiError,
   exportAgentFeedbackSummaryCsv,
   exportAgentFeedbackSummaryJson,
+  exportAgentFeedbackSummaryMarkdown,
   getAgentFeedbackSummary,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
@@ -155,5 +156,26 @@ describe('Agent feedback summary frontend API helper', () => {
     );
     const result = await exportAgentFeedbackSummaryJson();
     expect(result.filename).toBe('arena-feedback-activity-30d.json');
+  });
+
+  it('exports the selected feedback activity window as Markdown', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['# Arena — feedback activity\n']), {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-feedback-activity-7-20260818.md"',
+        },
+      }),
+    );
+
+    const result = await exportAgentFeedbackSummaryMarkdown(7);
+
+    expect(result.blob).toBeInstanceOf(Blob);
+    expect(result.filename).toBe('arena-feedback-activity-7-20260818.md');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/feedback/summary/export.md?window_days=7',
+      {},
+    );
   });
 });

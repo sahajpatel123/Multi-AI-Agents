@@ -177,6 +177,11 @@ const hoistedMocks = vi.hoisted(() => ({
       }),
       filename: `arena-feedback-activity-1-${windowDays}d-20260818.json`,
     })),
+  exportAgentFeedbackSummaryMarkdown: vi.fn((windowDays: number = 30) =>
+    Promise.resolve({
+      blob: new Blob(['# Arena — feedback activity\n'], { type: 'text/markdown' }),
+      filename: `arena-feedback-activity-1-${windowDays}d-20260818.md`,
+    })),
   getMcpIntegrations: vi.fn().mockResolvedValue({ integrations: [] }),
 }));
 
@@ -230,6 +235,7 @@ vi.mock('../api', () => ({
   exportAgentFeedbackMarkdown: hoistedMocks.exportAgentFeedbackMarkdown,
   exportAgentFeedbackSummaryCsv: hoistedMocks.exportAgentFeedbackSummaryCsv,
   exportAgentFeedbackSummaryJson: hoistedMocks.exportAgentFeedbackSummaryJson,
+  exportAgentFeedbackSummaryMarkdown: hoistedMocks.exportAgentFeedbackSummaryMarkdown,
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
   exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(new Blob(['date,prompts'], { type: 'text/csv' })),
   exportAnalyticsActivityJson: vi.fn().mockResolvedValue({
@@ -383,7 +389,7 @@ describe('ProfileModal', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
     screen.getByRole('button', { name: /usage/i }).click();
-    const button = await screen.findByRole('button', { name: /activity markdown export/i });
+    const button = await screen.findByRole('button', { name: /^🗓️ activity markdown export$/i });
     button.click();
 
     await waitFor(() => {
@@ -706,6 +712,31 @@ describe('ProfileModal', () => {
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-feedback-activity-1-7d-20260818.json',
+      );
+    });
+  });
+
+  it('downloads feedback activity Markdown for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /feedback activity window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '7' } });
+    const button = await screen.findByRole('button', {
+      name: /^🧭 feedback activity markdown export$/i,
+    });
+    button.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAgentFeedbackSummaryMarkdown).toHaveBeenCalledWith(7);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-feedback-activity-1-7d-20260818.md',
       );
     });
   });

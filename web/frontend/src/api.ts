@@ -1582,6 +1582,30 @@ export async function exportAgentFeedbackSummaryJson(
   };
 }
 
+export async function exportAgentFeedbackSummaryMarkdown(
+  windowDays: number = 30,
+): Promise<AgentFeedbackActivityExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(
+    `/api/agent/feedback/summary/export.md?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export feedback activity Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ?? `arena-feedback-activity-${windowDays}d.md`,
+  };
+}
+
 export type AgentFeedbackCsvExport = {
   blob: Blob;
   filename: string;
