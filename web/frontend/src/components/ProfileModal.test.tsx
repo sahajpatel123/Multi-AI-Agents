@@ -165,14 +165,18 @@ const hoistedMocks = vi.hoisted(() => ({
     blob: new Blob(['# Arena — answer feedback'], { type: 'text/markdown' }),
     filename: 'arena-feedback-1-20260818.md',
   }),
-  exportAgentFeedbackSummaryCsv: vi.fn().mockResolvedValue({
-    blob: new Blob(['date,feedback_count\n2026-08-18,2\n'], { type: 'text/csv' }),
-    filename: 'arena-feedback-activity-1-30d-20260818.csv',
-  }),
-  exportAgentFeedbackSummaryJson: vi.fn().mockResolvedValue({
-    blob: new Blob(['{"window_days":30,"daily_trend":[]}'], { type: 'application/json' }),
-    filename: 'arena-feedback-activity-1-30d-20260818.json',
-  }),
+  exportAgentFeedbackSummaryCsv: vi.fn((windowDays: number = 30) =>
+    Promise.resolve({
+      blob: new Blob(['date,feedback_count\n2026-08-18,2\n'], { type: 'text/csv' }),
+      filename: `arena-feedback-activity-1-${windowDays}d-20260818.csv`,
+    })),
+  exportAgentFeedbackSummaryJson: vi.fn((windowDays: number = 30) =>
+    Promise.resolve({
+      blob: new Blob([`{"window_days":${windowDays},"daily_trend":[]}`], {
+        type: 'application/json',
+      }),
+      filename: `arena-feedback-activity-1-${windowDays}d-20260818.json`,
+    })),
   getMcpIntegrations: vi.fn().mockResolvedValue({ integrations: [] }),
 }));
 
@@ -676,7 +680,7 @@ describe('ProfileModal', () => {
       expect(hoistedMocks.exportAgentFeedbackSummaryCsv).toHaveBeenCalledWith(7);
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
-        'arena-feedback-activity-1-30d-20260818.csv',
+        'arena-feedback-activity-1-7d-20260818.csv',
       );
     });
   });
@@ -701,7 +705,7 @@ describe('ProfileModal', () => {
       expect(hoistedMocks.exportAgentFeedbackSummaryJson).toHaveBeenCalledWith(7);
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
-        'arena-feedback-activity-1-30d-20260818.json',
+        'arena-feedback-activity-1-7d-20260818.json',
       );
     });
   });

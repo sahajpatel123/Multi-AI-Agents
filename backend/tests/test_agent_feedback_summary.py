@@ -224,6 +224,31 @@ async def test_feedback_summary_json_export_matches_summary_contract(
     assert body["verdicts"] == {"correct": 1, "partial": 0, "wrong": 0}
     assert len(body["daily_trend"]) == 7
     assert body["daily_trend"][-1]["count"] == 1
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert res.headers["cache-control"] == "no-store, no-cache, must-revalidate, private"
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_json_filename_matches_window_end_at_utc_midnight(
+    app_client, make_user, monkeypatch
+):
+    user = make_user(email="fb-sum-json-midnight@test.com", tier=UserTier.PRO)
+    aggregation_now = datetime(2026, 8, 18, 23, 59, 59)
+    next_day = datetime(2026, 8, 19, 0, 0, 1)
+    monkeypatch.setattr(agent_metrics, "utcnow_naive", lambda: aggregation_now)
+    monkeypatch.setattr(agent_routes, "utcnow_naive", lambda: next_day)
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.json?window_days=7",
+        headers=headers,
+    )
+
+    assert res.status_code == 200
+    assert (
+        'filename="arena-feedback-activity-'
+        f"{user.id}-7d-20260818.json"
+    ) in res.headers["content-disposition"]
 
 
 @pytest.mark.asyncio

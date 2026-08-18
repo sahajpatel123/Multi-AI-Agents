@@ -4009,24 +4009,9 @@ async def export_feedback_summary_csv(
     It exports exactly the selected window, including zero-activity days, so
     a chart can be recreated without guessing which dates were omitted.
     """
-    _ensure_agent_access(user, db)
-    enforce_user_rate_limit(
-        user.id,
-        scope="agent_feedback_summary_export",
-        limit=30,
-        window_seconds=60,
-        message="Too many feedback activity exports. Please wait.",
-    )
-    orm_user = db.query(User).filter(User.id == user.id).first()
-    if orm_user is None:
-        raise HTTPException(
-            status_code=404,
-            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
-        )
-
-    payload = compute_user_feedback_summary(
+    payload, filename_stem = _prepare_feedback_summary_export(
+        user=user,
         db=db,
-        user=orm_user,
         window_days=window_days,
     )
 
@@ -4039,33 +4024,27 @@ async def export_feedback_summary_csv(
     for point in payload["daily_trend"]:
         writer.writerow([point["date"], point["count"]])
 
-    # Derive the date in the filename from the exported payload rather than
-    # taking a second wall-clock reading. If a request crosses UTC midnight,
-    # the filename must still describe the final day present in the CSV.
-    window_end = payload["daily_trend"][-1]["date"].replace("-", "")
-    filename = f"arena-feedback-activity-{user.id}-{window_days}d-{window_end}.csv"
+    # The shared preparation step derives the date from the exported payload
+    # rather than taking a second wall-clock reading.
+    filename = f"{filename_stem}.csv"
     return Response(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": content_disposition_attachment(filename),
-            "X-Content-Type-Options": "nosniff",
-            "Cache-Control": "no-store, no-cache, must-revalidate, private",
-        },
+        headers=_feedback_summary_export_headers(filename),
     )
 
 
-@router.get("/feedback/summary/export.json")
-async def export_feedback_summary_json(
-    window_days: int = Query(30, ge=1, le=90),
-    user: UserResponse = Depends(get_current_user_required),
-    db: Session = Depends(get_db),
-):
-    """Download the selected feedback-activity window as a JSON report.
+def _prepare_feedback_summary_export(
+    *,
+    user: UserResponse,
+    db: Session,
+    window_days: int,
+) -> tuple[dict, str]:
+    """Build the shared payload and filename stem for feedback exports.
 
-    The response intentionally mirrors ``/feedback/summary`` so structured
-    consumers can preserve the verdict totals and the zero-padded daily
-    trend without parsing the chart-oriented CSV export.
+    CSV and JSON must use the same authorization, rate-limit bucket, UTC
+    aggregation, and window-end date. Keeping that setup in one helper avoids
+    a format-specific export drifting from the dashboard contract.
     """
     _ensure_agent_access(user, db)
     enforce_user_rate_limit(
@@ -4087,17 +4066,44 @@ async def export_feedback_summary_json(
         user=orm_user,
         window_days=window_days,
     )
-    # Derive the date from the payload just as the CSV export does. This keeps
-    # filenames stable if aggregation crosses a UTC midnight boundary.
+    # The query guarantees a positive window, and the aggregator pads every
+    # day. Derive the filename from that payload so a UTC-midnight rollover
+    # cannot label the download with a different day than its contents.
     window_end = payload["daily_trend"][-1]["date"].replace("-", "")
-    filename = f"arena-feedback-activity-{user.id}-{window_days}d-{window_end}.json"
+    filename_stem = f"arena-feedback-activity-{user.id}-{window_days}d-{window_end}"
+    return payload, filename_stem
+
+
+def _feedback_summary_export_headers(filename: str) -> dict[str, str]:
+    """Return the privacy and download headers shared by both formats."""
+    return {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+
+
+@router.get("/feedback/summary/export.json")
+async def export_feedback_summary_json(
+    window_days: int = Query(30, ge=1, le=90),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download the selected feedback-activity window as a JSON report.
+
+    The response intentionally mirrors ``/feedback/summary`` so structured
+    consumers can preserve the verdict totals and the zero-padded daily
+    trend without parsing the chart-oriented CSV export.
+    """
+    payload, filename_stem = _prepare_feedback_summary_export(
+        user=user,
+        db=db,
+        window_days=window_days,
+    )
+    filename = f"{filename_stem}.json"
     return JSONResponse(
         content=payload,
-        headers={
-            "Content-Disposition": content_disposition_attachment(filename),
-            "X-Content-Type-Options": "nosniff",
-            "Cache-Control": "no-store, no-cache, must-revalidate, private",
-        },
+        headers=_feedback_summary_export_headers(filename),
     )
 
 
