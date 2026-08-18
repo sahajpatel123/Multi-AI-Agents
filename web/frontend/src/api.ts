@@ -1527,14 +1527,16 @@ export async function getAgentFeedbackSummary(
   return data;
 }
 
-export type AgentFeedbackActivityCsvExport = {
+export type AgentFeedbackActivityExport = {
   blob: Blob;
   filename: string;
 };
 
+export type AgentFeedbackActivityCsvExport = AgentFeedbackActivityExport;
+
 export async function exportAgentFeedbackSummaryCsv(
   windowDays: number = 30,
-): Promise<AgentFeedbackActivityCsvExport> {
+): Promise<AgentFeedbackActivityExport> {
   if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
     throw new RangeError('windowDays must be an integer between 1 and 90');
   }
@@ -1553,6 +1555,30 @@ export async function exportAgentFeedbackSummaryCsv(
     blob: await response.blob(),
     filename:
       contentDispositionFilename(response) ?? `arena-feedback-activity-${windowDays}d.csv`,
+  };
+}
+
+export async function exportAgentFeedbackSummaryJson(
+  windowDays: number = 30,
+): Promise<AgentFeedbackActivityExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(
+    `/api/agent/feedback/summary/export.json?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export feedback activity JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ?? `arena-feedback-activity-${windowDays}d.json`,
   };
 }
 

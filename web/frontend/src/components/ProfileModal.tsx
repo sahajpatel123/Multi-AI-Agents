@@ -11,6 +11,7 @@ import {
   exportAgentFeedbackJson,
   exportAgentFeedbackMarkdown,
   exportAgentFeedbackSummaryCsv,
+  exportAgentFeedbackSummaryJson,
   exportCalibrationHistoryCsv,
   exportCalibrationHistoryJson,
   exportAnalyticsActivityJson,
@@ -2869,6 +2870,48 @@ export function ProfileModal() {
                       {activeExport === 'feedback-summary-csv'
                         ? '⏳ Downloading…'
                         : '🧭 Feedback Activity CSV Export'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeExport !== null}
+                      style={{
+                        width: '100%',
+                        marginTop: 8,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: activeExport === 'feedback-summary-json' ? '#EDE4D8' : '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--vp-font-sans)',
+                        opacity: activeExport !== null && activeExport !== 'feedback-summary-json' ? 0.6 : 1,
+                      }}
+                      onClick={async () => {
+                        setActiveExport('feedback-summary-json');
+                        setExportError(null);
+                        try {
+                          const { blob, filename } = await exportAgentFeedbackSummaryJson(
+                            feedbackSummaryWindowDays,
+                          );
+                          if (!downloadBlobFile(blob, filename)) {
+                            setExportError('Could not download feedback activity JSON — try again.');
+                          }
+                        } catch (error) {
+                          setExportError(
+                            error instanceof ApiError
+                              ? error.message
+                              : 'Could not download feedback activity JSON — try again.',
+                          );
+                        } finally {
+                          setActiveExport(null);
+                        }
+                      }}
+                    >
+                      {activeExport === 'feedback-summary-json'
+                        ? '⏳ Downloading…'
+                        : '🧭 Feedback Activity JSON Export'}
                     </button>
                   </div>
                 ) : null}

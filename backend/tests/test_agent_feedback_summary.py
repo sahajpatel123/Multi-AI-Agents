@@ -203,6 +203,36 @@ async def test_feedback_summary_csv_filename_matches_window_end_at_utc_midnight(
 
 
 @pytest.mark.asyncio
+async def test_feedback_summary_json_export_matches_summary_contract(
+    app_client, make_user, db_session
+):
+    user = make_user(email="fb-sum-json@test.com", tier=UserTier.PRO)
+    db_session.add(_make_feedback(user_id=user.id, suffix="today", verdict="correct"))
+    db_session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.json?window_days=7",
+        headers=headers,
+    )
+
+    assert res.status_code == 200
+    assert "application/json" in res.headers["content-type"]
+    assert 'filename="arena-feedback-activity-' in res.headers["content-disposition"]
+    body = res.json()
+    assert body["window_days"] == 7
+    assert body["verdicts"] == {"correct": 1, "partial": 0, "wrong": 0}
+    assert len(body["daily_trend"]) == 7
+    assert body["daily_trend"][-1]["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_json_export_requires_auth(app_client):
+    res = await app_client.get("/api/agent/feedback/summary/export.json")
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_feedback_summary_csv_export_requires_auth(app_client):
     res = await app_client.get("/api/agent/feedback/summary/export.csv")
     assert res.status_code == 401

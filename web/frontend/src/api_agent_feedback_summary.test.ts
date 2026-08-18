@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   ApiError,
   exportAgentFeedbackSummaryCsv,
+  exportAgentFeedbackSummaryJson,
   getAgentFeedbackSummary,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
@@ -121,5 +122,38 @@ describe('Agent feedback summary frontend API helper', () => {
     );
     const result = await exportAgentFeedbackSummaryCsv();
     expect(result.filename).toBe('arena-feedback-activity-30d.csv');
+  });
+
+  it('exports the selected feedback activity window as JSON', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['{"window_days":7,"daily_trend":[]}']), {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-feedback-activity-7-20260818.json"',
+        },
+      }),
+    );
+
+    const result = await exportAgentFeedbackSummaryJson(7);
+
+    expect(result.blob).toBeInstanceOf(Blob);
+    expect(result.filename).toBe('arena-feedback-activity-7-20260818.json');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/feedback/summary/export.json?window_days=7',
+      {},
+    );
+  });
+
+  it('uses a safe JSON fallback filename and validates the export window', async () => {
+    await expect(exportAgentFeedbackSummaryJson(91)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 90',
+    );
+
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['{}']), { status: 200 }),
+    );
+    const result = await exportAgentFeedbackSummaryJson();
+    expect(result.filename).toBe('arena-feedback-activity-30d.json');
   });
 });

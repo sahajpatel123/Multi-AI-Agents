@@ -4055,6 +4055,52 @@ async def export_feedback_summary_csv(
     )
 
 
+@router.get("/feedback/summary/export.json")
+async def export_feedback_summary_json(
+    window_days: int = Query(30, ge=1, le=90),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download the selected feedback-activity window as a JSON report.
+
+    The response intentionally mirrors ``/feedback/summary`` so structured
+    consumers can preserve the verdict totals and the zero-padded daily
+    trend without parsing the chart-oriented CSV export.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_summary_export",
+        limit=30,
+        window_seconds=60,
+        message="Too many feedback activity exports. Please wait.",
+    )
+    orm_user = db.query(User).filter(User.id == user.id).first()
+    if orm_user is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
+        )
+
+    payload = compute_user_feedback_summary(
+        db=db,
+        user=orm_user,
+        window_days=window_days,
+    )
+    # Derive the date from the payload just as the CSV export does. This keeps
+    # filenames stable if aggregation crosses a UTC midnight boundary.
+    window_end = payload["daily_trend"][-1]["date"].replace("-", "")
+    filename = f"arena-feedback-activity-{user.id}-{window_days}d-{window_end}.json"
+    return JSONResponse(
+        content=payload,
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
+    )
+
+
 @router.get("/feedback/recent")
 async def list_recent_feedback(
     http_request: Request,
