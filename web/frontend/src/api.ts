@@ -1448,6 +1448,27 @@ export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedback
   return data?.items ?? [];
 }
 
+export type AgentFeedbackCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAgentFeedbackCsv(): Promise<AgentFeedbackCsvExport> {
+  const response = await apiFetch('/api/agent/feedback/export.csv');
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export answer feedback CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-feedback.csv',
+  };
+}
+
 export type AgentStartResponse = {
   request_id?: string | null;
   task_id: string;

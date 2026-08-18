@@ -7,6 +7,7 @@ import {
   cancelAgentAddon,
   cancelSubscription,
   deleteMcpIntegration,
+  exportAgentFeedbackCsv,
   exportCalibrationHistoryCsv,
   exportCalibrationHistoryJson,
   exportAnalyticsActivityJson,
@@ -2734,6 +2735,46 @@ export function ProfileModal() {
                     })}
                   </ul>
                 )}
+                {fbAcc && fbAcc.total > 0 ? (
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      width: '100%',
+                      marginTop: 12,
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'feedback-csv' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'feedback-csv' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('feedback-csv');
+                      setExportError(null);
+                      try {
+                        const { blob, filename } = await exportAgentFeedbackCsv();
+                        downloadBlobFile(blob, filename);
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download answer feedback CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'feedback-csv'
+                      ? '⏳ Downloading…'
+                      : '🧭 Answer Feedback CSV Export'}
+                  </button>
+                ) : null}
               </>
             )}
           </div>

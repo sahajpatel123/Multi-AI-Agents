@@ -141,6 +141,10 @@ const hoistedMocks = vi.hoisted(() => ({
     inaccurate: 0,
     rate: null,
   }),
+  exportAgentFeedbackCsv: vi.fn().mockResolvedValue({
+    blob: new Blob(['id,task_id,verdict\n1,task-1,correct\n'], { type: 'text/csv' }),
+    filename: 'arena-feedback-1-20260818.csv',
+  }),
   getMcpIntegrations: vi.fn().mockResolvedValue({ integrations: [] }),
 }));
 
@@ -188,6 +192,7 @@ vi.mock('../api', () => ({
   getCalibrationStats: hoistedMocks.getCalibrationStats,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
+  exportAgentFeedbackCsv: hoistedMocks.exportAgentFeedbackCsv,
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
   exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(new Blob(['date,prompts'], { type: 'text/csv' })),
   exportAnalyticsActivityJson: vi.fn().mockResolvedValue({
@@ -273,6 +278,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
+    vi.mocked(hoistedMocks.exportAgentFeedbackCsv).mockClear();
     vi.mocked(downloadBlobFile).mockClear();
     (window as { __profileModalOpened?: boolean }).__profileModalOpened = false;
   });
@@ -416,6 +422,31 @@ describe('ProfileModal', () => {
     expect(
       screen.getByRole('button', { name: /calibration json export/i }),
     ).toBeInTheDocument();
+  });
+
+  it('downloads answer feedback CSV when feedback exists', async () => {
+    hoistedMocks.getUserAnswerFeedbackStats.mockResolvedValueOnce({
+      total: 2,
+      correct_pct: 50,
+      partial_pct: 0,
+      wrong_pct: 50,
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /answer feedback csv export/i });
+    button.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAgentFeedbackCsv).toHaveBeenCalledTimes(1);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-feedback-1-20260818.csv',
+      );
+    });
   });
 
   it('views and paginates recent calibration history', async () => {
