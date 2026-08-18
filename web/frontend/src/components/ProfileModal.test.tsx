@@ -761,6 +761,36 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('can include fallback scorings with a provisional-data warning', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const toggle = await screen.findByRole('checkbox', { name: /include fallback scorings/i });
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenCalledWith(30, 1);
+    });
+    hoistedMocks.getAnalyticsPersonaWinRate.mockResolvedValueOnce(
+      emptyWinRatePayload({
+        include_fallback: true,
+        scored_exchanges: 2,
+        fallback_exchanges: 2,
+      }),
+    );
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(30, 1, true);
+    });
+    expect(
+      await screen.findByText(
+        'Includes 2 fallback scorings; those winners are provisional because the panel was not judged.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('uses the selected window and server filename for the win-rate CSV export', async () => {
     renderModal();
     await waitFor(() => {

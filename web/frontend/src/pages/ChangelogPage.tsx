@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Profile analytics: optionally include fallback scorer exchanges in persona win rates with an explicit provisional-data warning',
       '[NEW] Profile analytics: download the selected persona win-rate window as the canonical JSON report alongside CSV and Markdown',
       '[NEW] Profile analytics: filter persona win rates by a minimum appearance sample, with the same floor applied to exports',
       '[NEW] Memory: copy the current filtered view link so shared searches and ordering reopen exactly as seen',

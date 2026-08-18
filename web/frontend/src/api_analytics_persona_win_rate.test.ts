@@ -78,6 +78,19 @@ describe('Analytics persona win-rate frontend API helper', () => {
     );
   });
 
+  it('opts into fallback scorings only when explicitly requested', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(winRatePayload({ include_fallback: true })), { status: 200 }),
+    );
+
+    const res = await getAnalyticsPersonaWinRate(30, 1, true);
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/analytics/persona-win-rate?window_days=30&min_appearances=1&include_fallback=true',
+      {},
+    );
+    expect(res.include_fallback).toBe(true);
+  });
+
   it('surfaces request IDs on failure', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(

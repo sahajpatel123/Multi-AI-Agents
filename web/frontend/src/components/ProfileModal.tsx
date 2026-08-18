@@ -462,6 +462,7 @@ export function ProfileModal() {
   const [winRateReload, setWinRateReload] = useState(0);
   const [winRateWindowDays, setWinRateWindowDays] = useState(30);
   const [winRateMinAppearances, setWinRateMinAppearances] = useState(1);
+  const [winRateIncludeFallback, setWinRateIncludeFallback] = useState(false);
   const [calStats, setCalStats] = useState<{
     total_ratings?: number;
     avg_delta?: number;
@@ -598,7 +599,10 @@ export function ProfileModal() {
     let cancelled = false;
     setWinRateLoading(true);
     setWinRateErr(null);
-    void getAnalyticsPersonaWinRate(winRateWindowDays, winRateMinAppearances)
+    const request = winRateIncludeFallback
+      ? getAnalyticsPersonaWinRate(winRateWindowDays, winRateMinAppearances, true)
+      : getAnalyticsPersonaWinRate(winRateWindowDays, winRateMinAppearances);
+    void request
       .then((w) => {
         if (!cancelled) setWinRate(w);
       })
@@ -614,7 +618,14 @@ export function ProfileModal() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, activeTab, winRateReload, winRateWindowDays, winRateMinAppearances]);
+  }, [
+    isOpen,
+    activeTab,
+    winRateReload,
+    winRateWindowDays,
+    winRateMinAppearances,
+    winRateIncludeFallback,
+  ]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -1636,6 +1647,29 @@ export function ProfileModal() {
                         ))}
                       </select>
                     </label>
+                    <label
+                      title="Fallback scorings have an arbitrary winner because the scorer could not judge the panel."
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        color: '#A0A39A',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label="Include fallback scorings"
+                        checked={winRateIncludeFallback}
+                        onChange={(event) => {
+                          setExportError(null);
+                          setWinRateIncludeFallback(event.target.checked);
+                        }}
+                      />
+                      <span>Include fallback</span>
+                    </label>
                   </div>
                 </div>
                 {winRateLoading ? (
@@ -1666,18 +1700,33 @@ export function ProfileModal() {
                     </button>
                   </div>
                 ) : winRate ? (
-                  winRate.personas.length === 0 ? (
-                    <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
-                      {winRate.scored_exchanges === 0 && winRate.fallback_exchanges > 0
-                        ? `No judged panels in the last ${winRateWindowDays} days yet — fallback scorings are excluded.`
-                          : winRate.scored_exchanges === 0 && winRate.unattributed_exchanges > 0
-                            ? `No panels with recorded appearances in the last ${winRateWindowDays} days yet.`
-                            : winRate.min_appearances > 1
-                              ? `No persona reached the ${winRate.min_appearances}-appearance minimum in the last ${winRateWindowDays} days.`
-                              : `No scored panels in the last ${winRateWindowDays} days yet.`}
-                    </p>
-                  ) : (
-                    <div role="group" aria-label="Persona win rates">
+                  <>
+                    {winRate.include_fallback ? (
+                      <p
+                        role="note"
+                        style={{
+                          fontSize: 11,
+                          color: '#8C5A2C',
+                          margin: '0 0 10px',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Includes {winRate.fallback_exchanges} fallback scoring
+                        {winRate.fallback_exchanges === 1 ? '' : 's'}; those winners are provisional because the panel was not judged.
+                      </p>
+                    ) : null}
+                    {winRate.personas.length === 0 ? (
+                      <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                        {winRate.scored_exchanges === 0 && winRate.fallback_exchanges > 0
+                          ? `No judged panels in the last ${winRateWindowDays} days yet — fallback scorings are excluded.`
+                            : winRate.scored_exchanges === 0 && winRate.unattributed_exchanges > 0
+                              ? `No panels with recorded appearances in the last ${winRateWindowDays} days yet.`
+                              : winRate.min_appearances > 1
+                                ? `No persona reached the ${winRate.min_appearances}-appearance minimum in the last ${winRateWindowDays} days.`
+                                : `No scored panels in the last ${winRateWindowDays} days yet.`}
+                      </p>
+                    ) : (
+                      <div role="group" aria-label="Persona win rates">
                       {(() => {
                         const bestRow = winRate.best_persona_id
                           ? winRate.personas.find((row) => row.persona_id === winRate.best_persona_id)
@@ -1754,8 +1803,9 @@ export function ProfileModal() {
                           ))}
                         </tbody>
                       </table>
-                    </div>
-                  )
+                      </div>
+                    )}
+                  </>
                 ) : null}
                 <div
                   style={{

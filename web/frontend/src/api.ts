@@ -3564,6 +3564,7 @@ function isAnalyticsPersonaWinRateResponse(
 export async function getAnalyticsPersonaWinRate(
   windowDays: number = 30,
   minAppearances: number = 1,
+  includeFallback: boolean = false,
 ): Promise<AnalyticsPersonaWinRateResponse> {
   if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
     throw new RangeError('windowDays must be an integer between 1 and 365');
@@ -3571,8 +3572,9 @@ export async function getAnalyticsPersonaWinRate(
   if (!Number.isInteger(minAppearances) || minAppearances < 1 || minAppearances > 200) {
     throw new RangeError('minAppearances must be an integer between 1 and 200');
   }
+  const fallbackQuery = includeFallback ? '&include_fallback=true' : '';
   const response = await apiFetch(
-    `/api/analytics/persona-win-rate?window_days=${encodeURIComponent(String(windowDays))}&min_appearances=${encodeURIComponent(String(minAppearances))}`,
+    `/api/analytics/persona-win-rate?window_days=${encodeURIComponent(String(windowDays))}&min_appearances=${encodeURIComponent(String(minAppearances))}${fallbackQuery}`,
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
