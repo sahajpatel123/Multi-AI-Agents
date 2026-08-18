@@ -217,3 +217,70 @@ async def test_feedback_json_export_empty(app_client, make_user, db_session):
     import json
     items = json.loads(res.text)
     assert items == []
+
+
+@pytest.mark.asyncio
+async def test_feedback_markdown_export_includes_summary_and_escapes_metadata(
+    app_client, make_user, db_session
+):
+    """Markdown is readable while feedback metadata cannot forge structure."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    feedback = _seed_feedback(
+        db_session,
+        user.id,
+        "task-md",
+        verdict="correct",
+        note="Keep `format`\n- forged list item",
+    )
+    task = db_session.query(AgentTask).filter(AgentTask.task_id == feedback.task_id).one()
+    task.title = "# Hidden [link]"
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/feedback/export.md",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/markdown")
+    assert res.headers["content-disposition"].endswith(".md\"")
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert "# Arena — answer feedback" in res.text
+    assert "**Ratings:** 1" in res.text
+    assert "- **Correct:** 1" in res.text
+    assert "### 1. correct — \\# Hidden \\[link\\]" in res.text
+    assert "- **Task ID:** task-md" in res.text
+    assert "Keep \\`format\\` - forged list item" in res.text
+    assert "\n- forged list item\n" not in res.text
+
+
+@pytest.mark.asyncio
+async def test_feedback_markdown_honors_verdict_filter_and_empty_state(
+    app_client, make_user, db_session
+):
+    user = _make_pro(make_user)
+    db_session.commit()
+    _seed_feedback(db_session, user.id, "task-correct", verdict="correct")
+    _seed_feedback(db_session, user.id, "task-partial", verdict="partial")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/feedback/export.md?verdict=correct",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "**Filter:** correct" in res.text
+    assert "**Ratings:** 1" in res.text
+    assert "task-correct" in res.text
+    assert "task-partial" not in res.text
+    assert "- **Partial:** 0" in res.text
+
+    empty_res = await app_client.get(
+        "/api/agent/feedback/export.md?verdict=wrong",
+        headers=_pro_headers(user),
+    )
+    assert empty_res.status_code == 200
+    assert "**Ratings:** 0" in empty_res.text
+    assert "_No answer feedback recorded._" in empty_res.text
+    assert "task-correct" not in empty_res.text

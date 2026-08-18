@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Agent feedback: download all rated answers as a human-readable Markdown report alongside CSV and JSON',
       '[NEW] Profile analytics: optionally include fallback scorer exchanges in persona win rates with an explicit provisional-data warning',
       '[NEW] Profile analytics: download the selected persona win-rate window as the canonical JSON report alongside CSV and Markdown',
       '[NEW] Profile analytics: filter persona win rates by a minimum appearance sample, with the same floor applied to exports',

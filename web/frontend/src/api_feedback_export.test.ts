@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { exportAgentFeedbackCsv, exportAgentFeedbackJson } from './api';
+import {
+  exportAgentFeedbackCsv,
+  exportAgentFeedbackJson,
+  exportAgentFeedbackMarkdown,
+} from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -91,6 +95,45 @@ describe('Agent answer feedback export helper', () => {
     await expect(exportAgentFeedbackJson()).rejects.toMatchObject({
       status: 503,
       message: 'json export unavailable (Request ID: req-feedback-json)',
+    });
+  });
+
+  it('fetches the Markdown endpoint and preserves the server filename', async () => {
+    const blob = new Blob(['# Arena — answer feedback\n'], { type: 'text/markdown' });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(blob, {
+        status: 200,
+        headers: {
+          'Content-Disposition': 'attachment; filename="arena-feedback-7-20260818.md"',
+        },
+      }),
+    );
+
+    const result = await exportAgentFeedbackMarkdown();
+
+    expect(result.blob).toBeInstanceOf(Blob);
+    expect(result.filename).toBe('arena-feedback-7-20260818.md');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/agent/feedback/export.md', {});
+  });
+
+  it('uses a safe Markdown fallback filename and surfaces request IDs on failure', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['# Arena'], { type: 'text/markdown' }), { status: 200 }),
+    );
+
+    const result = await exportAgentFeedbackMarkdown();
+    expect(result.filename).toBe('arena-feedback.md');
+
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'markdown export unavailable' }), {
+        status: 503,
+        headers: { 'x-request-id': 'req-feedback-md' },
+      }),
+    );
+
+    await expect(exportAgentFeedbackMarkdown()).rejects.toMatchObject({
+      status: 503,
+      message: 'markdown export unavailable (Request ID: req-feedback-md)',
     });
   });
 });

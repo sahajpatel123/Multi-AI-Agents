@@ -151,6 +151,10 @@ const hoistedMocks = vi.hoisted(() => ({
     }),
     filename: 'arena-feedback-1-20260818.json',
   }),
+  exportAgentFeedbackMarkdown: vi.fn().mockResolvedValue({
+    blob: new Blob(['# Arena — answer feedback'], { type: 'text/markdown' }),
+    filename: 'arena-feedback-1-20260818.md',
+  }),
   getMcpIntegrations: vi.fn().mockResolvedValue({ integrations: [] }),
 }));
 
@@ -200,6 +204,7 @@ vi.mock('../api', () => ({
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
   exportAgentFeedbackCsv: hoistedMocks.exportAgentFeedbackCsv,
   exportAgentFeedbackJson: hoistedMocks.exportAgentFeedbackJson,
+  exportAgentFeedbackMarkdown: hoistedMocks.exportAgentFeedbackMarkdown,
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
   exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(new Blob(['date,prompts'], { type: 'text/csv' })),
   exportAnalyticsActivityJson: vi.fn().mockResolvedValue({
@@ -287,6 +292,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(hoistedMocks.exportAgentFeedbackCsv).mockClear();
     vi.mocked(hoistedMocks.exportAgentFeedbackJson).mockClear();
+    vi.mocked(hoistedMocks.exportAgentFeedbackMarkdown).mockClear();
     vi.mocked(downloadBlobFile).mockClear();
     (window as { __profileModalOpened?: boolean }).__profileModalOpened = false;
   });
@@ -526,6 +532,33 @@ describe('ProfileModal', () => {
       await screen.findByText('Could not download answer feedback JSON — try again.'),
     ).toBeInTheDocument();
     expect(button).not.toBeDisabled();
+  });
+
+  it('downloads answer feedback Markdown when feedback exists', async () => {
+    hoistedMocks.getUserAnswerFeedbackStats.mockResolvedValueOnce({
+      total: 2,
+      correct_pct: 50,
+      partial_pct: 0,
+      wrong_pct: 50,
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', {
+      name: /answer feedback markdown export/i,
+    });
+    button.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAgentFeedbackMarkdown).toHaveBeenCalledTimes(1);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-feedback-1-20260818.md',
+      );
+    });
   });
 
   it('views and paginates recent calibration history', async () => {

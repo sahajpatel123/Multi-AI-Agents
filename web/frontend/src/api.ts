@@ -1490,6 +1490,27 @@ export async function exportAgentFeedbackJson(): Promise<AgentFeedbackJsonExport
   };
 }
 
+export type AgentFeedbackMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAgentFeedbackMarkdown(): Promise<AgentFeedbackMarkdownExport> {
+  const response = await apiFetch('/api/agent/feedback/export.md');
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export answer feedback Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-feedback.md',
+  };
+}
+
 export type AgentStartResponse = {
   request_id?: string | null;
   task_id: string;

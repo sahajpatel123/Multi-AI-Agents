@@ -4264,6 +4264,139 @@ async def export_feedback_json(
     )
 
 
+def _feedback_markdown_inline(value: object) -> str:
+    """Flatten and escape user-controlled feedback metadata for Markdown."""
+    if value is None:
+        return ""
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("`", "\\`")
+        .replace("*", "\\*")
+        .replace("_", "\\_")
+        .replace("#", "\\#")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("|", "\\|")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\n", " ")
+        .replace("\u2028", " ")
+        .replace("\u2029", " ")
+        .replace("\t", " ")
+        .strip()
+    )
+
+
+@router.get("/feedback/export.md")
+async def export_feedback_markdown(
+    verdict: Optional[str] = Query(
+        None,
+        description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download a human-readable Markdown report of the caller's feedback.
+
+    This is the portable sibling of the CSV and JSON exports. It keeps the
+    same owner scope and verdict filtering while escaping metadata so a title
+    or note cannot change the structure of the downloaded report.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_markdown",
+        limit=30,
+        window_seconds=60,
+        message="Too many Markdown exports. Please wait.",
+    )
+
+    q = (
+        db.query(AnswerFeedback, AgentTaskRow)
+        .outerjoin(
+            AgentTaskRow,
+            (AnswerFeedback.task_id == AgentTaskRow.task_id)
+            & (AnswerFeedback.user_id == AgentTaskRow.user_id),
+        )
+        .filter(AnswerFeedback.user_id == user.id)
+    )
+    if verdict is not None:
+        if verdict in {"correct", "partial", "wrong"}:
+            q = q.filter(AnswerFeedback.verdict == verdict)
+        else:
+            q = q.filter(False)
+
+    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
+    items = [
+        {
+            "task_id": feedback.task_id,
+            "title": task.title if task else None,
+            "verdict": feedback.verdict,
+            "note": feedback.note,
+            "created_at": feedback.created_at.isoformat()
+            if feedback.created_at
+            else None,
+        }
+        for feedback, task in rows
+    ]
+
+    counts = {name: 0 for name in ("correct", "partial", "wrong")}
+    for item in items:
+        if item["verdict"] in counts:
+            counts[item["verdict"]] += 1
+
+    lines = [
+        "# Arena — answer feedback",
+        "",
+        f"**Ratings:** {len(items)}",
+    ]
+    if verdict is not None:
+        lines.append(f"**Filter:** {_feedback_markdown_inline(verdict) or 'none'}")
+    lines.extend(
+        [
+            "",
+            "## Summary",
+            "",
+            f"- **Correct:** {counts['correct']}",
+            f"- **Partial:** {counts['partial']}",
+            f"- **Wrong:** {counts['wrong']}",
+        ]
+    )
+
+    if items:
+        lines.extend(["", "## Ratings", ""])
+        for index, item in enumerate(items, start=1):
+            title = _feedback_markdown_inline(item["title"]) or "Untitled task"
+            feedback_verdict = _feedback_markdown_inline(item["verdict"]) or "unknown"
+            lines.extend(
+                [
+                    f"### {index}. {feedback_verdict} — {title}",
+                    "",
+                    f"- **Task ID:** {_feedback_markdown_inline(item['task_id'])}",
+                    f"- **Rated:** {_feedback_markdown_inline(item['created_at']) or 'unknown'}",
+                ]
+            )
+            note = _feedback_markdown_inline(item["note"])
+            if note:
+                lines.append(f"- **Note:** {note}")
+            lines.append("")
+    else:
+        lines.extend(["", "_No answer feedback recorded._", ""])
+
+    lines.extend(["---", "_Exported from Arena_", ""])
+    filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.md"
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
+    )
+
+
 @router.get("/tasks/export.jsonl")
 async def export_tasks_jsonl(
     retention_days: int = Query(30, ge=1, le=365),
