@@ -2457,7 +2457,7 @@ export function ProfileModal() {
                     onClick={async () => {
                       setActiveExport('activity-json');
                       try {
-                        const { blob, filename } = await exportAnalyticsActivityJson(30);
+                        const { blob, filename } = await exportAnalyticsActivityJson(activityWindowDays);
                         downloadBlobFile(blob, filename);
                       } catch {
                         // ignore error
@@ -2486,7 +2486,7 @@ export function ProfileModal() {
                     onClick={async () => {
                       setActiveExport('activity-markdown');
                       try {
-                        const { blob, filename } = await exportAnalyticsActivityMarkdown(30);
+                        const { blob, filename } = await exportAnalyticsActivityMarkdown(activityWindowDays);
                         downloadBlobFile(blob, filename);
                       } catch {
                         // ignore error

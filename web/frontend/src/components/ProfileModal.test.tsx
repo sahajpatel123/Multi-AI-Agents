@@ -87,6 +87,14 @@ const hoistedMocks = vi.hoisted(() => {
   exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(
     new Blob(['date,prompts'], { type: 'text/csv' }),
   ),
+  exportAnalyticsActivityJson: vi.fn().mockResolvedValue({
+    blob: new Blob(['{"activity":[]}'], { type: 'application/json' }),
+    filename: 'arena-activity-2026-08-05-to-2026-08-11.json',
+  }),
+  exportAnalyticsActivityMarkdown: vi.fn().mockResolvedValue({
+    blob: new Blob(['# Arena — activity timeline'], { type: 'text/markdown' }),
+    filename: 'arena-activity-2026-08-05-to-2026-08-11.md',
+  }),
   getAnalyticsPersonaWinRate: vi.fn().mockResolvedValue({
     window_days: 30,
     window_start: '2026-07-13',
@@ -273,14 +281,8 @@ vi.mock('../api', () => ({
   exportAgentFeedbackSummaryMarkdown: hoistedMocks.exportAgentFeedbackSummaryMarkdown,
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
   exportAnalyticsActivityCsv: hoistedMocks.exportAnalyticsActivityCsv,
-  exportAnalyticsActivityJson: vi.fn().mockResolvedValue({
-    blob: new Blob(['{"activity":[]}'], { type: 'application/json' }),
-    filename: 'arena-activity-2026-08-05-to-2026-08-11.json',
-  }),
-  exportAnalyticsActivityMarkdown: vi.fn().mockResolvedValue({
-    blob: new Blob(['# Arena — activity timeline'], { type: 'text/markdown' }),
-    filename: 'arena-activity-2026-08-05-to-2026-08-11.md',
-  }),
+  exportAnalyticsActivityJson: hoistedMocks.exportAnalyticsActivityJson,
+  exportAnalyticsActivityMarkdown: hoistedMocks.exportAnalyticsActivityMarkdown,
   exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateJson: hoistedMocks.exportAnalyticsPersonaWinRateJson,
   exportAnalyticsPersonaWinRateMarkdown: hoistedMocks.exportAnalyticsPersonaWinRateMarkdown,
@@ -358,6 +360,8 @@ describe('ProfileModal', () => {
     refreshTierMock.mockClear();
     vi.mocked(hoistedMocks.getAnalyticsActivity).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityCsv).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsActivityJson).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsActivityMarkdown).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
@@ -419,6 +423,7 @@ describe('ProfileModal', () => {
     button.click();
 
     await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsActivityJson).toHaveBeenCalledWith(30);
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-activity-2026-08-05-to-2026-08-11.json',
@@ -436,6 +441,7 @@ describe('ProfileModal', () => {
     button.click();
 
     await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsActivityMarkdown).toHaveBeenCalledWith(30);
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-activity-2026-08-05-to-2026-08-11.md',
@@ -1386,6 +1392,16 @@ describe('ProfileModal', () => {
         expect.any(Blob),
         'arena-activity-90d.csv',
       );
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /^🗓️ activity json export$/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsActivityJson).toHaveBeenCalledWith(90);
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /^🗓️ activity markdown export$/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsActivityMarkdown).toHaveBeenCalledWith(90);
     });
   });
 
