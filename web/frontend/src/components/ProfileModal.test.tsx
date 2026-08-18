@@ -514,6 +514,67 @@ describe('ProfileModal', () => {
     expect(await screen.findByText('You underestimated this answer')).toBeInTheDocument();
   });
 
+  it('sorts calibration history and returns to the first page', async () => {
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 6,
+      avg_delta: 2.0,
+      trend: 'stable',
+      calibration_score: 92,
+      recent_ratings: [{ delta: 5, created_at: '2026-08-11T10:00:00Z' }],
+    });
+    hoistedMocks.getCalibrationHistory.mockResolvedValueOnce({
+      ratings: [],
+      total: 6,
+      page: 1,
+      per_page: 5,
+      total_pages: 2,
+      filters: { min_delta: null, max_delta: null, sort: 'newest' },
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const openHistory = await screen.findByRole('button', {
+      name: /view calibration history \(6\)/i,
+    });
+    openHistory.click();
+    const history = await screen.findByRole('region', { name: /calibration history/i });
+
+    hoistedMocks.getCalibrationHistory.mockResolvedValueOnce({
+      ratings: [
+        {
+          id: 12,
+          task_id: 'task-history-2',
+          user_rating: 2,
+          system_score: 60,
+          delta: 20,
+          verdict: 'You underestimated this answer',
+          created_at: '2026-08-09T10:00:00Z',
+        },
+      ],
+      total: 6,
+      page: 1,
+      per_page: 5,
+      total_pages: 2,
+      filters: { min_delta: null, max_delta: null, sort: 'delta_desc' },
+    });
+    fireEvent.change(
+      within(history).getByRole('combobox', { name: /calibration history sort/i }),
+      { target: { value: 'delta_desc' } },
+    );
+
+    await waitFor(() => {
+      expect(hoistedMocks.getCalibrationHistory).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 5,
+        sort: 'delta_desc',
+      });
+    });
+    expect(within(history).getByDisplayValue('Underestimates first')).toBeInTheDocument();
+    expect(await within(history).findByText('You underestimated this answer')).toBeInTheDocument();
+  });
+
   it('downloads calibration history CSV with the server filename', async () => {
     hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
       total_ratings: 1,

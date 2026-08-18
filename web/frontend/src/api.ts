@@ -2651,6 +2651,8 @@ export type CalibrationHistoryRating = {
   created_at: string | null;
 };
 
+export type CalibrationHistorySort = 'newest' | 'oldest' | 'delta_asc' | 'delta_desc';
+
 export type CalibrationHistoryResponse = {
   ratings: CalibrationHistoryRating[];
   total: number;
@@ -2668,7 +2670,7 @@ export async function getCalibrationHistory(
   params: {
     page?: number;
     perPage?: number;
-    sort?: 'newest' | 'oldest' | 'delta_asc' | 'delta_desc';
+    sort?: CalibrationHistorySort;
   } = {},
 ): Promise<CalibrationHistoryResponse> {
   const query = new URLSearchParams();

@@ -37,6 +37,7 @@ import {
   type AnalyticsPersonaWinRateTrendPoint,
   type AnswerFeedbackStats,
   type CalibrationHistoryResponse,
+  type CalibrationHistorySort,
   type RecentFeedbackItem,
   type SubscriptionStatusResponse,
   type UserUsageResponse,
@@ -470,6 +471,7 @@ export function ProfileModal() {
   const [calHistoryErr, setCalHistoryErr] = useState<string | null>(null);
   const [calHistoryOpen, setCalHistoryOpen] = useState(false);
   const [calHistoryPage, setCalHistoryPage] = useState(1);
+  const [calHistorySort, setCalHistorySort] = useState<CalibrationHistorySort>('newest');
   const [calHistoryReload, setCalHistoryReload] = useState(0);
   const [fbAcc, setFbAcc] = useState<AnswerFeedbackStats | null>(null);
   const [fbAccLoading, setFbAccLoading] = useState(false);
@@ -543,7 +545,7 @@ export function ProfileModal() {
     let cancelled = false;
     setCalHistoryLoading(true);
     setCalHistoryErr(null);
-    void getCalibrationHistory({ page: calHistoryPage, perPage: 5, sort: 'newest' })
+    void getCalibrationHistory({ page: calHistoryPage, perPage: 5, sort: calHistorySort })
       .then((history) => {
         if (!cancelled) setCalHistory(history);
       })
@@ -559,7 +561,7 @@ export function ProfileModal() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, activeTab, calHistoryOpen, calHistoryPage, calHistoryReload]);
+  }, [isOpen, activeTab, calHistoryOpen, calHistoryPage, calHistorySort, calHistoryReload]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -2232,6 +2234,7 @@ export function ProfileModal() {
                         setCalHistoryOpen((open) => {
                           if (!open) {
                             setCalHistoryPage(1);
+                            setCalHistorySort('newest');
                             setCalHistoryErr(null);
                           }
                           return !open;
@@ -2265,6 +2268,49 @@ export function ProfileModal() {
                           border: '0.5px solid #E0D5C5',
                         }}
                       >
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            marginBottom: 10,
+                          }}
+                        >
+                          <label
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              color: '#A0A39A',
+                              fontSize: 11,
+                              fontFamily: 'var(--vp-font-sans)',
+                            }}
+                          >
+                            <span>Sort</span>
+                            <select
+                              aria-label="Calibration history sort"
+                              value={calHistorySort}
+                              onChange={(event) => {
+                                setCalHistorySort(event.target.value as CalibrationHistorySort);
+                                setCalHistoryPage(1);
+                                setCalHistoryErr(null);
+                              }}
+                              style={{
+                                border: '0.5px solid #E0D5C5',
+                                borderRadius: 5,
+                                background: '#F0E8DC',
+                                color: '#F3F0E7',
+                                padding: '4px 6px',
+                                fontSize: 11,
+                                fontFamily: 'var(--vp-font-sans)',
+                              }}
+                            >
+                              <option value="newest">Newest first</option>
+                              <option value="oldest">Oldest first</option>
+                              <option value="delta_desc">Underestimates first</option>
+                              <option value="delta_asc">Overestimates first</option>
+                            </select>
+                          </label>
+                        </div>
                         {calHistoryLoading ? (
                           <div style={{ padding: 8, display: 'flex', justifyContent: 'center' }}>
                             <MicroLoader />
