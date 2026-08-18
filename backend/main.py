@@ -281,10 +281,10 @@ def create_app() -> FastAPI:
             "Accept-Language",
             "X-Requested-With",
         ],
-        # Browser JS can only read response headers listed here. We want
-        # clients on allowed origins to correlate the X-Request-ID header
-        # that RequestIDMiddleware emits on every response.
-        expose_headers=["X-Request-ID"],
+        # Browser JS can only read response headers listed here. Clients on
+        # allowed origins need both request correlation and the server-chosen
+        # filename for streamed exports (including usage Markdown).
+        expose_headers=["X-Request-ID", "Content-Disposition"],
         max_age=3600,
     )
     app.add_middleware(GlobalRateLimitMiddleware)
