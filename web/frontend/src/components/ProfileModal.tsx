@@ -869,6 +869,14 @@ export function ProfileModal() {
       .finally(() => {
         if (!cancelled) setFbAccLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
     setRecentFbLoading(true);
     setRecentFbErr(null);
     void getRecentAgentFeedback(10, recentFbVerdict || undefined)

@@ -695,6 +695,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getRecentAgentFeedback)
       .mockResolvedValueOnce(recentRatings)
       .mockResolvedValueOnce([recentRatings[1]]);
+    vi.mocked(hoistedMocks.getUserAnswerFeedbackStats).mockClear();
 
     renderModal();
     await waitFor(() => {
@@ -711,6 +712,7 @@ describe('ProfileModal', () => {
     await waitFor(() => {
       expect(hoistedMocks.getRecentAgentFeedback).toHaveBeenLastCalledWith(10, 'wrong');
     });
+    expect(hoistedMocks.getUserAnswerFeedbackStats).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole('button', { name: 'Wrong answer' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Correct answer' })).not.toBeInTheDocument();
   });
