@@ -97,6 +97,74 @@ function formatSignedDelta(delta: number): string {
   return delta > 0 ? `+${delta}` : String(delta);
 }
 
+function CalibrationHistoryPagination({
+  page,
+  totalPages,
+  onPrevious,
+  onNext,
+}: {
+  page: number;
+  totalPages: number;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  const safeTotalPages = Math.max(1, totalPages);
+  const isFirstPage = page <= 1;
+  const isLastPage = page >= safeTotalPages;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+        marginTop: 10,
+      }}
+    >
+      <span style={{ fontSize: 10, color: '#A0A39A' }}>
+        Page {page} of {safeTotalPages}
+      </span>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button
+          type="button"
+          aria-label="Previous calibration history page"
+          disabled={isFirstPage}
+          onClick={onPrevious}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: '#F0E8DC',
+            color: '#4A3728',
+            cursor: isFirstPage ? 'not-allowed' : 'pointer',
+            opacity: isFirstPage ? 0.5 : 1,
+          }}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          aria-label="Next calibration history page"
+          disabled={isLastPage}
+          onClick={onNext}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: '#F0E8DC',
+            color: '#4A3728',
+            cursor: isLastPage ? 'not-allowed' : 'pointer',
+            opacity: isLastPage ? 0.5 : 1,
+          }}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TabIconAccount({ active }: { active: boolean }) {
   const c = active ? '#F0B84E' : 'currentColor';
   return (
@@ -2219,102 +2287,63 @@ export function ProfileModal() {
                               Retry
                             </button>
                           </div>
-                        ) : calHistory?.ratings.length ? (
+                        ) : calHistory && (calHistory.ratings.length > 0 || calHistory.total_pages > 1) ? (
                           <>
-                            <div style={{ fontSize: 10, color: '#A0A39A', marginBottom: 6 }}>
-                              Newest first · {calHistory.total} total rating{calHistory.total === 1 ? '' : 's'}
-                            </div>
-                            <div style={{ display: 'grid', gap: 6 }}>
-                              {calHistory.ratings.map((rating) => {
-                                const delta = Number(rating.delta ?? 0);
-                                return (
-                                  <div
-                                    key={rating.id}
-                                    title={`Task ${rating.task_id}`}
-                                    aria-label={`${formatCalibrationDate(rating.created_at)}: rated ${rating.user_rating} out of 5, delta ${formatSignedDelta(delta)}, ${rating.verdict}`}
-                                    style={{
-                                      display: 'grid',
-                                      gridTemplateColumns: '72px 42px 48px minmax(0, 1fr)',
-                                      alignItems: 'center',
-                                      gap: 6,
-                                      fontSize: 11,
-                                      color: '#4A3728',
-                                    }}
-                                  >
-                                    <span>{formatCalibrationDate(rating.created_at)}</span>
-                                    <span>{rating.user_rating}/5</span>
-                                    <span
-                                      style={{
-                                        color: Math.abs(delta) <= 10 ? '#639922' : delta > 0 ? '#BA7517' : '#C0392B',
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      Δ {formatSignedDelta(delta)}
-                                    </span>
-                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {rating.verdict}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 8,
-                                marginTop: 10,
-                              }}
-                            >
-                              <span style={{ fontSize: 10, color: '#A0A39A' }}>
-                                Page {calHistory.page} of {Math.max(1, calHistory.total_pages)}
-                              </span>
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button
-                                  type="button"
-                                  aria-label="Previous calibration history page"
-                                  disabled={calHistoryPage <= 1}
-                                  onClick={() => setCalHistoryPage((page) => Math.max(1, page - 1))}
-                                  style={{
-                                    padding: '4px 8px',
-                                    border: '0.5px solid #E0D5C5',
-                                    borderRadius: 5,
-                                    background: '#F0E8DC',
-                                    color: '#4A3728',
-                                    cursor: calHistoryPage <= 1 ? 'not-allowed' : 'pointer',
-                                    opacity: calHistoryPage <= 1 ? 0.5 : 1,
-                                  }}
-                                >
-                                  Previous
-                                </button>
-                                <button
-                                  type="button"
-                                  aria-label="Next calibration history page"
-                                  disabled={calHistoryPage >= Math.max(1, calHistory.total_pages)}
-                                  onClick={() =>
-                                    setCalHistoryPage((page) =>
-                                      Math.min(Math.max(1, calHistory.total_pages), page + 1),
-                                    )
-                                  }
-                                  style={{
-                                    padding: '4px 8px',
-                                    border: '0.5px solid #E0D5C5',
-                                    borderRadius: 5,
-                                    background: '#F0E8DC',
-                                    color: '#4A3728',
-                                    cursor:
-                                      calHistoryPage >= Math.max(1, calHistory.total_pages)
-                                        ? 'not-allowed'
-                                        : 'pointer',
-                                    opacity:
-                                      calHistoryPage >= Math.max(1, calHistory.total_pages) ? 0.5 : 1,
-                                  }}
-                                >
-                                  Next
-                                </button>
-                              </div>
-                            </div>
+                            {calHistory.ratings.length ? (
+                              <>
+                                <div style={{ fontSize: 10, color: '#A0A39A', marginBottom: 6 }}>
+                                  Newest first · {calHistory.total} total rating{calHistory.total === 1 ? '' : 's'}
+                                </div>
+                                <div style={{ display: 'grid', gap: 6 }}>
+                                  {calHistory.ratings.map((rating) => {
+                                    const delta = Number(rating.delta ?? 0);
+                                    return (
+                                      <div
+                                        key={rating.id}
+                                        title={`Task ${rating.task_id}`}
+                                        aria-label={`${formatCalibrationDate(rating.created_at)}: rated ${rating.user_rating} out of 5, delta ${formatSignedDelta(delta)}, ${rating.verdict}`}
+                                        style={{
+                                          display: 'grid',
+                                          gridTemplateColumns: '72px 42px 48px minmax(0, 1fr)',
+                                          alignItems: 'center',
+                                          gap: 6,
+                                          fontSize: 11,
+                                          color: '#4A3728',
+                                        }}
+                                      >
+                                        <span>{formatCalibrationDate(rating.created_at)}</span>
+                                        <span>{rating.user_rating}/5</span>
+                                        <span
+                                          style={{
+                                            color: Math.abs(delta) <= 10 ? '#639922' : delta > 0 ? '#BA7517' : '#C0392B',
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          Δ {formatSignedDelta(delta)}
+                                        </span>
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {rating.verdict}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            ) : (
+                              <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                                No calibration ratings on this page.
+                              </p>
+                            )}
+                            <CalibrationHistoryPagination
+                              page={calHistoryPage}
+                              totalPages={calHistory.total_pages}
+                              onPrevious={() => setCalHistoryPage((page) => Math.max(1, page - 1))}
+                              onNext={() =>
+                                setCalHistoryPage((page) =>
+                                  Math.min(Math.max(1, calHistory.total_pages), page + 1),
+                                )
+                              }
+                            />
                           </>
                         ) : (
                           <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>

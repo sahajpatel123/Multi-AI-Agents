@@ -480,7 +480,38 @@ describe('ProfileModal', () => {
         sort: 'newest',
       });
     });
-    expect(await screen.findByText('No calibration ratings found.')).toBeInTheDocument();
+    expect(await screen.findByText('No calibration ratings on this page.')).toBeInTheDocument();
+    expect(
+      within(history).getByRole('button', { name: /previous calibration history page/i }),
+    ).toBeEnabled();
+
+    hoistedMocks.getCalibrationHistory.mockResolvedValueOnce({
+      ratings: [
+        {
+          id: 11,
+          task_id: 'task-history-1',
+          user_rating: 4,
+          system_score: 95,
+          delta: 15,
+          verdict: 'You underestimated this answer',
+          created_at: '2026-08-11T10:00:00Z',
+        },
+      ],
+      total: 6,
+      page: 1,
+      per_page: 5,
+      total_pages: 2,
+      filters: { min_delta: null, max_delta: null, sort: 'newest' },
+    });
+    within(history).getByRole('button', { name: /previous calibration history page/i }).click();
+    await waitFor(() => {
+      expect(hoistedMocks.getCalibrationHistory).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 5,
+        sort: 'newest',
+      });
+    });
+    expect(await screen.findByText('You underestimated this answer')).toBeInTheDocument();
   });
 
   it('downloads calibration history CSV with the server filename', async () => {
