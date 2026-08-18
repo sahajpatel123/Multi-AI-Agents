@@ -1142,6 +1142,68 @@ describe('ProfileModal', () => {
     expect(screen.getByText('Persona win rates · 7 days')).toBeInTheDocument();
   });
 
+  it('sorts persona win rates by the selected table metric', async () => {
+    hoistedMocks.getAnalyticsPersonaWinRate.mockResolvedValueOnce({
+      window_days: 30,
+      window_start: '2026-07-13',
+      window_end: '2026-08-11',
+      min_appearances: 1,
+      include_fallback: false,
+      low_confidence_threshold: 5,
+      scored_exchanges: 10,
+      unattributed_exchanges: 0,
+      fallback_exchanges: 0,
+      personas: [
+        {
+          persona_id: 'analyst',
+          name: 'The Analyst',
+          color: '#F0B84E',
+          appearances: 8,
+          wins: 2,
+          win_rate: 0.25,
+          low_confidence: false,
+          trend_omitted_appearances: 0,
+          trend_omitted_wins: 0,
+          trend: [],
+        },
+        {
+          persona_id: 'philosopher',
+          name: 'The Philosopher',
+          color: '#8C7355',
+          appearances: 3,
+          wins: 2,
+          win_rate: 0.667,
+          low_confidence: true,
+          trend_omitted_appearances: 0,
+          trend_omitted_wins: 0,
+          trend: [],
+        },
+      ],
+      best_persona_id: 'philosopher',
+      best_win_rate: 0.667,
+    });
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const group = await screen.findByRole('group', { name: /persona win rates/i });
+    const rowsBeforeSort = within(group).getAllByRole('row');
+    expect(rowsBeforeSort[1]).toHaveTextContent('The Philosopher');
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate sort/i }),
+      { target: { value: 'appearances' } },
+    );
+
+    await waitFor(() => {
+      const rowsAfterSort = within(group).getAllByRole('row');
+      expect(rowsAfterSort[1]).toHaveTextContent('The Analyst');
+    });
+  });
+
   it('refreshes persona win rates and exports when the minimum sample changes', async () => {
     renderModal();
     await waitFor(() => {

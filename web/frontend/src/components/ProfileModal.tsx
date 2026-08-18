@@ -268,7 +268,35 @@ function TabIconHelp({ active }: { active: boolean }) {
 const PLACEHOLDER_HISTORY = [8, 14, 11, 19, 15, 22, 17, 12, 25, 18, 14, 21, 10, 28];
 const PERSONA_WIN_RATE_WINDOWS = [7, 30, 90] as const;
 const PERSONA_WIN_RATE_MIN_APPEARANCES = [1, 3, 5, 10] as const;
+type PersonaWinRateSort = 'win_rate' | 'appearances' | 'wins' | 'name';
+const PERSONA_WIN_RATE_SORT_LABELS: Record<PersonaWinRateSort, string> = {
+  win_rate: 'Win rate',
+  appearances: 'Appearances',
+  wins: 'Wins',
+  name: 'Name',
+};
 const FEEDBACK_ACTIVITY_WINDOWS = [7, 30, 90] as const;
+
+function sortPersonaWinRateRows(
+  rows: AnalyticsPersonaWinRateResponse['personas'],
+  sort: PersonaWinRateSort,
+): AnalyticsPersonaWinRateResponse['personas'] {
+  return [...rows].sort((a, b) => {
+    if (sort === 'name') {
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+        a.persona_id.localeCompare(b.persona_id);
+    }
+
+    const primary = sort === 'win_rate'
+      ? b.win_rate - a.win_rate
+      : sort === 'appearances'
+        ? b.appearances - a.appearances
+        : b.wins - a.wins;
+    return primary || b.win_rate - a.win_rate || b.appearances - a.appearances ||
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+      a.persona_id.localeCompare(b.persona_id);
+  });
+}
 
 function UsageChart({
   data,
@@ -620,6 +648,7 @@ export function ProfileModal() {
   const [winRateWindowDays, setWinRateWindowDays] = useState(30);
   const [winRateMinAppearances, setWinRateMinAppearances] = useState(1);
   const [winRateIncludeFallback, setWinRateIncludeFallback] = useState(false);
+  const [winRateSort, setWinRateSort] = useState<PersonaWinRateSort>('win_rate');
   const [calStats, setCalStats] = useState<{
     total_ratings?: number;
     avg_delta?: number;
@@ -1857,6 +1886,38 @@ export function ProfileModal() {
                       </select>
                     </label>
                     <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        color: '#A0A39A',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      <span>Sort</span>
+                      <select
+                        aria-label="Persona win-rate sort"
+                        value={winRateSort}
+                        onChange={(event) => setWinRateSort(event.target.value as PersonaWinRateSort)}
+                        style={{
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 5,
+                          background: '#F0E8DC',
+                          color: '#F3F0E7',
+                          padding: '4px 6px',
+                          fontSize: 11,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        {Object.entries(PERSONA_WIN_RATE_SORT_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label
                       title="Fallback scorings have an arbitrary winner because the scorer could not judge the panel."
                       style={{
                         display: 'inline-flex',
@@ -1966,7 +2027,7 @@ export function ProfileModal() {
                           </tr>
                         </thead>
                         <tbody>
-                          {winRate.personas.map((row) => (
+                          {sortPersonaWinRateRows(winRate.personas, winRateSort).map((row) => (
                             <tr key={row.persona_id} style={{ opacity: row.low_confidence ? 0.65 : 1 }}>
                               <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', color: '#F3F0E7' }}>
                                 {row.color ? (
