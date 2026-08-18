@@ -2844,11 +2844,18 @@ export function ProfileModal() {
                         }}
                         onClick={async () => {
                           setActiveExport('calibration-csv');
+                          clearExportFeedback();
                           try {
                             const { blob, filename } = await exportCalibrationHistoryCsv();
-                            downloadBlobFile(blob, filename);
-                          } catch {
-                            // ignore error
+                            if (!downloadBlobFile(blob, filename)) {
+                              setExportError('Could not download calibration CSV — try again.');
+                            }
+                          } catch (error) {
+                            setExportError(
+                              error instanceof ApiError
+                                ? error.message
+                                : 'Could not download calibration CSV — try again.',
+                            );
                           } finally {
                             setActiveExport(null);
                           }
@@ -2879,11 +2886,18 @@ export function ProfileModal() {
                         }}
                         onClick={async () => {
                           setActiveExport('calibration-json');
+                          clearExportFeedback();
                           try {
                             const { blob, filename } = await exportCalibrationHistoryJson();
-                            downloadBlobFile(blob, filename);
-                          } catch {
-                            // ignore error
+                            if (!downloadBlobFile(blob, filename)) {
+                              setExportError('Could not download calibration JSON — try again.');
+                            }
+                          } catch (error) {
+                            setExportError(
+                              error instanceof ApiError
+                                ? error.message
+                                : 'Could not download calibration JSON — try again.',
+                            );
                           } finally {
                             setActiveExport(null);
                           }
@@ -2914,11 +2928,18 @@ export function ProfileModal() {
                         }}
                         onClick={async () => {
                           setActiveExport('calibration-markdown');
+                          clearExportFeedback();
                           try {
                             const { blob, filename } = await exportCalibrationHistoryMarkdown();
-                            downloadBlobFile(blob, filename);
-                          } catch {
-                            // ignore error
+                            if (!downloadBlobFile(blob, filename)) {
+                              setExportError('Could not download calibration Markdown — try again.');
+                            }
+                          } catch (error) {
+                            setExportError(
+                              error instanceof ApiError
+                                ? error.message
+                                : 'Could not download calibration Markdown — try again.',
+                            );
                           } finally {
                             setActiveExport(null);
                           }

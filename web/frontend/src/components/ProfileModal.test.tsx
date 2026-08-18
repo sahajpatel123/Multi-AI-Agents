@@ -1220,6 +1220,33 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('surfaces blocked calibration Markdown downloads and releases the export lock', async () => {
+    vi.mocked(downloadBlobFile).mockReturnValueOnce(false);
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 1,
+      avg_delta: 0,
+      trend: 'stable',
+      calibration_score: 100,
+      recent_ratings: [{ delta: 0, created_at: '2026-08-11T10:00:00Z' }],
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', {
+      name: /calibration markdown export/i,
+    });
+    button.click();
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Could not download calibration Markdown — try again.',
+      );
+      expect(button).not.toBeDisabled();
+    });
+  });
+
   it('copies calibration history Markdown and reports success', async () => {
     hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
       total_ratings: 1,
