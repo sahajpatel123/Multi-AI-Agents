@@ -561,6 +561,30 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('applies the selected verdict when exporting answer feedback', async () => {
+    hoistedMocks.getUserAnswerFeedbackStats.mockResolvedValueOnce({
+      total: 2,
+      correct_pct: 50,
+      partial_pct: 50,
+      wrong_pct: 0,
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const filter = await screen.findByRole('combobox', {
+      name: /answer feedback export filter/i,
+    });
+    fireEvent.change(filter, { target: { value: 'partial' } });
+    screen.getByRole('button', { name: /answer feedback csv export/i }).click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAgentFeedbackCsv).toHaveBeenCalledWith('partial');
+    });
+  });
+
   it('views and paginates recent calibration history', async () => {
     hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
       total_ratings: 6,

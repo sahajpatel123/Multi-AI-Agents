@@ -38,6 +38,7 @@ import {
   type AnalyticsActivityResponse,
   type AnalyticsPersonaWinRateResponse,
   type AnalyticsPersonaWinRateTrendPoint,
+  type AgentFeedbackVerdict,
   type AnswerFeedbackStats,
   type CalibrationHistoryResponse,
   type CalibrationHistorySort,
@@ -490,6 +491,7 @@ export function ProfileModal() {
   const [recentFb, setRecentFb] = useState<RecentFeedbackItem[]>([]);
   const [recentFbLoading, setRecentFbLoading] = useState(false);
   const [recentFbErr, setRecentFbErr] = useState<string | null>(null);
+  const [feedbackExportVerdict, setFeedbackExportVerdict] = useState<AgentFeedbackVerdict | ''>('');
 
   const [sub, setSub] = useState<SubscriptionStatusResponse | null>(null);
   const [subLoading, setSubLoading] = useState(false);
@@ -2739,6 +2741,46 @@ export function ProfileModal() {
                 )}
                 {fbAcc && fbAcc.total > 0 ? (
                   <>
+                    <label
+                      htmlFor="profile-feedback-export-filter"
+                      style={{
+                        display: 'block',
+                        fontSize: 10,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        color: '#A0A39A',
+                        marginTop: 12,
+                        marginBottom: 6,
+                      }}
+                    >
+                      Export ratings
+                    </label>
+                    <select
+                      id="profile-feedback-export-filter"
+                      aria-label="Answer feedback export filter"
+                      value={feedbackExportVerdict}
+                      disabled={activeExport !== null}
+                      onChange={(event) =>
+                        setFeedbackExportVerdict(event.target.value as AgentFeedbackVerdict | '')
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        fontSize: 12,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        opacity: activeExport !== null ? 0.7 : 1,
+                      }}
+                    >
+                      <option value="">All ratings</option>
+                      <option value="correct">Correct only</option>
+                      <option value="partial">Partial only</option>
+                      <option value="wrong">Wrong only</option>
+                    </select>
                     <button
                       type="button"
                       disabled={activeExport !== null}
@@ -2760,7 +2802,9 @@ export function ProfileModal() {
                         setActiveExport('feedback-csv');
                         setExportError(null);
                         try {
-                          const { blob, filename } = await exportAgentFeedbackCsv();
+                          const { blob, filename } = await exportAgentFeedbackCsv(
+                            feedbackExportVerdict || undefined,
+                          );
                           if (!downloadBlobFile(blob, filename)) {
                             setExportError('Could not download answer feedback CSV — try again.');
                           }
@@ -2800,7 +2844,9 @@ export function ProfileModal() {
                         setActiveExport('feedback-json');
                         setExportError(null);
                         try {
-                          const { blob, filename } = await exportAgentFeedbackJson();
+                          const { blob, filename } = await exportAgentFeedbackJson(
+                            feedbackExportVerdict || undefined,
+                          );
                           if (!downloadBlobFile(blob, filename)) {
                             setExportError('Could not download answer feedback JSON — try again.');
                           }
@@ -2840,7 +2886,9 @@ export function ProfileModal() {
                         setActiveExport('feedback-markdown');
                         setExportError(null);
                         try {
-                          const { blob, filename } = await exportAgentFeedbackMarkdown();
+                          const { blob, filename } = await exportAgentFeedbackMarkdown(
+                            feedbackExportVerdict || undefined,
+                          );
                           if (!downloadBlobFile(blob, filename)) {
                             setExportError('Could not download answer feedback Markdown — try again.');
                           }

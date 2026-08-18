@@ -43,6 +43,25 @@ describe('Agent answer feedback export helper', () => {
     expect(result.filename).toBe('arena-feedback.csv');
   });
 
+  it('passes verdict filters through to every export format', async () => {
+    const formats = [
+      ['csv', exportAgentFeedbackCsv],
+      ['json', exportAgentFeedbackJson],
+      ['md', exportAgentFeedbackMarkdown],
+    ] as const;
+
+    for (const [format, exportFeedback] of formats) {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(new Blob(['filtered'], { type: 'text/plain' }), { status: 200 }),
+      );
+      await exportFeedback('partial');
+      expect(apiFetchModule.apiFetch).toHaveBeenLastCalledWith(
+        `/api/agent/feedback/export.${format}?verdict=partial`,
+        {},
+      );
+    }
+  });
+
   it('surfaces request IDs when the export fails', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: 'export unavailable' }), {

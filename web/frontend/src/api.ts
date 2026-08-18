@@ -1453,8 +1453,17 @@ export type AgentFeedbackCsvExport = {
   filename: string;
 };
 
-export async function exportAgentFeedbackCsv(): Promise<AgentFeedbackCsvExport> {
-  const response = await apiFetch('/api/agent/feedback/export.csv');
+export type AgentFeedbackVerdict = 'correct' | 'partial' | 'wrong';
+
+function agentFeedbackExportPath(format: 'csv' | 'json' | 'md', verdict?: AgentFeedbackVerdict): string {
+  const query = verdict ? `?verdict=${encodeURIComponent(verdict)}` : '';
+  return `/api/agent/feedback/export.${format}${query}`;
+}
+
+export async function exportAgentFeedbackCsv(
+  verdict?: AgentFeedbackVerdict,
+): Promise<AgentFeedbackCsvExport> {
+  const response = await apiFetch(agentFeedbackExportPath('csv', verdict));
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
     throw new ApiError(
@@ -1474,8 +1483,10 @@ export type AgentFeedbackJsonExport = {
   filename: string;
 };
 
-export async function exportAgentFeedbackJson(): Promise<AgentFeedbackJsonExport> {
-  const response = await apiFetch('/api/agent/feedback/export.json');
+export async function exportAgentFeedbackJson(
+  verdict?: AgentFeedbackVerdict,
+): Promise<AgentFeedbackJsonExport> {
+  const response = await apiFetch(agentFeedbackExportPath('json', verdict));
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
     throw new ApiError(
@@ -1495,8 +1506,10 @@ export type AgentFeedbackMarkdownExport = {
   filename: string;
 };
 
-export async function exportAgentFeedbackMarkdown(): Promise<AgentFeedbackMarkdownExport> {
-  const response = await apiFetch('/api/agent/feedback/export.md');
+export async function exportAgentFeedbackMarkdown(
+  verdict?: AgentFeedbackVerdict,
+): Promise<AgentFeedbackMarkdownExport> {
+  const response = await apiFetch(agentFeedbackExportPath('md', verdict));
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
     throw new ApiError(
