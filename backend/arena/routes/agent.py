@@ -4196,7 +4196,7 @@ async def export_feedback_csv(
         to_date=to_date,
     )
     
-    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
+    rows = q.order_by(AnswerFeedback.created_at.desc(), AnswerFeedback.id.desc()).all()
     
     # Format items
     items = []
@@ -4299,7 +4299,7 @@ async def export_feedback_json(
         to_date=to_date,
     )
     
-    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
+    rows = q.order_by(AnswerFeedback.created_at.desc(), AnswerFeedback.id.desc()).all()
     
     # Format items
     items = []
@@ -4409,7 +4409,7 @@ async def export_feedback_markdown(
         to_date=to_date,
     )
 
-    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
+    rows = q.order_by(AnswerFeedback.created_at.desc(), AnswerFeedback.id.desc()).all()
     items = [
         {
             "task_id": feedback.task_id,

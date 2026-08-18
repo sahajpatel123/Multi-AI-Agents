@@ -604,6 +604,7 @@ class AnswerFeedback(Base):
     __tablename__ = "answer_feedback"
     __table_args__ = (
         UniqueConstraint("user_id", "task_id", name="uq_answer_feedback_user_task"),
+        Index("idx_answer_feedback_user_created", "user_id", "created_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)

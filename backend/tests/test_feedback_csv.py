@@ -1,4 +1,7 @@
+import asyncio
+import csv
 from datetime import timedelta
+from io import StringIO
 
 import pytest
 from arena.core.datetime_utils import utcnow_naive
@@ -164,6 +167,41 @@ async def test_feedback_export_rejects_reversed_date_range(app_client, make_user
 
     assert res.status_code == 422
     assert res.json()["detail"]["error"] == "invalid_date_range"
+
+
+@pytest.mark.asyncio
+async def test_feedback_exports_are_deterministic_for_equal_timestamps(
+    app_client, make_user, db_session
+):
+    """All formats use the same stable newest-first order for tied UTC times."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    tied_at = utcnow_naive() - timedelta(days=1)
+    _seed_feedback(db_session, user.id, "task-tie-a", created_at=tied_at)
+    _seed_feedback(db_session, user.id, "task-tie-b", created_at=tied_at)
+    db_session.commit()
+
+    date_query = tied_at.date().isoformat()
+    query = f"?from_date={date_query}&to_date={date_query}"
+    responses = await asyncio.gather(
+        app_client.get(
+            f"/api/agent/feedback/export.csv{query}", headers=_pro_headers(user)
+        ),
+        app_client.get(
+            f"/api/agent/feedback/export.json{query}", headers=_pro_headers(user)
+        ),
+        app_client.get(
+            f"/api/agent/feedback/export.md{query}", headers=_pro_headers(user)
+        ),
+    )
+
+    assert all(response.status_code == 200 for response in responses)
+    csv_tasks = [row["task_id"] for row in csv.DictReader(StringIO(responses[0].text))]
+    json_tasks = [item["task_id"] for item in responses[1].json()]
+    assert csv_tasks == json_tasks == ["task-tie-b", "task-tie-a"]
+    assert responses[2].text.index("Task task-tie-b") < responses[2].text.index(
+        "Task task-tie-a"
+    )
 
 
 @pytest.mark.asyncio
