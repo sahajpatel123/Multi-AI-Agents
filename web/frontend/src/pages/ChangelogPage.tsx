@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Profile analytics: copy the selected feedback activity window as Markdown without leaving the dashboard',
       '[NEW] Profile analytics: download the selected feedback activity window as a UTC-bucketed CSV',
       '[NEW] Profile analytics: download the selected feedback activity window as a structured JSON report',
       '[NEW] Agent feedback: filter CSV, JSON, and Markdown exports by an inclusive UTC date range from Profile analytics',

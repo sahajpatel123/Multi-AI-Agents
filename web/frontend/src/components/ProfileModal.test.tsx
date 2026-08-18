@@ -38,6 +38,12 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(personaWinRateMarkdownBlob, 'text', {
     value: vi.fn().mockResolvedValue('# Arena — persona win rates'),
   });
+  const feedbackSummaryMarkdownBlob = new Blob(['# Arena — feedback activity\n'], {
+    type: 'text/markdown',
+  });
+  Object.defineProperty(feedbackSummaryMarkdownBlob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — feedback activity\n'),
+  });
 
   return {
   getSubscriptionStatus: vi.fn().mockResolvedValue({
@@ -197,7 +203,7 @@ const hoistedMocks = vi.hoisted(() => {
     })),
   exportAgentFeedbackSummaryMarkdown: vi.fn((windowDays: number = 30) =>
     Promise.resolve({
-      blob: new Blob(['# Arena — feedback activity\n'], { type: 'text/markdown' }),
+      blob: feedbackSummaryMarkdownBlob,
       filename: `arena-feedback-activity-1-${windowDays}d-20260818.md`,
     })),
   getMcpIntegrations: vi.fn().mockResolvedValue({ integrations: [] }),
@@ -903,6 +909,56 @@ describe('ProfileModal', () => {
         expect.any(Blob),
         'arena-feedback-activity-1-7d-20260818.md',
       );
+    });
+  });
+
+  it('copies feedback activity Markdown for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /feedback activity window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '7' } });
+    const button = await screen.findByRole('button', {
+      name: /^🧭 copy feedback activity markdown$/i,
+    });
+    button.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAgentFeedbackSummaryMarkdown).toHaveBeenCalledWith(7);
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith(
+        '# Arena — feedback activity\n',
+      );
+      expect(
+        screen.getByText('Copied feedback activity Markdown to the clipboard.'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('surfaces feedback activity clipboard failures and releases the copy lock', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', {
+      name: /^🧭 copy feedback activity markdown$/i,
+    });
+    button.click();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Could not copy feedback activity Markdown — try again.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /^🧭 copy feedback activity markdown$/i }),
+      ).not.toBeDisabled();
     });
   });
 

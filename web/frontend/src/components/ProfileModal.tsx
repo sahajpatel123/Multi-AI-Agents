@@ -3188,6 +3188,51 @@ export function ProfileModal() {
                         ? '⏳ Downloading…'
                         : '🧭 Feedback Activity Markdown Export'}
                     </button>
+                    <button
+                      type="button"
+                      disabled={activeExport !== null}
+                      style={{
+                        width: '100%',
+                        marginTop: 8,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: activeExport === 'feedback-summary-copy' ? '#EDE4D8' : '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--vp-font-sans)',
+                        opacity: activeExport !== null && activeExport !== 'feedback-summary-copy' ? 0.6 : 1,
+                      }}
+                      onClick={async () => {
+                        setActiveExport('feedback-summary-copy');
+                        clearExportFeedback();
+                        try {
+                          const { blob } = await exportAgentFeedbackSummaryMarkdown(
+                            feedbackSummaryWindowDays,
+                          );
+                          const copied = await copyToClipboard(await blob.text());
+                          if (copied) {
+                            setExportNotice('Copied feedback activity Markdown to the clipboard.');
+                          } else {
+                            setExportError('Could not copy feedback activity Markdown — try again.');
+                          }
+                        } catch (error) {
+                          setExportError(
+                            error instanceof ApiError
+                              ? error.message
+                              : 'Could not copy feedback activity Markdown — try again.',
+                          );
+                        } finally {
+                          setActiveExport(null);
+                        }
+                      }}
+                    >
+                      {activeExport === 'feedback-summary-copy'
+                        ? '⏳ Copying…'
+                        : '🧭 Copy Feedback Activity Markdown'}
+                    </button>
                   </div>
                 ) : null}
                 <div
