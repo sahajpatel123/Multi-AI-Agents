@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfileModal } from './ProfileModal';
 import { ProfileModalProvider, useProfileModal } from '../context/ProfileModalContext';
@@ -462,15 +462,30 @@ describe('ProfileModal', () => {
     });
 
     const button = await screen.findByRole('button', { name: /copy win rates markdown/i });
-    button.click();
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        button.click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
 
-    await waitFor(() => {
       expect(hoistedMocks.exportAnalyticsPersonaWinRateMarkdown).toHaveBeenCalledWith(7, 5, true);
       expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('# Arena — persona win rates');
       expect(screen.getByRole('status')).toHaveTextContent(
         'Copied persona win rates Markdown to the clipboard.',
       );
-    });
+      expect(button).toHaveStyle({ color: '#4A3728' });
+
+      fireEvent.change(
+        screen.getByRole('combobox', { name: /persona win-rate window/i }),
+        { target: { value: '14' } },
+      );
+      expect(screen.queryByText('Copied persona win rates Markdown to the clipboard.')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('surfaces clipboard failures and releases the persona win-rate copy lock', async () => {

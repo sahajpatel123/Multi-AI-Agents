@@ -660,6 +660,10 @@ export function ProfileModal() {
   const [activeExport, setActiveExport] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const clearExportFeedback = useCallback(() => {
+    setExportError(null);
+    setExportNotice(null);
+  }, []);
   const [calLoading, setCalLoading] = useState(false);
   const [calErr, setCalErr] = useState<string | null>(null);
   const [calHistory, setCalHistory] = useState<CalibrationHistoryResponse | null>(null);
@@ -952,6 +956,12 @@ export function ProfileModal() {
     const t = window.setTimeout(() => setMcpToast(null), 2000);
     return () => clearTimeout(t);
   }, [mcpToast]);
+
+  useEffect(() => {
+    if (!exportNotice) return;
+    const t = window.setTimeout(() => setExportNotice(null), 2000);
+    return () => clearTimeout(t);
+  }, [exportNotice]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1832,7 +1842,7 @@ export function ProfileModal() {
                         aria-label="Persona win-rate window"
                         value={winRateWindowDays}
                         onChange={(event) => {
-                          setExportError(null);
+                          clearExportFeedback();
                           setWinRateWindowDays(Number(event.target.value));
                         }}
                         style={{
@@ -1867,7 +1877,7 @@ export function ProfileModal() {
                         aria-label="Persona win-rate minimum appearances"
                         value={winRateMinAppearances}
                         onChange={(event) => {
-                          setExportError(null);
+                          clearExportFeedback();
                           setWinRateMinAppearances(Number(event.target.value));
                         }}
                         style={{
@@ -1936,7 +1946,7 @@ export function ProfileModal() {
                         aria-label="Include fallback scorings"
                         checked={winRateIncludeFallback}
                         onChange={(event) => {
-                          setExportError(null);
+                          clearExportFeedback();
                           setWinRateIncludeFallback(event.target.checked);
                         }}
                       />
@@ -2175,7 +2185,7 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('win-rate');
-                      setExportError(null);
+                      clearExportFeedback();
                       try {
                         const { blob, filename } = await exportAnalyticsPersonaWinRateCsv(
                           winRateWindowDays,
@@ -2215,7 +2225,7 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('win-rate-md');
-                      setExportError(null);
+                      clearExportFeedback();
                       try {
                         const { blob, filename } = await exportAnalyticsPersonaWinRateMarkdown(
                           winRateWindowDays,
@@ -2246,7 +2256,7 @@ export function ProfileModal() {
                       borderRadius: 6,
                       border: '0.5px solid #E0D5C5',
                       background: activeExport === 'win-rate-copy' ? '#EDE4D8' : '#F0E8DC',
-                      color: '#F3F0E7',
+                      color: '#4A3728',
                       fontSize: 12,
                       cursor: activeExport !== null ? 'wait' : 'pointer',
                       textAlign: 'left',
@@ -2255,8 +2265,7 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('win-rate-copy');
-                      setExportError(null);
-                      setExportNotice(null);
+                      clearExportFeedback();
                       try {
                         const { blob } = await exportAnalyticsPersonaWinRateMarkdown(
                           winRateWindowDays,
@@ -2299,7 +2308,7 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('win-rate-json');
-                      setExportError(null);
+                      clearExportFeedback();
                       try {
                         const { blob, filename } = await exportAnalyticsPersonaWinRateJson(
                           winRateWindowDays,
@@ -3072,7 +3081,7 @@ export function ProfileModal() {
                       }}
                       onClick={async () => {
                         setActiveExport('feedback-summary-csv');
-                        setExportError(null);
+                        clearExportFeedback();
                         try {
                           const { blob, filename } = await exportAgentFeedbackSummaryCsv(
                             feedbackSummaryWindowDays,
@@ -3114,7 +3123,7 @@ export function ProfileModal() {
                       }}
                       onClick={async () => {
                         setActiveExport('feedback-summary-json');
-                        setExportError(null);
+                        clearExportFeedback();
                         try {
                           const { blob, filename } = await exportAgentFeedbackSummaryJson(
                             feedbackSummaryWindowDays,
@@ -3156,7 +3165,7 @@ export function ProfileModal() {
                       }}
                       onClick={async () => {
                         setActiveExport('feedback-summary-markdown');
-                        setExportError(null);
+                        clearExportFeedback();
                         try {
                           const { blob, filename } = await exportAgentFeedbackSummaryMarkdown(
                             feedbackSummaryWindowDays,
@@ -3500,7 +3509,7 @@ export function ProfileModal() {
                       }}
                       onClick={async () => {
                         setActiveExport('feedback-csv');
-                        setExportError(null);
+                        clearExportFeedback();
                         try {
                           const { blob, filename } = feedbackExportDateRange
                             ? await exportAgentFeedbackCsv(
@@ -3545,7 +3554,7 @@ export function ProfileModal() {
                       }}
                       onClick={async () => {
                         setActiveExport('feedback-json');
-                        setExportError(null);
+                        clearExportFeedback();
                         try {
                           const { blob, filename } = feedbackExportDateRange
                             ? await exportAgentFeedbackJson(
@@ -3590,7 +3599,7 @@ export function ProfileModal() {
                       }}
                       onClick={async () => {
                         setActiveExport('feedback-markdown');
-                        setExportError(null);
+                        clearExportFeedback();
                         try {
                           const { blob, filename } = feedbackExportDateRange
                             ? await exportAgentFeedbackMarkdown(
