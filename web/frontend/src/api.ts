@@ -268,6 +268,27 @@ export async function exportUserUsageJson(): Promise<UserUsageJsonExport> {
   };
 }
 
+export type UserUsageMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportUserUsageMarkdown(): Promise<UserUsageMarkdownExport> {
+  const res = await apiFetch(`/api/user/usage/export.md`);
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to export usage Markdown', res),
+      res.status,
+      err,
+    );
+  }
+  return {
+    blob: await res.blob(),
+    filename: contentDispositionFilename(res) ?? 'arena-usage-14d.md',
+  };
+}
+
 export async function patchUserProfile(body: {
   name?: string;
   expertise_level?: string;

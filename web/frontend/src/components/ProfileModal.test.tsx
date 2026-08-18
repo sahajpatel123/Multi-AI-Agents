@@ -106,6 +106,10 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['# Arena — analytics summary'], { type: 'text/markdown' }),
     filename: 'arena-summary-2026-07-13-to-2026-08-11.md',
   }),
+  exportUserUsageMarkdown: vi.fn().mockResolvedValue({
+    blob: new Blob(['# Arena — usage report'], { type: 'text/markdown' }),
+    filename: 'arena-usage-2026-07-29-to-2026-08-11.md',
+  }),
   getAnalyticsPersonaWinRate: vi.fn().mockResolvedValue({
     window_days: 30,
     window_start: '2026-07-13',
@@ -297,6 +301,7 @@ vi.mock('../api', () => ({
   exportAnalyticsSummaryCsv: hoistedMocks.exportAnalyticsSummaryCsv,
   exportAnalyticsSummaryJson: hoistedMocks.exportAnalyticsSummaryJson,
   exportAnalyticsSummaryMarkdown: hoistedMocks.exportAnalyticsSummaryMarkdown,
+  exportUserUsageMarkdown: hoistedMocks.exportUserUsageMarkdown,
   exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateJson: hoistedMocks.exportAnalyticsPersonaWinRateJson,
   exportAnalyticsPersonaWinRateMarkdown: hoistedMocks.exportAnalyticsPersonaWinRateMarkdown,
@@ -379,6 +384,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsSummaryCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsSummaryJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsSummaryMarkdown).mockClear();
+    vi.mocked(hoistedMocks.exportUserUsageMarkdown).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
@@ -1420,6 +1426,17 @@ describe('ProfileModal', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders the usage Markdown export button', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    expect(
+      await screen.findByRole('button', { name: /usage markdown export/i }),
+    ).toBeInTheDocument();
+  });
+
   it('renders activity highlights from the live timeline', async () => {
     renderModal();
     await waitFor(() => {
@@ -1911,6 +1928,23 @@ describe('ProfileModal', () => {
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-usage-2026-07-29-to-2026-08-11.json',
+      );
+    });
+  });
+
+  it('downloads usage Markdown with the server-provided filename', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', { name: /usage markdown export/i });
+    button.click();
+
+    await waitFor(() => {
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-usage-2026-07-29-to-2026-08-11.md',
       );
     });
   });

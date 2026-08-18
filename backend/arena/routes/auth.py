@@ -767,6 +767,17 @@ def _csv_safe(value) -> str:
     return s
 
 
+def _markdown_cell(value: object) -> str:
+    """Keep computed usage values safe inside Markdown table cells."""
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("|", "\\|")
+        .replace("\r", " ")
+        .replace("\n", " ")
+    )
+
+
 def _usage_history_rows(user: User, db: Session) -> list[tuple[date, int]]:
     """Return 14 daily token totals as (UTC date, tokens) pairs, oldest first.
 
@@ -993,6 +1004,81 @@ async def export_user_usage_json(
     }
     return JSONResponse(
         content=body,
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@user_router.get("/usage/export.md")
+async def export_user_usage_markdown(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Markdown export of the user's 14-day usage history and quota summary.
+
+    This is the shareable, human-readable sibling of the CSV and JSON
+    exports. It intentionally uses the same aggregation helper so a report
+    copied into notes or an issue tracker cannot disagree with the dashboard.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_usage_markdown",
+        limit=60,
+        window_seconds=60,
+        message="Too many usage Markdown exports. Please slow down.",
+    )
+
+    history = _usage_history_rows(user, db)
+    payload = _user_usage_payload(user, db, history=history)
+    start_date, end_date = history[0][0], history[-1][0]
+
+    summary_rows = [
+        ("Credits used today", payload["credits_used_today"]),
+        ("Credits remaining today", payload["credits_remaining_today"]),
+        ("Daily limit", payload["daily_limit"]),
+        ("Credits used this week", payload["credits_used_week"]),
+        ("Credits remaining this week", payload["credits_remaining_week"]),
+        ("Weekly limit", payload["weekly_limit"]),
+        ("Tasks this month", payload["total_tasks_month"]),
+    ]
+    lines = [
+        "# Arena — usage report",
+        "",
+        f"**Window:** {start_date.isoformat()} → {end_date.isoformat()} (14 days, UTC)",
+        "",
+        "## Quota snapshot",
+        "",
+        "| Metric | Value |",
+        "| --- | ---: |",
+    ]
+    lines.extend(
+        f"| {_markdown_cell(label)} | {_markdown_cell(value)} |"
+        for label, value in summary_rows
+    )
+    lines.extend(
+        [
+            "",
+            "## Daily token history",
+            "",
+            "| Date | Tokens |",
+            "| --- | ---: |",
+        ]
+    )
+    lines.extend(
+        f"| {_markdown_cell(day.isoformat())} | {_markdown_cell(tokens)} |"
+        for day, tokens in history
+    )
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+
+    filename = (
+        f"arena-usage-{start_date.isoformat()}-to-{end_date.isoformat()}.md"
+    )
+    return Response(
+        content="\n".join(lines),
+        media_type="text/markdown; charset=utf-8",
         headers={
             "Content-Disposition": content_disposition_attachment(filename),
             "Cache-Control": "no-store",
