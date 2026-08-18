@@ -2758,7 +2758,9 @@ export function ProfileModal() {
                       setExportError(null);
                       try {
                         const { blob, filename } = await exportAgentFeedbackCsv();
-                        downloadBlobFile(blob, filename);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download answer feedback CSV — try again.');
+                        }
                       } catch (error) {
                         setExportError(
                           error instanceof ApiError
