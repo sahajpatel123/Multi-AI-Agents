@@ -145,6 +145,12 @@ const hoistedMocks = vi.hoisted(() => ({
     blob: new Blob(['id,task_id,verdict\n1,task-1,correct\n'], { type: 'text/csv' }),
     filename: 'arena-feedback-1-20260818.csv',
   }),
+  exportAgentFeedbackJson: vi.fn().mockResolvedValue({
+    blob: new Blob(['[{"task_id":"task-1","verdict":"correct"}]'], {
+      type: 'application/json',
+    }),
+    filename: 'arena-feedback-1-20260818.json',
+  }),
   getMcpIntegrations: vi.fn().mockResolvedValue({ integrations: [] }),
 }));
 
@@ -193,6 +199,7 @@ vi.mock('../api', () => ({
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
   exportAgentFeedbackCsv: hoistedMocks.exportAgentFeedbackCsv,
+  exportAgentFeedbackJson: hoistedMocks.exportAgentFeedbackJson,
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
   exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(new Blob(['date,prompts'], { type: 'text/csv' })),
   exportAnalyticsActivityJson: vi.fn().mockResolvedValue({
@@ -279,6 +286,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(hoistedMocks.exportAgentFeedbackCsv).mockClear();
+    vi.mocked(hoistedMocks.exportAgentFeedbackJson).mockClear();
     vi.mocked(downloadBlobFile).mockClear();
     (window as { __profileModalOpened?: boolean }).__profileModalOpened = false;
   });
@@ -470,6 +478,31 @@ describe('ProfileModal', () => {
       await screen.findByText('Could not download answer feedback CSV — try again.'),
     ).toBeInTheDocument();
     expect(button).not.toBeDisabled();
+  });
+
+  it('downloads answer feedback JSON when feedback exists', async () => {
+    hoistedMocks.getUserAnswerFeedbackStats.mockResolvedValueOnce({
+      total: 2,
+      correct_pct: 50,
+      partial_pct: 0,
+      wrong_pct: 50,
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /answer feedback json export/i });
+    button.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAgentFeedbackJson).toHaveBeenCalledTimes(1);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-feedback-1-20260818.json',
+      );
+    });
   });
 
   it('views and paginates recent calibration history', async () => {

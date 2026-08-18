@@ -1469,6 +1469,27 @@ export async function exportAgentFeedbackCsv(): Promise<AgentFeedbackCsvExport> 
   };
 }
 
+export type AgentFeedbackJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAgentFeedbackJson(): Promise<AgentFeedbackJsonExport> {
+  const response = await apiFetch('/api/agent/feedback/export.json');
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export answer feedback JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-feedback.json',
+  };
+}
+
 export type AgentStartResponse = {
   request_id?: string | null;
   task_id: string;
