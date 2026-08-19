@@ -3904,8 +3904,24 @@ function isAnalyticsPersonaStatsTimelinePoint(
     typeof point.win_rate === 'number' &&
     Number.isFinite(point.win_rate) &&
     point.win_rate >= 0 &&
-    point.win_rate <= 1
+    point.win_rate <= 1 &&
+    isRoundedWinRate(point.wins, point.appearances, point.win_rate)
   );
+}
+
+function isRoundedWinRate(wins: unknown, appearances: unknown, winRate: unknown): boolean {
+  if (
+    typeof wins !== 'number' ||
+    typeof appearances !== 'number' ||
+    typeof winRate !== 'number'
+  ) {
+    return false;
+  }
+  const expected = appearances > 0 ? wins / appearances : 0;
+  // The backend publishes rates rounded to four decimal places. Allow the
+  // half-unit of that precision so valid ratios cannot fail due to JSON
+  // floating-point representation while contradictory values are rejected.
+  return Math.abs(winRate - expected) <= 0.00005 + Number.EPSILON;
 }
 
 function isAnalyticsPersonaStatsTimelineResponse(
@@ -3944,7 +3960,13 @@ function isAnalyticsPersonaStatsTimelineResponse(
   if (
     timeline[0]?.date !== data.window_start ||
     timeline[timeline.length - 1]?.date !== data.window_end ||
-    timeline.some((point, index) => index > 0 && point.date <= timeline[index - 1].date) ||
+    timeline.some(
+      (point, index) =>
+        index > 0 &&
+        Date.parse(`${point.date}T00:00:00Z`) -
+          Date.parse(`${timeline[index - 1].date}T00:00:00Z`) !==
+          24 * 60 * 60 * 1000,
+    ) ||
     timeline.reduce((sum, point) => sum + point.appearances, 0) !== data.total_appearances ||
     timeline.reduce((sum, point) => sum + point.wins, 0) !== data.total_wins
   ) {
@@ -3952,20 +3974,32 @@ function isAnalyticsPersonaStatsTimelineResponse(
   }
 
   if (data.best_day === null) {
-    return data.best_day_wins === 0 && data.best_day_appearances === 0 && data.best_day_win_rate === 0;
+    return (
+      data.best_day_wins === 0 &&
+      data.best_day_appearances === 0 &&
+      data.best_day_win_rate === 0 &&
+      timeline.every((point) => point.wins === 0)
+    );
   }
 
   const bestDay = timeline.find((point) => point.date === data.best_day);
-  return !!bestDay &&
+  const maxWins = Math.max(...timeline.map((point) => point.wins));
+  const expectedBestDay = timeline.find((point) => point.wins === maxWins);
+  return (
+    !!bestDay &&
+    !!expectedBestDay &&
+    maxWins > 0 &&
+    bestDay.date === expectedBestDay.date &&
     bestDay.wins === data.best_day_wins &&
     bestDay.appearances === data.best_day_appearances &&
-    bestDay.win_rate === data.best_day_win_rate;
+    bestDay.win_rate === data.best_day_win_rate
+  );
 }
 
 function isIsoDateString(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(parsed.getTime());
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function isAnalyticsPersonaWinRateTrendPoint(

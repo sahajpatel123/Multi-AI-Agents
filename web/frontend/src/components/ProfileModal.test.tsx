@@ -289,7 +289,7 @@ const hoistedMocks = vi.hoisted(() => {
     window_end: '2026-08-20',
     total_appearances: 3,
     total_wins: 2,
-    best_day: '2026-08-20',
+    best_day: '2026-08-19',
     best_day_wins: 1,
     best_day_appearances: 1,
     best_day_win_rate: 1,
@@ -2643,7 +2643,76 @@ describe('ProfileModal', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('2 wins / 3 appearances in 3 days')).toBeInTheDocument();
     expect(screen.getByRole('listitem', { name: /2026-08-20: 1 win/ })).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent(
+      'Wins exclude fallback scorings; appearances include every panel appearance.',
+    );
+    expect(detailsButton).toHaveAttribute('aria-controls', 'persona-timeline-analyst');
     expect(detailsButton).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('clears the previous persona timeline before showing a different drill-down', async () => {
+    vi.mocked(hoistedMocks.getAnalyticsPersonaStatsTimeline)
+      .mockImplementationOnce(() => Promise.resolve({
+        persona_id: 'analyst',
+        name: 'The Analyst',
+        days: 3,
+        window_start: '2026-08-18',
+        window_end: '2026-08-20',
+        total_appearances: 3,
+        total_wins: 2,
+        best_day: '2026-08-19',
+        best_day_wins: 1,
+        best_day_appearances: 1,
+        best_day_win_rate: 1,
+        timeline: [
+          { date: '2026-08-18', appearances: 1, wins: 0, win_rate: 0 },
+          { date: '2026-08-19', appearances: 1, wins: 1, win_rate: 1 },
+          { date: '2026-08-20', appearances: 1, wins: 1, win_rate: 1 },
+        ],
+      }))
+      .mockImplementationOnce(() => Promise.resolve({
+        persona_id: 'philosopher',
+        name: 'The Philosopher',
+        days: 3,
+        window_start: '2026-08-18',
+        window_end: '2026-08-20',
+        total_appearances: 1,
+        total_wins: 0,
+        best_day: null,
+        best_day_wins: 0,
+        best_day_appearances: 0,
+        best_day_win_rate: 0,
+        timeline: [
+          { date: '2026-08-18', appearances: 0, wins: 0, win_rate: 0 },
+          { date: '2026-08-19', appearances: 1, wins: 0, win_rate: 0 },
+          { date: '2026-08-20', appearances: 0, wins: 0, win_rate: 0 },
+        ],
+      }));
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(await screen.findByRole('button', {
+      name: 'Show The Analyst daily timeline',
+    }));
+    expect(await screen.findByRole('region', {
+      name: 'The Analyst daily activity timeline',
+    })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', {
+      name: 'Show The Philosopher daily timeline',
+    }));
+    await waitFor(() => {
+      expect(screen.queryByRole('region', {
+        name: 'The Analyst daily activity timeline',
+      })).not.toBeInTheDocument();
+    });
+    expect(await screen.findByRole('region', {
+      name: 'The Philosopher daily activity timeline',
+    })).toBeInTheDocument();
   });
 
   it('refreshes persona win rates when the analysis window changes', async () => {

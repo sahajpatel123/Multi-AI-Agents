@@ -589,6 +589,18 @@ function PersonaActivityTimeline({
         <span>{timeline.window_start}</span>
         <span>today · {timeline.window_end}</span>
       </div>
+      <span
+        role="note"
+        style={{
+          display: 'block',
+          marginTop: 8,
+          color: '#8C7355',
+          fontSize: 10,
+          lineHeight: 1.35,
+        }}
+      >
+        Wins exclude fallback scorings; appearances include every panel appearance.
+      </span>
     </div>
   );
 }
@@ -814,6 +826,13 @@ export function ProfileModal() {
     setExportError(null);
     setExportNotice(null);
   }, []);
+  const togglePersonaTimeline = useCallback((personaId: string) => {
+    const closing = personaTimelinePersonaId === personaId;
+    setPersonaTimelinePersonaId(closing ? null : personaId);
+    setPersonaTimeline(null);
+    setPersonaTimelineErr(null);
+    setPersonaTimelineLoading(!closing);
+  }, [personaTimelinePersonaId]);
   const [calLoading, setCalLoading] = useState(false);
   const [calErr, setCalErr] = useState<string | null>(null);
   const [calHistory, setCalHistory] = useState<CalibrationHistoryResponse | null>(null);
@@ -1040,6 +1059,7 @@ export function ProfileModal() {
     setPersonaTimelinePersonaId(null);
     setPersonaTimeline(null);
     setPersonaTimelineErr(null);
+    setPersonaTimelineLoading(false);
   }, [isOpen, activeTab, winRateReload, winRateWindowDays, winRateMinAppearances, winRateIncludeFallback]);
 
   useEffect(() => {
@@ -2441,6 +2461,7 @@ export function ProfileModal() {
                         <tbody>
                           {sortPersonaWinRateRows(winRate.personas, winRateSort).map((row) => {
                             const isTimelineOpen = personaTimelinePersonaId === row.persona_id;
+                            const timelinePanelId = `persona-timeline-${row.persona_id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
                             return (
                               <Fragment key={row.persona_id}>
                                 <tr style={{ opacity: row.low_confidence ? 0.65 : 1 }}>
@@ -2488,8 +2509,9 @@ export function ProfileModal() {
                                     <button
                                       type="button"
                                       aria-expanded={isTimelineOpen}
+                                      aria-controls={timelinePanelId}
                                       aria-label={`${isTimelineOpen ? 'Hide' : 'Show'} ${row.name} daily timeline`}
-                                      onClick={() => setPersonaTimelinePersonaId(isTimelineOpen ? null : row.persona_id)}
+                                      onClick={() => togglePersonaTimeline(row.persona_id)}
                                       style={{
                                         padding: '3px 7px',
                                         border: '0.5px solid #E0D5C5',
@@ -2508,6 +2530,7 @@ export function ProfileModal() {
                                 {isTimelineOpen ? (
                                   <tr>
                                     <td
+                                      id={timelinePanelId}
                                       colSpan={6}
                                       style={{
                                         padding: '0 8px 8px 0',
