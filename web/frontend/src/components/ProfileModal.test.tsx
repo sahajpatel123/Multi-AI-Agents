@@ -74,6 +74,12 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(summaryCsvBlob, 'text', {
     value: vi.fn().mockResolvedValue('metric,value\ntotal_prompts,42\n'),
   });
+  const summaryJsonBlob = new Blob(['{"window_days":30,"total_prompts":42}'], {
+    type: 'application/json',
+  });
+  Object.defineProperty(summaryJsonBlob, 'text', {
+    value: vi.fn().mockResolvedValue('{"window_days":30,"total_prompts":42}'),
+  });
   const usageMarkdownBlob = new Blob(['# Arena — usage report'], {
     type: 'text/markdown',
   });
@@ -87,6 +93,7 @@ const hoistedMocks = vi.hoisted(() => {
   activityMarkdownBlob,
   summaryMarkdownBlob,
   summaryCsvBlob,
+  summaryJsonBlob,
   usageMarkdownBlob,
   getSubscriptionStatus: vi.fn().mockResolvedValue({
     active: true,
@@ -175,7 +182,7 @@ const hoistedMocks = vi.hoisted(() => {
   }),
   exportAnalyticsSummaryCsv: vi.fn().mockResolvedValue(summaryCsvBlob),
   exportAnalyticsSummaryJson: vi.fn().mockResolvedValue({
-    blob: new Blob(['{"window_days":30,"total_prompts":42}'], { type: 'application/json' }),
+    blob: summaryJsonBlob,
     filename: 'arena-summary-2026-07-13-to-2026-08-11.json',
   }),
   exportAnalyticsSummaryMarkdown: vi.fn().mockResolvedValue({
@@ -569,6 +576,49 @@ describe('ProfileModal', () => {
         'arena-summary-2026-07-13-to-2026-08-11.md',
       );
     });
+  });
+
+  it('copies analytics summary JSON for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /analytics summary export window/i }),
+      { target: { value: '90' } },
+    );
+    const button = await screen.findByRole('button', { name: /copy summary json/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsSummaryJson).toHaveBeenCalledWith(90);
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith(
+        '{"window_days":30,"total_prompts":42}',
+      );
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied analytics summary JSON to the clipboard.',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces analytics summary JSON clipboard failures', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy summary json/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy analytics summary JSON — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
   });
 
   it('copies analytics summary Markdown for the selected window', async () => {

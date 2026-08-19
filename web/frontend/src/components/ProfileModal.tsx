@@ -2557,6 +2557,46 @@ export function ProfileModal() {
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    aria-busy={activeExport === 'summary-copy-json'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'summary-copy-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'summary-copy-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('summary-copy-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsSummaryJson(summaryExportWindowDays);
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied analytics summary JSON to the clipboard.');
+                        } else {
+                          setExportError('Could not copy analytics summary JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy analytics summary JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'summary-copy-json' ? '⏳ Copying…' : '📊 Copy Summary JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
                     style={{
                       padding: '8px 12px',
                       borderRadius: 6,
