@@ -2952,6 +2952,125 @@ describe('ProfileModal', () => {
     expect(copyButton).not.toBeDisabled();
   });
 
+  it('copies the filtered persona win-rate trend as JSON', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate window/i }),
+      { target: { value: '7' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate minimum appearances/i }),
+      { target: { value: '5' } },
+    );
+    fireEvent.click(await screen.findByRole('checkbox', { name: /include fallback scorings/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7, 5, true);
+    });
+
+    const trendJsonBlob = new Blob(['{"row_count":1,"rows":[]}'], {
+      type: 'application/json',
+    });
+    Object.defineProperty(trendJsonBlob, 'text', {
+      value: vi.fn().mockResolvedValue('{"row_count":1,"rows":[]}'),
+    });
+    hoistedMocks.exportAnalyticsPersonaWinRateTrendJson.mockResolvedValueOnce({
+      blob: trendJsonBlob,
+      filename: 'arena-persona-win-rate-trend.json',
+    });
+    const copyButton = await screen.findByRole('button', {
+      name: 'Copy persona win-rate trend JSON',
+    });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).toHaveBeenCalledWith(7, 5, true);
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('{"row_count":1,"rows":[]}');
+      expect(screen.getByText('Copied persona win-rate trend JSON to the clipboard.')).toBeInTheDocument();
+    });
+    expect(copyButton).not.toBeDisabled();
+  });
+
+  it('keeps persona win-rate trend JSON filters locked until copying finishes', async () => {
+    let finishExport: (value: { blob: Blob; filename: string }) => void = () => undefined;
+    hoistedMocks.exportAnalyticsPersonaWinRateTrendJson.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        finishExport = resolve;
+      }),
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /persona win-rate window/i,
+    });
+    const minimumSelect = await screen.findByRole('combobox', {
+      name: /persona win-rate minimum appearances/i,
+    });
+    const fallbackCheckbox = await screen.findByRole('checkbox', {
+      name: /include fallback scorings/i,
+    });
+    const copyButton = await screen.findByRole('button', {
+      name: 'Copy persona win-rate trend JSON',
+    });
+
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).toHaveBeenCalledWith(30, 1, false);
+    });
+    expect(windowSelect).toBeDisabled();
+    expect(minimumSelect).toBeDisabled();
+    expect(fallbackCheckbox).toBeDisabled();
+    expect(copyButton).toBeDisabled();
+    expect(copyButton).toHaveAttribute('aria-busy', 'true');
+    expect(copyButton).toHaveAttribute('title', 'Copy the filtered persona win-rate trend as JSON');
+
+    const trendJsonBlob = new Blob(['{"rows":[]}'], { type: 'application/json' });
+    Object.defineProperty(trendJsonBlob, 'text', {
+      value: vi.fn().mockResolvedValue('{"rows":[]}'),
+    });
+    await act(async () => {
+      finishExport({ blob: trendJsonBlob, filename: 'arena-persona-win-rate-trend.json' });
+    });
+
+    await waitFor(() => {
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('{"rows":[]}');
+      expect(windowSelect).not.toBeDisabled();
+      expect(minimumSelect).not.toBeDisabled();
+      expect(fallbackCheckbox).not.toBeDisabled();
+      expect(copyButton).not.toBeDisabled();
+      expect(copyButton).toHaveAttribute('aria-busy', 'false');
+    });
+  });
+
+  it('surfaces persona win-rate trend JSON clipboard failures and releases the lock', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const copyButton = await screen.findByRole('button', {
+      name: 'Copy persona win-rate trend JSON',
+    });
+    fireEvent.click(copyButton);
+
+    expect(
+      await screen.findByText('Could not copy persona win-rate trend JSON — try again.'),
+    ).toBeInTheDocument();
+    expect(copyButton).not.toBeDisabled();
+  });
+
   it('keeps persona win-rate trend filters locked through the full clipboard copy', async () => {
     let finishExport: (value: { blob: Blob; filename: string }) => void = () => undefined;
     hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv.mockImplementationOnce(

@@ -2801,6 +2801,52 @@ export function ProfileModal() {
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    aria-label="Copy persona win-rate trend JSON"
+                    aria-busy={activeExport === 'win-rate-trend-copy-json'}
+                    title="Copy the filtered persona win-rate trend as JSON"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend-copy-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend-copy-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend-copy-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaWinRateTrendJson(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona win-rate trend JSON to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona win-rate trend JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona win-rate trend JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend-copy-json' ? '⏳ Copying…' : '🏆 Copy Win Rates Trend JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
                     aria-label="Copy persona win-rate trend CSV"
                     aria-busy={activeExport === 'win-rate-trend-copy'}
                     title="Copy the filtered persona win-rate trend as CSV"
