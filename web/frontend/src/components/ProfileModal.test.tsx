@@ -306,6 +306,7 @@ const hoistedMocks = vi.hoisted(() => {
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
   }),
   copyToClipboard: vi.fn().mockResolvedValue(true),
+  copyJsonToClipboard: vi.fn().mockResolvedValue(true),
   copyCsvToClipboard: vi.fn().mockResolvedValue(true),
   copyMarkdownToClipboard: vi.fn().mockResolvedValue(true),
   getCalibrationHistory: vi.fn().mockResolvedValue({
@@ -487,6 +488,7 @@ vi.mock('../lib/downloadTextFile', () => ({
 
 vi.mock('../lib/clipboard', () => ({
   copyToClipboard: hoistedMocks.copyToClipboard,
+  copyJsonToClipboard: hoistedMocks.copyJsonToClipboard,
   copyCsvToClipboard: hoistedMocks.copyCsvToClipboard,
   copyMarkdownToClipboard: hoistedMocks.copyMarkdownToClipboard,
 }));
@@ -542,6 +544,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateMarkdown).mockClear();
     vi.mocked(hoistedMocks.copyToClipboard).mockClear().mockResolvedValue(true);
+    vi.mocked(hoistedMocks.copyJsonToClipboard).mockClear().mockResolvedValue(true);
     vi.mocked(hoistedMocks.copyCsvToClipboard).mockClear().mockResolvedValue(true);
     vi.mocked(hoistedMocks.copyMarkdownToClipboard).mockClear().mockResolvedValue(true);
     vi.mocked(hoistedMocks.exportAgentFeedbackCsv).mockClear();
@@ -2989,7 +2992,7 @@ describe('ProfileModal', () => {
 
     await waitFor(() => {
       expect(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).toHaveBeenCalledWith(7, 5, true);
-      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('{"row_count":1,"rows":[]}');
+      expect(hoistedMocks.copyJsonToClipboard).toHaveBeenCalledWith('{"row_count":1,"rows":[]}');
       expect(screen.getByText('Copied persona win-rate trend JSON to the clipboard.')).toBeInTheDocument();
     });
     expect(copyButton).not.toBeDisabled();
@@ -3043,7 +3046,7 @@ describe('ProfileModal', () => {
     });
 
     await waitFor(() => {
-      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('{"rows":[]}');
+      expect(hoistedMocks.copyJsonToClipboard).toHaveBeenCalledWith('{"rows":[]}');
       expect(windowSelect).not.toBeDisabled();
       expect(minimumSelect).not.toBeDisabled();
       expect(fallbackCheckbox).not.toBeDisabled();
@@ -3053,7 +3056,7 @@ describe('ProfileModal', () => {
   });
 
   it('surfaces persona win-rate trend JSON clipboard failures and releases the lock', async () => {
-    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    hoistedMocks.copyJsonToClipboard.mockResolvedValueOnce(false);
     renderModal();
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();

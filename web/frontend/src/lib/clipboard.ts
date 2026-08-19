@@ -105,3 +105,32 @@ export async function copyMarkdownToClipboard(text: string): Promise<boolean> {
 
   return copyToClipboard(text);
 }
+
+/**
+ * Copy JSON with both its structured MIME type and a plain-text
+ * representation. JSON-aware destinations can parse the payload directly,
+ * while ordinary editors continue to receive the same readable text.
+ */
+export async function copyJsonToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+
+  try {
+    if (
+      typeof ClipboardItem !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      navigator.clipboard?.write
+    ) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'application/json': new Blob([text], { type: 'application/json;charset=utf-8' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        }),
+      ]);
+      return true;
+    }
+  } catch {
+    /* fall through to the generic text copy path */
+  }
+
+  return copyToClipboard(text);
+}

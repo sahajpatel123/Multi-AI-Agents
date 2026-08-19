@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { copyCsvToClipboard, copyMarkdownToClipboard, copyToClipboard } from './clipboard';
+import {
+  copyCsvToClipboard,
+  copyJsonToClipboard,
+  copyMarkdownToClipboard,
+  copyToClipboard,
+} from './clipboard';
 
 describe('copyToClipboard', () => {
   afterEach(() => {
@@ -127,5 +132,35 @@ describe('copyToClipboard', () => {
 
     expect(await copyMarkdownToClipboard('# Arena usage\n')).toBe(true);
     expect(writeText).toHaveBeenCalledWith('# Arena usage\n');
+  });
+
+  it('writes JSON clipboard data through ClipboardItem when available', async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { write } });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        data: Record<string, Blob>;
+
+        constructor(data: Record<string, Blob>) {
+          this.data = data;
+        }
+      },
+    );
+
+    expect(await copyJsonToClipboard('{"rows":[]}')).toBe(true);
+    expect(write).toHaveBeenCalledTimes(1);
+    const item = write.mock.calls[0][0][0] as { data: Record<string, Blob> };
+    expect(item.data['application/json']).toBeInstanceOf(Blob);
+    expect(item.data['text/plain']).toBeInstanceOf(Blob);
+  });
+
+  it('falls back to plain text when JSON clipboard support is unavailable', async () => {
+    vi.stubGlobal('ClipboardItem', undefined);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+
+    expect(await copyJsonToClipboard('{"rows":[]}')).toBe(true);
+    expect(writeText).toHaveBeenCalledWith('{"rows":[]}');
   });
 });

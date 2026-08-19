@@ -64,7 +64,12 @@ import {
   type UserUsageResponse,
 } from '../api';
 import { downloadBlobFile } from '../lib/downloadTextFile';
-import { copyCsvToClipboard, copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
+import {
+  copyCsvToClipboard,
+  copyJsonToClipboard,
+  copyMarkdownToClipboard,
+  copyToClipboard,
+} from '../lib/clipboard';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { safeLocalStorage } from '../lib/safeStorage';
@@ -2825,7 +2830,7 @@ export function ProfileModal() {
                           winRateMinAppearances,
                           winRateIncludeFallback,
                         );
-                        const copied = await copyToClipboard(await blob.text());
+                        const copied = await copyJsonToClipboard(await blob.text());
                         if (copied) {
                           setExportNotice('Copied persona win-rate trend JSON to the clipboard.');
                         } else {
