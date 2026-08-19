@@ -2766,7 +2766,7 @@ export function ProfileModal() {
                       borderRadius: 6,
                       border: '0.5px solid #E0D5C5',
                       background: activeExport === 'win-rate-trend-json' ? '#EDE4D8' : '#F0E8DC',
-                      color: '#F3F0E7',
+                      color: '#4A3728',
                       fontSize: 12,
                       cursor: activeExport !== null ? 'wait' : 'pointer',
                       textAlign: 'left',

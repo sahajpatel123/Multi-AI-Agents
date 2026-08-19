@@ -2897,6 +2897,7 @@ describe('ProfileModal', () => {
       filename: 'arena-persona-win-rate-trend-2026-08-11-to-2026-08-17.json',
     });
     const exportButton = await screen.findByRole('button', { name: '🏆 Win Rates Trend JSON' });
+    expect(exportButton).toHaveStyle({ color: '#4A3728' });
     fireEvent.click(exportButton);
 
     await waitFor(() => {
