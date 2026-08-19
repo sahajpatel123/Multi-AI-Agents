@@ -1078,6 +1078,67 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('copies persona win-rate CSV with the selected filters', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate window/i }),
+      { target: { value: '7' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate minimum appearances/i }),
+      { target: { value: '5' } },
+    );
+    fireEvent.click(await screen.findByRole('checkbox', { name: /include fallback scorings/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7, 5, true);
+    });
+
+    const csvBlob = new Blob(['persona_id,name\nanalyst,The Analyst\n'], { type: 'text/csv' });
+    Object.defineProperty(csvBlob, 'text', {
+      value: vi.fn().mockResolvedValue('persona_id,name\nanalyst,The Analyst\n'),
+    });
+    hoistedMocks.exportAnalyticsPersonaWinRateCsv.mockResolvedValueOnce({
+      blob: csvBlob,
+      filename: 'arena-persona-win-rate-2026-08-11-to-2026-08-17.csv',
+    });
+
+    const button = await screen.findByRole('button', { name: /copy win rates csv/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateCsv).toHaveBeenCalledWith(7, 5, true);
+      expect(hoistedMocks.copyCsvToClipboard).toHaveBeenCalledWith(
+        'persona_id,name\nanalyst,The Analyst\n',
+      );
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied persona win-rate CSV to the clipboard.',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces persona win-rate CSV clipboard failures and releases the copy lock', async () => {
+    hoistedMocks.copyCsvToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy win rates csv/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not copy persona win-rate CSV — try again.')).toBeInTheDocument();
+    });
+    expect(button).not.toBeDisabled();
+  });
+
   it('copies persona win-rate Markdown with the selected filters', async () => {
     renderModal();
     await waitFor(() => {
