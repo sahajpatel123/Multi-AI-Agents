@@ -706,3 +706,39 @@ async def test_json_export_matches_dashboard_payload_and_headers(
         'attachment; filename="arena-category-stats-'
     )
     assert exported.headers["content-disposition"].endswith('.json"')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "scope"),
+    [
+        ("/api/analytics/category-stats/export.csv", "analytics_category_stats_csv"),
+        ("/api/analytics/category-stats/export.json", "analytics_category_stats_json"),
+    ],
+)
+async def test_category_stats_exports_use_only_their_own_rate_limit_scope(
+    app_client, make_user, monkeypatch, path, scope
+):
+    """A download must not consume the dashboard refresh budget."""
+    from arena.core import rate_limits
+
+    keys: list[str] = []
+    real_hit = rate_limits.rate_limiter.hit
+
+    def recording_hit(key, *, limit, window_seconds, message):
+        keys.append(key)
+        return real_hit(
+            key,
+            limit=limit,
+            window_seconds=window_seconds,
+            message=message,
+        )
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", recording_hit)
+
+    user = make_user(email=f"{scope}-budget@test.com", tier=UserTier.PRO)
+    res = await app_client.get(path, headers=_pro_headers(user))
+
+    assert res.status_code == 200, res.text
+    user_keys = [key for key in keys if key.startswith("user:")]
+    assert user_keys == [f"user:{scope}:{user.id}"]

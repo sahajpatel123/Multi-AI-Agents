@@ -1907,17 +1907,7 @@ async def analytics_persona_win_rate_markdown(
     )
 
 
-@router.get("/analytics/category-stats")
-async def analytics_category_stats(
-    user: UserResponse = Depends(get_current_user_required),
-    db: Session = Depends(get_db),
-    window_days: int = Query(
-        90,
-        ge=1,
-        le=365,
-        description="Window length in days, ending today (UTC). Caps the row scan.",
-    ),
-) -> dict:
+def _category_stats_payload(*, user_id: int, db: Session, window_days: int) -> dict:
     """All-categories aggregate: how the caller's exchanges distribute
     across prompt categories.
 
@@ -1934,17 +1924,11 @@ async def analytics_category_stats(
     PromptCategory values in enum order, unknown categories
     alphabetically, uncategorized bucket last.
 
-    Scoped to the caller, bounded like the sibling endpoints.
+    Scoped to the caller, bounded like the sibling endpoints. The route
+    handlers apply their own user-scoped rate limits before calling this
+    helper so dashboard reads and downloads do not share a bucket.
     """
     from arena.models.schemas import PromptCategory
-
-    enforce_user_rate_limit(
-        user.id,
-        scope="analytics_category_stats",
-        limit=60,
-        window_seconds=3600,
-        message="Too many category-stats requests. Limit is 60 per hour.",
-    )
 
     now_utc = utcnow_naive()
     window_start = now_utc - timedelta(days=window_days - 1)
@@ -1958,7 +1942,7 @@ async def analytics_category_stats(
             ScoringAudit.fallback_used,
         )
         .filter(
-            ScoringAudit.user_id == user.id,
+            ScoringAudit.user_id == user_id,
             ScoringAudit.created_at >= window_start,
         )
         .all()
@@ -2091,6 +2075,32 @@ async def analytics_category_stats(
     }
 
 
+@router.get("/analytics/category-stats")
+async def analytics_category_stats(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+) -> dict:
+    """All-categories aggregate for the authenticated dashboard caller."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_category_stats",
+        limit=60,
+        window_seconds=3600,
+        message="Too many category-stats requests. Limit is 60 per hour.",
+    )
+    return _category_stats_payload(
+        user_id=user.id,
+        db=db,
+        window_days=window_days,
+    )
+
+
 @router.get("/analytics/category-stats/export.csv")
 async def analytics_category_stats_csv(
     user: UserResponse = Depends(get_current_user_required),
@@ -2105,7 +2115,8 @@ async def analytics_category_stats_csv(
     """CSV export of the all-categories aggregate.
 
     Same computation as /api/analytics/category-stats — reuses the
-    JSON route so the CSV and the API response can never drift.
+    private aggregation helper so the CSV and the API response can never
+    drift without consuming the dashboard rate-limit bucket.
 
     Columns mirror the JSON categories[] rows in the same order:
       category, is_known_category, is_uncategorized, appearances,
@@ -2126,11 +2137,10 @@ async def analytics_category_stats_csv(
         message="Too many category-stats CSV exports. Limit is 60 per hour.",
     )
 
-    # Reuse the JSON route so the math cannot drift.
-    payload = await analytics_category_stats(
-        window_days=window_days,
-        user=user,
+    payload = _category_stats_payload(
+        user_id=user.id,
         db=db,
+        window_days=window_days,
     )
 
     import csv
@@ -2215,10 +2225,10 @@ async def analytics_category_stats_json(
         message="Too many category-stats JSON exports. Please wait.",
     )
 
-    payload = await analytics_category_stats(
-        window_days=window_days,
-        user=user,
+    payload = _category_stats_payload(
+        user_id=user.id,
         db=db,
+        window_days=window_days,
     )
 
     import json
