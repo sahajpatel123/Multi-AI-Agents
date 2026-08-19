@@ -2952,6 +2952,7 @@ export function ProfileModal() {
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    aria-busy={activeExport === 'activity-copy'}
                     style={{
                       padding: '8px 12px',
                       borderRadius: 6,

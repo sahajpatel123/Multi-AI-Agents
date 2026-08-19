@@ -638,6 +638,45 @@ describe('ProfileModal', () => {
     expect(button).not.toBeDisabled();
   });
 
+  it('locks the activity window while activity Markdown is being copied', async () => {
+    let resolveExport: ((value: { blob: Blob; filename: string }) => void) | undefined;
+    const pendingExport = new Promise<{ blob: Blob; filename: string }>((resolve) => {
+      resolveExport = resolve;
+    });
+    hoistedMocks.exportAnalyticsActivityMarkdown.mockImplementationOnce(
+      () => pendingExport,
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /activity highlights window/i,
+    });
+    const copyButton = await screen.findByRole('button', { name: /copy activity markdown/i });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsActivityMarkdown).toHaveBeenCalledWith(30);
+    });
+    expect(windowSelect).toBeDisabled();
+    expect(copyButton).toBeDisabled();
+    expect(copyButton).toHaveAttribute('aria-busy', 'true');
+
+    resolveExport?.({
+      blob: hoistedMocks.activityMarkdownBlob,
+      filename: 'arena-activity-30d.md',
+    });
+    await waitFor(() => {
+      expect(windowSelect).not.toBeDisabled();
+      expect(copyButton).not.toBeDisabled();
+      expect(copyButton).toHaveAttribute('aria-busy', 'false');
+    });
+  });
+
   it('surfaces activity Markdown clipboard failures and releases the copy lock', async () => {
     hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
     renderModal();
