@@ -62,11 +62,18 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(activityMarkdownBlob, 'text', {
     value: vi.fn().mockResolvedValue('# Arena — activity timeline'),
   });
+  const summaryMarkdownBlob = new Blob(['# Arena — analytics summary'], {
+    type: 'text/markdown',
+  });
+  Object.defineProperty(summaryMarkdownBlob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — analytics summary'),
+  });
 
   return {
   calibrationMarkdownBlob,
   categoryStatsMarkdownBlob,
   activityMarkdownBlob,
+  summaryMarkdownBlob,
   getSubscriptionStatus: vi.fn().mockResolvedValue({
     active: true,
     status: 'active',
@@ -160,7 +167,7 @@ const hoistedMocks = vi.hoisted(() => {
     filename: 'arena-summary-2026-07-13-to-2026-08-11.json',
   }),
   exportAnalyticsSummaryMarkdown: vi.fn().mockResolvedValue({
-    blob: new Blob(['# Arena — analytics summary'], { type: 'text/markdown' }),
+    blob: summaryMarkdownBlob,
     filename: 'arena-summary-2026-07-13-to-2026-08-11.md',
   }),
   exportUserUsageCsv: vi.fn((windowDays: number = 14) => Promise.resolve({
@@ -544,6 +551,47 @@ describe('ProfileModal', () => {
         'arena-summary-2026-07-13-to-2026-08-11.md',
       );
     });
+  });
+
+  it('copies analytics summary Markdown for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /analytics summary export window/i }),
+      { target: { value: '90' } },
+    );
+    const button = await screen.findByRole('button', { name: /copy summary markdown/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsSummaryMarkdown).toHaveBeenCalledWith(90);
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('# Arena — analytics summary');
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied analytics summary Markdown to the clipboard.',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces analytics summary clipboard failures', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy summary markdown/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy analytics summary Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
   });
 
   it('uses the selected window for every analytics summary export', async () => {

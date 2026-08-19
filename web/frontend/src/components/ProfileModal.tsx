@@ -2547,6 +2547,46 @@ export function ProfileModal() {
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    aria-busy={activeExport === 'summary-copy'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'summary-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'summary-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('summary-copy');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsSummaryMarkdown(summaryExportWindowDays);
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied analytics summary Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy analytics summary Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy analytics summary Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'summary-copy' ? '⏳ Copying…' : '📊 Copy Summary Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
                     style={{
                       padding: '8px 12px',
                       borderRadius: 6,

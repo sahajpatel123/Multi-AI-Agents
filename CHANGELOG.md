@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Analytics summary reports can now be copied as Markdown for the selected
+  window, with honest clipboard-failure feedback
 - Usage activity timeline reports can now be copied as Markdown for the
   selected activity window, with honest clipboard-failure feedback
 - Usage category performance reports can now be copied as Markdown for the
