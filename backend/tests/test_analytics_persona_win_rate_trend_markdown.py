@@ -118,7 +118,7 @@ async def test_trend_markdown_empty_report_is_explicit(app_client, make_user):
     )
     assert res.status_code == 200
     assert "(7 days, UTC)" in res.text
+    assert "**Low-confidence threshold:** fewer than 5 appearances" in res.text
     assert "**Fallback scorings included:** no" in res.text
     assert "- **Scored exchanges:** 0" in res.text
     assert "_No scored panels meet the minimum appearance threshold in this window._" in res.text
-

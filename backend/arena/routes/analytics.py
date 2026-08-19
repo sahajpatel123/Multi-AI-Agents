@@ -1917,6 +1917,8 @@ async def analytics_persona_win_rate_trend_markdown(
         f"**Window:** {payload['window_start']} → {payload['window_end']} "
         f"({payload['window_days']} days, UTC)",
         f"**Minimum appearances:** {payload['min_appearances']}",
+        f"**Low-confidence threshold:** fewer than "
+        f"{payload['low_confidence_threshold']} appearances",
         f"**Fallback scorings included:** {'yes' if payload['include_fallback'] else 'no'}",
         "",
         "## Summary",
