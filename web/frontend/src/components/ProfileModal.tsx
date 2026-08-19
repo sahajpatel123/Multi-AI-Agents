@@ -2397,6 +2397,7 @@ export function ProfileModal() {
                     <span>Usage window</span>
                     <select
                       aria-label="Usage export window"
+                      disabled={activeExport !== null}
                       value={usageExportWindowDays}
                       onChange={(event) => {
                         clearExportFeedback();
@@ -2410,6 +2411,8 @@ export function ProfileModal() {
                         padding: '4px 6px',
                         fontSize: 11,
                         fontFamily: 'var(--vp-font-sans)',
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        opacity: activeExport !== null ? 0.65 : 1,
                       }}
                     >
                       {USAGE_EXPORT_WINDOWS.map((days) => (
@@ -3139,6 +3142,46 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'usage-markdown' ? '⏳ Downloading…' : '📝 Usage Markdown Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'usage-copy'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'usage-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'usage-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('usage-copy');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportUserUsageMarkdown(usageExportWindowDays);
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied usage Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy usage Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy usage Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'usage-copy' ? '⏳ Copying…' : '📝 Copy Usage Markdown'}
                   </button>
                   <button
                     type="button"

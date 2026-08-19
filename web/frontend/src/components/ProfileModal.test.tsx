@@ -68,12 +68,19 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(summaryMarkdownBlob, 'text', {
     value: vi.fn().mockResolvedValue('# Arena — analytics summary'),
   });
+  const usageMarkdownBlob = new Blob(['# Arena — usage report'], {
+    type: 'text/markdown',
+  });
+  Object.defineProperty(usageMarkdownBlob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — usage report'),
+  });
 
   return {
   calibrationMarkdownBlob,
   categoryStatsMarkdownBlob,
   activityMarkdownBlob,
   summaryMarkdownBlob,
+  usageMarkdownBlob,
   getSubscriptionStatus: vi.fn().mockResolvedValue({
     active: true,
     status: 'active',
@@ -181,7 +188,7 @@ const hoistedMocks = vi.hoisted(() => {
       : `arena-usage-${windowDays}d.json`,
   })),
   exportUserUsageMarkdown: vi.fn().mockResolvedValue({
-    blob: new Blob(['# Arena — usage report'], { type: 'text/markdown' }),
+    blob: usageMarkdownBlob,
     filename: 'arena-usage-2026-07-29-to-2026-08-11.md',
   }),
   getAnalyticsPersonaWinRate: vi.fn().mockResolvedValue({
@@ -1676,6 +1683,82 @@ describe('ProfileModal', () => {
     expect(
       await screen.findByRole('button', { name: /usage markdown export/i }),
     ).toBeInTheDocument();
+  });
+
+  it('copies usage Markdown for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /usage export window/i }),
+      { target: { value: '30' } },
+    );
+    const button = await screen.findByRole('button', { name: /copy usage markdown/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportUserUsageMarkdown).toHaveBeenCalledWith(30);
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('# Arena — usage report');
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied usage Markdown to the clipboard.',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('locks the usage window while usage Markdown is being copied', async () => {
+    let resolveExport: ((value: { blob: Blob; filename: string }) => void) | undefined;
+    const pendingExport = new Promise<{ blob: Blob; filename: string }>((resolve) => {
+      resolveExport = resolve;
+    });
+    hoistedMocks.exportUserUsageMarkdown.mockImplementationOnce(() => pendingExport);
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', { name: /usage export window/i });
+    const copyButton = await screen.findByRole('button', { name: /copy usage markdown/i });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportUserUsageMarkdown).toHaveBeenCalledWith(14);
+    });
+    expect(windowSelect).toBeDisabled();
+    expect(copyButton).toBeDisabled();
+    expect(copyButton).toHaveAttribute('aria-busy', 'true');
+
+    resolveExport?.({
+      blob: hoistedMocks.usageMarkdownBlob,
+      filename: 'arena-usage-14d.md',
+    });
+    await waitFor(() => {
+      expect(windowSelect).not.toBeDisabled();
+      expect(copyButton).not.toBeDisabled();
+      expect(copyButton).toHaveAttribute('aria-busy', 'false');
+    });
+  });
+
+  it('surfaces usage Markdown clipboard failures and releases the copy lock', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy usage markdown/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy usage Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
   });
 
   it('renders activity highlights from the live timeline', async () => {

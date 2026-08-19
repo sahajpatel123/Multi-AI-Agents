@@ -58,6 +58,13 @@ describe('exportUserUsageMarkdown', () => {
     );
   });
 
+  it('validates the client-side window bounds', async () => {
+    await expect(exportUserUsageMarkdown(0)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+  });
+
   it('surfaces request IDs on failure', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: 'boom' }), {
