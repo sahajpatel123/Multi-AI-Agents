@@ -268,6 +268,10 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['persona_id,name'], { type: 'text/csv' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.csv',
   }),
+  exportAnalyticsPersonaWinRateTrendCsv: vi.fn().mockResolvedValue({
+    blob: new Blob(['persona_id,bucket_start,win_rate'], { type: 'text/csv' }),
+    filename: 'arena-persona-win-rate-trend-2026-07-13-to-2026-08-11.csv',
+  }),
   exportAnalyticsPersonaWinRateJson: vi.fn().mockResolvedValue({
     blob: new Blob(['{"window_days":30,"personas":[]}'], { type: 'application/json' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.json',
@@ -416,6 +420,7 @@ vi.mock('../api', () => ({
   exportUserUsageJson: hoistedMocks.exportUserUsageJson,
   exportUserUsageMarkdown: hoistedMocks.exportUserUsageMarkdown,
   exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
+  exportAnalyticsPersonaWinRateTrendCsv: hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv,
   exportAnalyticsPersonaWinRateJson: hoistedMocks.exportAnalyticsPersonaWinRateJson,
   exportAnalyticsPersonaWinRateMarkdown: hoistedMocks.exportAnalyticsPersonaWinRateMarkdown,
   getCalibrationHistory: hoistedMocks.getCalibrationHistory,
@@ -504,6 +509,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateMarkdown).mockClear();
     vi.mocked(hoistedMocks.copyToClipboard).mockClear().mockResolvedValue(true);
@@ -2761,6 +2767,45 @@ describe('ProfileModal', () => {
     expect(
       await screen.findByText('Could not download persona win-rate CSV — try again.'),
     ).toBeInTheDocument();
+    expect(exportButton).not.toBeDisabled();
+  });
+
+  it('downloads the flattened persona win-rate trend with the selected filters', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate window/i }),
+      { target: { value: '7' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate minimum appearances/i }),
+      { target: { value: '5' } },
+    );
+    fireEvent.click(await screen.findByRole('checkbox', { name: /include fallback scorings/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7, 5, true);
+    });
+
+    hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv.mockResolvedValueOnce({
+      blob: new Blob(['persona_id,bucket_start,win_rate\nanalyst,2026-08-11,1\n'], {
+        type: 'text/csv',
+      }),
+      filename: 'arena-persona-win-rate-trend-2026-08-11-to-2026-08-17.csv',
+    });
+    const exportButton = await screen.findByRole('button', { name: /win rates trend csv/i });
+    exportButton.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).toHaveBeenCalledWith(7, 5, true);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-persona-win-rate-trend-2026-08-11-to-2026-08-17.csv',
+      );
+    });
     expect(exportButton).not.toBeDisabled();
   });
 

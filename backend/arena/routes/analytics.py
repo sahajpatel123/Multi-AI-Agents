@@ -1759,6 +1759,110 @@ async def analytics_persona_win_rate_json(
     )
 
 
+@router.get("/analytics/persona-win-rate/export-trend.csv")
+async def analytics_persona_win_rate_trend_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
+) -> Response:
+    """CSV export of the weekly persona win-rate trend.
+
+    The aggregate CSV is intentionally compact, while the dashboard's
+    sparkline data lives in each JSON row's ``trend`` array. This export
+    flattens that array into one row per persona/week so spreadsheets and
+    charting tools can consume the time series without parsing nested JSON.
+    Empty weeks keep their row with a blank ``win_rate`` — no activity is
+    different from a measured 0% week. Omitted older buckets are repeated on
+    each row as report metadata so a filtered spreadsheet row remains
+    self-describing.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_trend_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate trend exports. Please slow down.",
+    )
+
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=include_fallback,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(
+        [
+            "persona_id",
+            "name",
+            "color",
+            "bucket_start",
+            "bucket_end",
+            "appearances",
+            "wins",
+            "win_rate",
+            "low_confidence",
+            "trend_omitted_appearances",
+            "trend_omitted_wins",
+        ]
+    )
+    for row in payload["personas"]:
+        for point in row["trend"]:
+            writer.writerow(
+                [
+                    _csv_safe(row["persona_id"]),
+                    _csv_safe(row["name"]),
+                    _csv_safe(row["color"]),
+                    _csv_safe(point["bucket_start"]),
+                    _csv_safe(point["bucket_end"]),
+                    point["appearances"],
+                    point["wins"],
+                    point["win_rate"],
+                    "true" if row["low_confidence"] else "false",
+                    row["trend_omitted_appearances"],
+                    row["trend_omitted_wins"],
+                ]
+            )
+
+    filename = (
+        f"arena-persona-win-rate-trend-"
+        f"{payload['window_start']}-to-{payload['window_end']}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-win-rate/export.md")
 async def analytics_persona_win_rate_markdown(
     user: UserResponse = Depends(get_current_user_required),
