@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never shows a hollow ranking
 
 ### Fixed
+- Profile analytics exports now keep the activity window locked while a
+  category report is being fetched, so copied Markdown cannot lag behind the
+  window the user selected
 - Memory filter changes now release a pending older-page spinner immediately,
   so a stale pagination request cannot make the refreshed view look disabled
 - The Memory page no longer swallows pagination failures: a failed

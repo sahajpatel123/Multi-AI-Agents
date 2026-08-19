@@ -59,6 +59,7 @@ const hoistedMocks = vi.hoisted(() => {
 
   return {
   calibrationMarkdownBlob,
+  categoryStatsMarkdownBlob,
   getSubscriptionStatus: vi.fn().mockResolvedValue({
     active: true,
     status: 'active',
@@ -1725,6 +1726,43 @@ describe('ProfileModal', () => {
       );
     });
     expect(copyButton).not.toBeDisabled();
+  });
+
+  it('locks the activity window while category Markdown is being copied', async () => {
+    let resolveExport: ((value: { blob: Blob; filename: string }) => void) | undefined;
+    const pendingExport = new Promise<{ blob: Blob; filename: string }>((resolve) => {
+      resolveExport = resolve;
+    });
+    hoistedMocks.exportAnalyticsCategoryStatsMarkdown.mockImplementationOnce(
+      () => pendingExport,
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /activity highlights window/i,
+    });
+    const copyButton = await screen.findByRole('button', { name: /copy categories markdown/i });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsCategoryStatsMarkdown).toHaveBeenCalledWith(30);
+    });
+    expect(windowSelect).toBeDisabled();
+    expect(copyButton).toBeDisabled();
+
+    resolveExport?.({
+      blob: hoistedMocks.categoryStatsMarkdownBlob,
+      filename: 'arena-category-stats-30d.md',
+    });
+    await waitFor(() => {
+      expect(windowSelect).not.toBeDisabled();
+      expect(copyButton).not.toBeDisabled();
+    });
   });
 
   it('surfaces category Markdown clipboard failures and releases the copy lock', async () => {

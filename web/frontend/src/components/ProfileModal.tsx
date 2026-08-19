@@ -1806,6 +1806,7 @@ export function ProfileModal() {
                     <span>Window</span>
                     <select
                       aria-label="Activity highlights window"
+                      disabled={activeExport !== null}
                       value={activityWindowDays}
                       onChange={(event) => {
                         clearExportFeedback();
@@ -1819,6 +1820,8 @@ export function ProfileModal() {
                         padding: '4px 6px',
                         fontSize: 11,
                         fontFamily: 'var(--vp-font-sans)',
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        opacity: activeExport !== null ? 0.65 : 1,
                       }}
                     >
                       {ACTIVITY_HIGHLIGHT_WINDOWS.map((days) => (
