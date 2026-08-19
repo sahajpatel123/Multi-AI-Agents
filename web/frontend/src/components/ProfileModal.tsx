@@ -3034,11 +3034,18 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('activity-json');
+                      clearExportFeedback();
                       try {
                         const { blob, filename } = await exportAnalyticsActivityJson(activityWindowDays);
-                        downloadBlobFile(blob, filename);
-                      } catch {
-                        // ignore error
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download activity JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download activity JSON — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }

@@ -802,6 +802,44 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('surfaces activity JSON download failures and releases the export lock', async () => {
+    hoistedMocks.exportAnalyticsActivityJson.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', {
+      name: /^🗓️ activity json export$/i,
+    });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not download activity JSON — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces a blocked activity JSON download and releases the export lock', async () => {
+    vi.mocked(downloadBlobFile).mockReturnValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', {
+      name: /^🗓️ activity json export$/i,
+    });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not download activity JSON — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
   it('copies analytics activity JSON for the selected window', async () => {
     renderModal();
     await waitFor(() => {
