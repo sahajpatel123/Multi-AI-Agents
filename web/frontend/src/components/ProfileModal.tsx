@@ -2057,6 +2057,7 @@ export function ProfileModal() {
                       <span>Window</span>
                       <select
                         aria-label="Persona win-rate window"
+                        disabled={activeExport !== null}
                         value={winRateWindowDays}
                         onChange={(event) => {
                           clearExportFeedback();
@@ -2092,6 +2093,7 @@ export function ProfileModal() {
                       <span>Minimum sample</span>
                       <select
                         aria-label="Persona win-rate minimum appearances"
+                        disabled={activeExport !== null}
                         value={winRateMinAppearances}
                         onChange={(event) => {
                           clearExportFeedback();
@@ -2161,6 +2163,7 @@ export function ProfileModal() {
                       <input
                         type="checkbox"
                         aria-label="Include fallback scorings"
+                        disabled={activeExport !== null}
                         checked={winRateIncludeFallback}
                         onChange={(event) => {
                           clearExportFeedback();

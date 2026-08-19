@@ -1293,6 +1293,55 @@ describe('ProfileModal', () => {
     expect(button).not.toBeDisabled();
   });
 
+  it('locks persona win-rate export filters while JSON is being copied', async () => {
+    let resolveExport: ((value: { blob: Blob; filename: string }) => void) | undefined;
+    const pendingExport = new Promise<{ blob: Blob; filename: string }>((resolve) => {
+      resolveExport = resolve;
+    });
+    hoistedMocks.exportAnalyticsPersonaWinRateJson.mockImplementationOnce(
+      () => pendingExport,
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /persona win-rate window/i,
+    });
+    const minimumSelect = await screen.findByRole('combobox', {
+      name: /persona win-rate minimum appearances/i,
+    });
+    const fallbackCheckbox = await screen.findByRole('checkbox', {
+      name: /include fallback scorings/i,
+    });
+    const copyButton = await screen.findByRole('button', { name: /copy win rates json/i });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(30, 1, false);
+    });
+    expect(windowSelect).toBeDisabled();
+    expect(minimumSelect).toBeDisabled();
+    expect(fallbackCheckbox).toBeDisabled();
+    expect(copyButton).toBeDisabled();
+    expect(copyButton).toHaveAttribute('aria-busy', 'true');
+
+    resolveExport?.({
+      blob: hoistedMocks.summaryJsonBlob,
+      filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.json',
+    });
+    await waitFor(() => {
+      expect(windowSelect).not.toBeDisabled();
+      expect(minimumSelect).not.toBeDisabled();
+      expect(fallbackCheckbox).not.toBeDisabled();
+      expect(copyButton).not.toBeDisabled();
+      expect(copyButton).toHaveAttribute('aria-busy', 'false');
+    });
+  });
+
   it('renders calibration history export buttons when ratings exist', async () => {
     hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
       total_ratings: 3,
