@@ -61,7 +61,7 @@ import {
   type UserUsageResponse,
 } from '../api';
 import { downloadBlobFile } from '../lib/downloadTextFile';
-import { copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
+import { copyCsvToClipboard, copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { safeLocalStorage } from '../lib/safeStorage';
@@ -2477,6 +2477,46 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'summary' ? '⏳ Downloading…' : '📊 Summary Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'summary-copy-csv'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'summary-copy-csv' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'summary-copy-csv' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('summary-copy-csv');
+                      clearExportFeedback();
+                      try {
+                        const blob = await exportAnalyticsSummaryCsv(summaryExportWindowDays);
+                        const copied = await copyCsvToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied analytics summary CSV to the clipboard.');
+                        } else {
+                          setExportError('Could not copy analytics summary CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy analytics summary CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'summary-copy-csv' ? '⏳ Copying…' : '📊 Copy Summary CSV'}
                   </button>
                   <button
                     type="button"

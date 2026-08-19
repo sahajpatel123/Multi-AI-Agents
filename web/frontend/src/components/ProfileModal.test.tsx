@@ -68,6 +68,12 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(summaryMarkdownBlob, 'text', {
     value: vi.fn().mockResolvedValue('# Arena — analytics summary'),
   });
+  const summaryCsvBlob = new Blob(['metric,value\ntotal_prompts,42\n'], {
+    type: 'text/csv',
+  });
+  Object.defineProperty(summaryCsvBlob, 'text', {
+    value: vi.fn().mockResolvedValue('metric,value\ntotal_prompts,42\n'),
+  });
   const usageMarkdownBlob = new Blob(['# Arena — usage report'], {
     type: 'text/markdown',
   });
@@ -80,6 +86,7 @@ const hoistedMocks = vi.hoisted(() => {
   categoryStatsMarkdownBlob,
   activityMarkdownBlob,
   summaryMarkdownBlob,
+  summaryCsvBlob,
   usageMarkdownBlob,
   getSubscriptionStatus: vi.fn().mockResolvedValue({
     active: true,
@@ -166,9 +173,7 @@ const hoistedMocks = vi.hoisted(() => {
     blob: categoryStatsMarkdownBlob,
     filename: 'arena-category-stats-2026-08-05-to-2026-08-11.md',
   }),
-  exportAnalyticsSummaryCsv: vi.fn().mockResolvedValue(
-    new Blob(['metric,value\ntotal_prompts,42\n'], { type: 'text/csv' }),
-  ),
+  exportAnalyticsSummaryCsv: vi.fn().mockResolvedValue(summaryCsvBlob),
   exportAnalyticsSummaryJson: vi.fn().mockResolvedValue({
     blob: new Blob(['{"window_days":30,"total_prompts":42}'], { type: 'application/json' }),
     filename: 'arena-summary-2026-07-13-to-2026-08-11.json',
@@ -253,6 +258,7 @@ const hoistedMocks = vi.hoisted(() => {
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
   }),
   copyToClipboard: vi.fn().mockResolvedValue(true),
+  copyCsvToClipboard: vi.fn().mockResolvedValue(true),
   copyMarkdownToClipboard: vi.fn().mockResolvedValue(true),
   getCalibrationHistory: vi.fn().mockResolvedValue({
     ratings: [],
@@ -430,6 +436,7 @@ vi.mock('../lib/downloadTextFile', () => ({
 
 vi.mock('../lib/clipboard', () => ({
   copyToClipboard: hoistedMocks.copyToClipboard,
+  copyCsvToClipboard: hoistedMocks.copyCsvToClipboard,
   copyMarkdownToClipboard: hoistedMocks.copyMarkdownToClipboard,
 }));
 
@@ -481,6 +488,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateMarkdown).mockClear();
     vi.mocked(hoistedMocks.copyToClipboard).mockClear().mockResolvedValue(true);
+    vi.mocked(hoistedMocks.copyCsvToClipboard).mockClear().mockResolvedValue(true);
     vi.mocked(hoistedMocks.copyMarkdownToClipboard).mockClear().mockResolvedValue(true);
     vi.mocked(hoistedMocks.exportAgentFeedbackCsv).mockClear();
     vi.mocked(hoistedMocks.exportAgentFeedbackJson).mockClear();
@@ -639,6 +647,49 @@ describe('ProfileModal', () => {
 
     expect(
       await screen.findByText('Could not copy analytics summary Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('copies analytics summary CSV for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /analytics summary export window/i }),
+      { target: { value: '90' } },
+    );
+    const button = await screen.findByRole('button', { name: /copy summary csv/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsSummaryCsv).toHaveBeenCalledWith(90);
+      expect(hoistedMocks.copyCsvToClipboard).toHaveBeenCalledWith(
+        'metric,value\ntotal_prompts,42\n',
+      );
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied analytics summary CSV to the clipboard.',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces analytics summary CSV clipboard failures', async () => {
+    hoistedMocks.copyCsvToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy summary csv/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy analytics summary CSV — try again.'),
     ).toBeInTheDocument();
     expect(button).not.toBeDisabled();
   });
