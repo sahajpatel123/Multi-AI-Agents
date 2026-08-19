@@ -106,6 +106,16 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['# Arena — analytics summary'], { type: 'text/markdown' }),
     filename: 'arena-summary-2026-07-13-to-2026-08-11.md',
   }),
+  exportUserUsageCsv: vi.fn((windowDays: number = 14) => Promise.resolve({
+    blob: new Blob(['date,tokens'], { type: 'text/csv' }),
+    filename: `arena-usage-${windowDays}d.csv`,
+  })),
+  exportUserUsageJson: vi.fn((windowDays: number = 14) => Promise.resolve({
+    blob: new Blob(['{"history":[]}'], { type: 'application/json' }),
+    filename: windowDays === 14
+      ? 'arena-usage-2026-07-29-to-2026-08-11.json'
+      : `arena-usage-${windowDays}d.json`,
+  })),
   exportUserUsageMarkdown: vi.fn().mockResolvedValue({
     blob: new Blob(['# Arena — usage report'], { type: 'text/markdown' }),
     filename: 'arena-usage-2026-07-29-to-2026-08-11.md',
@@ -301,6 +311,8 @@ vi.mock('../api', () => ({
   exportAnalyticsSummaryCsv: hoistedMocks.exportAnalyticsSummaryCsv,
   exportAnalyticsSummaryJson: hoistedMocks.exportAnalyticsSummaryJson,
   exportAnalyticsSummaryMarkdown: hoistedMocks.exportAnalyticsSummaryMarkdown,
+  exportUserUsageCsv: hoistedMocks.exportUserUsageCsv,
+  exportUserUsageJson: hoistedMocks.exportUserUsageJson,
   exportUserUsageMarkdown: hoistedMocks.exportUserUsageMarkdown,
   exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateJson: hoistedMocks.exportAnalyticsPersonaWinRateJson,
@@ -319,11 +331,6 @@ vi.mock('../api', () => ({
   exportCalibrationHistoryMarkdown: vi.fn().mockResolvedValue({
     blob: hoistedMocks.calibrationMarkdownBlob,
     filename: 'arena-calibration-7-20260812.md',
-  }),
-  exportUserUsageCsv: vi.fn().mockResolvedValue(new Blob(['date,tokens'], { type: 'text/csv' })),
-  exportUserUsageJson: vi.fn().mockResolvedValue({
-    blob: new Blob(['{"history":[]}'], { type: 'application/json' }),
-    filename: 'arena-usage-2026-07-29-to-2026-08-11.json',
   }),
   patchUserProfile: vi.fn().mockResolvedValue({ ok: true }),
   cancelSubscription: vi.fn().mockResolvedValue({ ok: true }),
@@ -384,6 +391,8 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsSummaryCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsSummaryJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsSummaryMarkdown).mockClear();
+    vi.mocked(hoistedMocks.exportUserUsageCsv).mockClear();
+    vi.mocked(hoistedMocks.exportUserUsageJson).mockClear();
     vi.mocked(hoistedMocks.exportUserUsageMarkdown).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
@@ -1946,6 +1955,38 @@ describe('ProfileModal', () => {
         expect.any(Blob),
         'arena-usage-2026-07-29-to-2026-08-11.md',
       );
+    });
+  });
+
+  it('uses the selected usage window for every export format', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /usage export window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '30' } });
+
+    fireEvent.click(await screen.findByRole('button', { name: /usage history export/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.exportUserUsageCsv).toHaveBeenCalledWith(30);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-usage-30d.csv',
+      );
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /usage json export/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.exportUserUsageJson).toHaveBeenCalledWith(30);
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /usage markdown export/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.exportUserUsageMarkdown).toHaveBeenCalledWith(30);
     });
   });
 

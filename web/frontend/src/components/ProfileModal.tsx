@@ -272,6 +272,7 @@ function TabIconHelp({ active }: { active: boolean }) {
 
 const PLACEHOLDER_HISTORY = [8, 14, 11, 19, 15, 22, 17, 12, 25, 18, 14, 21, 10, 28];
 const SUMMARY_EXPORT_WINDOWS = [7, 30, 90, 365] as const;
+const USAGE_EXPORT_WINDOWS = [7, 14, 30, 90, 365] as const;
 const PERSONA_WIN_RATE_WINDOWS = [7, 30, 90] as const;
 const PERSONA_WIN_RATE_MIN_APPEARANCES = [1, 3, 5, 10] as const;
 type PersonaWinRateSort = 'win_rate' | 'appearances' | 'wins' | 'name';
@@ -650,6 +651,7 @@ export function ProfileModal() {
   const [activityReload, setActivityReload] = useState(0);
   const [activityWindowDays, setActivityWindowDays] = useState(30);
   const [summaryExportWindowDays, setSummaryExportWindowDays] = useState(30);
+  const [usageExportWindowDays, setUsageExportWindowDays] = useState(14);
   const [winRate, setWinRate] = useState<AnalyticsPersonaWinRateResponse | null>(null);
   const [winRateLoading, setWinRateLoading] = useState(false);
   const [winRateErr, setWinRateErr] = useState<string | null>(null);
@@ -2217,6 +2219,41 @@ export function ProfileModal() {
                       ))}
                     </select>
                   </label>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    <span>Usage window</span>
+                    <select
+                      aria-label="Usage export window"
+                      value={usageExportWindowDays}
+                      onChange={(event) => {
+                        clearExportFeedback();
+                        setUsageExportWindowDays(Number(event.target.value));
+                      }}
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {USAGE_EXPORT_WINDOWS.map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
                 {exportError ? (
                   <p
@@ -2643,11 +2680,18 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('usage-history');
+                      clearExportFeedback();
                       try {
-                        const blob = await exportUserUsageCsv();
-                        downloadBlobFile(blob, 'arena-usage-14d.csv');
-                      } catch {
-                        // ignore error
+                        const { blob, filename } = await exportUserUsageCsv(usageExportWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download usage CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download usage CSV — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
@@ -2672,11 +2716,18 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('usage-json');
+                      clearExportFeedback();
                       try {
-                        const { blob, filename } = await exportUserUsageJson();
-                        downloadBlobFile(blob, filename);
-                      } catch {
-                        // ignore error
+                        const { blob, filename } = await exportUserUsageJson(usageExportWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download usage JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download usage JSON — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
@@ -2701,11 +2752,18 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('usage-markdown');
+                      clearExportFeedback();
                       try {
-                        const { blob, filename } = await exportUserUsageMarkdown();
-                        downloadBlobFile(blob, filename);
-                      } catch {
-                        // ignore error
+                        const { blob, filename } = await exportUserUsageMarkdown(usageExportWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download usage Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download usage Markdown — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }

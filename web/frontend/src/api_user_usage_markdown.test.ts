@@ -43,6 +43,21 @@ describe('exportUserUsageMarkdown', () => {
     expect(result.filename).toBe('arena-usage-14d.md');
   });
 
+  it('passes a custom window and uses it for the fallback filename', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['# Arena — usage report'], { type: 'text/markdown' }), {
+        status: 200,
+      }),
+    );
+
+    const result = await exportUserUsageMarkdown(30);
+    expect(result.filename).toBe('arena-usage-30d.md');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/user/usage/export.md?window_days=30',
+      {},
+    );
+  });
+
   it('surfaces request IDs on failure', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: 'boom' }), {

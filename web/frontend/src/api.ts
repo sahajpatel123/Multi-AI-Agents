@@ -219,8 +219,27 @@ export async function getUserUsage(): Promise<UserUsageResponse> {
   return data;
 }
 
-export async function exportUserUsageCsv(): Promise<Blob> {
-  const res = await apiFetch(`/api/user/usage/export.csv`);
+const DEFAULT_USAGE_EXPORT_WINDOW_DAYS = 14;
+
+function usageExportPath(format: 'csv' | 'json' | 'md', windowDays: number): string {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const query = windowDays === DEFAULT_USAGE_EXPORT_WINDOW_DAYS
+    ? ''
+    : `?window_days=${encodeURIComponent(String(windowDays))}`;
+  return `/api/user/usage/export.${format}${query}`;
+}
+
+export type UserUsageCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportUserUsageCsv(
+  windowDays: number = DEFAULT_USAGE_EXPORT_WINDOW_DAYS,
+): Promise<UserUsageCsvExport> {
+  const res = await apiFetch(usageExportPath('csv', windowDays));
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
     throw new ApiError(
@@ -229,7 +248,10 @@ export async function exportUserUsageCsv(): Promise<Blob> {
       err,
     );
   }
-  return res.blob();
+  return {
+    blob: await res.blob(),
+    filename: contentDispositionFilename(res) ?? `arena-usage-${windowDays}d.csv`,
+  };
 }
 
 export type UserUsageJsonExport = {
@@ -252,8 +274,10 @@ function contentDispositionFilename(res: Response): string | null {
   return plain?.[1]?.trim() || null;
 }
 
-export async function exportUserUsageJson(): Promise<UserUsageJsonExport> {
-  const res = await apiFetch(`/api/user/usage/export.json`);
+export async function exportUserUsageJson(
+  windowDays: number = DEFAULT_USAGE_EXPORT_WINDOW_DAYS,
+): Promise<UserUsageJsonExport> {
+  const res = await apiFetch(usageExportPath('json', windowDays));
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
     throw new ApiError(
@@ -264,7 +288,7 @@ export async function exportUserUsageJson(): Promise<UserUsageJsonExport> {
   }
   return {
     blob: await res.blob(),
-    filename: contentDispositionFilename(res) ?? 'arena-usage-14d.json',
+    filename: contentDispositionFilename(res) ?? `arena-usage-${windowDays}d.json`,
   };
 }
 
@@ -273,8 +297,10 @@ export type UserUsageMarkdownExport = {
   filename: string;
 };
 
-export async function exportUserUsageMarkdown(): Promise<UserUsageMarkdownExport> {
-  const res = await apiFetch(`/api/user/usage/export.md`);
+export async function exportUserUsageMarkdown(
+  windowDays: number = DEFAULT_USAGE_EXPORT_WINDOW_DAYS,
+): Promise<UserUsageMarkdownExport> {
+  const res = await apiFetch(usageExportPath('md', windowDays));
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
     throw new ApiError(
@@ -285,7 +311,7 @@ export async function exportUserUsageMarkdown(): Promise<UserUsageMarkdownExport
   }
   return {
     blob: await res.blob(),
-    filename: contentDispositionFilename(res) ?? 'arena-usage-14d.md',
+    filename: contentDispositionFilename(res) ?? `arena-usage-${windowDays}d.md`,
   };
 }
 

@@ -778,16 +778,21 @@ def _markdown_cell(value: object) -> str:
     )
 
 
-def _usage_history_rows(user: User, db: Session) -> list[tuple[date, int]]:
-    """Return 14 daily token totals as (UTC date, tokens) pairs, oldest first.
+def _usage_history_rows(
+    user: User,
+    db: Session,
+    window_days: int = 14,
+) -> list[tuple[date, int]]:
+    """Return daily token totals as (UTC date, tokens) pairs, oldest first.
 
     Shared by the JSON usage endpoint and its CSV export so the dashboard
     chart and the downloaded file cannot drift. Day boundaries use the
     codebase's canonical naive-UTC form so SQLite and Postgres compare
-    ``usage_records.timestamp`` identically.
+    ``usage_records.timestamp`` identically. Export callers bound
+    ``window_days`` with FastAPI's query validation before reaching here.
     """
     today_start = utcnow_naive().replace(hour=0, minute=0, second=0, microsecond=0)
-    chart_start = today_start - timedelta(days=13)
+    chart_start = today_start - timedelta(days=window_days - 1)
     token_sum = UsageRecord.input_tokens + UsageRecord.output_tokens
     day_col = func.date(UsageRecord.timestamp).label("day")
     rows = (
@@ -810,7 +815,7 @@ def _usage_history_rows(user: User, db: Session) -> list[tuple[date, int]]:
         by_day[dk] = int(r.total or 0)
 
     history: list[tuple[date, int]] = []
-    for i in range(13, -1, -1):
+    for i in range(window_days - 1, -1, -1):
         day = (today_start - timedelta(days=i)).date()
         history.append((day, by_day.get(day, 0)))
     return history
@@ -897,8 +902,14 @@ async def get_user_usage(
 async def export_user_usage_csv(
     user: User = Depends(get_current_user_required_orm),
     db: Session = Depends(get_db),
+    window_days: int = Query(
+        14,
+        ge=1,
+        le=365,
+        description="Number of UTC calendar days to include, ending today.",
+    ),
 ) -> Response:
-    """CSV export of the user's 14-day usage history.
+    """CSV export of the user's selected usage-history window.
 
     Shares the JSON endpoint's aggregation helper so the downloaded file
     and the Profile modal chart cannot drift. Uses its own rate-limit scope
@@ -915,7 +926,7 @@ async def export_user_usage_csv(
         message="Too many usage CSV exports. Please slow down.",
     )
 
-    history = _usage_history_rows(user, db)
+    history = _usage_history_rows(user, db, window_days=window_days)
     payload = _user_usage_payload(user, db, history=history)
 
     import csv
@@ -957,8 +968,14 @@ async def export_user_usage_csv(
 async def export_user_usage_json(
     user: User = Depends(get_current_user_required_orm),
     db: Session = Depends(get_db),
+    window_days: int = Query(
+        14,
+        ge=1,
+        le=365,
+        description="Number of UTC calendar days to include, ending today.",
+    ),
 ) -> Response:
-    """JSON export of the user's 14-day usage history and period summary.
+    """JSON export of the selected usage history and period summary.
 
     Complements the CSV export for automation and machine-readable backups:
     each daily row carries its date alongside the token total, and the
@@ -974,7 +991,7 @@ async def export_user_usage_json(
         message="Too many usage JSON exports. Please slow down.",
     )
 
-    history = _usage_history_rows(user, db)
+    history = _usage_history_rows(user, db, window_days=window_days)
     payload = _user_usage_payload(user, db, history=history)
     start_date, end_date = history[0][0], history[-1][0]
     filename = (
@@ -1016,8 +1033,14 @@ async def export_user_usage_json(
 async def export_user_usage_markdown(
     user: User = Depends(get_current_user_required_orm),
     db: Session = Depends(get_db),
+    window_days: int = Query(
+        14,
+        ge=1,
+        le=365,
+        description="Number of UTC calendar days to include, ending today.",
+    ),
 ) -> Response:
-    """Markdown export of the user's 14-day usage history and quota summary.
+    """Markdown export of the selected usage history and quota summary.
 
     This is the shareable, human-readable sibling of the CSV and JSON
     exports. It intentionally uses the same aggregation helper so a report
@@ -1031,7 +1054,7 @@ async def export_user_usage_markdown(
         message="Too many usage Markdown exports. Please slow down.",
     )
 
-    history = _usage_history_rows(user, db)
+    history = _usage_history_rows(user, db, window_days=window_days)
     payload = _user_usage_payload(user, db, history=history)
     start_date, end_date = history[0][0], history[-1][0]
 
@@ -1047,7 +1070,7 @@ async def export_user_usage_markdown(
     lines = [
         "# Arena — usage report",
         "",
-        f"**Window:** {start_date.isoformat()} → {end_date.isoformat()} (14 days, UTC)",
+        f"**Window:** {start_date.isoformat()} → {end_date.isoformat()} ({window_days} days, UTC)",
         "",
         "## Quota snapshot",
         "",

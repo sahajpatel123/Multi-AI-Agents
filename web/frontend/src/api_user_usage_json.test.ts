@@ -49,6 +49,21 @@ describe('exportUserUsageJson', () => {
     expect(res.filename).toBe('arena-usage-14d.json');
   });
 
+  it('passes a custom window and uses it for the fallback filename', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['{"history":[]}'], { type: 'application/json' }), {
+        status: 200,
+      }),
+    );
+
+    const res = await exportUserUsageJson(30);
+    expect(res.filename).toBe('arena-usage-30d.json');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/user/usage/export.json?window_days=30',
+      {},
+    );
+  });
+
   it('decodes RFC 5987 encoded filenames', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(new Blob(['{"history":[]}'], { type: 'application/json' }), {
