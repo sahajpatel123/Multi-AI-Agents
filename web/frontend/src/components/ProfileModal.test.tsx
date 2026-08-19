@@ -50,6 +50,12 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(calibrationMarkdownBlob, 'text', {
     value: vi.fn().mockResolvedValue('# Arena — confidence calibration'),
   });
+  const categoryStatsMarkdownBlob = new Blob(['# Arena — category stats'], {
+    type: 'text/markdown',
+  });
+  Object.defineProperty(categoryStatsMarkdownBlob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — category stats'),
+  });
 
   return {
   calibrationMarkdownBlob,
@@ -135,7 +141,7 @@ const hoistedMocks = vi.hoisted(() => {
     filename: 'arena-category-stats-2026-08-05-to-2026-08-11.json',
   }),
   exportAnalyticsCategoryStatsMarkdown: vi.fn().mockResolvedValue({
-    blob: new Blob(['# Arena — category stats'], { type: 'text/markdown' }),
+    blob: categoryStatsMarkdownBlob,
     filename: 'arena-category-stats-2026-08-05-to-2026-08-11.md',
   }),
   exportAnalyticsSummaryCsv: vi.fn().mockResolvedValue(
@@ -1695,6 +1701,47 @@ describe('ProfileModal', () => {
         'arena-category-stats-2026-08-05-to-2026-08-11.md',
       );
     });
+  });
+
+  it('copies category performance Markdown for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /activity highlights window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '90' } });
+    const copyButton = await screen.findByRole('button', { name: /copy categories markdown/i });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsCategoryStatsMarkdown).toHaveBeenCalledWith(90);
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('# Arena — category stats');
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied category stats Markdown to the clipboard.',
+      );
+    });
+    expect(copyButton).not.toBeDisabled();
+  });
+
+  it('surfaces category Markdown clipboard failures and releases the copy lock', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const copyButton = await screen.findByRole('button', { name: /copy categories markdown/i });
+    fireEvent.click(copyButton);
+
+    expect(
+      await screen.findByText('Could not copy category stats Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(copyButton).not.toBeDisabled();
   });
 
   it('shows a fallback message when activity highlights fail to load', async () => {
