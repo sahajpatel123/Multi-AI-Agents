@@ -76,3 +76,32 @@ export async function copyCsvToClipboard(text: string): Promise<boolean> {
 
   return copyToClipboard(text);
 }
+
+/**
+ * Copy Markdown with both its structured MIME type and a plain-text
+ * representation. Editors that understand Markdown can preserve the format,
+ * while ordinary text fields continue to receive the same readable content.
+ */
+export async function copyMarkdownToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+
+  try {
+    if (
+      typeof ClipboardItem !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      navigator.clipboard?.write
+    ) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/markdown': new Blob([text], { type: 'text/markdown;charset=utf-8' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        }),
+      ]);
+      return true;
+    }
+  } catch {
+    /* fall through to the generic text copy path */
+  }
+
+  return copyToClipboard(text);
+}

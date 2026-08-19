@@ -61,7 +61,7 @@ import {
   type UserUsageResponse,
 } from '../api';
 import { downloadBlobFile } from '../lib/downloadTextFile';
-import { copyToClipboard } from '../lib/clipboard';
+import { copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { safeLocalStorage } from '../lib/safeStorage';
@@ -3164,7 +3164,7 @@ export function ProfileModal() {
                       clearExportFeedback();
                       try {
                         const { blob } = await exportUserUsageMarkdown(usageExportWindowDays);
-                        const copied = await copyToClipboard(await blob.text());
+                        const copied = await copyMarkdownToClipboard(await blob.text());
                         if (copied) {
                           setExportNotice('Copied usage Markdown to the clipboard.');
                         } else {

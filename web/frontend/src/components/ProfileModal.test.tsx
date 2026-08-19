@@ -253,6 +253,7 @@ const hoistedMocks = vi.hoisted(() => {
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
   }),
   copyToClipboard: vi.fn().mockResolvedValue(true),
+  copyMarkdownToClipboard: vi.fn().mockResolvedValue(true),
   getCalibrationHistory: vi.fn().mockResolvedValue({
     ratings: [],
     total: 0,
@@ -429,6 +430,7 @@ vi.mock('../lib/downloadTextFile', () => ({
 
 vi.mock('../lib/clipboard', () => ({
   copyToClipboard: hoistedMocks.copyToClipboard,
+  copyMarkdownToClipboard: hoistedMocks.copyMarkdownToClipboard,
 }));
 
 /** Test helper that mounts the modal already open via the context. */
@@ -479,6 +481,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateMarkdown).mockClear();
     vi.mocked(hoistedMocks.copyToClipboard).mockClear().mockResolvedValue(true);
+    vi.mocked(hoistedMocks.copyMarkdownToClipboard).mockClear().mockResolvedValue(true);
     vi.mocked(hoistedMocks.exportAgentFeedbackCsv).mockClear();
     vi.mocked(hoistedMocks.exportAgentFeedbackJson).mockClear();
     vi.mocked(hoistedMocks.exportAgentFeedbackMarkdown).mockClear();
@@ -1701,7 +1704,9 @@ describe('ProfileModal', () => {
 
     await waitFor(() => {
       expect(hoistedMocks.exportUserUsageMarkdown).toHaveBeenCalledWith(30);
-      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('# Arena — usage report');
+      expect(hoistedMocks.copyMarkdownToClipboard).toHaveBeenCalledWith(
+        '# Arena — usage report',
+      );
       expect(screen.getByRole('status')).toHaveTextContent(
         'Copied usage Markdown to the clipboard.',
       );
@@ -1745,7 +1750,7 @@ describe('ProfileModal', () => {
   });
 
   it('surfaces usage Markdown clipboard failures and releases the copy lock', async () => {
-    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    hoistedMocks.copyMarkdownToClipboard.mockResolvedValueOnce(false);
     renderModal();
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();

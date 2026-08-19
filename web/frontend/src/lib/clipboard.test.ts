@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { copyCsvToClipboard, copyToClipboard } from './clipboard';
+import { copyCsvToClipboard, copyMarkdownToClipboard, copyToClipboard } from './clipboard';
 
 describe('copyToClipboard', () => {
   afterEach(() => {
@@ -97,5 +97,35 @@ describe('copyToClipboard', () => {
 
     expect(await copyCsvToClipboard('a,b\r\n1,2\r\n')).toBe(true);
     expect(writeText).toHaveBeenCalledWith('a,b\r\n1,2\r\n');
+  });
+
+  it('writes Markdown clipboard data through ClipboardItem when available', async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { write } });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        data: Record<string, Blob>;
+
+        constructor(data: Record<string, Blob>) {
+          this.data = data;
+        }
+      },
+    );
+
+    expect(await copyMarkdownToClipboard('# Arena usage\n')).toBe(true);
+    expect(write).toHaveBeenCalledTimes(1);
+    const item = write.mock.calls[0][0][0] as { data: Record<string, Blob> };
+    expect(item.data['text/markdown']).toBeInstanceOf(Blob);
+    expect(item.data['text/plain']).toBeInstanceOf(Blob);
+  });
+
+  it('falls back to plain text when Markdown clipboard support is unavailable', async () => {
+    vi.stubGlobal('ClipboardItem', undefined);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+
+    expect(await copyMarkdownToClipboard('# Arena usage\n')).toBe(true);
+    expect(writeText).toHaveBeenCalledWith('# Arena usage\n');
   });
 });
