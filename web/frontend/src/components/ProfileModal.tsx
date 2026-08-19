@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import '../styles/profile-modal.css';
@@ -38,6 +38,7 @@ import {
   getAnalyticsActivity,
   getAnalyticsCategoryStats,
   getAnalyticsPersonaWinRate,
+  getAnalyticsPersonaStatsTimeline,
   getAgentFeedbackSummary,
   getCalibrationHistory,
   getCalibrationStats,
@@ -53,6 +54,7 @@ import {
   type AnalyticsCategoryStatsResponse,
   type AnalyticsPersonaWinRateResponse,
   type AnalyticsPersonaWinRateTrendPoint,
+  type AnalyticsPersonaStatsTimelineResponse,
   type AgentFeedbackSummary,
   type AgentFeedbackExportDateRange,
   type AgentFeedbackVerdict,
@@ -480,6 +482,117 @@ function WinRateTrendSparkline({
   );
 }
 
+function PersonaActivityTimeline({
+  timeline,
+  color,
+}: {
+  timeline: AnalyticsPersonaStatsTimelineResponse;
+  color: string;
+}) {
+  const maxAppearances = Math.max(
+    ...timeline.timeline.map((point) => point.appearances),
+    1,
+  );
+  const barColor = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#F0B84E';
+
+  return (
+    <div
+      role="region"
+      aria-label={`${timeline.name} daily activity timeline`}
+      style={{
+        padding: '10px 0 4px',
+        color: '#A0A39A',
+        fontFamily: 'var(--vp-font-sans)',
+      }}
+    >
+      <div
+        role="list"
+        aria-label={`${timeline.name} activity by day`}
+        style={{
+          display: 'flex',
+          alignItems: 'stretch',
+          gap: 2,
+          height: 48,
+        }}
+      >
+        {timeline.timeline.map((point) => {
+          const appearanceHeight = point.appearances > 0
+            ? Math.max(8, (point.appearances / maxAppearances) * 100)
+            : 2;
+          const winHeight = point.wins > 0
+            ? Math.max(5, (point.wins / maxAppearances) * 100)
+            : 0;
+          const label = `${point.date}: ${point.wins} win${point.wins === 1 ? '' : 's'}, ${point.appearances} appearance${point.appearances === 1 ? '' : 's'} (${Math.round(point.win_rate * 100)}%)`;
+          return (
+            <span
+              key={point.date}
+              role="listitem"
+              aria-label={label}
+              title={label}
+              style={{
+                position: 'relative',
+                flex: 1,
+                minWidth: 2,
+                borderRadius: 2,
+                background: '#EDE4D8',
+                overflow: 'hidden',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  height: `${appearanceHeight}%`,
+                  background: '#A0A39A',
+                  opacity: 0.45,
+                }}
+              />
+              {winHeight > 0 ? (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    bottom: 0,
+                    left: 0,
+                    height: `${winHeight}%`,
+                    background: barColor,
+                  }}
+                />
+              ) : null}
+            </span>
+          );
+        })}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginTop: 7,
+          fontSize: 11,
+        }}
+      >
+        <span>
+          {timeline.total_wins} win{timeline.total_wins === 1 ? '' : 's'} / {timeline.total_appearances} appearance{timeline.total_appearances === 1 ? '' : 's'} in {timeline.days} days
+        </span>
+        <span>
+          {timeline.best_day
+            ? `Peak ${timeline.best_day}: ${timeline.best_day_wins}/${timeline.best_day_appearances}`
+            : 'No winning day yet'}
+        </span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10 }}>
+        <span>{timeline.window_start}</span>
+        <span>today · {timeline.window_end}</span>
+      </div>
+    </div>
+  );
+}
+
 function FeedbackActivityTrend({
   summary,
 }: {
@@ -682,6 +795,11 @@ export function ProfileModal() {
   const [winRateMinAppearances, setWinRateMinAppearances] = useState(1);
   const [winRateIncludeFallback, setWinRateIncludeFallback] = useState(false);
   const [winRateSort, setWinRateSort] = useState<PersonaWinRateSort>('win_rate');
+  const [personaTimelinePersonaId, setPersonaTimelinePersonaId] = useState<string | null>(null);
+  const [personaTimeline, setPersonaTimeline] = useState<AnalyticsPersonaStatsTimelineResponse | null>(null);
+  const [personaTimelineLoading, setPersonaTimelineLoading] = useState(false);
+  const [personaTimelineErr, setPersonaTimelineErr] = useState<string | null>(null);
+  const [personaTimelineReload, setPersonaTimelineReload] = useState(0);
   const [calStats, setCalStats] = useState<{
     total_ratings?: number;
     avg_delta?: number;
@@ -917,6 +1035,37 @@ export function ProfileModal() {
     winRateMinAppearances,
     winRateIncludeFallback,
   ]);
+
+  useEffect(() => {
+    setPersonaTimelinePersonaId(null);
+    setPersonaTimeline(null);
+    setPersonaTimelineErr(null);
+  }, [isOpen, activeTab, winRateReload, winRateWindowDays, winRateMinAppearances, winRateIncludeFallback]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage' || !personaTimelinePersonaId) return;
+    let cancelled = false;
+    setPersonaTimelineLoading(true);
+    setPersonaTimelineErr(null);
+    void getAnalyticsPersonaStatsTimeline(personaTimelinePersonaId, winRateWindowDays)
+      .then((data) => {
+        if (!cancelled) setPersonaTimeline(data);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPersonaTimeline(null);
+          setPersonaTimelineErr(
+            error instanceof ApiError ? error.message : 'Could not load persona activity timeline',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPersonaTimelineLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, personaTimelinePersonaId, personaTimelineReload, winRateWindowDays]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -2284,53 +2433,121 @@ export function ProfileModal() {
                             >
                               Rate
                             </th>
+                            <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>
+                              Daily
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
-                          {sortPersonaWinRateRows(winRate.personas, winRateSort).map((row) => (
-                            <tr key={row.persona_id} style={{ opacity: row.low_confidence ? 0.65 : 1 }}>
-                              <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', color: '#F3F0E7' }}>
-                                {row.color ? (
-                                  <span
-                                    style={{
-                                      display: 'inline-block',
-                                      width: 8,
-                                      height: 8,
-                                      borderRadius: '50%',
-                                      background: row.color,
-                                      marginRight: 6,
-                                    }}
-                                  />
+                          {sortPersonaWinRateRows(winRate.personas, winRateSort).map((row) => {
+                            const isTimelineOpen = personaTimelinePersonaId === row.persona_id;
+                            return (
+                              <Fragment key={row.persona_id}>
+                                <tr style={{ opacity: row.low_confidence ? 0.65 : 1 }}>
+                                  <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', color: '#F3F0E7' }}>
+                                    {row.color ? (
+                                      <span
+                                        style={{
+                                          display: 'inline-block',
+                                          width: 8,
+                                          height: 8,
+                                          borderRadius: '50%',
+                                          background: row.color,
+                                          marginRight: 6,
+                                        }}
+                                      />
+                                    ) : null}
+                                    {row.name}
+                                    {row.low_confidence ? (
+                                      <span
+                                        title={`Fewer than ${winRate.low_confidence_threshold} scored appearances — treat as provisional`}
+                                        style={{ color: '#A0A39A', fontSize: 10, marginLeft: 6 }}
+                                      >
+                                        low sample
+                                      </span>
+                                    ) : null}
+                                  </td>
+                                  <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', verticalAlign: 'middle' }}>
+                                    <WinRateTrendSparkline
+                                      trend={row.trend}
+                                      personaName={row.name}
+                                      color={row.color}
+                                      omittedAppearances={row.trend_omitted_appearances}
+                                    />
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                    {row.appearances}
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                    {row.wins}
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#F0B84E' }}>
+                                    {Math.round(row.win_rate * 100)}%
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5' }}>
+                                    <button
+                                      type="button"
+                                      aria-expanded={isTimelineOpen}
+                                      aria-label={`${isTimelineOpen ? 'Hide' : 'Show'} ${row.name} daily timeline`}
+                                      onClick={() => setPersonaTimelinePersonaId(isTimelineOpen ? null : row.persona_id)}
+                                      style={{
+                                        padding: '3px 7px',
+                                        border: '0.5px solid #E0D5C5',
+                                        borderRadius: 5,
+                                        background: isTimelineOpen ? '#EDE4D8' : '#F0E8DC',
+                                        color: '#4A3728',
+                                        fontSize: 10,
+                                        cursor: 'pointer',
+                                        fontFamily: 'var(--vp-font-sans)',
+                                      }}
+                                    >
+                                      {isTimelineOpen ? 'Hide' : 'Details'}
+                                    </button>
+                                  </td>
+                                </tr>
+                                {isTimelineOpen ? (
+                                  <tr>
+                                    <td
+                                      colSpan={6}
+                                      style={{
+                                        padding: '0 8px 8px 0',
+                                        borderTop: '0.5px solid #E0D5C5',
+                                      }}
+                                    >
+                                      {personaTimelineLoading ? (
+                                        <span role="status" style={{ display: 'block', padding: '10px 0', color: '#A0A39A', fontSize: 11 }}>
+                                          Loading daily timeline…
+                                        </span>
+                                      ) : personaTimelineErr ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0' }}>
+                                          <span role="alert" style={{ color: '#8C7355', fontSize: 11 }}>
+                                            {personaTimelineErr}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => setPersonaTimelineReload((value) => value + 1)}
+                                            style={{
+                                              padding: '3px 7px',
+                                              border: '0.5px solid #E0D5C5',
+                                              borderRadius: 5,
+                                              background: '#F0E8DC',
+                                              color: '#4A3728',
+                                              fontSize: 10,
+                                              cursor: 'pointer',
+                                            }}
+                                          >
+                                            Retry
+                                          </button>
+                                        </div>
+                                      ) : personaTimeline ? (
+                                        <PersonaActivityTimeline timeline={personaTimeline} color={row.color} />
+                                      ) : null}
+                                    </td>
+                                  </tr>
                                 ) : null}
-                                {row.name}
-                                {row.low_confidence ? (
-                                  <span
-                                    title={`Fewer than ${winRate.low_confidence_threshold} scored appearances — treat as provisional`}
-                                    style={{ color: '#A0A39A', fontSize: 10, marginLeft: 6 }}
-                                  >
-                                    low sample
-                                  </span>
-                                ) : null}
-                              </td>
-                              <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', verticalAlign: 'middle' }}>
-                                <WinRateTrendSparkline
-                                  trend={row.trend}
-                                  personaName={row.name}
-                                  color={row.color}
-                                  omittedAppearances={row.trend_omitted_appearances}
-                                />
-                              </td>
-                              <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
-                                {row.appearances}
-                              </td>
-                              <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
-                                {row.wins}
-                              </td>
-                              <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#F0B84E' }}>
-                                {Math.round(row.win_rate * 100)}%
-                              </td>
-                            </tr>
-                          ))}
+                              </Fragment>
+                            );
+                          })}
                         </tbody>
                       </table>
                       </div>

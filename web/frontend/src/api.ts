@@ -3811,6 +3811,28 @@ export type AnalyticsCategoryStatsResponse = {
   categories: AnalyticsCategoryStatsRow[];
 };
 
+export type AnalyticsPersonaStatsTimelinePoint = {
+  date: string;
+  appearances: number;
+  wins: number;
+  win_rate: number;
+};
+
+export type AnalyticsPersonaStatsTimelineResponse = {
+  persona_id: string;
+  name: string;
+  days: number;
+  window_start: string;
+  window_end: string;
+  total_appearances: number;
+  total_wins: number;
+  best_day: string | null;
+  best_day_wins: number;
+  best_day_appearances: number;
+  best_day_win_rate: number;
+  timeline: AnalyticsPersonaStatsTimelinePoint[];
+};
+
 function isAnalyticsPersonaWinRateRow(value: unknown): value is AnalyticsPersonaWinRateRow {
   if (!value || typeof value !== 'object') return false;
   const row = value as Record<string, unknown>;
@@ -3867,6 +3889,77 @@ function isAnalyticsCategoryStatsRow(value: unknown): value is AnalyticsCategory
     (row.best_persona_id === null ||
       (typeof row.best_persona_id === 'string' && row.best_persona_id.length > 0))
   );
+}
+
+function isAnalyticsPersonaStatsTimelinePoint(
+  value: unknown,
+): value is AnalyticsPersonaStatsTimelinePoint {
+  if (!value || typeof value !== 'object') return false;
+  const point = value as Record<string, unknown>;
+  return (
+    isIsoDateString(point.date) &&
+    isNonNegativeInteger(point.appearances) &&
+    isNonNegativeInteger(point.wins) &&
+    point.wins <= point.appearances &&
+    typeof point.win_rate === 'number' &&
+    Number.isFinite(point.win_rate) &&
+    point.win_rate >= 0 &&
+    point.win_rate <= 1
+  );
+}
+
+function isAnalyticsPersonaStatsTimelineResponse(
+  value: unknown,
+): value is AnalyticsPersonaStatsTimelineResponse {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Record<string, unknown>;
+  if (
+    typeof data.persona_id !== 'string' ||
+    data.persona_id.length === 0 ||
+    typeof data.name !== 'string' ||
+    data.name.length === 0 ||
+    !isPositiveInteger(data.days) ||
+    data.days > 90 ||
+    !isIsoDateString(data.window_start) ||
+    !isIsoDateString(data.window_end) ||
+    !isNonNegativeInteger(data.total_appearances) ||
+    !isNonNegativeInteger(data.total_wins) ||
+    data.total_wins > data.total_appearances ||
+    (data.best_day !== null && !isIsoDateString(data.best_day)) ||
+    !isNonNegativeInteger(data.best_day_wins) ||
+    !isNonNegativeInteger(data.best_day_appearances) ||
+    data.best_day_wins > data.best_day_appearances ||
+    typeof data.best_day_win_rate !== 'number' ||
+    !Number.isFinite(data.best_day_win_rate) ||
+    data.best_day_win_rate < 0 ||
+    data.best_day_win_rate > 1 ||
+    !Array.isArray(data.timeline) ||
+    data.timeline.length !== data.days ||
+    !data.timeline.every(isAnalyticsPersonaStatsTimelinePoint)
+  ) {
+    return false;
+  }
+
+  const timeline = data.timeline as AnalyticsPersonaStatsTimelinePoint[];
+  if (
+    timeline[0]?.date !== data.window_start ||
+    timeline[timeline.length - 1]?.date !== data.window_end ||
+    timeline.some((point, index) => index > 0 && point.date <= timeline[index - 1].date) ||
+    timeline.reduce((sum, point) => sum + point.appearances, 0) !== data.total_appearances ||
+    timeline.reduce((sum, point) => sum + point.wins, 0) !== data.total_wins
+  ) {
+    return false;
+  }
+
+  if (data.best_day === null) {
+    return data.best_day_wins === 0 && data.best_day_appearances === 0 && data.best_day_win_rate === 0;
+  }
+
+  const bestDay = timeline.find((point) => point.date === data.best_day);
+  return !!bestDay &&
+    bestDay.wins === data.best_day_wins &&
+    bestDay.appearances === data.best_day_appearances &&
+    bestDay.win_rate === data.best_day_win_rate;
 }
 
 function isIsoDateString(value: unknown): value is string {
@@ -4016,6 +4109,40 @@ export async function getAnalyticsPersonaWinRate(
   if (!isAnalyticsPersonaWinRateResponse(data)) {
     throw new ApiError(
       withRequestId('Malformed persona win rate response', response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
+export async function getAnalyticsPersonaStatsTimeline(
+  personaId: string,
+  days: number = 30,
+): Promise<AnalyticsPersonaStatsTimelineResponse> {
+  const normalizedPersonaId = personaId.trim();
+  if (!normalizedPersonaId) {
+    throw new RangeError('personaId must not be empty');
+  }
+  if (!Number.isInteger(days) || days < 1 || days > 90) {
+    throw new RangeError('days must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(
+    `/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/timeline?days=${encodeURIComponent(String(days))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load persona activity timeline'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<AnalyticsPersonaStatsTimelineResponse>(response);
+  if (!data) throw new Error(withRequestId('Empty persona activity timeline response', response));
+  if (!isAnalyticsPersonaStatsTimelineResponse(data)) {
+    throw new ApiError(
+      withRequestId('Malformed persona activity timeline response', response),
       response.status,
       data,
     );

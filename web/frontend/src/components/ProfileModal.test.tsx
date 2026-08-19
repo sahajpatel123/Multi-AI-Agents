@@ -281,6 +281,24 @@ const hoistedMocks = vi.hoisted(() => {
     best_persona_id: 'analyst',
     best_win_rate: 0.75,
   }),
+  getAnalyticsPersonaStatsTimeline: vi.fn().mockResolvedValue({
+    persona_id: 'analyst',
+    name: 'The Analyst',
+    days: 3,
+    window_start: '2026-08-18',
+    window_end: '2026-08-20',
+    total_appearances: 3,
+    total_wins: 2,
+    best_day: '2026-08-20',
+    best_day_wins: 1,
+    best_day_appearances: 1,
+    best_day_win_rate: 1,
+    timeline: [
+      { date: '2026-08-18', appearances: 1, wins: 0, win_rate: 0 },
+      { date: '2026-08-19', appearances: 1, wins: 1, win_rate: 1 },
+      { date: '2026-08-20', appearances: 1, wins: 1, win_rate: 1 },
+    ],
+  }),
   exportAnalyticsPersonaWinRateCsv: vi.fn().mockResolvedValue({
     blob: new Blob(['persona_id,name'], { type: 'text/csv' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.csv',
@@ -422,6 +440,7 @@ vi.mock('../api', () => ({
   getAnalyticsActivity: hoistedMocks.getAnalyticsActivity,
   getAnalyticsCategoryStats: hoistedMocks.getAnalyticsCategoryStats,
   getAnalyticsPersonaWinRate: hoistedMocks.getAnalyticsPersonaWinRate,
+  getAnalyticsPersonaStatsTimeline: hoistedMocks.getAnalyticsPersonaStatsTimeline,
   getCalibrationStats: hoistedMocks.getCalibrationStats,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getAgentFeedbackSummary: hoistedMocks.getAgentFeedbackSummary,
@@ -536,6 +555,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportUserUsageJson).mockClear();
     vi.mocked(hoistedMocks.exportUserUsageMarkdown).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
+    vi.mocked(hoistedMocks.getAnalyticsPersonaStatsTimeline).mockClear();
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
@@ -2603,6 +2623,27 @@ describe('ProfileModal', () => {
     expect(within(group).getByText(/best:/i)).toHaveTextContent('The Analyst');
     expect(within(group).getByText('low sample')).toBeInTheDocument();
     expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenCalledWith(30, 1);
+  });
+
+  it('opens a daily activity drill-down for a persona', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const detailsButton = await screen.findByRole('button', {
+      name: 'Show The Analyst daily timeline',
+    });
+    fireEvent.click(detailsButton);
+
+    expect(hoistedMocks.getAnalyticsPersonaStatsTimeline).toHaveBeenCalledWith('analyst', 30);
+    expect(
+      await screen.findByRole('region', { name: 'The Analyst daily activity timeline' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('2 wins / 3 appearances in 3 days')).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: /2026-08-20: 1 win/ })).toBeInTheDocument();
+    expect(detailsButton).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('refreshes persona win rates when the analysis window changes', async () => {
