@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Profile analytics can now download or copy the filtered weekly persona
+  win-rate trend as a portable Markdown report, including empty-week and
+  omitted-history honesty notes
 - Profile analytics can now copy the filtered weekly persona win-rate trend
   as spreadsheet-aware CSV, preserving the selected window, minimum sample,
   and fallback-scoring filters

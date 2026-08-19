@@ -25,6 +25,7 @@ import {
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateTrendCsv,
+  exportAnalyticsPersonaWinRateTrendMarkdown,
   exportAnalyticsPersonaWinRateJson,
   exportAnalyticsPersonaWinRateMarkdown,
   exportAnalyticsSummaryCsv,
@@ -2800,6 +2801,93 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'win-rate-trend-copy' ? '⏳ Copying…' : '🏆 Copy Win Rates Trend CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'win-rate-trend-md'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend-md' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend-md' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend-md');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateTrendMarkdown(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate trend Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate trend Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend-md' ? '⏳ Downloading…' : '🏆 Win Rates Trend Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-label="Copy persona win-rate trend Markdown"
+                    aria-busy={activeExport === 'win-rate-trend-copy-md'}
+                    title="Copy the filtered persona win-rate trend as Markdown"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend-copy-md' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend-copy-md' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend-copy-md');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaWinRateTrendMarkdown(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        const copied = await copyMarkdownToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona win-rate trend Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona win-rate trend Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona win-rate trend Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend-copy-md' ? '⏳ Copying…' : '🏆 Copy Win Rates Trend Markdown'}
                   </button>
                   <button
                     type="button"

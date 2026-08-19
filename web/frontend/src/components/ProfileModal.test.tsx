@@ -44,6 +44,12 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(personaWinRateTrendCsvBlob, 'text', {
     value: vi.fn().mockResolvedValue('persona_id,bucket_start,win_rate'),
   });
+  const personaWinRateTrendMarkdownBlob = new Blob(['# Arena — persona win-rate weekly trend'], {
+    type: 'text/markdown',
+  });
+  Object.defineProperty(personaWinRateTrendMarkdownBlob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — persona win-rate weekly trend'),
+  });
   const feedbackSummaryMarkdownBlob = new Blob(['# Arena — feedback activity\n'], {
     type: 'text/markdown',
   });
@@ -279,6 +285,10 @@ const hoistedMocks = vi.hoisted(() => {
     blob: personaWinRateTrendCsvBlob,
     filename: 'arena-persona-win-rate-trend-2026-07-13-to-2026-08-11.csv',
   }),
+  exportAnalyticsPersonaWinRateTrendMarkdown: vi.fn().mockResolvedValue({
+    blob: personaWinRateTrendMarkdownBlob,
+    filename: 'arena-persona-win-rate-trend-2026-07-13-to-2026-08-11.md',
+  }),
   exportAnalyticsPersonaWinRateJson: vi.fn().mockResolvedValue({
     blob: new Blob(['{"window_days":30,"personas":[]}'], { type: 'application/json' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.json',
@@ -428,6 +438,7 @@ vi.mock('../api', () => ({
   exportUserUsageMarkdown: hoistedMocks.exportUserUsageMarkdown,
   exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateTrendCsv: hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv,
+  exportAnalyticsPersonaWinRateTrendMarkdown: hoistedMocks.exportAnalyticsPersonaWinRateTrendMarkdown,
   exportAnalyticsPersonaWinRateJson: hoistedMocks.exportAnalyticsPersonaWinRateJson,
   exportAnalyticsPersonaWinRateMarkdown: hoistedMocks.exportAnalyticsPersonaWinRateMarkdown,
   getCalibrationHistory: hoistedMocks.getCalibrationHistory,
@@ -517,6 +528,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendMarkdown).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateMarkdown).mockClear();
     vi.mocked(hoistedMocks.copyToClipboard).mockClear().mockResolvedValue(true);
@@ -2962,6 +2974,76 @@ describe('ProfileModal', () => {
     expect(
       await screen.findByText('Could not copy persona win-rate trend CSV — try again.'),
     ).toBeInTheDocument();
+    expect(copyButton).not.toBeDisabled();
+  });
+
+  it('downloads the filtered persona win-rate trend as Markdown', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate window/i }),
+      { target: { value: '7' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate minimum appearances/i }),
+      { target: { value: '5' } },
+    );
+    fireEvent.click(await screen.findByRole('checkbox', { name: /include fallback scorings/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7, 5, true);
+    });
+
+    hoistedMocks.exportAnalyticsPersonaWinRateTrendMarkdown.mockResolvedValueOnce({
+      blob: new Blob(['# Arena — persona win-rate weekly trend'], { type: 'text/markdown' }),
+      filename: 'arena-persona-win-rate-trend-2026-08-11-to-2026-08-17.md',
+    });
+    const exportButton = await screen.findByRole('button', {
+      name: '🏆 Win Rates Trend Markdown',
+    });
+    fireEvent.click(exportButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateTrendMarkdown).toHaveBeenCalledWith(7, 5, true);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-persona-win-rate-trend-2026-08-11-to-2026-08-17.md',
+      );
+    });
+    expect(exportButton).not.toBeDisabled();
+  });
+
+  it('copies the filtered persona win-rate trend as Markdown', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const markdownBlob = new Blob(['# Arena — persona win-rate weekly trend'], {
+      type: 'text/markdown',
+    });
+    Object.defineProperty(markdownBlob, 'text', {
+      value: vi.fn().mockResolvedValue('# Arena — persona win-rate weekly trend'),
+    });
+    hoistedMocks.exportAnalyticsPersonaWinRateTrendMarkdown.mockResolvedValueOnce({
+      blob: markdownBlob,
+      filename: 'arena-persona-win-rate-trend.md',
+    });
+    const copyButton = await screen.findByRole('button', {
+      name: 'Copy persona win-rate trend Markdown',
+    });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateTrendMarkdown).toHaveBeenCalledWith(30, 1, false);
+      expect(hoistedMocks.copyMarkdownToClipboard).toHaveBeenCalledWith(
+        '# Arena — persona win-rate weekly trend',
+      );
+    });
     expect(copyButton).not.toBeDisabled();
   });
 

@@ -4185,6 +4185,33 @@ export async function exportAnalyticsPersonaWinRateTrendCsv(
   };
 }
 
+export type AnalyticsPersonaWinRateTrendMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaWinRateTrendMarkdown(
+  windowDays: number = 30,
+  minAppearances: number = 1,
+  includeFallback: boolean = false,
+): Promise<AnalyticsPersonaWinRateTrendMarkdownExport> {
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate/export-trend.md?${personaWinRateExportQuery(windowDays, minAppearances, includeFallback)}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona win-rate trend Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-persona-win-rate-trend-${windowDays}d.md`,
+  };
+}
+
 export type AnalyticsPersonaWinRateJsonExport = {
   blob: Blob;
   filename: string;

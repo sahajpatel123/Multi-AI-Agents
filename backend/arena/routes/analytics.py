@@ -1863,6 +1863,136 @@ async def analytics_persona_win_rate_trend_csv(
     )
 
 
+@router.get("/analytics/persona-win-rate/export-trend.md")
+async def analytics_persona_win_rate_trend_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
+) -> Response:
+    """Markdown export of the flattened weekly persona win-rate trend.
+
+    The report is deliberately one row per persona/week so it can be pasted
+    into notes or docs without asking the reader to interpret nested JSON.
+    It shares the canonical aggregation with the JSON and CSV routes; empty
+    weeks remain ``no data`` rather than being rewritten as 0%, and older
+    buckets outside the sparkline cap are called out explicitly.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_trend_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate trend Markdown exports. Please slow down.",
+    )
+
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=include_fallback,
+    )
+
+    lines = [
+        "# Arena — persona win-rate weekly trend",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        f"**Minimum appearances:** {payload['min_appearances']}",
+        f"**Fallback scorings included:** {'yes' if payload['include_fallback'] else 'no'}",
+        "",
+        "## Summary",
+        "",
+        f"- **Scored exchanges:** {payload['scored_exchanges']}",
+        f"- **Unattributed exchanges:** {payload['unattributed_exchanges']}",
+        f"- **Fallback exchanges:** {payload['fallback_exchanges']}",
+    ]
+
+    if payload["personas"]:
+        lines.extend(
+            [
+                "",
+                "## Weekly trend",
+                "",
+                "| Persona | Week (UTC) | Appearances | Wins | Win rate | Sample |",
+                "| --- | --- | ---: | ---: | ---: | --- |",
+            ]
+        )
+        omitted_notes = []
+        for row in payload["personas"]:
+            sample = "low sample" if row["low_confidence"] else ""
+            for point in row["trend"]:
+                rate = (
+                    "no data"
+                    if point["win_rate"] is None
+                    else f"{round(point['win_rate'] * 100)}%"
+                )
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            _markdown_cell(row["name"]),
+                            _markdown_cell(
+                                f"{point['bucket_start']} → {point['bucket_end']}"
+                            ),
+                            _markdown_cell(point["appearances"]),
+                            _markdown_cell(point["wins"]),
+                            _markdown_cell(rate),
+                            sample,
+                        ]
+                    )
+                    + " |"
+                )
+            if row["trend_omitted_appearances"] or row["trend_omitted_wins"]:
+                omitted_notes.append(
+                    f"- **{_markdown_cell(row['name'])}:** "
+                    f"{row['trend_omitted_appearances']} older appearances and "
+                    f"{row['trend_omitted_wins']} older wins were not plotted."
+                )
+        if omitted_notes:
+            lines.extend(["", "### Trend notes", "", *omitted_notes])
+    else:
+        lines.extend(
+            [
+                "",
+                "_No scored panels meet the minimum appearance threshold in this window._",
+            ]
+        )
+
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+    filename = (
+        f"arena-persona-win-rate-trend-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-win-rate/export.md")
 async def analytics_persona_win_rate_markdown(
     user: UserResponse = Depends(get_current_user_required),
