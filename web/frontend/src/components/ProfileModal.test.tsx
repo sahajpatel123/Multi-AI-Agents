@@ -549,6 +549,7 @@ describe('ProfileModal', () => {
     });
     screen.getByRole('button', { name: /usage/i }).click();
     const button = await screen.findByRole('button', { name: /^📊 summary json export$/i });
+    expect(button).toHaveStyle({ color: '#4A3728' });
     button.click();
 
     await waitFor(() => {
