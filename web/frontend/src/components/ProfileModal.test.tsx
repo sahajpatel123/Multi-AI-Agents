@@ -99,6 +99,10 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['{"categories":[]}'], { type: 'application/json' }),
     filename: 'arena-category-stats-2026-08-05-to-2026-08-11.json',
   }),
+  exportAnalyticsCategoryStatsMarkdown: vi.fn().mockResolvedValue({
+    blob: new Blob(['# Arena — category stats'], { type: 'text/markdown' }),
+    filename: 'arena-category-stats-2026-08-05-to-2026-08-11.md',
+  }),
   exportAnalyticsSummaryCsv: vi.fn().mockResolvedValue(
     new Blob(['metric,value\ntotal_prompts,42\n'], { type: 'text/csv' }),
   ),
@@ -313,6 +317,7 @@ vi.mock('../api', () => ({
   exportAnalyticsActivityJson: hoistedMocks.exportAnalyticsActivityJson,
   exportAnalyticsActivityMarkdown: hoistedMocks.exportAnalyticsActivityMarkdown,
   exportAnalyticsCategoryStatsJson: hoistedMocks.exportAnalyticsCategoryStatsJson,
+  exportAnalyticsCategoryStatsMarkdown: hoistedMocks.exportAnalyticsCategoryStatsMarkdown,
   exportAnalyticsSummaryCsv: hoistedMocks.exportAnalyticsSummaryCsv,
   exportAnalyticsSummaryJson: hoistedMocks.exportAnalyticsSummaryJson,
   exportAnalyticsSummaryMarkdown: hoistedMocks.exportAnalyticsSummaryMarkdown,
@@ -394,6 +399,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsActivityJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityMarkdown).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsCategoryStatsJson).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsCategoryStatsMarkdown).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsSummaryCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsSummaryJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsSummaryMarkdown).mockClear();
@@ -1540,6 +1546,28 @@ describe('ProfileModal', () => {
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-category-stats-2026-08-05-to-2026-08-11.json',
+      );
+    });
+  });
+
+  it('exports category performance as Markdown for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /activity highlights window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '90' } });
+    fireEvent.click(await screen.findByRole('button', { name: /categories markdown export/i }));
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsCategoryStatsMarkdown).toHaveBeenCalledWith(90);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-category-stats-2026-08-05-to-2026-08-11.md',
       );
     });
   });

@@ -709,11 +709,85 @@ async def test_json_export_matches_dashboard_payload_and_headers(
 
 
 @pytest.mark.asyncio
+async def test_markdown_export_matches_dashboard_rollups_and_rows(
+    app_client, make_user, db_session
+):
+    """The Markdown report should be a readable projection of the same payload."""
+    user = make_user(email="cat-md@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        category="question",
+        score=91,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=panel,
+        category="task",
+        score=84,
+    )
+    db_session.commit()
+
+    dashboard = await app_client.get(
+        "/api/analytics/category-stats?window_days=7", headers=_pro_headers(user)
+    )
+    exported = await app_client.get(
+        "/api/analytics/category-stats/export.md?window_days=7",
+        headers=_pro_headers(user),
+    )
+
+    assert dashboard.status_code == 200
+    assert exported.status_code == 200
+    body = dashboard.json()
+    text = exported.text
+    assert "# Arena — category stats" in text
+    assert f"- **Total appearances:** {body['total_appearances']}" in text
+    assert f"- **Total wins:** {body['total_wins']}" in text
+    assert f"- **Most active category:** {body['most_active_category']}" in text
+    for row in body["categories"]:
+        assert (
+            f"| {row['category']} | {row['appearances']} | {row['wins']} | "
+            f"{row['win_rate'] * 100:.1f}% |"
+        ) in text
+
+
+@pytest.mark.asyncio
+async def test_markdown_export_empty_report_has_stable_headers(app_client, make_user):
+    user = make_user(email="cat-md-empty@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/category-stats/export.md?window_days=7",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/markdown")
+    assert res.headers["cache-control"] == "no-store"
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert "**Window:**" in res.text
+    assert "- **Most active category:** none" in res.text
+    assert "_No categories recorded in this window._" in res.text
+    assert res.text.rstrip().endswith("_Exported from Arena_")
+    assert res.headers["content-disposition"].startswith(
+        'attachment; filename="arena-category-stats-'
+    )
+    assert res.headers["content-disposition"].endswith('.md"')
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("path", "scope"),
     [
         ("/api/analytics/category-stats/export.csv", "analytics_category_stats_csv"),
         ("/api/analytics/category-stats/export.json", "analytics_category_stats_json"),
+        (
+            "/api/analytics/category-stats/export.md",
+            "analytics_category_stats_markdown",
+        ),
     ],
 )
 async def test_category_stats_exports_use_only_their_own_rate_limit_scope(

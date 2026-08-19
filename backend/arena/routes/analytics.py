@@ -2248,6 +2248,107 @@ async def analytics_category_stats_json(
     )
 
 
+@router.get("/analytics/category-stats/export.md")
+async def analytics_category_stats_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+) -> Response:
+    """Download category performance as a human-readable Markdown report.
+
+    The report intentionally reuses the dashboard aggregation so its
+    summary and category table remain aligned with the JSON and CSV
+    siblings. It has an independent budget because downloading a report
+    should not make the interactive category dashboard feel rate-limited.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_category_stats_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many category-stats Markdown exports. Please wait.",
+    )
+
+    payload = _category_stats_payload(
+        user_id=user.id,
+        db=db,
+        window_days=window_days,
+    )
+
+    lines = [
+        "# Arena — category stats",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Total appearances:** {payload['total_appearances']}",
+        f"- **Total wins:** {payload['total_wins']}",
+        (
+            f"- **Most active category:** "
+            f"{_markdown_cell(payload['most_active_category']) if payload['most_active_category'] else 'none'}"
+        ),
+        "",
+    ]
+
+    if payload["categories"]:
+        lines.extend(
+            [
+                "## Categories",
+                "",
+                "| Category | Appearances | Wins | Win rate | Avg winning score | Last exchange | Best persona |",
+                "| --- | ---: | ---: | ---: | ---: | --- | --- |",
+            ]
+        )
+        for row in payload["categories"]:
+            avg_score = (
+                row["avg_winning_score"]
+                if row["avg_winning_score"] is not None
+                else "—"
+            )
+            last_exchange = row["last_exchange_at"] or "—"
+            best_persona = row["best_persona_id"] or "—"
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        _markdown_cell(row["category"]),
+                        _markdown_cell(row["appearances"]),
+                        _markdown_cell(row["wins"]),
+                        _markdown_cell(f"{row['win_rate'] * 100:.1f}%"),
+                        _markdown_cell(avg_score),
+                        _markdown_cell(last_exchange),
+                        _markdown_cell(best_persona),
+                    ]
+                )
+                + " |"
+            )
+    else:
+        lines.append("_No categories recorded in this window._")
+
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+
+    filename = (
+        f"arena-category-stats-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-stats")
 async def analytics_persona_stats_all(
     user: UserResponse = Depends(get_current_user_required),

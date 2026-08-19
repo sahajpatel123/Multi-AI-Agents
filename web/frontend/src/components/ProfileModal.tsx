@@ -21,6 +21,7 @@ import {
   exportAnalyticsActivityMarkdown,
   exportAnalyticsCategoryStatsCsv,
   exportAnalyticsCategoryStatsJson,
+  exportAnalyticsCategoryStatsMarkdown,
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateJson,
@@ -2610,6 +2611,44 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'category-json' ? '⏳ Downloading…' : '📂 Categories JSON Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'category-markdown' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'category-markdown' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('category-markdown');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsCategoryStatsMarkdown(activityWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download category stats Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download category stats Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'category-markdown'
+                      ? '⏳ Downloading…'
+                      : '📂 Categories Markdown Export'}
                   </button>
                   <button
                     type="button"
