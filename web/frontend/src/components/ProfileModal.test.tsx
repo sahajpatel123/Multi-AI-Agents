@@ -68,6 +68,10 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(activityJsonBlob, 'text', {
     value: vi.fn().mockResolvedValue('{"activity":[]}'),
   });
+  const activityCsvBlob = new Blob(['date,prompts'], { type: 'text/csv' });
+  Object.defineProperty(activityCsvBlob, 'text', {
+    value: vi.fn().mockResolvedValue('date,prompts'),
+  });
   const summaryMarkdownBlob = new Blob(['# Arena — analytics summary'], {
     type: 'text/markdown',
   });
@@ -98,6 +102,7 @@ const hoistedMocks = vi.hoisted(() => {
   categoryStatsMarkdownBlob,
   activityMarkdownBlob,
   activityJsonBlob,
+  activityCsvBlob,
   summaryMarkdownBlob,
   summaryCsvBlob,
   summaryJsonBlob,
@@ -166,7 +171,7 @@ const hoistedMocks = vi.hoisted(() => {
     ],
   }),
   exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(
-    new Blob(['date,prompts'], { type: 'text/csv' }),
+    activityCsvBlob,
   ),
   exportAnalyticsActivityJson: vi.fn().mockResolvedValue({
     blob: activityJsonBlob,
@@ -897,6 +902,47 @@ describe('ProfileModal', () => {
         'arena-activity-2026-08-05-to-2026-08-11.md',
       );
     });
+  });
+
+  it('copies analytics activity CSV for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /activity highlights window/i }),
+      { target: { value: '90' } },
+    );
+    const button = await screen.findByRole('button', { name: /copy activity csv/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsActivityCsv).toHaveBeenCalledWith(90);
+      expect(hoistedMocks.copyCsvToClipboard).toHaveBeenCalledWith('date,prompts');
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied activity CSV to the clipboard.',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces activity CSV clipboard failures and releases the copy lock', async () => {
+    hoistedMocks.copyCsvToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy activity csv/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy activity CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
   });
 
   it('copies analytics activity Markdown for the selected window', async () => {
