@@ -62,6 +62,12 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(activityMarkdownBlob, 'text', {
     value: vi.fn().mockResolvedValue('# Arena — activity timeline'),
   });
+  const activityJsonBlob = new Blob(['{"activity":[]}'], {
+    type: 'application/json',
+  });
+  Object.defineProperty(activityJsonBlob, 'text', {
+    value: vi.fn().mockResolvedValue('{"activity":[]}'),
+  });
   const summaryMarkdownBlob = new Blob(['# Arena — analytics summary'], {
     type: 'text/markdown',
   });
@@ -91,6 +97,7 @@ const hoistedMocks = vi.hoisted(() => {
   calibrationMarkdownBlob,
   categoryStatsMarkdownBlob,
   activityMarkdownBlob,
+  activityJsonBlob,
   summaryMarkdownBlob,
   summaryCsvBlob,
   summaryJsonBlob,
@@ -162,7 +169,7 @@ const hoistedMocks = vi.hoisted(() => {
     new Blob(['date,prompts'], { type: 'text/csv' }),
   ),
   exportAnalyticsActivityJson: vi.fn().mockResolvedValue({
-    blob: new Blob(['{"activity":[]}'], { type: 'application/json' }),
+    blob: activityJsonBlob,
     filename: 'arena-activity-2026-08-05-to-2026-08-11.json',
   }),
   exportAnalyticsActivityMarkdown: vi.fn().mockResolvedValue({
@@ -793,6 +800,47 @@ describe('ProfileModal', () => {
         'arena-activity-2026-08-05-to-2026-08-11.json',
       );
     });
+  });
+
+  it('copies analytics activity JSON for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /activity highlights window/i }),
+      { target: { value: '90' } },
+    );
+    const button = await screen.findByRole('button', { name: /copy activity json/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsActivityJson).toHaveBeenCalledWith(90);
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('{"activity":[]}');
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied activity JSON to the clipboard.',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces activity JSON clipboard failures and releases the copy lock', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy activity json/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy activity JSON — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
   });
 
   it('renders and downloads the analytics activity Markdown export', async () => {

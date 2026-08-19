@@ -3049,6 +3049,46 @@ export function ProfileModal() {
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    aria-busy={activeExport === 'activity-copy-json'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'activity-copy-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'activity-copy-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('activity-copy-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsActivityJson(activityWindowDays);
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied activity JSON to the clipboard.');
+                        } else {
+                          setExportError('Could not copy activity JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy activity JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'activity-copy-json' ? '⏳ Copying…' : '🗓️ Copy Activity JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
                     style={{
                       padding: '8px 12px',
                       borderRadius: 6,
