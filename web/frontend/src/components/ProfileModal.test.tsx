@@ -127,6 +127,9 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['# Arena — activity timeline'], { type: 'text/markdown' }),
     filename: 'arena-activity-2026-08-05-to-2026-08-11.md',
   }),
+  exportAnalyticsCategoryStatsCsv: vi.fn().mockResolvedValue(
+    new Blob(['category,appearances,wins'], { type: 'text/csv' }),
+  ),
   exportAnalyticsCategoryStatsJson: vi.fn().mockResolvedValue({
     blob: new Blob(['{"categories":[]}'], { type: 'application/json' }),
     filename: 'arena-category-stats-2026-08-05-to-2026-08-11.json',
@@ -349,6 +352,7 @@ vi.mock('../api', () => ({
   exportAnalyticsActivityCsv: hoistedMocks.exportAnalyticsActivityCsv,
   exportAnalyticsActivityJson: hoistedMocks.exportAnalyticsActivityJson,
   exportAnalyticsActivityMarkdown: hoistedMocks.exportAnalyticsActivityMarkdown,
+  exportAnalyticsCategoryStatsCsv: hoistedMocks.exportAnalyticsCategoryStatsCsv,
   exportAnalyticsCategoryStatsJson: hoistedMocks.exportAnalyticsCategoryStatsJson,
   exportAnalyticsCategoryStatsMarkdown: hoistedMocks.exportAnalyticsCategoryStatsMarkdown,
   exportAnalyticsSummaryCsv: hoistedMocks.exportAnalyticsSummaryCsv,
@@ -432,6 +436,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsActivityCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityMarkdown).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsCategoryStatsCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsCategoryStatsJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsCategoryStatsMarkdown).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsSummaryCsv).mockClear();
@@ -1632,6 +1637,42 @@ describe('ProfileModal', () => {
         'arena-category-stats-2026-08-05-to-2026-08-11.json',
       );
     });
+  });
+
+  it('exports category performance CSV for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /activity highlights window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '90' } });
+    fireEvent.click(await screen.findByRole('button', { name: /categories export/i }));
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsCategoryStatsCsv).toHaveBeenCalledWith(90);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-category-stats-90d.csv',
+      );
+    });
+  });
+
+  it('shows category CSV export failures instead of hiding them', async () => {
+    hoistedMocks.exportAnalyticsCategoryStatsCsv.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    fireEvent.click(await screen.findByRole('button', { name: /categories export/i }));
+
+    expect(
+      await screen.findByText('Could not download category stats CSV — try again.'),
+    ).toBeInTheDocument();
   });
 
   it('exports category performance as Markdown for the selected window', async () => {

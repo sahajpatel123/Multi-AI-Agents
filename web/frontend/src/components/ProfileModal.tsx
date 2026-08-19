@@ -2721,17 +2721,26 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('category');
+                      clearExportFeedback();
                       try {
-                        const blob = await exportAnalyticsCategoryStatsCsv(30);
-                        downloadBlobFile(blob, 'arena-category-stats-30d.csv');
-                      } catch {
-                        // ignore error
+                        const blob = await exportAnalyticsCategoryStatsCsv(activityWindowDays);
+                        if (!downloadBlobFile(blob, `arena-category-stats-${activityWindowDays}d.csv`)) {
+                          setExportError('Could not download category stats CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download category stats CSV — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
                     }}
                   >
-                    {activeExport === 'category' ? '⏳ Downloading…' : '📂 Categories Export'}
+                    {activeExport === 'category'
+                      ? '⏳ Downloading…'
+                      : `📂 Categories Export · ${activityWindowDays}d`}
                   </button>
                   <button
                     type="button"

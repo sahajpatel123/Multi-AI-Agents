@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Usage now shows category performance for the selected activity window,
   including round counts, wins, win rate, and the best-performing mind, with
-  honest loading, empty, retry, and malformed-response handling
+  honest loading, empty, retry, and malformed-response handling; category CSV
+  exports now follow that selected window and report download failures
 - Memory summaries can now be filtered by session kind or trusted mind from
   the Memory page; CSV and JSON exports follow the active filters
 - Memory summaries can now be exported from the Memory page as CSV or JSON;
