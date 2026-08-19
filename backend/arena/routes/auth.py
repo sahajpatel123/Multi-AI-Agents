@@ -778,10 +778,17 @@ def _markdown_cell(value: object) -> str:
     )
 
 
+def _usage_day_start() -> datetime:
+    """Return the current UTC calendar-day boundary in canonical form."""
+    return utcnow_naive().replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def _usage_history_rows(
     user: User,
     db: Session,
     window_days: int = 14,
+    *,
+    today_start: Optional[datetime] = None,
 ) -> list[tuple[date, int]]:
     """Return daily token totals as (UTC date, tokens) pairs, oldest first.
 
@@ -791,7 +798,7 @@ def _usage_history_rows(
     ``usage_records.timestamp`` identically. Export callers bound
     ``window_days`` with FastAPI's query validation before reaching here.
     """
-    today_start = utcnow_naive().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = today_start or _usage_day_start()
     chart_start = today_start - timedelta(days=window_days - 1)
     token_sum = UsageRecord.input_tokens + UsageRecord.output_tokens
     day_col = func.date(UsageRecord.timestamp).label("day")
@@ -825,6 +832,8 @@ def _user_usage_payload(
     user: User,
     db: Session,
     history: Optional[list[tuple[date, int]]] = None,
+    *,
+    today_start: Optional[datetime] = None,
 ) -> dict:
     """Compute the /api/user/usage response for one user.
 
@@ -836,7 +845,7 @@ def _user_usage_payload(
     daily_limit = get_credit_budget(normalized)
     weekly_limit = daily_limit * 7
 
-    today_start = utcnow_naive().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = today_start or _usage_day_start()
     week_start = today_start - timedelta(days=7)
     month_start = today_start - timedelta(days=30)
 
@@ -867,7 +876,7 @@ def _user_usage_payload(
     total_tasks_month = int(total_tasks_month)
 
     if history is None:
-        history = _usage_history_rows(user, db)
+        history = _usage_history_rows(user, db, today_start=today_start)
     usage_history = [tokens for _, tokens in history]
 
     return {
@@ -880,6 +889,33 @@ def _user_usage_payload(
         "total_tasks_month": total_tasks_month,
         "usage_history": usage_history,
     }
+
+
+def _usage_export_snapshot(
+    user: User,
+    db: Session,
+    window_days: int,
+) -> tuple[list[tuple[date, int]], dict]:
+    """Build history and its summary against one UTC-day snapshot.
+
+    Export generation can cross midnight while its database queries run. Keep
+    the history labels and quota boundaries anchored to the same day so a
+    report cannot combine yesterday's rows with today's summary.
+    """
+    today_start = _usage_day_start()
+    history = _usage_history_rows(
+        user,
+        db,
+        window_days=window_days,
+        today_start=today_start,
+    )
+    payload = _user_usage_payload(
+        user,
+        db,
+        history=history,
+        today_start=today_start,
+    )
+    return history, payload
 
 
 @user_router.get("/usage")
@@ -926,8 +962,7 @@ async def export_user_usage_csv(
         message="Too many usage CSV exports. Please slow down.",
     )
 
-    history = _usage_history_rows(user, db, window_days=window_days)
-    payload = _user_usage_payload(user, db, history=history)
+    history, payload = _usage_export_snapshot(user, db, window_days)
 
     import csv
     import io
@@ -991,8 +1026,7 @@ async def export_user_usage_json(
         message="Too many usage JSON exports. Please slow down.",
     )
 
-    history = _usage_history_rows(user, db, window_days=window_days)
-    payload = _user_usage_payload(user, db, history=history)
+    history, payload = _usage_export_snapshot(user, db, window_days)
     start_date, end_date = history[0][0], history[-1][0]
     filename = (
         f"arena-usage-{start_date.isoformat()}-to-{end_date.isoformat()}.json"
@@ -1054,8 +1088,7 @@ async def export_user_usage_markdown(
         message="Too many usage Markdown exports. Please slow down.",
     )
 
-    history = _usage_history_rows(user, db, window_days=window_days)
-    payload = _user_usage_payload(user, db, history=history)
+    history, payload = _usage_export_snapshot(user, db, window_days)
     start_date, end_date = history[0][0], history[-1][0]
 
     summary_rows = [
