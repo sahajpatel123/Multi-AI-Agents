@@ -2359,6 +2359,7 @@ export function ProfileModal() {
                     <span>Summary window</span>
                     <select
                       aria-label="Analytics summary export window"
+                      disabled={activeExport !== null}
                       value={summaryExportWindowDays}
                       onChange={(event) => {
                         clearExportFeedback();
@@ -2372,6 +2373,8 @@ export function ProfileModal() {
                         padding: '4px 6px',
                         fontSize: 11,
                         fontFamily: 'var(--vp-font-sans)',
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        opacity: activeExport !== null ? 0.65 : 1,
                       }}
                     >
                       {SUMMARY_EXPORT_WINDOWS.map((days) => (

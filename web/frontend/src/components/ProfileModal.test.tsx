@@ -577,6 +577,45 @@ describe('ProfileModal', () => {
     expect(button).not.toBeDisabled();
   });
 
+  it('locks the summary window while analytics summary Markdown is being copied', async () => {
+    let resolveExport: ((value: { blob: Blob; filename: string }) => void) | undefined;
+    const pendingExport = new Promise<{ blob: Blob; filename: string }>((resolve) => {
+      resolveExport = resolve;
+    });
+    hoistedMocks.exportAnalyticsSummaryMarkdown.mockImplementationOnce(
+      () => pendingExport,
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /analytics summary export window/i,
+    });
+    const copyButton = await screen.findByRole('button', { name: /copy summary markdown/i });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsSummaryMarkdown).toHaveBeenCalledWith(30);
+    });
+    expect(windowSelect).toBeDisabled();
+    expect(copyButton).toBeDisabled();
+    expect(copyButton).toHaveAttribute('aria-busy', 'true');
+
+    resolveExport?.({
+      blob: hoistedMocks.summaryMarkdownBlob,
+      filename: 'arena-summary-30d.md',
+    });
+    await waitFor(() => {
+      expect(windowSelect).not.toBeDisabled();
+      expect(copyButton).not.toBeDisabled();
+      expect(copyButton).toHaveAttribute('aria-busy', 'false');
+    });
+  });
+
   it('surfaces analytics summary clipboard failures', async () => {
     hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
     renderModal();
