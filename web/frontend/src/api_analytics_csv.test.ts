@@ -152,6 +152,20 @@ describe('Analytics CSV export frontend API helpers', () => {
     );
   });
 
+  it('surfaces request IDs on persona win-rate CSV failures', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Too many persona win-rate exports' }), {
+        status: 429,
+        headers: { 'x-request-id': 'req-persona-win-rate-csv' },
+      }),
+    );
+
+    await expect(exportAnalyticsPersonaWinRateCsv()).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many persona win-rate exports (Request ID: req-persona-win-rate-csv)',
+    });
+  });
+
   it('falls back to a window-based filename when the CSV response omits one', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(new Blob(['persona_id,win_rate'], { type: 'text/csv' }), { status: 200 }),

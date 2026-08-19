@@ -4146,7 +4146,11 @@ export async function exportAnalyticsPersonaWinRateCsv(
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export persona win rate CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona win rate CSV'), response),
+      response.status,
+      err,
+    );
   }
   return {
     blob: await response.blob(),

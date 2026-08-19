@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never shows a hollow ranking
 
 ### Fixed
+- Persona win-rate CSV export and clipboard failures now preserve the server
+  request ID, making rate-limit and support diagnostics actionable
 - Profile analytics exports now keep the activity window locked while a
   category report is being fetched, so copied Markdown cannot lag behind the
   window the user selected
