@@ -4378,7 +4378,11 @@ export async function exportAnalyticsActivityCsv(days: number = 30): Promise<Blo
   const response = await apiFetch(`/api/analytics/activity/export.csv?days=${encodeURIComponent(String(days))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export activity CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export activity CSV'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }

@@ -3003,11 +3003,18 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('activity');
+                      clearExportFeedback();
                       try {
                         const blob = await exportAnalyticsActivityCsv(activityWindowDays);
-                        downloadBlobFile(blob, `arena-activity-${activityWindowDays}d.csv`);
-                      } catch {
-                        // ignore error
+                        if (!downloadBlobFile(blob, `arena-activity-${activityWindowDays}d.csv`)) {
+                          setExportError('Could not download activity CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download activity CSV — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }

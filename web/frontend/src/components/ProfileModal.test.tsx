@@ -928,6 +928,40 @@ describe('ProfileModal', () => {
     expect(button).not.toBeDisabled();
   });
 
+  it('locks the activity window while activity CSV is being copied', async () => {
+    let resolveExport: ((value: Blob) => void) | undefined;
+    const pendingExport = new Promise<Blob>((resolve) => {
+      resolveExport = resolve;
+    });
+    hoistedMocks.exportAnalyticsActivityCsv.mockImplementationOnce(() => pendingExport);
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /activity highlights window/i,
+    });
+    const copyButton = await screen.findByRole('button', { name: /copy activity csv/i });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsActivityCsv).toHaveBeenCalledWith(30);
+    });
+    expect(windowSelect).toBeDisabled();
+    expect(copyButton).toBeDisabled();
+    expect(copyButton).toHaveAttribute('aria-busy', 'true');
+
+    resolveExport?.(hoistedMocks.activityCsvBlob);
+    await waitFor(() => {
+      expect(windowSelect).not.toBeDisabled();
+      expect(copyButton).not.toBeDisabled();
+      expect(copyButton).toHaveAttribute('aria-busy', 'false');
+    });
+  });
+
   it('surfaces activity CSV clipboard failures and releases the copy lock', async () => {
     hoistedMocks.copyCsvToClipboard.mockResolvedValueOnce(false);
     renderModal();
@@ -2068,6 +2102,44 @@ describe('ProfileModal', () => {
     await waitFor(() => {
       expect(hoistedMocks.exportAnalyticsActivityMarkdown).toHaveBeenCalledWith(90);
     });
+  });
+
+  it('surfaces activity CSV download failures and releases the export lock', async () => {
+    hoistedMocks.exportAnalyticsActivityCsv.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', {
+      name: /^🗓️ activity export · 30d$/i,
+    });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not download activity CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces a blocked activity CSV download and releases the export lock', async () => {
+    vi.mocked(downloadBlobFile).mockReturnValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', {
+      name: /^🗓️ activity export · 30d$/i,
+    });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not download activity CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
   });
 
   it('renders category performance from the live endpoint', async () => {

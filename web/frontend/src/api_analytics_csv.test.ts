@@ -286,6 +286,20 @@ describe('Analytics CSV export frontend API helpers', () => {
     );
   });
 
+  it('surfaces request IDs on activity CSV failures', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Too many activity CSV exports' }), {
+        status: 429,
+        headers: { 'x-request-id': 'req-activity-csv' },
+      }),
+    );
+
+    await expect(exportAnalyticsActivityCsv()).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many activity CSV exports (Request ID: req-activity-csv)',
+    });
+  });
+
   it('exportAnalyticsPersonaStatsOverviewCsv fetches expected endpoint', async () => {
     const mockBlob = new Blob(['persona_id,name'], { type: 'text/csv' });
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
