@@ -3789,6 +3789,28 @@ export type AnalyticsPersonaWinRateResponse = {
   best_win_rate: number | null;
 };
 
+export type AnalyticsCategoryStatsRow = {
+  category: string;
+  is_known_category: boolean;
+  is_uncategorized: boolean;
+  appearances: number;
+  wins: number;
+  win_rate: number;
+  avg_winning_score: number | null;
+  last_exchange_at: string | null;
+  best_persona_id: string | null;
+};
+
+export type AnalyticsCategoryStatsResponse = {
+  window_days: number;
+  window_start: string;
+  window_end: string;
+  total_appearances: number;
+  total_wins: number;
+  most_active_category: string | null;
+  categories: AnalyticsCategoryStatsRow[];
+};
+
 function isAnalyticsPersonaWinRateRow(value: unknown): value is AnalyticsPersonaWinRateRow {
   if (!value || typeof value !== 'object') return false;
   const row = value as Record<string, unknown>;
@@ -3818,6 +3840,32 @@ function isAnalyticsPersonaWinRateRow(value: unknown): value is AnalyticsPersona
       row.appearances &&
     row.trend.reduce((sum, point) => sum + point.wins, 0) + row.trend_omitted_wins ===
       row.wins
+  );
+}
+
+function isAnalyticsCategoryStatsRow(value: unknown): value is AnalyticsCategoryStatsRow {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.category === 'string' &&
+    row.category.length > 0 &&
+    typeof row.is_known_category === 'boolean' &&
+    typeof row.is_uncategorized === 'boolean' &&
+    isNonNegativeInteger(row.appearances) &&
+    isNonNegativeInteger(row.wins) &&
+    row.wins <= row.appearances &&
+    typeof row.win_rate === 'number' &&
+    Number.isFinite(row.win_rate) &&
+    row.win_rate >= 0 &&
+    row.win_rate <= 1 &&
+    (row.avg_winning_score === null ||
+      (typeof row.avg_winning_score === 'number' &&
+        Number.isFinite(row.avg_winning_score) &&
+        row.avg_winning_score >= 0 &&
+        row.avg_winning_score <= 100)) &&
+    (row.last_exchange_at === null || typeof row.last_exchange_at === 'string') &&
+    (row.best_persona_id === null ||
+      (typeof row.best_persona_id === 'string' && row.best_persona_id.length > 0))
   );
 }
 
@@ -3907,6 +3955,39 @@ function isAnalyticsPersonaWinRateResponse(
   return true;
 }
 
+function isAnalyticsCategoryStatsResponse(
+  value: unknown,
+): value is AnalyticsCategoryStatsResponse {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Record<string, unknown>;
+  if (
+    !isPositiveInteger(data.window_days) ||
+    typeof data.window_start !== 'string' ||
+    typeof data.window_end !== 'string' ||
+    !isNonNegativeInteger(data.total_appearances) ||
+    !isNonNegativeInteger(data.total_wins) ||
+    data.total_wins > data.total_appearances ||
+    (data.most_active_category !== null &&
+      (typeof data.most_active_category !== 'string' || data.most_active_category.length === 0)) ||
+    !Array.isArray(data.categories) ||
+    !data.categories.every(isAnalyticsCategoryStatsRow)
+  ) {
+    return false;
+  }
+
+  const categories = data.categories as AnalyticsCategoryStatsRow[];
+  if (
+    new Set(categories.map((row) => row.category)).size !== categories.length ||
+    categories.reduce((sum, row) => sum + row.appearances, 0) !== data.total_appearances ||
+    categories.reduce((sum, row) => sum + row.wins, 0) !== data.total_wins
+  ) {
+    return false;
+  }
+
+  return data.most_active_category === null ||
+    categories.some((row) => row.category === data.most_active_category);
+}
+
 export async function getAnalyticsPersonaWinRate(
   windowDays: number = 30,
   minAppearances: number = 1,
@@ -3935,6 +4016,35 @@ export async function getAnalyticsPersonaWinRate(
   if (!isAnalyticsPersonaWinRateResponse(data)) {
     throw new ApiError(
       withRequestId('Malformed persona win rate response', response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
+export async function getAnalyticsCategoryStats(
+  windowDays: number = 30,
+): Promise<AnalyticsCategoryStatsResponse> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/category-stats?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load category stats'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<AnalyticsCategoryStatsResponse>(response);
+  if (!data) throw new Error(withRequestId('Empty category stats response', response));
+  if (!isAnalyticsCategoryStatsResponse(data)) {
+    throw new ApiError(
+      withRequestId('Malformed category stats response', response),
       response.status,
       data,
     );

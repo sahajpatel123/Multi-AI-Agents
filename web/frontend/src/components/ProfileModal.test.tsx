@@ -84,6 +84,38 @@ const hoistedMocks = vi.hoisted(() => {
     busiest_day: '2026-08-10',
     busiest_day_count: 8,
   }),
+  getAnalyticsCategoryStats: vi.fn().mockResolvedValue({
+    window_days: 30,
+    window_start: '2026-07-13',
+    window_end: '2026-08-11',
+    total_appearances: 10,
+    total_wins: 7,
+    most_active_category: 'question',
+    categories: [
+      {
+        category: 'question',
+        is_known_category: true,
+        is_uncategorized: false,
+        appearances: 6,
+        wins: 5,
+        win_rate: 0.8333,
+        avg_winning_score: 88,
+        last_exchange_at: '2026-08-11T10:00:00',
+        best_persona_id: 'analyst',
+      },
+      {
+        category: 'task',
+        is_known_category: true,
+        is_uncategorized: false,
+        appearances: 4,
+        wins: 2,
+        win_rate: 0.5,
+        avg_winning_score: 79,
+        last_exchange_at: '2026-08-10T10:00:00',
+        best_persona_id: 'philosopher',
+      },
+    ],
+  }),
   exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(
     new Blob(['date,prompts'], { type: 'text/csv' }),
   ),
@@ -301,6 +333,7 @@ vi.mock('../api', () => ({
   getSubscriptionStatus: hoistedMocks.getSubscriptionStatus,
   getUserUsage: hoistedMocks.getUserUsage,
   getAnalyticsActivity: hoistedMocks.getAnalyticsActivity,
+  getAnalyticsCategoryStats: hoistedMocks.getAnalyticsCategoryStats,
   getAnalyticsPersonaWinRate: hoistedMocks.getAnalyticsPersonaWinRate,
   getCalibrationStats: hoistedMocks.getCalibrationStats,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
@@ -395,6 +428,7 @@ describe('ProfileModal', () => {
     refreshUserMock.mockClear();
     refreshTierMock.mockClear();
     vi.mocked(hoistedMocks.getAnalyticsActivity).mockClear();
+    vi.mocked(hoistedMocks.getAnalyticsCategoryStats).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsActivityMarkdown).mockClear();
@@ -1526,6 +1560,56 @@ describe('ProfileModal', () => {
     await waitFor(() => {
       expect(hoistedMocks.exportAnalyticsActivityMarkdown).toHaveBeenCalledWith(90);
     });
+  });
+
+  it('renders category performance from the live endpoint', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const group = await screen.findByRole('group', { name: /category performance/i });
+    expect(within(group).getByRole('cell', { name: 'question' })).toBeInTheDocument();
+    expect(within(group).getByText('Analyst')).toBeInTheDocument();
+    expect(within(group).getByText('83%')).toBeInTheDocument();
+    expect(within(group).getByText(/most active/i)).toHaveTextContent('question');
+    expect(hoistedMocks.getAnalyticsCategoryStats).toHaveBeenCalledWith(30);
+  });
+
+  it('refreshes category performance with the activity window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /activity highlights window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '7' } });
+
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsCategoryStats).toHaveBeenLastCalledWith(7);
+      expect(screen.getByText('Category performance · 7 days')).toBeInTheDocument();
+    });
+  });
+
+  it('retries category performance after a failed load', async () => {
+    hoistedMocks.getAnalyticsCategoryStats.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const retry = await screen.findByRole('button', {
+      name: /retry loading category performance/i,
+    });
+    fireEvent.click(retry);
+
+    expect(await screen.findByText('Analyst')).toBeInTheDocument();
+    expect(hoistedMocks.getAnalyticsCategoryStats).toHaveBeenCalledTimes(2);
   });
 
   it('exports category performance as JSON for the selected window', async () => {

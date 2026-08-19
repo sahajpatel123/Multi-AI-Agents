@@ -33,6 +33,7 @@ import {
   exportUserUsageJson,
   exportUserUsageMarkdown,
   getAnalyticsActivity,
+  getAnalyticsCategoryStats,
   getAnalyticsPersonaWinRate,
   getAgentFeedbackSummary,
   getCalibrationHistory,
@@ -46,6 +47,7 @@ import {
   postMcpManualConnect,
   reactivateAgentAddon,
   type AnalyticsActivityResponse,
+  type AnalyticsCategoryStatsResponse,
   type AnalyticsPersonaWinRateResponse,
   type AnalyticsPersonaWinRateTrendPoint,
   type AgentFeedbackSummary,
@@ -306,6 +308,12 @@ function sortPersonaWinRateRows(
       a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
       a.persona_id.localeCompare(b.persona_id);
   });
+}
+
+function formatCategoryPersona(personaId: string): string {
+  return personaId
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function UsageChart({
@@ -652,6 +660,10 @@ export function ProfileModal() {
   const [activityErr, setActivityErr] = useState<string | null>(null);
   const [activityReload, setActivityReload] = useState(0);
   const [activityWindowDays, setActivityWindowDays] = useState(30);
+  const [categoryStats, setCategoryStats] = useState<AnalyticsCategoryStatsResponse | null>(null);
+  const [categoryStatsLoading, setCategoryStatsLoading] = useState(false);
+  const [categoryStatsErr, setCategoryStatsErr] = useState<string | null>(null);
+  const [categoryStatsReload, setCategoryStatsReload] = useState(0);
   const [summaryExportWindowDays, setSummaryExportWindowDays] = useState(30);
   const [usageExportWindowDays, setUsageExportWindowDays] = useState(14);
   const [winRate, setWinRate] = useState<AnalyticsPersonaWinRateResponse | null>(null);
@@ -841,6 +853,29 @@ export function ProfileModal() {
       cancelled = true;
     };
   }, [isOpen, activeTab, activityReload, activityWindowDays]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
+    setCategoryStatsLoading(true);
+    setCategoryStatsErr(null);
+    void getAnalyticsCategoryStats(activityWindowDays)
+      .then((stats) => {
+        if (!cancelled) setCategoryStats(stats);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCategoryStatsErr('Could not load category performance');
+          setCategoryStats(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCategoryStatsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, activityWindowDays, categoryStatsReload]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -1861,6 +1896,128 @@ export function ProfileModal() {
                         {activity.busiest_day_count} actions)
                       </p>
                     ) : null}
+                  </div>
+                ) : null}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      color: '#A0A39A',
+                      letterSpacing: '0.10em',
+                    }}
+                  >
+                    Category performance · {activityWindowDays} days
+                  </div>
+                </div>
+                {categoryStatsLoading ? (
+                  <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }} role="status">
+                    <MicroLoader label="Loading category performance" />
+                  </div>
+                ) : categoryStatsErr ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <p style={{ fontSize: 13, color: '#8C7355', margin: 0 }} aria-live="polite">
+                      {categoryStatsErr}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Retry loading category performance"
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                      onClick={() => setCategoryStatsReload((n) => n + 1)}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : categoryStats ? (
+                  <div role="group" aria-label="Category performance">
+                    {categoryStats.categories.length === 0 ? (
+                      <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                        No prompt categories recorded in the last {activityWindowDays} days yet.
+                      </p>
+                    ) : (
+                      <>
+                        <p style={{ fontSize: 12, color: '#8C7355', margin: '0 0 10px' }}>
+                          Most active:{' '}
+                          <strong style={{ color: '#F0B84E' }}>
+                            {categoryStats.most_active_category || '—'}
+                          </strong>{' '}
+                          · {categoryStats.total_appearances} scored rounds
+                        </p>
+                        <div style={{ overflowX: 'auto' }}>
+                          <table
+                            style={{
+                              width: '100%',
+                              minWidth: 440,
+                              borderCollapse: 'collapse',
+                              fontFamily: 'var(--vp-font-sans)',
+                              fontSize: 12,
+                            }}
+                          >
+                            <caption style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+                              Category performance for the selected activity window
+                            </caption>
+                            <thead>
+                              <tr>
+                                <th style={{ textAlign: 'left', color: '#A0A39A', fontWeight: 500, padding: '4px 8px 8px 0' }}>
+                                  Category
+                                </th>
+                                <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>
+                                  Rounds
+                                </th>
+                                <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>
+                                  Wins
+                                </th>
+                                <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>
+                                  Rate
+                                </th>
+                                <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>
+                                  Best mind
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {categoryStats.categories.map((row) => (
+                                <tr key={row.category}>
+                                  <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', color: '#F3F0E7' }}>
+                                    {row.category}
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                    {row.appearances}
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                    {row.wins}
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#F0B84E' }}>
+                                    {Math.round(row.win_rate * 100)}%
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                    {row.best_persona_id ? formatCategoryPersona(row.best_persona_id) : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : null}
                 <div
