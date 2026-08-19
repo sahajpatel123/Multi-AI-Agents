@@ -38,6 +38,12 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(personaWinRateMarkdownBlob, 'text', {
     value: vi.fn().mockResolvedValue('# Arena — persona win rates'),
   });
+  const personaWinRateTrendCsvBlob = new Blob(['persona_id,bucket_start,win_rate'], {
+    type: 'text/csv',
+  });
+  Object.defineProperty(personaWinRateTrendCsvBlob, 'text', {
+    value: vi.fn().mockResolvedValue('persona_id,bucket_start,win_rate'),
+  });
   const feedbackSummaryMarkdownBlob = new Blob(['# Arena — feedback activity\n'], {
     type: 'text/markdown',
   });
@@ -98,6 +104,7 @@ const hoistedMocks = vi.hoisted(() => {
   });
 
   return {
+  personaWinRateTrendCsvBlob,
   calibrationMarkdownBlob,
   categoryStatsMarkdownBlob,
   activityMarkdownBlob,
@@ -269,7 +276,7 @@ const hoistedMocks = vi.hoisted(() => {
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.csv',
   }),
   exportAnalyticsPersonaWinRateTrendCsv: vi.fn().mockResolvedValue({
-    blob: new Blob(['persona_id,bucket_start,win_rate'], { type: 'text/csv' }),
+    blob: personaWinRateTrendCsvBlob,
     filename: 'arena-persona-win-rate-trend-2026-07-13-to-2026-08-11.csv',
   }),
   exportAnalyticsPersonaWinRateJson: vi.fn().mockResolvedValue({
@@ -2790,13 +2797,17 @@ describe('ProfileModal', () => {
       expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7, 5, true);
     });
 
+    const trendCsvBlob = new Blob(['persona_id,bucket_start,win_rate\nanalyst,2026-08-11,1\n'], {
+      type: 'text/csv',
+    });
+    Object.defineProperty(trendCsvBlob, 'text', {
+      value: vi.fn().mockResolvedValue('persona_id,bucket_start,win_rate\nanalyst,2026-08-11,1\n'),
+    });
     hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv.mockResolvedValueOnce({
-      blob: new Blob(['persona_id,bucket_start,win_rate\nanalyst,2026-08-11,1\n'], {
-        type: 'text/csv',
-      }),
+      blob: trendCsvBlob,
       filename: 'arena-persona-win-rate-trend-2026-08-11-to-2026-08-17.csv',
     });
-    const exportButton = await screen.findByRole('button', { name: /win rates trend csv/i });
+    const exportButton = await screen.findByRole('button', { name: '🏆 Win Rates Trend CSV' });
     exportButton.click();
 
     await waitFor(() => {
@@ -2822,7 +2833,7 @@ describe('ProfileModal', () => {
         finishExport = resolve;
       }),
     );
-    const exportButton = await screen.findByRole('button', { name: /win rates trend csv/i });
+    const exportButton = await screen.findByRole('button', { name: '🏆 Win Rates Trend CSV' });
 
     fireEvent.click(exportButton);
 
@@ -2837,6 +2848,65 @@ describe('ProfileModal', () => {
     });
     await waitFor(() => expect(exportButton).not.toBeDisabled());
     expect(exportButton).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('copies the filtered persona win-rate trend CSV to the clipboard', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate window/i }),
+      { target: { value: '7' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate minimum appearances/i }),
+      { target: { value: '5' } },
+    );
+    fireEvent.click(await screen.findByRole('checkbox', { name: /include fallback scorings/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7, 5, true);
+    });
+
+    const trendCsvBlob = new Blob(['persona_id,bucket_start,win_rate\nanalyst,2026-08-11,1\n'], {
+      type: 'text/csv',
+    });
+    Object.defineProperty(trendCsvBlob, 'text', {
+      value: vi.fn().mockResolvedValue('persona_id,bucket_start,win_rate\nanalyst,2026-08-11,1\n'),
+    });
+    hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv.mockResolvedValueOnce({
+      blob: trendCsvBlob,
+      filename: 'arena-persona-win-rate-trend-2026-08-11-to-2026-08-17.csv',
+    });
+    const copyButton = await screen.findByRole('button', { name: '🏆 Copy Win Rates Trend CSV' });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).toHaveBeenCalledWith(7, 5, true);
+      expect(hoistedMocks.copyCsvToClipboard).toHaveBeenCalledWith(
+        'persona_id,bucket_start,win_rate\nanalyst,2026-08-11,1\n',
+      );
+    });
+    expect(copyButton).not.toBeDisabled();
+  });
+
+  it('surfaces persona win-rate trend CSV clipboard failures and releases the lock', async () => {
+    hoistedMocks.copyCsvToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const copyButton = await screen.findByRole('button', { name: '🏆 Copy Win Rates Trend CSV' });
+    fireEvent.click(copyButton);
+
+    expect(
+      await screen.findByText('Could not copy persona win-rate trend CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(copyButton).not.toBeDisabled();
   });
 
   it('renders an accessible weekly trend sparkline per persona', async () => {

@@ -2758,6 +2758,50 @@ export function ProfileModal() {
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    aria-busy={activeExport === 'win-rate-trend-copy'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend-copy');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaWinRateTrendCsv(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        const copied = await copyCsvToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona win-rate trend CSV to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona win-rate trend CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona win-rate trend CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend-copy' ? '⏳ Copying…' : '🏆 Copy Win Rates Trend CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
                     aria-busy={activeExport === 'win-rate-copy-csv'}
                     style={{
                       padding: '8px 12px',

@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Profile analytics: copy the filtered persona win-rate trend as spreadsheet-aware CSV without leaving the dashboard',
       '[NEW] Profile analytics: copy the selected activity timeline as spreadsheet-aware CSV without leaving the dashboard',
       '[NEW] Profile analytics: copy the selected feedback activity window as Markdown without leaving the dashboard',
       '[NEW] Profile analytics: download the selected feedback activity window as a UTC-bucketed CSV',
