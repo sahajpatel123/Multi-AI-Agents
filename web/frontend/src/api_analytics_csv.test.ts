@@ -57,6 +57,20 @@ describe('Analytics CSV export frontend API helpers', () => {
     expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
   });
 
+  it('surfaces request IDs on summary CSV failures', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Too many summary CSV exports' }), {
+        status: 429,
+        headers: { 'x-request-id': 'req-summary-csv' },
+      }),
+    );
+
+    await expect(exportAnalyticsSummaryCsv()).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many summary CSV exports (Request ID: req-summary-csv)',
+    });
+  });
+
   it('exportAnalyticsSummaryJson returns the server filename', async () => {
     const mockBlob = new Blob(['{"window_days":30,"total_prompts":0}'], {
       type: 'application/json',

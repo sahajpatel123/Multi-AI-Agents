@@ -4059,7 +4059,11 @@ export async function exportAnalyticsSummaryCsv(windowDays: number = 30): Promis
   const response = await apiFetch(`/api/analytics/summary/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export analytics summary CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export analytics summary CSV'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }
