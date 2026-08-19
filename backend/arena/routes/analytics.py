@@ -2055,10 +2055,17 @@ def _category_stats_payload(*, user_id: int, db: Session, window_days: int) -> d
     most_active_apps = 0
     for row in category_rows:
         if (
-            row["appearances"] > most_active_apps
+            most_active is None
+            or row["appearances"] > most_active_apps
             or (
                 row["appearances"] == most_active_apps
-                and row["wins"] > (most_active["wins"] if most_active else -1)
+                and (
+                    row["wins"] > most_active["wins"]
+                    or (
+                        row["wins"] == most_active["wins"]
+                        and row["category"] < most_active["category"]
+                    )
+                )
             )
         ):
             most_active = row

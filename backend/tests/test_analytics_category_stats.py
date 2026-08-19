@@ -205,6 +205,34 @@ async def test_category_stats_most_active(app_client, make_user, db_session):
     assert res.json()["most_active_category"] == "question"
 
 
+@pytest.mark.asyncio
+async def test_category_stats_most_active_tie_breaks_alphabetically(
+    app_client, make_user, db_session
+):
+    """Equal activity and wins must not depend on database row order."""
+    user = make_user(email="cat-active-tie@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # The enum order is statement → debate, while alphabetical order is
+    # debate → statement. This catches a tie-breaker that follows the
+    # presentation order instead of the documented alphabetical rule.
+    for category in ["statement", "debate"]:
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=panel,
+            category=category,
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+
+    assert res.status_code == 200
+    assert res.json()["most_active_category"] == "debate"
+
+
 # ─── Honesty rules ─────────────────────────────────────────────────────────
 
 
