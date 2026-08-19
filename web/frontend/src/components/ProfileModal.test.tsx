@@ -2809,6 +2809,36 @@ describe('ProfileModal', () => {
     expect(exportButton).not.toBeDisabled();
   });
 
+  it('marks the trend CSV export busy until the download request settles', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    let finishExport: (value: { blob: Blob; filename: string }) => void = () => undefined;
+    hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        finishExport = resolve;
+      }),
+    );
+    const exportButton = await screen.findByRole('button', { name: /win rates trend csv/i });
+
+    fireEvent.click(exportButton);
+
+    expect(exportButton).toBeDisabled();
+    expect(exportButton).toHaveAttribute('aria-busy', 'true');
+
+    await act(async () => {
+      finishExport({
+        blob: new Blob(['persona_id,bucket_start,win_rate\n']),
+        filename: 'arena-persona-win-rate-trend.csv',
+      });
+    });
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    expect(exportButton).toHaveAttribute('aria-busy', 'false');
+  });
+
   it('renders an accessible weekly trend sparkline per persona', async () => {
     renderModal();
     await waitFor(() => {
