@@ -2758,7 +2758,9 @@ export function ProfileModal() {
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    aria-label="Copy persona win-rate trend CSV"
                     aria-busy={activeExport === 'win-rate-trend-copy'}
+                    title="Copy the filtered persona win-rate trend as CSV"
                     style={{
                       padding: '8px 12px',
                       borderRadius: 6,

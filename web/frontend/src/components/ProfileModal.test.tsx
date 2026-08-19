@@ -2880,7 +2880,7 @@ describe('ProfileModal', () => {
       blob: trendCsvBlob,
       filename: 'arena-persona-win-rate-trend-2026-08-11-to-2026-08-17.csv',
     });
-    const copyButton = await screen.findByRole('button', { name: '🏆 Copy Win Rates Trend CSV' });
+    const copyButton = await screen.findByRole('button', { name: 'Copy persona win-rate trend CSV' });
     fireEvent.click(copyButton);
 
     await waitFor(() => {
@@ -2892,6 +2892,62 @@ describe('ProfileModal', () => {
     expect(copyButton).not.toBeDisabled();
   });
 
+  it('keeps persona win-rate trend filters locked through the full clipboard copy', async () => {
+    let finishExport: (value: { blob: Blob; filename: string }) => void = () => undefined;
+    hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        finishExport = resolve;
+      }),
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /persona win-rate window/i,
+    });
+    const minimumSelect = await screen.findByRole('combobox', {
+      name: /persona win-rate minimum appearances/i,
+    });
+    const fallbackCheckbox = await screen.findByRole('checkbox', {
+      name: /include fallback scorings/i,
+    });
+    const copyButton = await screen.findByRole('button', { name: 'Copy persona win-rate trend CSV' });
+
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).toHaveBeenCalledWith(30, 1, false);
+    });
+    expect(windowSelect).toBeDisabled();
+    expect(minimumSelect).toBeDisabled();
+    expect(fallbackCheckbox).toBeDisabled();
+    expect(copyButton).toBeDisabled();
+    expect(copyButton).toHaveAttribute('aria-busy', 'true');
+    expect(copyButton).toHaveAttribute('title', 'Copy the filtered persona win-rate trend as CSV');
+
+    await act(async () => {
+      finishExport({
+        blob: hoistedMocks.personaWinRateTrendCsvBlob,
+        filename: 'arena-persona-win-rate-trend.csv',
+      });
+    });
+
+    await waitFor(() => {
+      expect(hoistedMocks.copyCsvToClipboard).toHaveBeenCalledWith(
+        'persona_id,bucket_start,win_rate',
+      );
+      expect(windowSelect).not.toBeDisabled();
+      expect(minimumSelect).not.toBeDisabled();
+      expect(fallbackCheckbox).not.toBeDisabled();
+      expect(copyButton).not.toBeDisabled();
+      expect(copyButton).toHaveAttribute('aria-busy', 'false');
+    });
+  });
+
   it('surfaces persona win-rate trend CSV clipboard failures and releases the lock', async () => {
     hoistedMocks.copyCsvToClipboard.mockResolvedValueOnce(false);
     renderModal();
@@ -2900,7 +2956,7 @@ describe('ProfileModal', () => {
     });
     screen.getByRole('button', { name: /usage/i }).click();
 
-    const copyButton = await screen.findByRole('button', { name: '🏆 Copy Win Rates Trend CSV' });
+    const copyButton = await screen.findByRole('button', { name: 'Copy persona win-rate trend CSV' });
     fireEvent.click(copyButton);
 
     expect(

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Profile analytics can now copy the filtered weekly persona win-rate trend
+  as spreadsheet-aware CSV, preserving the selected window, minimum sample,
+  and fallback-scoring filters
 - Usage persona win-rate JSON reports can now be copied to the clipboard with
   the selected window, minimum sample, and fallback-scoring filters
 - Usage persona win-rate reports can now be copied as structured CSV for the
