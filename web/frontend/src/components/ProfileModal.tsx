@@ -20,6 +20,7 @@ import {
   exportAnalyticsActivityCsv,
   exportAnalyticsActivityMarkdown,
   exportAnalyticsCategoryStatsCsv,
+  exportAnalyticsCategoryStatsJson,
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateJson,
@@ -2573,6 +2574,42 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'category' ? '⏳ Downloading…' : '📂 Categories Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'category-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'category-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('category-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsCategoryStatsJson(activityWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download category stats JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download category stats JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'category-json' ? '⏳ Downloading…' : '📂 Categories JSON Export'}
                   </button>
                   <button
                     type="button"

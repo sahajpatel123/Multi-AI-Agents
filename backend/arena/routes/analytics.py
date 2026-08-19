@@ -2189,6 +2189,55 @@ async def analytics_category_stats_csv(
     )
 
 
+@router.get("/analytics/category-stats/export.json")
+async def analytics_category_stats_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+) -> Response:
+    """Download the exact category-stats payload as JSON.
+
+    The dashboard response is already a compact, stable analytics contract;
+    exposing that same envelope lets users archive or analyze category
+    performance without scraping the UI. Keep this on its own rate-limit
+    scope so a download cannot consume the interactive dashboard budget.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_category_stats_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many category-stats JSON exports. Please wait.",
+    )
+
+    payload = await analytics_category_stats(
+        window_days=window_days,
+        user=user,
+        db=db,
+    )
+
+    import json
+
+    filename = (
+        f"arena-category-stats-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-stats")
 async def analytics_persona_stats_all(
     user: UserResponse = Depends(get_current_user_required),

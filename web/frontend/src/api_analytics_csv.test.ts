@@ -6,6 +6,7 @@ import {
   exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateJson,
   exportAnalyticsCategoryStatsCsv,
+  exportAnalyticsCategoryStatsJson,
   exportAnalyticsActivityCsv,
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaStatsTimelineCsv,
@@ -198,6 +199,34 @@ describe('Analytics CSV export frontend API helpers', () => {
       '/api/analytics/category-stats/export.csv?window_days=7',
       {}
     );
+  });
+
+  it('exportAnalyticsCategoryStatsJson returns the server filename', async () => {
+    const mockBlob = new Blob(['{"categories":[]}'], { type: 'application/json' });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-category-stats-2026-08-01-to-2026-08-07.json"',
+        },
+      }),
+    );
+
+    const res = await exportAnalyticsCategoryStatsJson(7);
+    expectBlob(res.blob);
+    expect(res.filename).toBe('arena-category-stats-2026-08-01-to-2026-08-07.json');
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/analytics/category-stats/export.json?window_days=7',
+      {},
+    );
+  });
+
+  it('rejects an invalid category-stats JSON window before fetching', async () => {
+    await expect(exportAnalyticsCategoryStatsJson(366)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
   });
 
   it('exportAnalyticsActivityCsv fetches expected endpoint', async () => {

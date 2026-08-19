@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import uuid
 from datetime import timedelta
 
@@ -668,3 +669,40 @@ async def test_csv_security_headers(app_client, make_user, db_session):
     assert res.headers.get("x-content-type-options") == "nosniff"
     assert res.headers.get("cache-control") == "no-store"
     assert "attachment" in res.headers.get("content-disposition", "")
+
+
+@pytest.mark.asyncio
+async def test_json_export_matches_dashboard_payload_and_headers(
+    app_client, make_user, db_session
+):
+    """The JSON download is an archival copy of the dashboard contract."""
+    user = make_user(email="cat-json@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        category="question",
+        score=91,
+    )
+    db_session.commit()
+
+    dashboard = await app_client.get(
+        "/api/analytics/category-stats?window_days=7", headers=_pro_headers(user)
+    )
+    exported = await app_client.get(
+        "/api/analytics/category-stats/export.json?window_days=7",
+        headers=_pro_headers(user),
+    )
+
+    assert dashboard.status_code == 200
+    assert exported.status_code == 200
+    assert json.loads(exported.text) == dashboard.json()
+    assert exported.headers["content-type"].startswith("application/json")
+    assert exported.headers.get("x-content-type-options") == "nosniff"
+    assert exported.headers.get("cache-control") == "no-store"
+    assert exported.headers["content-disposition"].startswith(
+        'attachment; filename="arena-category-stats-'
+    )
+    assert exported.headers["content-disposition"].endswith('.json"')
