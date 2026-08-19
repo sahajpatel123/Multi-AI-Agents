@@ -2956,6 +2956,45 @@ export function ProfileModal() {
                       padding: '8px 12px',
                       borderRadius: 6,
                       border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'activity-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'activity-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('activity-copy');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsActivityMarkdown(activityWindowDays);
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied activity Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy activity Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy activity Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'activity-copy' ? '⏳ Copying…' : '🗓️ Copy Activity Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
                       background: activeExport === 'usage-history' ? '#EDE4D8' : '#F0E8DC',
                       color: '#F3F0E7',
                       fontSize: 12,

@@ -56,10 +56,17 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(categoryStatsMarkdownBlob, 'text', {
     value: vi.fn().mockResolvedValue('# Arena — category stats'),
   });
+  const activityMarkdownBlob = new Blob(['# Arena — activity timeline'], {
+    type: 'text/markdown',
+  });
+  Object.defineProperty(activityMarkdownBlob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — activity timeline'),
+  });
 
   return {
   calibrationMarkdownBlob,
   categoryStatsMarkdownBlob,
+  activityMarkdownBlob,
   getSubscriptionStatus: vi.fn().mockResolvedValue({
     active: true,
     status: 'active',
@@ -131,7 +138,7 @@ const hoistedMocks = vi.hoisted(() => {
     filename: 'arena-activity-2026-08-05-to-2026-08-11.json',
   }),
   exportAnalyticsActivityMarkdown: vi.fn().mockResolvedValue({
-    blob: new Blob(['# Arena — activity timeline'], { type: 'text/markdown' }),
+    blob: activityMarkdownBlob,
     filename: 'arena-activity-2026-08-05-to-2026-08-11.md',
   }),
   exportAnalyticsCategoryStatsCsv: vi.fn().mockResolvedValue(
@@ -605,6 +612,47 @@ describe('ProfileModal', () => {
         'arena-activity-2026-08-05-to-2026-08-11.md',
       );
     });
+  });
+
+  it('copies analytics activity Markdown for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /activity highlights window/i }),
+      { target: { value: '90' } },
+    );
+    const button = await screen.findByRole('button', { name: /copy activity markdown/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsActivityMarkdown).toHaveBeenCalledWith(90);
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('# Arena — activity timeline');
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied activity Markdown to the clipboard.',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces activity Markdown clipboard failures and releases the copy lock', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy activity markdown/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy activity Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
   });
 
   it('renders and downloads the persona win-rate Markdown export', async () => {
