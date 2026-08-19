@@ -25,6 +25,7 @@ import {
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateTrendCsv,
+  exportAnalyticsPersonaWinRateTrendJson,
   exportAnalyticsPersonaWinRateTrendMarkdown,
   exportAnalyticsPersonaWinRateJson,
   exportAnalyticsPersonaWinRateMarkdown,
@@ -2755,6 +2756,47 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'win-rate-trend' ? '⏳ Downloading…' : '🏆 Win Rates Trend CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'win-rate-trend-json'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateTrendJson(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate trend JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate trend JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend-json' ? '⏳ Downloading…' : '🏆 Win Rates Trend JSON'}
                   </button>
                   <button
                     type="button"

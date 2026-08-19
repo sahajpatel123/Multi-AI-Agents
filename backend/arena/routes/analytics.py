@@ -1813,6 +1813,8 @@ async def analytics_persona_win_rate_trend_csv(
     import csv
     import io
 
+    trend_rows = _flatten_persona_win_rate_trend(payload)
+
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
     writer.writerow(
@@ -1830,23 +1832,22 @@ async def analytics_persona_win_rate_trend_csv(
             "trend_omitted_wins",
         ]
     )
-    for row in payload["personas"]:
-        for point in row["trend"]:
-            writer.writerow(
-                [
-                    _csv_safe(row["persona_id"]),
-                    _csv_safe(row["name"]),
-                    _csv_safe(row["color"]),
-                    _csv_safe(point["bucket_start"]),
-                    _csv_safe(point["bucket_end"]),
-                    point["appearances"],
-                    point["wins"],
-                    point["win_rate"],
-                    "true" if row["low_confidence"] else "false",
-                    row["trend_omitted_appearances"],
-                    row["trend_omitted_wins"],
-                ]
-            )
+    for row in trend_rows:
+        writer.writerow(
+            [
+                _csv_safe(row["persona_id"]),
+                _csv_safe(row["name"]),
+                _csv_safe(row["color"]),
+                _csv_safe(row["bucket_start"]),
+                _csv_safe(row["bucket_end"]),
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+                "true" if row["low_confidence"] else "false",
+                row["trend_omitted_appearances"],
+                row["trend_omitted_wins"],
+            ]
+        )
 
     filename = (
         f"arena-persona-win-rate-trend-"
@@ -1855,6 +1856,116 @@ async def analytics_persona_win_rate_trend_csv(
     return Response(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+def _flatten_persona_win_rate_trend(payload: dict) -> list[dict]:
+    """Flatten the canonical nested trend into one self-describing row/week.
+
+    The dashboard keeps each persona's weekly points nested so sparklines can
+    render cheaply. Exports need the opposite shape: one row per persona/week
+    that can be loaded directly by a charting tool without first joining
+    summary metadata back onto each point. Keeping this helper shared by the
+    CSV and JSON routes prevents the two machine-readable formats from
+    drifting.
+    """
+    rows = []
+    for persona in payload["personas"]:
+        for point in persona["trend"]:
+            rows.append(
+                {
+                    "persona_id": persona["persona_id"],
+                    "name": persona["name"],
+                    "color": persona["color"],
+                    "bucket_start": point["bucket_start"],
+                    "bucket_end": point["bucket_end"],
+                    "appearances": point["appearances"],
+                    "wins": point["wins"],
+                    "win_rate": point["win_rate"],
+                    "low_confidence": persona["low_confidence"],
+                    "trend_omitted_appearances": persona["trend_omitted_appearances"],
+                    "trend_omitted_wins": persona["trend_omitted_wins"],
+                }
+            )
+    return rows
+
+
+@router.get("/analytics/persona-win-rate/export-trend.json")
+async def analytics_persona_win_rate_trend_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
+) -> Response:
+    """JSON export of the flattened weekly persona win-rate trend.
+
+    The response keeps the report-level honesty counters and filter metadata
+    beside a ``rows`` array with one object per persona/week. This is the
+    machine-readable counterpart to the flattened CSV export: consumers can
+    chart the series directly while still knowing which rows are provisional
+    or omit older buckets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_trend_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate trend JSON exports. Please slow down.",
+    )
+
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=include_fallback,
+    )
+
+    import json
+
+    rows = _flatten_persona_win_rate_trend(payload)
+    export = {
+        "window_days": payload["window_days"],
+        "window_start": payload["window_start"],
+        "window_end": payload["window_end"],
+        "min_appearances": payload["min_appearances"],
+        "include_fallback": payload["include_fallback"],
+        "low_confidence_threshold": payload["low_confidence_threshold"],
+        "scored_exchanges": payload["scored_exchanges"],
+        "unattributed_exchanges": payload["unattributed_exchanges"],
+        "fallback_exchanges": payload["fallback_exchanges"],
+        "row_count": len(rows),
+        "rows": rows,
+    }
+    filename = (
+        f"arena-persona-win-rate-trend-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(export, indent=2, ensure_ascii=False, default=str) + "\n",
+        media_type="application/json; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-store",

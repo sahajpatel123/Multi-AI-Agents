@@ -44,6 +44,9 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(personaWinRateTrendCsvBlob, 'text', {
     value: vi.fn().mockResolvedValue('persona_id,bucket_start,win_rate'),
   });
+  const personaWinRateTrendJsonBlob = new Blob(['{"rows":[]}'], {
+    type: 'application/json',
+  });
   const personaWinRateTrendMarkdownBlob = new Blob(['# Arena — persona win-rate weekly trend'], {
     type: 'text/markdown',
   });
@@ -111,6 +114,7 @@ const hoistedMocks = vi.hoisted(() => {
 
   return {
   personaWinRateTrendCsvBlob,
+  personaWinRateTrendJsonBlob,
   calibrationMarkdownBlob,
   categoryStatsMarkdownBlob,
   activityMarkdownBlob,
@@ -285,6 +289,10 @@ const hoistedMocks = vi.hoisted(() => {
     blob: personaWinRateTrendCsvBlob,
     filename: 'arena-persona-win-rate-trend-2026-07-13-to-2026-08-11.csv',
   }),
+  exportAnalyticsPersonaWinRateTrendJson: vi.fn().mockResolvedValue({
+    blob: personaWinRateTrendJsonBlob,
+    filename: 'arena-persona-win-rate-trend-2026-07-13-to-2026-08-11.json',
+  }),
   exportAnalyticsPersonaWinRateTrendMarkdown: vi.fn().mockResolvedValue({
     blob: personaWinRateTrendMarkdownBlob,
     filename: 'arena-persona-win-rate-trend-2026-07-13-to-2026-08-11.md',
@@ -438,6 +446,7 @@ vi.mock('../api', () => ({
   exportUserUsageMarkdown: hoistedMocks.exportUserUsageMarkdown,
   exportAnalyticsPersonaWinRateCsv: hoistedMocks.exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateTrendCsv: hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv,
+  exportAnalyticsPersonaWinRateTrendJson: hoistedMocks.exportAnalyticsPersonaWinRateTrendJson,
   exportAnalyticsPersonaWinRateTrendMarkdown: hoistedMocks.exportAnalyticsPersonaWinRateTrendMarkdown,
   exportAnalyticsPersonaWinRateJson: hoistedMocks.exportAnalyticsPersonaWinRateJson,
   exportAnalyticsPersonaWinRateMarkdown: hoistedMocks.exportAnalyticsPersonaWinRateMarkdown,
@@ -528,6 +537,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendMarkdown).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateMarkdown).mockClear();
@@ -2860,6 +2870,43 @@ describe('ProfileModal', () => {
     });
     await waitFor(() => expect(exportButton).not.toBeDisabled());
     expect(exportButton).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('downloads the flattened persona win-rate trend as JSON with the selected filters', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate window/i }),
+      { target: { value: '7' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate minimum appearances/i }),
+      { target: { value: '5' } },
+    );
+    fireEvent.click(await screen.findByRole('checkbox', { name: /include fallback scorings/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7, 5, true);
+    });
+
+    hoistedMocks.exportAnalyticsPersonaWinRateTrendJson.mockResolvedValueOnce({
+      blob: new Blob(['{"row_count":1,"rows":[]}'], { type: 'application/json' }),
+      filename: 'arena-persona-win-rate-trend-2026-08-11-to-2026-08-17.json',
+    });
+    const exportButton = await screen.findByRole('button', { name: '🏆 Win Rates Trend JSON' });
+    fireEvent.click(exportButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).toHaveBeenCalledWith(7, 5, true);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-persona-win-rate-trend-2026-08-11-to-2026-08-17.json',
+      );
+    });
+    expect(exportButton).not.toBeDisabled();
   });
 
   it('copies the filtered persona win-rate trend CSV to the clipboard', async () => {
