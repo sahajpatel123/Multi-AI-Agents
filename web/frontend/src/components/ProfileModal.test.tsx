@@ -1232,6 +1232,67 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('copies the selected persona win-rate JSON report with its filters', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate window/i }),
+      { target: { value: '7' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona win-rate minimum appearances/i }),
+      { target: { value: '5' } },
+    );
+    fireEvent.click(await screen.findByRole('checkbox', { name: /include fallback scorings/i }));
+    await waitFor(() => {
+      expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenLastCalledWith(7, 5, true);
+    });
+
+    const jsonBlob = new Blob(['{"window_days":7,"personas":[]}'], {
+      type: 'application/json',
+    });
+    Object.defineProperty(jsonBlob, 'text', {
+      value: vi.fn().mockResolvedValue('{"window_days":7,"personas":[]}'),
+    });
+    hoistedMocks.exportAnalyticsPersonaWinRateJson.mockResolvedValueOnce({
+      blob: jsonBlob,
+      filename: 'arena-persona-win-rate-2026-08-11-to-2026-08-17.json',
+    });
+
+    const button = await screen.findByRole('button', { name: /copy win rates json/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaWinRateJson).toHaveBeenCalledWith(7, 5, true);
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('{"window_days":7,"personas":[]}');
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copied persona win-rate JSON to the clipboard.',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces persona win-rate JSON clipboard failures and releases the copy lock', async () => {
+    hoistedMocks.copyToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy win rates json/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not copy persona win-rate JSON — try again.')).toBeInTheDocument();
+    });
+    expect(button).not.toBeDisabled();
+  });
+
   it('renders calibration history export buttons when ratings exist', async () => {
     hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
       total_ratings: 3,
