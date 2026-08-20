@@ -668,6 +668,48 @@ describe('ProfileModal', () => {
     expect(copyButton).not.toBeDisabled();
   });
 
+  it('labels only the active persona timeline action while it is in progress', async () => {
+    let releaseExport: (() => void) | undefined;
+    const pendingExport = new Promise<typeof hoistedMocks.personaTimelineMarkdownExport>((resolve) => {
+      releaseExport = () => resolve(hoistedMocks.personaTimelineMarkdownExport);
+    });
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineMarkdown).mockReturnValueOnce(
+      pendingExport,
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const copyButton = await screen.findByRole('button', {
+      name: /copy the analyst daily timeline markdown/i,
+    });
+    const csvButton = screen.getByRole('button', {
+      name: /download the analyst daily timeline csv/i,
+    });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(copyButton).toHaveTextContent('⏳ Copying…');
+      expect(copyButton).toHaveAttribute('aria-busy', 'true');
+    });
+    expect(csvButton).toHaveTextContent('Download CSV');
+    expect(csvButton).toHaveAttribute('aria-busy', 'false');
+    expect(csvButton).toBeDisabled();
+
+    await act(async () => {
+      releaseExport?.();
+    });
+    await waitFor(() => {
+      expect(copyButton).not.toBeDisabled();
+    });
+  });
+
   it('surfaces persona timeline Markdown clipboard failures and releases the copy lock', async () => {
     hoistedMocks.copyMarkdownToClipboard.mockResolvedValueOnce(false);
     renderModal();
