@@ -3473,6 +3473,67 @@ async def analytics_persona_stats_timeline_csv(
     )
 
 
+@router.get("/analytics/persona-stats/{persona_id}/timeline/export.json")
+async def analytics_persona_stats_timeline_json(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=90,
+        description="Window length in days, ending today (UTC). Capped at 90 to keep the timeline compact.",
+    ),
+) -> Response:
+    """JSON export of the per-persona daily timeline.
+
+    Downloads the exact payload served by the timeline dashboard endpoint so
+    scripts and notebooks can consume the daily rows and rollup fields
+    without recreating the aggregation. JSON has its own export budget and
+    does not replace the existing CSV download.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_timeline_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many timeline JSON exports. Limit is 60 per hour.",
+    )
+
+    # Reuse the dashboard computation so the structured export cannot drift.
+    payload = await analytics_persona_stats_timeline(
+        persona_id=pid,
+        user=user,
+        db=db,
+        days=days,
+    )
+
+    import json
+
+    filename = (
+        f"arena-timeline-{pid}-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-stats/{persona_id}/by-category/export.csv")
 async def analytics_persona_stats_by_category_csv(
     persona_id: str,

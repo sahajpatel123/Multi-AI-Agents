@@ -4714,6 +4714,40 @@ export async function exportAnalyticsPersonaStatsTimelineCsv(
   };
 }
 
+export type AnalyticsPersonaStatsTimelineJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsTimelineJson(
+  personaId: string,
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsTimelineJsonExport> {
+  const normalizedPersonaId = personaId.trim();
+  if (!normalizedPersonaId) {
+    throw new RangeError('personaId must not be empty');
+  }
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/timeline/export.json?days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona timeline JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  const safePersonaId = normalizedPersonaId.replace(/[^a-zA-Z0-9_-]/g, '-');
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-timeline-${safePersonaId}-${windowDays}d.json`,
+  };
+}
+
 export async function exportAnalyticsPersonaStatsByCategoryCsv(personaId: string, windowDays: number = 30): Promise<Blob> {
   const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(personaId)}/by-category/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {

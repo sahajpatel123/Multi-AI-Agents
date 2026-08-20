@@ -24,6 +24,7 @@ import {
   exportAnalyticsCategoryStatsMarkdown,
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaStatsTimelineCsv,
+  exportAnalyticsPersonaStatsTimelineJson,
   exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateTrendCsv,
   exportAnalyticsPersonaWinRateTrendJson,
@@ -299,6 +300,7 @@ const PERSONA_WIN_RATE_SORT_LABELS: Record<PersonaWinRateSort, string> = {
 };
 const ACTIVITY_HIGHLIGHT_WINDOWS = [7, 30, 90] as const;
 const FEEDBACK_ACTIVITY_WINDOWS = [7, 30, 90] as const;
+type PersonaTimelineExportFormat = 'csv' | 'json';
 
 function sortPersonaWinRateRows(
   rows: AnalyticsPersonaWinRateResponse['personas'],
@@ -492,7 +494,7 @@ function PersonaActivityTimeline({
   timeline: AnalyticsPersonaStatsTimelineResponse;
   color: string;
   isExporting: boolean;
-  onExport: () => void;
+  onExport: (format: PersonaTimelineExportFormat) => void;
 }) {
   const maxAppearances = Math.max(
     ...timeline.timeline.map((point) => point.appearances),
@@ -606,13 +608,13 @@ function PersonaActivityTimeline({
       >
         Wins exclude fallback scorings; appearances include every panel appearance.
       </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 9 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 9 }}>
         <button
           type="button"
           aria-label={`Download ${timeline.name} daily timeline CSV`}
           aria-busy={isExporting}
           disabled={isExporting}
-          onClick={onExport}
+          onClick={() => onExport('csv')}
           style={{
             padding: '4px 8px',
             border: '0.5px solid #E0D5C5',
@@ -626,8 +628,27 @@ function PersonaActivityTimeline({
         >
           {isExporting ? '⏳ Downloading…' : 'Download CSV'}
         </button>
+        <button
+          type="button"
+          aria-label={`Download ${timeline.name} daily timeline JSON`}
+          aria-busy={isExporting}
+          disabled={isExporting}
+          onClick={() => onExport('json')}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isExporting ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isExporting ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {isExporting ? '⏳ Downloading…' : 'Download JSON'}
+        </button>
         <span style={{ fontSize: 10, color: '#A0A39A' }}>
-          Save the daily rows for spreadsheets or your own analysis.
+          Save daily rows for spreadsheets, scripts, or your own analysis.
         </span>
       </div>
     </div>
@@ -862,23 +883,26 @@ export function ProfileModal() {
     setPersonaTimelineErr(null);
     setPersonaTimelineLoading(!closing);
   }, [personaTimelinePersonaId]);
-  const handlePersonaTimelineExport = useCallback(async (timeline: AnalyticsPersonaStatsTimelineResponse) => {
+  const handlePersonaTimelineExport = useCallback(async (
+    timeline: AnalyticsPersonaStatsTimelineResponse,
+    format: PersonaTimelineExportFormat,
+  ) => {
     const exportKey = `persona-timeline-${timeline.persona_id}`;
+    const formatLabel = format.toUpperCase();
     setActiveExport(exportKey);
     clearExportFeedback();
     try {
-      const exportData = await exportAnalyticsPersonaStatsTimelineCsv(
-        timeline.persona_id,
-        timeline.days,
-      );
+      const exportData = format === 'json'
+        ? await exportAnalyticsPersonaStatsTimelineJson(timeline.persona_id, timeline.days)
+        : await exportAnalyticsPersonaStatsTimelineCsv(timeline.persona_id, timeline.days);
       if (!downloadBlobFile(exportData.blob, exportData.filename)) {
-        setExportError('Could not download persona timeline CSV — try again.');
+        setExportError(`Could not download persona timeline ${formatLabel} — try again.`);
       }
     } catch (error) {
       setExportError(
         error instanceof ApiError
           ? error.message
-          : 'Could not download persona timeline CSV — try again.',
+          : `Could not download persona timeline ${formatLabel} — try again.`,
       );
     } finally {
       setActiveExport(null);
@@ -2618,8 +2642,8 @@ export function ProfileModal() {
                                           timeline={personaTimeline}
                                           color={row.color}
                                           isExporting={activeExport === `persona-timeline-${personaTimeline.persona_id}`}
-                                          onExport={() => {
-                                            void handlePersonaTimelineExport(personaTimeline);
+                                          onExport={(format) => {
+                                            void handlePersonaTimelineExport(personaTimeline, format);
                                           }}
                                         />
                                       ) : null}
