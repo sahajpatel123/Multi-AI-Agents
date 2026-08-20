@@ -489,13 +489,17 @@ function WinRateTrendSparkline({
 function PersonaActivityTimeline({
   timeline,
   color,
-  isExporting,
+  isBusy,
+  isCopying,
   onExport,
+  onCopyMarkdown,
 }: {
   timeline: AnalyticsPersonaStatsTimelineResponse;
   color: string;
-  isExporting: boolean;
+  isBusy: boolean;
+  isCopying: boolean;
   onExport: (format: PersonaTimelineExportFormat) => void;
+  onCopyMarkdown: () => void;
 }) {
   const maxAppearances = Math.max(
     ...timeline.timeline.map((point) => point.appearances),
@@ -613,62 +617,81 @@ function PersonaActivityTimeline({
         <button
           type="button"
           aria-label={`Download ${timeline.name} daily timeline CSV`}
-          aria-busy={isExporting}
-          disabled={isExporting}
+          aria-busy={isBusy}
+          disabled={isBusy}
           onClick={() => onExport('csv')}
           style={{
             padding: '4px 8px',
             border: '0.5px solid #E0D5C5',
             borderRadius: 5,
-            background: isExporting ? '#EDE4D8' : '#F0E8DC',
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
             color: '#4A3728',
             fontSize: 10,
-            cursor: isExporting ? 'wait' : 'pointer',
+            cursor: isBusy ? 'wait' : 'pointer',
             fontFamily: 'var(--vp-font-sans)',
           }}
         >
-          {isExporting ? '⏳ Downloading…' : 'Download CSV'}
+          {isBusy ? '⏳ Downloading…' : 'Download CSV'}
         </button>
         <button
           type="button"
           aria-label={`Download ${timeline.name} daily timeline JSON`}
-          aria-busy={isExporting}
-          disabled={isExporting}
+          aria-busy={isBusy}
+          disabled={isBusy}
           onClick={() => onExport('json')}
           style={{
             padding: '4px 8px',
             border: '0.5px solid #E0D5C5',
             borderRadius: 5,
-            background: isExporting ? '#EDE4D8' : '#F0E8DC',
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
             color: '#4A3728',
             fontSize: 10,
-            cursor: isExporting ? 'wait' : 'pointer',
+            cursor: isBusy ? 'wait' : 'pointer',
             fontFamily: 'var(--vp-font-sans)',
           }}
         >
-          {isExporting ? '⏳ Downloading…' : 'Download JSON'}
+          {isBusy ? '⏳ Downloading…' : 'Download JSON'}
         </button>
         <button
           type="button"
           aria-label={`Download ${timeline.name} daily timeline Markdown`}
-          aria-busy={isExporting}
-          disabled={isExporting}
+          aria-busy={isBusy}
+          disabled={isBusy}
           onClick={() => onExport('markdown')}
           style={{
             padding: '4px 8px',
             border: '0.5px solid #E0D5C5',
             borderRadius: 5,
-            background: isExporting ? '#EDE4D8' : '#F0E8DC',
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
             color: '#4A3728',
             fontSize: 10,
-            cursor: isExporting ? 'wait' : 'pointer',
+            cursor: isBusy ? 'wait' : 'pointer',
             fontFamily: 'var(--vp-font-sans)',
           }}
         >
-          {isExporting ? '⏳ Downloading…' : 'Download Markdown'}
+          {isBusy ? '⏳ Downloading…' : 'Download Markdown'}
+        </button>
+        <button
+          type="button"
+          aria-label={`Copy ${timeline.name} daily timeline Markdown`}
+          aria-busy={isBusy}
+          disabled={isBusy}
+          onClick={onCopyMarkdown}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isBusy ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {isCopying ? '⏳ Copying…' : isBusy ? '⏳ Working…' : 'Copy Markdown'}
         </button>
         <span style={{ fontSize: 10, color: '#A0A39A' }}>
-          Save daily rows in notes, docs, or analysis tools.
+          Save daily rows in notes, docs, or analysis tools — or copy the report into a Markdown editor.
         </span>
       </div>
     </div>
@@ -925,6 +948,33 @@ export function ProfileModal() {
         error instanceof ApiError
           ? error.message
           : `Could not download persona timeline ${formatLabel} — try again.`,
+      );
+    } finally {
+      setActiveExport(null);
+    }
+  }, [clearExportFeedback]);
+  const handlePersonaTimelineCopy = useCallback(async (
+    timeline: AnalyticsPersonaStatsTimelineResponse,
+  ) => {
+    const exportKey = `persona-timeline-copy-${timeline.persona_id}`;
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const { blob } = await exportAnalyticsPersonaStatsTimelineMarkdown(
+        timeline.persona_id,
+        timeline.days,
+      );
+      const copied = await copyMarkdownToClipboard(await blob.text());
+      if (copied) {
+        setExportNotice(`Copied ${timeline.name} daily timeline Markdown to the clipboard.`);
+      } else {
+        setExportError(`Could not copy ${timeline.name} daily timeline Markdown — try again.`);
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : `Could not copy ${timeline.name} daily timeline Markdown — try again.`,
       );
     } finally {
       setActiveExport(null);
@@ -2663,9 +2713,16 @@ export function ProfileModal() {
                                         <PersonaActivityTimeline
                                           timeline={personaTimeline}
                                           color={row.color}
-                                          isExporting={activeExport === `persona-timeline-${personaTimeline.persona_id}`}
+                                          isBusy={
+                                            activeExport === `persona-timeline-${personaTimeline.persona_id}` ||
+                                            activeExport === `persona-timeline-copy-${personaTimeline.persona_id}`
+                                          }
+                                          isCopying={activeExport === `persona-timeline-copy-${personaTimeline.persona_id}`}
                                           onExport={(format) => {
                                             void handlePersonaTimelineExport(personaTimeline, format);
+                                          }}
+                                          onCopyMarkdown={() => {
+                                            void handlePersonaTimelineCopy(personaTimeline);
                                           }}
                                         />
                                       ) : null}

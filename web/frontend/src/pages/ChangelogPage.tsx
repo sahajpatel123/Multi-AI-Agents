@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Profile analytics: copy the selected persona daily activity timeline as Markdown without leaving the dashboard',
       '[NEW] Profile analytics: download the selected persona daily activity timeline as a portable Markdown report for notes and docs',
       '[NEW] Profile analytics: download the selected persona daily activity timeline as a structured JSON export for scripts and notebooks',
       '[NEW] Profile analytics: download the filtered weekly persona win-rate trend as a self-describing JSON export for scripts and charting tools',

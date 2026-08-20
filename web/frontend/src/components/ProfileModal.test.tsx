@@ -99,6 +99,9 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['# Arena — The Analyst persona timeline'], { type: 'text/markdown' }),
     filename: 'arena-timeline-analyst-2026-08-18-to-2026-08-20.md',
   };
+  Object.defineProperty(personaTimelineMarkdownExport.blob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — The Analyst persona timeline'),
+  });
   const summaryMarkdownBlob = new Blob(['# Arena — analytics summary'], {
     type: 'text/markdown',
   });
@@ -633,6 +636,58 @@ describe('ProfileModal', () => {
     expect(
       await screen.findByRole('button', { name: /^🗓️ activity json export$/i }),
     ).toBeInTheDocument();
+  });
+
+  it('copies the selected persona daily timeline as Markdown', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const copyButton = await screen.findByRole('button', {
+      name: /copy the analyst daily timeline markdown/i,
+    });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsTimelineMarkdown).toHaveBeenCalledWith(
+        'analyst',
+        3,
+      );
+      expect(hoistedMocks.copyMarkdownToClipboard).toHaveBeenCalledWith(
+        '# Arena — The Analyst persona timeline',
+      );
+      expect(
+        screen.getByText('Copied The Analyst daily timeline Markdown to the clipboard.'),
+      ).toBeInTheDocument();
+    });
+    expect(copyButton).not.toBeDisabled();
+  });
+
+  it('surfaces persona timeline Markdown clipboard failures and releases the copy lock', async () => {
+    hoistedMocks.copyMarkdownToClipboard.mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const copyButton = await screen.findByRole('button', {
+      name: /copy the analyst daily timeline markdown/i,
+    });
+    fireEvent.click(copyButton);
+
+    expect(
+      await screen.findByText('Could not copy The Analyst daily timeline Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(copyButton).not.toBeDisabled();
   });
 
   it('renders and downloads the analytics summary JSON export', async () => {
