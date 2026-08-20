@@ -4714,6 +4714,36 @@ export async function exportAnalyticsPersonaStatsOverviewJson(
   };
 }
 
+export type AnalyticsPersonaStatsOverviewMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsOverviewMarkdown(
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsOverviewMarkdownExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/persona-stats/export.md?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona stats overview Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-stats-overview-${windowDays}d.md`,
+  };
+}
+
 export type AnalyticsPersonaStatsTimelineCsvExport = {
   blob: Blob;
   filename: string;

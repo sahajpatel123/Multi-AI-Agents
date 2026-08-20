@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Profile analytics: download the complete persona-stats overview as a human-readable Markdown report for notes and docs',
       '[NEW] Profile analytics: download the complete persona-stats overview as structured JSON for notebooks, scripts, and data analysis',
       '[IMPROVED] Profile analytics: persona timeline JSON clipboard copy ignores duplicate activations while an export is in flight, preventing redundant requests and stale results',
       '[NEW] Profile analytics: copy the selected persona daily activity timeline as structured JSON for scripts and notebooks without leaving the dashboard',

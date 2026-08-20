@@ -3026,6 +3026,133 @@ async def analytics_persona_stats_all_json(
     )
 
 
+@router.get("/analytics/persona-stats/export.md")
+async def analytics_persona_stats_all_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Hide personas that appeared on fewer than N panels (noise floor).",
+    ),
+) -> Response:
+    """Markdown download of the all-personas summary catalog.
+
+    Uses the same canonical payload as the dashboard, CSV, and JSON routes
+    so a human-readable report cannot drift from the machine-readable views.
+    The report keeps every catalog persona visible, marks rows below the
+    appearance floor, and spells out the fallback-win accounting note.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_all_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona-stats Markdown exports. Limit is 60 per hour.",
+    )
+
+    payload = _analytics_persona_stats_all_payload(
+        window_days=window_days,
+        min_appearances=min_appearances,
+        user=user,
+        db=db,
+    )
+
+    best_persona = next(
+        (
+            row
+            for row in payload["personas"]
+            if row["persona_id"] == payload["best_persona_id"]
+        ),
+        None,
+    )
+    best_label = (
+        f"{_markdown_cell(best_persona['name'])}"
+        f" ({_markdown_cell(best_persona['persona_id'])})"
+        if best_persona
+        else "none"
+    )
+
+    lines = [
+        "# Arena — persona stats overview",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Personas in catalog:** {payload['total_personas']}",
+        f"- **Rows returned:** {payload['returned_personas']}",
+        f"- **Total appearances:** {payload['total_appearances']}",
+        f"- **Total wins:** {payload['total_wins']}",
+        f"- **Minimum appearances:** {payload['min_appearances']}",
+        f"- **Best-ranked persona:** {best_label}",
+        "",
+        "## Personas",
+        "",
+        "| Persona | ID | Appearances | Wins | Win rate | Avg winning score | Last appearance | Last win | Sample |",
+        "| --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |",
+    ]
+
+    for row in payload["personas"]:
+        avg_score = (
+            f"{row['avg_winning_score']:.1f}"
+            if row["avg_winning_score"] is not None
+            else "—"
+        )
+        sample = "below floor" if row["below_min_appearances"] else "meets floor"
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    _markdown_cell(row["name"]),
+                    _markdown_cell(row["persona_id"]),
+                    str(row["appearances"]),
+                    str(row["wins"]),
+                    f"{row['win_rate']:.1%}",
+                    _markdown_cell(avg_score),
+                    _markdown_cell(row["last_appearance_at"] or "—"),
+                    _markdown_cell(row["last_win_at"] or "—"),
+                    _markdown_cell(sample),
+                ]
+            )
+            + " |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "_Wins exclude fallback scorer results; appearances include every panel seat. "
+            "Rows below the minimum appearance floor remain visible for catalog completeness._",
+            "",
+            "---",
+            "_Exported from Arena_",
+            "",
+        ]
+    )
+
+    filename = (
+        f"arena-persona-stats-overview-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-stats/{persona_id}")
 async def analytics_persona_stats(
     persona_id: str,

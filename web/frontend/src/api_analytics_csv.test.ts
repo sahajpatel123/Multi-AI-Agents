@@ -11,6 +11,7 @@ import {
   exportAnalyticsActivityCsv,
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaStatsOverviewJson,
+  exportAnalyticsPersonaStatsOverviewMarkdown,
   exportAnalyticsPersonaStatsTimelineCsv,
   exportAnalyticsPersonaStatsByCategoryCsv,
   exportAgentWatchlistHistoryCsv,
@@ -357,6 +358,39 @@ describe('Analytics CSV export frontend API helpers', () => {
       'windowDays must be an integer between 1 and 365',
     );
     await expect(exportAnalyticsPersonaStatsOverviewJson(366)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('exportAnalyticsPersonaStatsOverviewMarkdown returns the server filename', async () => {
+    const mockBlob = new Blob(['# Arena — persona stats overview'], { type: 'text/markdown' });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-persona-stats-overview-2026-08-01-to-2026-08-30.md"',
+        },
+      }),
+    );
+
+    const res = await exportAnalyticsPersonaStatsOverviewMarkdown(30);
+    expectBlob(res.blob);
+    expect(res.filename).toBe(
+      'arena-persona-stats-overview-2026-08-01-to-2026-08-30.md',
+    );
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/analytics/persona-stats/export.md?window_days=30',
+      {},
+    );
+  });
+
+  it('rejects an invalid persona stats overview Markdown window before fetching', async () => {
+    await expect(exportAnalyticsPersonaStatsOverviewMarkdown(0)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    await expect(exportAnalyticsPersonaStatsOverviewMarkdown(366)).rejects.toThrow(
       'windowDays must be an integer between 1 and 365',
     );
     expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();

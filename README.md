@@ -148,6 +148,7 @@ GET  /api/analytics/persona-win-rate/export-trend.md   Human-readable weekly per
 GET  /api/analytics/persona-stats/:persona_id   Deep-dive on one persona (avg winning score, last activity, best category)
 GET  /api/analytics/persona-stats   All-personas summary (full 16-persona grid in one call, sorted strongest-first)
 GET  /api/analytics/persona-stats/export.json   Download the all-personas summary as structured JSON
+GET  /api/analytics/persona-stats/export.md   Download the all-personas summary as a human-readable Markdown report
 GET  /api/analytics/persona-stats/:persona_id/by-category   Full per-category breakdown for one persona (one row per category with appearances/wins/win_rate)
 GET  /api/analytics/persona-stats/:persona_id/by-category/export.csv   Same data as text/csv with footer rollup
 GET  /api/analytics/persona-stats/:persona_id/timeline   Per-persona daily timeline of wins and appearances (sparkline-ready, contiguous zero-fill)
