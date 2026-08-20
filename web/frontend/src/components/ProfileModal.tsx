@@ -25,6 +25,7 @@ import {
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaStatsTimelineCsv,
   exportAnalyticsPersonaStatsTimelineJson,
+  exportAnalyticsPersonaStatsTimelineMarkdown,
   exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateTrendCsv,
   exportAnalyticsPersonaWinRateTrendJson,
@@ -300,7 +301,7 @@ const PERSONA_WIN_RATE_SORT_LABELS: Record<PersonaWinRateSort, string> = {
 };
 const ACTIVITY_HIGHLIGHT_WINDOWS = [7, 30, 90] as const;
 const FEEDBACK_ACTIVITY_WINDOWS = [7, 30, 90] as const;
-type PersonaTimelineExportFormat = 'csv' | 'json';
+type PersonaTimelineExportFormat = 'csv' | 'json' | 'markdown';
 
 function sortPersonaWinRateRows(
   rows: AnalyticsPersonaWinRateResponse['personas'],
@@ -647,6 +648,25 @@ function PersonaActivityTimeline({
         >
           {isExporting ? '⏳ Downloading…' : 'Download JSON'}
         </button>
+        <button
+          type="button"
+          aria-label={`Download ${timeline.name} daily timeline Markdown`}
+          aria-busy={isExporting}
+          disabled={isExporting}
+          onClick={() => onExport('markdown')}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isExporting ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isExporting ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {isExporting ? '⏳ Downloading…' : 'Download Markdown'}
+        </button>
         <span style={{ fontSize: 10, color: '#A0A39A' }}>
           Save daily rows for spreadsheets, scripts, or your own analysis.
         </span>
@@ -888,13 +908,15 @@ export function ProfileModal() {
     format: PersonaTimelineExportFormat,
   ) => {
     const exportKey = `persona-timeline-${timeline.persona_id}`;
-    const formatLabel = format.toUpperCase();
+    const formatLabel = format === 'markdown' ? 'MARKDOWN' : format.toUpperCase();
     setActiveExport(exportKey);
     clearExportFeedback();
     try {
       const exportData = format === 'json'
         ? await exportAnalyticsPersonaStatsTimelineJson(timeline.persona_id, timeline.days)
-        : await exportAnalyticsPersonaStatsTimelineCsv(timeline.persona_id, timeline.days);
+        : format === 'markdown'
+          ? await exportAnalyticsPersonaStatsTimelineMarkdown(timeline.persona_id, timeline.days)
+          : await exportAnalyticsPersonaStatsTimelineCsv(timeline.persona_id, timeline.days);
       if (!downloadBlobFile(exportData.blob, exportData.filename)) {
         setExportError(`Could not download persona timeline ${formatLabel} — try again.`);
       }

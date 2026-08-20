@@ -151,6 +151,7 @@ GET  /api/analytics/persona-stats/:persona_id/by-category   Full per-category br
 GET  /api/analytics/persona-stats/:persona_id/by-category/export.csv   Same data as text/csv with footer rollup
 GET  /api/analytics/persona-stats/:persona_id/timeline   Per-persona daily timeline of wins and appearances (sparkline-ready, contiguous zero-fill)
 GET  /api/analytics/persona-stats/:persona_id/timeline/export.csv   Same data as text/csv with footer rollup
+GET  /api/analytics/persona-stats/:persona_id/timeline/export.md   Human-readable Markdown report of the persona timeline (summary + daily table)
 GET  /api/analytics/scoring-audit/:session_id   Pro per-round scoring audit (per-mind scores, criteria, confidence, fallback flag)
 GET  /api/analytics/scoring-audit/:session_id/export.csv   CSV export of the scoring audit (mirrors the JSON shape, footer rollup included)
 

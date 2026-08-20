@@ -3563,6 +3563,98 @@ async def analytics_persona_stats_timeline_json(
     )
 
 
+@router.get("/analytics/persona-stats/{persona_id}/timeline/export.md")
+async def analytics_persona_stats_timeline_markdown(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=90,
+        description="Window length in days, ending today (UTC). Capped at 90 to keep the timeline compact.",
+    ),
+) -> Response:
+    """Markdown export of the per-persona daily timeline.
+
+    Renders the same shared payload as the dashboard and CSV/JSON exports in
+    a compact report that can be pasted into notes, issue trackers, or a
+    research log. Markdown has its own user-scoped export budget so a report
+    download cannot consume dashboard, CSV, or JSON capacity.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_timeline_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many timeline Markdown exports. Limit is 60 per hour.",
+    )
+
+    payload = _persona_stats_timeline_payload(
+        db=db,
+        user_id=user.id,
+        persona_id=pid,
+        days=days,
+    )
+    name = _markdown_cell(payload["name"])
+    best_day = _markdown_cell(payload["best_day"] or "none")
+    lines = [
+        f"# Arena — {name} persona timeline",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Appearances:** {payload['total_appearances']}",
+        f"- **Wins:** {payload['total_wins']}",
+        f"- **Peak day:** {best_day}",
+        f"- **Peak day wins:** {payload['best_day_wins']}",
+        f"- **Peak day appearances:** {payload['best_day_appearances']}",
+        f"- **Peak day win rate:** {payload['best_day_win_rate']:.1%}",
+        "",
+        "## Daily activity",
+        "",
+        "| Date | Appearances | Wins | Win rate |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for row in payload["timeline"]:
+        lines.append(
+            f"| {_markdown_cell(row['date'])} | {row['appearances']} | "
+            f"{row['wins']} | {row['win_rate']:.1%} |"
+        )
+    lines.extend(
+        [
+            "",
+            "_Wins exclude fallback scorings; appearances include every panel appearance._",
+            "",
+        ]
+    )
+
+    filename = (
+        f"arena-timeline-{pid}-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-stats/{persona_id}/by-category/export.csv")
 async def analytics_persona_stats_by_category_csv(
     persona_id: str,
