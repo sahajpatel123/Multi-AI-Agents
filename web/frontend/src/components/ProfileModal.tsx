@@ -23,6 +23,7 @@ import {
   exportAnalyticsCategoryStatsJson,
   exportAnalyticsCategoryStatsMarkdown,
   exportAnalyticsPersonaStatsOverviewCsv,
+  exportAnalyticsPersonaStatsOverviewJson,
   exportAnalyticsPersonaStatsTimelineCsv,
   exportAnalyticsPersonaStatsTimelineJson,
   exportAnalyticsPersonaStatsTimelineMarkdown,
@@ -4295,6 +4296,42 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'overview' ? '⏳ Downloading…' : '🤖 Persona Stats Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'overview-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'overview-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('overview-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewJson(30);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona stats JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona stats JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'overview-json' ? '⏳ Downloading…' : '🤖 Persona Stats JSON'}
                   </button>
                 </div>
 

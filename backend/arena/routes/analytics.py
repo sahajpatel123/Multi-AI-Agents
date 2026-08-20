@@ -2955,6 +2955,62 @@ async def analytics_persona_stats_all_csv(
     )
 
 
+@router.get("/analytics/persona-stats/export.json")
+async def analytics_persona_stats_all_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Hide personas that appeared on fewer than N panels (noise floor).",
+    ),
+) -> Response:
+    """JSON download of the all-personas summary catalog.
+
+    The payload is the same envelope returned by the dashboard endpoint,
+    including the full catalog, rollup totals, and filter metadata. Keeping
+    the export on that canonical computation means notebooks and scripts see
+    exactly what the Profile analytics view shows.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_all_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona-stats JSON exports. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_persona_stats_all(
+        window_days=window_days,
+        min_appearances=min_appearances,
+        user=user,
+        db=db,
+    )
+
+    import json
+
+    filename = (
+        f"arena-persona-stats-overview-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n",
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-stats/{persona_id}")
 async def analytics_persona_stats(
     persona_id: str,

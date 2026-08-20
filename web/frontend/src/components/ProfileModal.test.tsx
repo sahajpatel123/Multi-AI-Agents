@@ -108,6 +108,10 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(personaTimelineMarkdownExport.blob, 'text', {
     value: vi.fn().mockResolvedValue('# Arena — The Analyst persona timeline'),
   });
+  const personaStatsOverviewJsonExport = {
+    blob: new Blob(['{"total_personas":16,"personas":[]}'], { type: 'application/json' }),
+    filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.json',
+  };
   const summaryMarkdownBlob = new Blob(['# Arena — analytics summary'], {
     type: 'text/markdown',
   });
@@ -144,6 +148,7 @@ const hoistedMocks = vi.hoisted(() => {
   personaTimelineCsvExport,
   personaTimelineJsonExport,
   personaTimelineMarkdownExport,
+  personaStatsOverviewJsonExport,
   summaryMarkdownBlob,
   summaryCsvBlob,
   summaryJsonBlob,
@@ -326,6 +331,7 @@ const hoistedMocks = vi.hoisted(() => {
   exportAnalyticsPersonaStatsTimelineCsv: vi.fn().mockResolvedValue(personaTimelineCsvExport),
   exportAnalyticsPersonaStatsTimelineJson: vi.fn().mockResolvedValue(personaTimelineJsonExport),
   exportAnalyticsPersonaStatsTimelineMarkdown: vi.fn().mockResolvedValue(personaTimelineMarkdownExport),
+  exportAnalyticsPersonaStatsOverviewJson: vi.fn().mockResolvedValue(personaStatsOverviewJsonExport),
   exportAnalyticsPersonaWinRateCsv: vi.fn().mockResolvedValue({
     blob: new Blob(['persona_id,name'], { type: 'text/csv' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.csv',
@@ -468,6 +474,7 @@ vi.mock('../api', () => ({
   getAnalyticsCategoryStats: hoistedMocks.getAnalyticsCategoryStats,
   getAnalyticsPersonaWinRate: hoistedMocks.getAnalyticsPersonaWinRate,
   getAnalyticsPersonaStatsTimeline: hoistedMocks.getAnalyticsPersonaStatsTimeline,
+  exportAnalyticsPersonaStatsOverviewJson: hoistedMocks.exportAnalyticsPersonaStatsOverviewJson,
   exportAnalyticsPersonaStatsTimelineCsv: hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv,
   exportAnalyticsPersonaStatsTimelineJson: hoistedMocks.exportAnalyticsPersonaStatsTimelineJson,
   exportAnalyticsPersonaStatsTimelineMarkdown: hoistedMocks.exportAnalyticsPersonaStatsTimelineMarkdown,
@@ -586,6 +593,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportUserUsageMarkdown).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaStatsTimeline).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsOverviewJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineMarkdown).mockClear();
@@ -2513,6 +2521,26 @@ describe('ProfileModal', () => {
     expect(
       await screen.findByRole('button', { name: /usage json export/i }),
     ).toBeInTheDocument();
+  });
+
+  it('downloads the persona stats overview as JSON', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /persona stats json/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsOverviewJson).toHaveBeenCalledWith(30);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        hoistedMocks.personaStatsOverviewJsonExport.blob,
+        'arena-persona-stats-overview-2026-08-01-to-2026-08-30.json',
+      );
+    });
+    expect(button).not.toBeDisabled();
   });
 
   it('renders the usage Markdown export button', async () => {
