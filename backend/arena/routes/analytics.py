@@ -3274,6 +3274,32 @@ async def analytics_persona_stats_timeline(
         message="Too many persona-stats-timeline requests. Limit is 120 per hour.",
     )
 
+    return _persona_stats_timeline_payload(
+        db=db,
+        user_id=user.id,
+        persona_id=pid,
+        days=days,
+    )
+
+
+def _persona_stats_timeline_payload(
+    *,
+    db: Session,
+    user_id: int,
+    persona_id: str,
+    days: int,
+) -> dict:
+    """Build the timeline payload without applying a route throttle.
+
+    The dashboard and its CSV/JSON exports have separate user-scoped rate
+    budgets. Keeping the aggregation here means an export can reuse the
+    dashboard's exact math without charging the dashboard budget as a side
+    effect of calling the route handler.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id
+
     now_utc = utcnow_naive()
     end_day = now_utc.date()
     start_day = end_day - timedelta(days=days - 1)
@@ -3290,7 +3316,7 @@ async def analytics_persona_stats_timeline(
             ScoringAudit.fallback_used,
         )
         .filter(
-            ScoringAudit.user_id == user.id,
+            ScoringAudit.user_id == user_id,
             ScoringAudit.created_at >= start_dt,
             ScoringAudit.created_at < end_dt,
         )
@@ -3398,10 +3424,11 @@ async def analytics_persona_stats_timeline_csv(
     comment row (# total_appearances, # total_wins, # best_day) so
     the CSV is self-describing when opened in isolation.
 
-    Same bounds as the JSON endpoint: days 1-90, persona_id must
-    be a known persona, 120/hr/user rate limit. The persona_id
-    filename suffix lets multiple downloads sit in the same
-    directory without overwriting each other.
+    Same bounds as the JSON endpoint: days 1-90 and persona_id must
+    be a known persona. The export has its own 60/hr/user budget,
+    separate from the 120/hr dashboard budget. The persona_id filename
+    suffix lets multiple downloads sit in the same directory without
+    overwriting each other.
     """
     from arena.core.agents import PERSONA_METADATA
 
@@ -3420,11 +3447,12 @@ async def analytics_persona_stats_timeline_csv(
         message="Too many timeline CSV exports. Limit is 60 per hour.",
     )
 
-    # Reuse the JSON route so the math cannot drift.
-    payload = await analytics_persona_stats_timeline(
-        persona_id=pid,
-        user=user,
+    # Reuse the shared aggregation so the export cannot consume the
+    # dashboard's rate-limit budget as a side effect.
+    payload = _persona_stats_timeline_payload(
         db=db,
+        user_id=user.id,
+        persona_id=pid,
         days=days,
     )
 
@@ -3509,11 +3537,12 @@ async def analytics_persona_stats_timeline_json(
         message="Too many timeline JSON exports. Limit is 60 per hour.",
     )
 
-    # Reuse the dashboard computation so the structured export cannot drift.
-    payload = await analytics_persona_stats_timeline(
-        persona_id=pid,
-        user=user,
+    # Reuse the shared aggregation so the structured export cannot consume
+    # the dashboard's rate-limit budget as a side effect.
+    payload = _persona_stats_timeline_payload(
         db=db,
+        user_id=user.id,
+        persona_id=pid,
         days=days,
     )
 

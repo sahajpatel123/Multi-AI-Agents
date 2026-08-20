@@ -159,3 +159,37 @@ async def test_json_export_is_scoped_to_caller(app_client, make_user, db_session
 
     assert owner_res.json()["total_appearances"] == 1
     assert other_res.json()["total_appearances"] == 0
+
+
+@pytest.mark.asyncio
+async def test_json_export_uses_only_its_own_rate_limit_scope(
+    app_client, make_user, monkeypatch
+):
+    """A JSON download must not also consume dashboard refresh capacity."""
+    from arena.core import rate_limits
+
+    keys: list[str] = []
+    real_hit = rate_limits.rate_limiter.hit
+
+    def recording_hit(key, *, limit, window_seconds, message):
+        keys.append(key)
+        return real_hit(key, limit=limit, window_seconds=window_seconds, message=message)
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", recording_hit)
+
+    user = make_user(email="ptlj-rate-scope@test.com", tier=UserTier.PRO)
+    headers = _pro_headers(user)
+    export_res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline/export.json?days=7",
+        headers=headers,
+    )
+    dashboard_res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline?days=7",
+        headers=headers,
+    )
+
+    assert export_res.status_code == 200
+    assert dashboard_res.status_code == 200
+    assert f"user:analytics_persona_stats_timeline_json:{user.id}" in keys
+    assert f"user:analytics_persona_stats_timeline:{user.id}" in keys
+    assert keys.count(f"user:analytics_persona_stats_timeline:{user.id}") == 1
