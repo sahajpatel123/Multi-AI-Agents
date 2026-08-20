@@ -2703,24 +2703,14 @@ async def analytics_category_stats_markdown(
     )
 
 
-@router.get("/analytics/persona-stats")
-async def analytics_persona_stats_all(
-    user: UserResponse = Depends(get_current_user_required),
-    db: Session = Depends(get_db),
-    window_days: int = Query(
-        90,
-        ge=1,
-        le=365,
-        description="Window length in days, ending today (UTC). Caps the row scan.",
-    ),
-    min_appearances: int = Query(
-        1,
-        ge=1,
-        le=200,
-        description="Hide personas that appeared on fewer than N panels (noise floor).",
-    ),
+def _analytics_persona_stats_all_payload(
+    *,
+    user: UserResponse,
+    db: Session,
+    window_days: int,
+    min_appearances: int,
 ) -> dict:
-    """All-personas summary: the deep-dive data for every catalog persona.
+    """Build the canonical all-personas summary without applying a route limit.
 
     Lets a dashboard render a 16-persona grid in one call instead of
     16 separate /persona-stats/{id} requests. Same per-persona shape
@@ -2736,14 +2726,6 @@ async def analytics_persona_stats_all(
     ties, then by persona_id alphabetically for stable ordering.
     """
     from arena.core.agents import PERSONA_METADATA
-
-    enforce_user_rate_limit(
-        user.id,
-        scope="analytics_persona_stats_all",
-        limit=60,
-        window_seconds=3600,
-        message="Too many all-personas stats requests. Limit is 60 per hour.",
-    )
 
     now_utc = utcnow_naive()
     window_start = now_utc - timedelta(days=window_days - 1)
@@ -2857,6 +2839,39 @@ async def analytics_persona_stats_all(
     }
 
 
+@router.get("/analytics/persona-stats")
+async def analytics_persona_stats_all(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Hide personas that appeared on fewer than N panels (noise floor).",
+    ),
+) -> dict:
+    """Return all-personas stats using the dashboard refresh budget."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_all",
+        limit=60,
+        window_seconds=3600,
+        message="Too many all-personas stats requests. Limit is 60 per hour.",
+    )
+    return _analytics_persona_stats_all_payload(
+        user=user,
+        db=db,
+        window_days=window_days,
+        min_appearances=min_appearances,
+    )
+
+
 @router.get("/analytics/persona-stats/export.csv")
 async def analytics_persona_stats_all_csv(
     user: UserResponse = Depends(get_current_user_required),
@@ -2876,9 +2891,9 @@ async def analytics_persona_stats_all_csv(
 ) -> Response:
     """CSV export of the all-personas summary catalog.
 
-    Reuses the JSON route ``analytics_persona_stats_all`` so the math and
-    sorting order (win_rate desc, appearances desc, persona_id asc) stay
-    identical and cannot drift between CSV and API.
+    Reuses the canonical payload builder so the math and sorting order
+    (win_rate desc, appearances desc, persona_id asc) stay identical and
+    cannot drift between CSV and API.
 
     Columns: persona_id, name, appearances, wins, win_rate, avg_winning_score,
              last_appearance_at, last_win_at, below_min_appearances.
@@ -2894,7 +2909,7 @@ async def analytics_persona_stats_all_csv(
         message="Too many persona-stats CSV exports. Limit is 60 per hour.",
     )
 
-    payload = await analytics_persona_stats_all(
+    payload = _analytics_persona_stats_all_payload(
         window_days=window_days,
         min_appearances=min_appearances,
         user=user,
@@ -2987,7 +3002,7 @@ async def analytics_persona_stats_all_json(
         message="Too many persona-stats JSON exports. Limit is 60 per hour.",
     )
 
-    payload = await analytics_persona_stats_all(
+    payload = _analytics_persona_stats_all_payload(
         window_days=window_days,
         min_appearances=min_appearances,
         user=user,

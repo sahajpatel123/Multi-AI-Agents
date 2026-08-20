@@ -110,3 +110,43 @@ async def test_persona_stats_overview_json_rejects_invalid_window(
             headers=headers,
         )
         assert res.status_code == 422, query
+
+
+@pytest.mark.asyncio
+async def test_persona_stats_overview_json_uses_only_its_export_rate_limit_scope(
+    app_client, make_user, monkeypatch
+):
+    """A JSON download must not consume the dashboard refresh budget."""
+    from arena.core import rate_limits
+
+    keys: list[str] = []
+    real_hit = rate_limits.rate_limiter.hit
+
+    def recording_hit(key, *, limit, window_seconds, message):
+        keys.append(key)
+        return real_hit(
+            key,
+            limit=limit,
+            window_seconds=window_seconds,
+            message=message,
+        )
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", recording_hit)
+
+    user = make_user(email="json-overview-rate-scope@test.com", tier=UserTier.PRO)
+    headers = _pro_headers(user)
+    export = await app_client.get(
+        "/api/analytics/persona-stats/export.json?window_days=7",
+        headers=headers,
+    )
+    dashboard = await app_client.get(
+        "/api/analytics/persona-stats?window_days=7",
+        headers=headers,
+    )
+
+    assert export.status_code == 200
+    assert dashboard.status_code == 200
+    assert [key for key in keys if key.startswith("user:")] == [
+        f"user:analytics_persona_stats_all_json:{user.id}",
+        f"user:analytics_persona_stats_all:{user.id}",
+    ]
