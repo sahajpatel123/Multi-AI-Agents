@@ -302,7 +302,7 @@ const PERSONA_WIN_RATE_SORT_LABELS: Record<PersonaWinRateSort, string> = {
 const ACTIVITY_HIGHLIGHT_WINDOWS = [7, 30, 90] as const;
 const FEEDBACK_ACTIVITY_WINDOWS = [7, 30, 90] as const;
 type PersonaTimelineExportFormat = 'csv' | 'json' | 'markdown';
-type PersonaTimelineAction = PersonaTimelineExportFormat | 'copy';
+type PersonaTimelineAction = PersonaTimelineExportFormat | 'copy' | 'copy-csv';
 
 function sortPersonaWinRateRows(
   rows: AnalyticsPersonaWinRateResponse['personas'],
@@ -493,12 +493,14 @@ function PersonaActivityTimeline({
   activeAction,
   onExport,
   onCopyMarkdown,
+  onCopyCsv,
 }: {
   timeline: AnalyticsPersonaStatsTimelineResponse;
   color: string;
   activeAction: PersonaTimelineAction | null;
   onExport: (format: PersonaTimelineExportFormat) => void;
   onCopyMarkdown: () => void;
+  onCopyCsv: () => void;
 }) {
   const isBusy = activeAction !== null;
   const maxAppearances = Math.max(
@@ -690,8 +692,27 @@ function PersonaActivityTimeline({
         >
           {activeAction === 'copy' ? '⏳ Copying…' : 'Copy Markdown'}
         </button>
+        <button
+          type="button"
+          aria-label={`Copy ${timeline.name} daily timeline CSV`}
+          aria-busy={activeAction === 'copy-csv'}
+          disabled={isBusy}
+          onClick={onCopyCsv}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isBusy ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {activeAction === 'copy-csv' ? '⏳ Copying…' : 'Copy CSV'}
+        </button>
         <span style={{ fontSize: 10, color: '#A0A39A' }}>
-          Save daily rows in notes, docs, or analysis tools — or copy the report into a Markdown editor.
+          Save daily rows in notes, docs, or analysis tools — or copy CSV into a spreadsheet and the report into a Markdown editor.
         </span>
       </div>
     </div>
@@ -975,6 +996,33 @@ export function ProfileModal() {
         error instanceof ApiError
           ? error.message
           : `Could not copy ${timeline.name} daily timeline Markdown — try again.`,
+      );
+    } finally {
+      setActiveExport(null);
+    }
+  }, [clearExportFeedback]);
+  const handlePersonaTimelineCopyCsv = useCallback(async (
+    timeline: AnalyticsPersonaStatsTimelineResponse,
+  ) => {
+    const exportKey = `persona-timeline-${timeline.persona_id}-copy-csv`;
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const { blob } = await exportAnalyticsPersonaStatsTimelineCsv(
+        timeline.persona_id,
+        timeline.days,
+      );
+      const copied = await copyCsvToClipboard(await blob.text());
+      if (copied) {
+        setExportNotice(`Copied ${timeline.name} daily timeline CSV to the clipboard.`);
+      } else {
+        setExportError(`Could not copy ${timeline.name} daily timeline CSV — try again.`);
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : `Could not copy ${timeline.name} daily timeline CSV — try again.`,
       );
     } finally {
       setActiveExport(null);
@@ -2714,7 +2762,7 @@ export function ProfileModal() {
                                           timeline={personaTimeline}
                                           color={row.color}
                                           activeAction={
-                                            (['csv', 'json', 'markdown', 'copy'] as const).find(
+                                            (['csv', 'json', 'markdown', 'copy', 'copy-csv'] as const).find(
                                               (action) => activeExport === `persona-timeline-${personaTimeline.persona_id}-${action}`,
                                             ) ?? null
                                           }
@@ -2723,6 +2771,9 @@ export function ProfileModal() {
                                           }}
                                           onCopyMarkdown={() => {
                                             void handlePersonaTimelineCopy(personaTimeline);
+                                          }}
+                                          onCopyCsv={() => {
+                                            void handlePersonaTimelineCopyCsv(personaTimeline);
                                           }}
                                         />
                                       ) : null}

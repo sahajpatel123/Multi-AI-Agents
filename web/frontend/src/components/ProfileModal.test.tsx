@@ -91,6 +91,9 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['date,appearances,wins,win_rate'], { type: 'text/csv' }),
     filename: 'arena-timeline-analyst-2026-08-18-to-2026-08-20.csv',
   };
+  Object.defineProperty(personaTimelineCsvExport.blob, 'text', {
+    value: vi.fn().mockResolvedValue('date,appearances,wins,win_rate'),
+  });
   const personaTimelineJsonExport = {
     blob: new Blob(['{"persona_id":"analyst","timeline":[]}'], { type: 'application/json' }),
     filename: 'arena-timeline-analyst-2026-08-18-to-2026-08-20.json',
@@ -668,6 +671,36 @@ describe('ProfileModal', () => {
     expect(copyButton).not.toBeDisabled();
   });
 
+  it('copies the selected persona daily timeline as spreadsheet-aware CSV', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const copyButton = await screen.findByRole('button', {
+      name: /copy the analyst daily timeline csv/i,
+    });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).toHaveBeenCalledWith(
+        'analyst',
+        3,
+      );
+      expect(hoistedMocks.copyCsvToClipboard).toHaveBeenCalledWith(
+        'date,appearances,wins,win_rate',
+      );
+      expect(
+        screen.getByText('Copied The Analyst daily timeline CSV to the clipboard.'),
+      ).toBeInTheDocument();
+    });
+    expect(copyButton).not.toBeDisabled();
+  });
+
   it('labels only the active persona timeline action while it is in progress', async () => {
     let releaseExport: (() => void) | undefined;
     const pendingExport = new Promise<typeof hoistedMocks.personaTimelineMarkdownExport>((resolve) => {
@@ -728,6 +761,28 @@ describe('ProfileModal', () => {
 
     expect(
       await screen.findByText('Could not copy The Analyst daily timeline Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(copyButton).not.toBeDisabled();
+  });
+
+  it('surfaces persona timeline CSV clipboard failures and releases the copy lock', async () => {
+    vi.mocked(hoistedMocks.copyCsvToClipboard).mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const copyButton = await screen.findByRole('button', {
+      name: /copy the analyst daily timeline csv/i,
+    });
+    fireEvent.click(copyButton);
+
+    expect(
+      await screen.findByText('Could not copy The Analyst daily timeline CSV — try again.'),
     ).toBeInTheDocument();
     expect(copyButton).not.toBeDisabled();
   });
