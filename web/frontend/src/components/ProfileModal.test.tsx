@@ -735,6 +735,45 @@ describe('ProfileModal', () => {
     expect(copyButton).not.toBeDisabled();
   });
 
+  it('does not start a duplicate persona timeline JSON copy while one is pending', async () => {
+    let releaseExport: ((value: typeof hoistedMocks.personaTimelineJsonExport) => void) | undefined;
+    const pendingExport = new Promise<typeof hoistedMocks.personaTimelineJsonExport>((resolve) => {
+      releaseExport = resolve;
+    });
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineJson).mockReturnValueOnce(pendingExport);
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const copyButton = await screen.findByRole('button', {
+      name: /copy the analyst daily timeline json/i,
+    });
+
+    await act(async () => {
+      copyButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      copyButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(hoistedMocks.exportAnalyticsPersonaStatsTimelineJson).toHaveBeenCalledTimes(1);
+    expect(copyButton).toBeDisabled();
+
+    await act(async () => {
+      releaseExport?.(hoistedMocks.personaTimelineJsonExport);
+    });
+    await waitFor(() => {
+      expect(hoistedMocks.copyJsonToClipboard).toHaveBeenCalledWith(
+        '{"persona_id":"analyst","timeline":[]}',
+      );
+      expect(copyButton).not.toBeDisabled();
+    });
+  });
+
   it('ignores a stale persona timeline CSV copy after the drill-down closes', async () => {
     let releaseExport: ((value: typeof hoistedMocks.personaTimelineCsvExport) => void) | undefined;
     const pendingExport = new Promise<typeof hoistedMocks.personaTimelineCsvExport>((resolve) => {

@@ -959,6 +959,7 @@ export function ProfileModal() {
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const personaTimelineCopyCsvRunRef = useRef(0);
   const personaTimelineCopyJsonRunRef = useRef(0);
+  const personaTimelineCopyJsonInFlightRef = useRef(false);
   const clearExportFeedback = useCallback(() => {
     setExportError(null);
     setExportNotice(null);
@@ -966,6 +967,7 @@ export function ProfileModal() {
   const invalidatePersonaTimelineCopyRuns = useCallback(() => {
     personaTimelineCopyCsvRunRef.current += 1;
     personaTimelineCopyJsonRunRef.current += 1;
+    personaTimelineCopyJsonInFlightRef.current = false;
     setActiveExport((current) => (
       current?.startsWith('persona-timeline-') &&
       (current.endsWith('-copy-csv') || current.endsWith('-copy-json'))
@@ -1038,6 +1040,8 @@ export function ProfileModal() {
   const handlePersonaTimelineCopyJson = useCallback(async (
     timeline: AnalyticsPersonaStatsTimelineResponse,
   ) => {
+    if (personaTimelineCopyJsonInFlightRef.current) return;
+    personaTimelineCopyJsonInFlightRef.current = true;
     const exportKey = `persona-timeline-${timeline.persona_id}-copy-json`;
     const runId = ++personaTimelineCopyJsonRunRef.current;
     setActiveExport(exportKey);
@@ -1066,6 +1070,7 @@ export function ProfileModal() {
       );
     } finally {
       if (personaTimelineCopyJsonRunRef.current === runId) {
+        personaTimelineCopyJsonInFlightRef.current = false;
         setActiveExport(null);
       }
     }

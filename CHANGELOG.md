@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Persona timeline JSON clipboard copy now ignores duplicate activations while
+  an export is still in flight, preventing redundant requests and stale results
 - Profile analytics can now copy each persona's daily activity timeline as
   structured JSON for scripts and notebooks without leaving the dashboard
 - Profile analytics can now copy each persona's daily activity timeline as

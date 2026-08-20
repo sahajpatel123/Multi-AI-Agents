@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[IMPROVED] Profile analytics: persona timeline JSON clipboard copy ignores duplicate activations while an export is in flight, preventing redundant requests and stale results',
       '[NEW] Profile analytics: copy the selected persona daily activity timeline as structured JSON for scripts and notebooks without leaving the dashboard',
       '[NEW] Profile analytics: copy the selected persona daily activity timeline as spreadsheet-aware CSV without leaving the dashboard',
       '[IMPROVED] Profile analytics: persona timeline CSV copy ignores late responses after the drill-down closes or refreshes',
