@@ -337,9 +337,19 @@ describe('Analytics CSV export frontend API helpers', () => {
     const res = await exportAnalyticsPersonaStatsTimelineCsv('claude/opus', 30);
     expectBlob(res);
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
-      '/api/analytics/persona-stats/claude%2Fopus/timeline/export.csv?window_days=30',
+      '/api/analytics/persona-stats/claude%2Fopus/timeline/export.csv?days=30',
       {}
     );
+  });
+
+  it('rejects invalid persona timeline export inputs before fetching', async () => {
+    await expect(exportAnalyticsPersonaStatsTimelineCsv('   ')).rejects.toThrow(
+      'personaId must not be empty',
+    );
+    await expect(exportAnalyticsPersonaStatsTimelineCsv('analyst', 91)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 90',
+    );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
   });
 
   it('exportAnalyticsPersonaStatsByCategoryCsv encodes persona ID safely', async () => {

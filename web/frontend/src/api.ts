@@ -4685,7 +4685,14 @@ export async function exportAnalyticsPersonaStatsOverviewCsv(windowDays: number 
 }
 
 export async function exportAnalyticsPersonaStatsTimelineCsv(personaId: string, windowDays: number = 30): Promise<Blob> {
-  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(personaId)}/timeline/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  const normalizedPersonaId = personaId.trim();
+  if (!normalizedPersonaId) {
+    throw new RangeError('personaId must not be empty');
+  }
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/timeline/export.csv?days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(getErrorMessage(err, 'Failed to export persona timeline CSV'), response.status, err);

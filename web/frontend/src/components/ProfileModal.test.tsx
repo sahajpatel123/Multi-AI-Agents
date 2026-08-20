@@ -87,6 +87,9 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(activityCsvBlob, 'text', {
     value: vi.fn().mockResolvedValue('date,prompts'),
   });
+  const personaTimelineCsvBlob = new Blob(['date,appearances,wins,win_rate'], {
+    type: 'text/csv',
+  });
   const summaryMarkdownBlob = new Blob(['# Arena — analytics summary'], {
     type: 'text/markdown',
   });
@@ -120,6 +123,7 @@ const hoistedMocks = vi.hoisted(() => {
   activityMarkdownBlob,
   activityJsonBlob,
   activityCsvBlob,
+  personaTimelineCsvBlob,
   summaryMarkdownBlob,
   summaryCsvBlob,
   summaryJsonBlob,
@@ -299,6 +303,7 @@ const hoistedMocks = vi.hoisted(() => {
       { date: '2026-08-20', appearances: 1, wins: 1, win_rate: 1 },
     ],
   }),
+  exportAnalyticsPersonaStatsTimelineCsv: vi.fn().mockResolvedValue(personaTimelineCsvBlob),
   exportAnalyticsPersonaWinRateCsv: vi.fn().mockResolvedValue({
     blob: new Blob(['persona_id,name'], { type: 'text/csv' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.csv',
@@ -441,6 +446,7 @@ vi.mock('../api', () => ({
   getAnalyticsCategoryStats: hoistedMocks.getAnalyticsCategoryStats,
   getAnalyticsPersonaWinRate: hoistedMocks.getAnalyticsPersonaWinRate,
   getAnalyticsPersonaStatsTimeline: hoistedMocks.getAnalyticsPersonaStatsTimeline,
+  exportAnalyticsPersonaStatsTimelineCsv: hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv,
   getCalibrationStats: hoistedMocks.getCalibrationStats,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getAgentFeedbackSummary: hoistedMocks.getAgentFeedbackSummary,
@@ -556,6 +562,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportUserUsageMarkdown).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaStatsTimeline).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).mockClear();
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
@@ -2648,6 +2655,60 @@ describe('ProfileModal', () => {
     );
     expect(detailsButton).toHaveAttribute('aria-controls', 'persona-timeline-analyst');
     expect(detailsButton).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('downloads the expanded persona daily timeline as CSV', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(await screen.findByRole('button', {
+      name: 'Show The Analyst daily timeline',
+    }));
+    await screen.findByRole('region', { name: 'The Analyst daily activity timeline' });
+
+    fireEvent.click(screen.getByRole('button', {
+      name: 'Download The Analyst daily timeline CSV',
+    }));
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).toHaveBeenCalledWith(
+        'analyst',
+        3,
+      );
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        hoistedMocks.personaTimelineCsvBlob,
+        'arena-persona-timeline-analyst-2026-08-18-to-2026-08-20.csv',
+      );
+    });
+  });
+
+  it('surfaces persona timeline CSV failures and releases the download lock', async () => {
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).mockRejectedValueOnce(
+      new Error('boom'),
+    );
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(await screen.findByRole('button', {
+      name: 'Show The Analyst daily timeline',
+    }));
+    await screen.findByRole('region', { name: 'The Analyst daily activity timeline' });
+
+    const exportButton = screen.getByRole('button', {
+      name: 'Download The Analyst daily timeline CSV',
+    });
+    fireEvent.click(exportButton);
+
+    expect(
+      await screen.findByText('Could not download persona timeline CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(exportButton).not.toBeDisabled();
   });
 
   it('clears the previous persona timeline before showing a different drill-down', async () => {

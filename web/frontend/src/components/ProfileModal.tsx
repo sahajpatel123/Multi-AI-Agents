@@ -23,6 +23,7 @@ import {
   exportAnalyticsCategoryStatsJson,
   exportAnalyticsCategoryStatsMarkdown,
   exportAnalyticsPersonaStatsOverviewCsv,
+  exportAnalyticsPersonaStatsTimelineCsv,
   exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsPersonaWinRateTrendCsv,
   exportAnalyticsPersonaWinRateTrendJson,
@@ -485,9 +486,13 @@ function WinRateTrendSparkline({
 function PersonaActivityTimeline({
   timeline,
   color,
+  isExporting,
+  onExport,
 }: {
   timeline: AnalyticsPersonaStatsTimelineResponse;
   color: string;
+  isExporting: boolean;
+  onExport: () => void;
 }) {
   const maxAppearances = Math.max(
     ...timeline.timeline.map((point) => point.appearances),
@@ -601,6 +606,30 @@ function PersonaActivityTimeline({
       >
         Wins exclude fallback scorings; appearances include every panel appearance.
       </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 9 }}>
+        <button
+          type="button"
+          aria-label={`Download ${timeline.name} daily timeline CSV`}
+          aria-busy={isExporting}
+          disabled={isExporting}
+          onClick={onExport}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isExporting ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isExporting ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {isExporting ? '⏳ Downloading…' : 'Download CSV'}
+        </button>
+        <span style={{ fontSize: 10, color: '#A0A39A' }}>
+          Save the daily rows for spreadsheets or your own analysis.
+        </span>
+      </div>
     </div>
   );
 }
@@ -833,6 +862,30 @@ export function ProfileModal() {
     setPersonaTimelineErr(null);
     setPersonaTimelineLoading(!closing);
   }, [personaTimelinePersonaId]);
+  const handlePersonaTimelineExport = useCallback(async (timeline: AnalyticsPersonaStatsTimelineResponse) => {
+    const exportKey = `persona-timeline-${timeline.persona_id}`;
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const blob = await exportAnalyticsPersonaStatsTimelineCsv(
+        timeline.persona_id,
+        timeline.days,
+      );
+      const safePersonaId = timeline.persona_id.replace(/[^a-zA-Z0-9_-]/g, '-');
+      const filename = `arena-persona-timeline-${safePersonaId}-${timeline.window_start}-to-${timeline.window_end}.csv`;
+      if (!downloadBlobFile(blob, filename)) {
+        setExportError('Could not download persona timeline CSV — try again.');
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : 'Could not download persona timeline CSV — try again.',
+      );
+    } finally {
+      setActiveExport(null);
+    }
+  }, [clearExportFeedback]);
   const [calLoading, setCalLoading] = useState(false);
   const [calErr, setCalErr] = useState<string | null>(null);
   const [calHistory, setCalHistory] = useState<CalibrationHistoryResponse | null>(null);
@@ -2563,7 +2616,14 @@ export function ProfileModal() {
                                           </button>
                                         </div>
                                       ) : personaTimeline ? (
-                                        <PersonaActivityTimeline timeline={personaTimeline} color={row.color} />
+                                        <PersonaActivityTimeline
+                                          timeline={personaTimeline}
+                                          color={row.color}
+                                          isExporting={activeExport === `persona-timeline-${personaTimeline.persona_id}`}
+                                          onExport={() => {
+                                            void handlePersonaTimelineExport(personaTimeline);
+                                          }}
+                                        />
                                       ) : null}
                                     </td>
                                   </tr>
