@@ -16,6 +16,7 @@ const CHANGELOG_ENTRIES = [
     },
     items: [
       '[NEW] Profile analytics: copy the selected persona daily activity timeline as spreadsheet-aware CSV without leaving the dashboard',
+      '[IMPROVED] Profile analytics: persona timeline CSV copy ignores late responses after the drill-down closes or refreshes',
       '[NEW] Profile analytics: copy the selected persona daily activity timeline as Markdown without leaving the dashboard',
       '[NEW] Profile analytics: download the selected persona daily activity timeline as a portable Markdown report for notes and docs',
       '[NEW] Profile analytics: download the selected persona daily activity timeline as a structured JSON export for scripts and notebooks',

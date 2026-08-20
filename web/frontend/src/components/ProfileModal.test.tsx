@@ -701,6 +701,77 @@ describe('ProfileModal', () => {
     expect(copyButton).not.toBeDisabled();
   });
 
+  it('ignores a stale persona timeline CSV copy after the drill-down closes', async () => {
+    let releaseExport: ((value: typeof hoistedMocks.personaTimelineCsvExport) => void) | undefined;
+    const pendingExport = new Promise<typeof hoistedMocks.personaTimelineCsvExport>((resolve) => {
+      releaseExport = resolve;
+    });
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).mockReturnValueOnce(pendingExport);
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const copyButton = await screen.findByRole('button', {
+      name: /copy the analyst daily timeline csv/i,
+    });
+    fireEvent.click(copyButton);
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).toHaveBeenCalledWith(
+        'analyst',
+        3,
+      );
+      expect(copyButton).toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /hide the analyst daily timeline/i }));
+    await act(async () => {
+      releaseExport?.(hoistedMocks.personaTimelineCsvExport);
+    });
+
+    expect(hoistedMocks.copyCsvToClipboard).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText('Copied The Analyst daily timeline CSV to the clipboard.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('ignores a stale persona timeline CSV failure after the drill-down closes', async () => {
+    let rejectExport: ((reason?: unknown) => void) | undefined;
+    const pendingExport = new Promise<typeof hoistedMocks.personaTimelineCsvExport>((_, reject) => {
+      rejectExport = reject;
+    });
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).mockReturnValueOnce(pendingExport);
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const copyButton = await screen.findByRole('button', {
+      name: /copy the analyst daily timeline csv/i,
+    });
+    fireEvent.click(copyButton);
+    await waitFor(() => expect(copyButton).toBeDisabled());
+
+    fireEvent.click(screen.getByRole('button', { name: /hide the analyst daily timeline/i }));
+    await act(async () => {
+      rejectExport?.(new Error('late export failure'));
+    });
+
+    expect(
+      screen.queryByText('Could not copy The Analyst daily timeline CSV — try again.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('labels only the active persona timeline action while it is in progress', async () => {
     let releaseExport: (() => void) | undefined;
     const pendingExport = new Promise<typeof hoistedMocks.personaTimelineMarkdownExport>((resolve) => {

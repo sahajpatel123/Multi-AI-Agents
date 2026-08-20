@@ -53,6 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hidden whenever scoring fell back to flat default scores so the panel
   never shows a hollow ranking
 
+### Improved
+- Persona timeline CSV copy now ignores late responses after the drill-down is
+  closed or refreshed, so stale feedback cannot leak into a newer view
+
 ### Fixed
 - Profile persona win-rate filters now stay locked while a filtered report is
   being copied or downloaded, so the visible selection cannot drift from the

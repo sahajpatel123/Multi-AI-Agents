@@ -936,17 +936,27 @@ export function ProfileModal() {
   const [activeExport, setActiveExport] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const personaTimelineCopyCsvRunRef = useRef(0);
   const clearExportFeedback = useCallback(() => {
     setExportError(null);
     setExportNotice(null);
   }, []);
+  const invalidatePersonaTimelineCopyCsv = useCallback(() => {
+    personaTimelineCopyCsvRunRef.current += 1;
+    setActiveExport((current) => (
+      current?.startsWith('persona-timeline-') && current.endsWith('-copy-csv')
+        ? null
+        : current
+    ));
+  }, []);
   const togglePersonaTimeline = useCallback((personaId: string) => {
+    invalidatePersonaTimelineCopyCsv();
     const closing = personaTimelinePersonaId === personaId;
     setPersonaTimelinePersonaId(closing ? null : personaId);
     setPersonaTimeline(null);
     setPersonaTimelineErr(null);
     setPersonaTimelineLoading(!closing);
-  }, [personaTimelinePersonaId]);
+  }, [invalidatePersonaTimelineCopyCsv, personaTimelinePersonaId]);
   const handlePersonaTimelineExport = useCallback(async (
     timeline: AnalyticsPersonaStatsTimelineResponse,
     format: PersonaTimelineExportFormat,
@@ -1005,6 +1015,7 @@ export function ProfileModal() {
     timeline: AnalyticsPersonaStatsTimelineResponse,
   ) => {
     const exportKey = `persona-timeline-${timeline.persona_id}-copy-csv`;
+    const runId = ++personaTimelineCopyCsvRunRef.current;
     setActiveExport(exportKey);
     clearExportFeedback();
     try {
@@ -1012,20 +1023,27 @@ export function ProfileModal() {
         timeline.persona_id,
         timeline.days,
       );
-      const copied = await copyCsvToClipboard(await blob.text());
+      if (personaTimelineCopyCsvRunRef.current !== runId) return;
+      const csv = await blob.text();
+      if (personaTimelineCopyCsvRunRef.current !== runId) return;
+      const copied = await copyCsvToClipboard(csv);
+      if (personaTimelineCopyCsvRunRef.current !== runId) return;
       if (copied) {
         setExportNotice(`Copied ${timeline.name} daily timeline CSV to the clipboard.`);
       } else {
         setExportError(`Could not copy ${timeline.name} daily timeline CSV — try again.`);
       }
     } catch (error) {
+      if (personaTimelineCopyCsvRunRef.current !== runId) return;
       setExportError(
         error instanceof ApiError
           ? error.message
           : `Could not copy ${timeline.name} daily timeline CSV — try again.`,
       );
     } finally {
-      setActiveExport(null);
+      if (personaTimelineCopyCsvRunRef.current === runId) {
+        setActiveExport(null);
+      }
     }
   }, [clearExportFeedback]);
   const [calLoading, setCalLoading] = useState(false);
@@ -1281,6 +1299,19 @@ export function ProfileModal() {
       cancelled = true;
     };
   }, [isOpen, activeTab, personaTimelinePersonaId, personaTimelineReload, winRateWindowDays]);
+
+  useEffect(() => () => {
+    // A timeline can be hidden, refreshed, or abandoned with the modal. Do
+    // not let a late CSV response repaint feedback for a different view.
+    invalidatePersonaTimelineCopyCsv();
+  }, [
+    isOpen,
+    activeTab,
+    personaTimelinePersonaId,
+    personaTimelineReload,
+    winRateWindowDays,
+    invalidatePersonaTimelineCopyCsv,
+  ]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
