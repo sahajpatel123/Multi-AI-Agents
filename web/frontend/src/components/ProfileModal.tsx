@@ -867,13 +867,11 @@ export function ProfileModal() {
     setActiveExport(exportKey);
     clearExportFeedback();
     try {
-      const blob = await exportAnalyticsPersonaStatsTimelineCsv(
+      const exportData = await exportAnalyticsPersonaStatsTimelineCsv(
         timeline.persona_id,
         timeline.days,
       );
-      const safePersonaId = timeline.persona_id.replace(/[^a-zA-Z0-9_-]/g, '-');
-      const filename = `arena-persona-timeline-${safePersonaId}-${timeline.window_start}-to-${timeline.window_end}.csv`;
-      if (!downloadBlobFile(blob, filename)) {
+      if (!downloadBlobFile(exportData.blob, exportData.filename)) {
         setExportError('Could not download persona timeline CSV — try again.');
       }
     } catch (error) {

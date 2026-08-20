@@ -4684,7 +4684,15 @@ export async function exportAnalyticsPersonaStatsOverviewCsv(windowDays: number 
   return response.blob();
 }
 
-export async function exportAnalyticsPersonaStatsTimelineCsv(personaId: string, windowDays: number = 30): Promise<Blob> {
+export type AnalyticsPersonaStatsTimelineCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsTimelineCsv(
+  personaId: string,
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsTimelineCsvExport> {
   const normalizedPersonaId = personaId.trim();
   if (!normalizedPersonaId) {
     throw new RangeError('personaId must not be empty');
@@ -4697,7 +4705,13 @@ export async function exportAnalyticsPersonaStatsTimelineCsv(personaId: string, 
     const err = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(getErrorMessage(err, 'Failed to export persona timeline CSV'), response.status, err);
   }
-  return response.blob();
+  const safePersonaId = normalizedPersonaId.replace(/[^a-zA-Z0-9_-]/g, '-');
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-timeline-${safePersonaId}-${windowDays}d.csv`,
+  };
 }
 
 export async function exportAnalyticsPersonaStatsByCategoryCsv(personaId: string, windowDays: number = 30): Promise<Blob> {

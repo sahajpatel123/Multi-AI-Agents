@@ -87,9 +87,10 @@ const hoistedMocks = vi.hoisted(() => {
   Object.defineProperty(activityCsvBlob, 'text', {
     value: vi.fn().mockResolvedValue('date,prompts'),
   });
-  const personaTimelineCsvBlob = new Blob(['date,appearances,wins,win_rate'], {
-    type: 'text/csv',
-  });
+  const personaTimelineCsvExport = {
+    blob: new Blob(['date,appearances,wins,win_rate'], { type: 'text/csv' }),
+    filename: 'arena-timeline-analyst-2026-08-18-to-2026-08-20.csv',
+  };
   const summaryMarkdownBlob = new Blob(['# Arena — analytics summary'], {
     type: 'text/markdown',
   });
@@ -123,7 +124,7 @@ const hoistedMocks = vi.hoisted(() => {
   activityMarkdownBlob,
   activityJsonBlob,
   activityCsvBlob,
-  personaTimelineCsvBlob,
+  personaTimelineCsvExport,
   summaryMarkdownBlob,
   summaryCsvBlob,
   summaryJsonBlob,
@@ -303,7 +304,7 @@ const hoistedMocks = vi.hoisted(() => {
       { date: '2026-08-20', appearances: 1, wins: 1, win_rate: 1 },
     ],
   }),
-  exportAnalyticsPersonaStatsTimelineCsv: vi.fn().mockResolvedValue(personaTimelineCsvBlob),
+  exportAnalyticsPersonaStatsTimelineCsv: vi.fn().mockResolvedValue(personaTimelineCsvExport),
   exportAnalyticsPersonaWinRateCsv: vi.fn().mockResolvedValue({
     blob: new Blob(['persona_id,name'], { type: 'text/csv' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.csv',
@@ -2679,8 +2680,8 @@ describe('ProfileModal', () => {
         3,
       );
       expect(downloadBlobFile).toHaveBeenCalledWith(
-        hoistedMocks.personaTimelineCsvBlob,
-        'arena-persona-timeline-analyst-2026-08-18-to-2026-08-20.csv',
+        hoistedMocks.personaTimelineCsvExport.blob,
+        hoistedMocks.personaTimelineCsvExport.filename,
       );
     });
   });

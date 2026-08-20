@@ -331,15 +331,36 @@ describe('Analytics CSV export frontend API helpers', () => {
   it('exportAnalyticsPersonaStatsTimelineCsv encodes persona ID safely', async () => {
     const mockBlob = new Blob(['date,wins'], { type: 'text/csv' });
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
-      new Response(mockBlob, { status: 200 })
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-timeline-claude-opus-2026-08-14-to-2026-08-20.csv"',
+        },
+      })
     );
 
     const res = await exportAnalyticsPersonaStatsTimelineCsv('claude/opus', 30);
-    expectBlob(res);
+    expectBlob(res.blob);
+    expect(res.filename).toBe(
+      'arena-timeline-claude-opus-2026-08-14-to-2026-08-20.csv',
+    );
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/analytics/persona-stats/claude%2Fopus/timeline/export.csv?days=30',
       {}
     );
+  });
+
+  it('uses a safe window-based filename when the timeline response omits one', async () => {
+    const mockBlob = new Blob(['date,wins'], { type: 'text/csv' });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(mockBlob, { status: 200 }),
+    );
+
+    const res = await exportAnalyticsPersonaStatsTimelineCsv(' claude/opus ', 7);
+
+    expectBlob(res.blob);
+    expect(res.filename).toBe('arena-persona-timeline-claude-opus-7d.csv');
   });
 
   it('rejects invalid persona timeline export inputs before fetching', async () => {
