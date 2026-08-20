@@ -98,6 +98,8 @@ async def test_markdown_empty_export_has_download_and_security_headers(app_clien
     assert "- **Appearances:** 0" in res.text
     assert "- **Wins:** 0" in res.text
     assert "| none |" not in res.text
+    assert "_Exported from Arena_" in res.text
+    assert res.text.endswith("\n")
 
 
 @pytest.mark.asyncio

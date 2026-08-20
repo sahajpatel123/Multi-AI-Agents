@@ -3637,6 +3637,9 @@ async def analytics_persona_stats_timeline_markdown(
             "",
             "_Wins exclude fallback scorings; appearances include every panel appearance._",
             "",
+            "---",
+            "_Exported from Arena_",
+            "",
         ]
     )
 
@@ -3645,7 +3648,7 @@ async def analytics_persona_stats_timeline_markdown(
         f"{payload['window_start']}-to-{payload['window_end']}.md"
     )
     return Response(
-        content="\n".join(lines),
+        content="\n".join(lines).strip() + "\n",
         media_type="text/markdown; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',

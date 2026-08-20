@@ -576,9 +576,9 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportUserUsageJson).mockClear();
     vi.mocked(hoistedMocks.exportUserUsageMarkdown).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
-  vi.mocked(hoistedMocks.getAnalyticsPersonaStatsTimeline).mockClear();
-  vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).mockClear();
-  vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineMarkdown).mockClear();
+    vi.mocked(hoistedMocks.getAnalyticsPersonaStatsTimeline).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineMarkdown).mockClear();
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
@@ -2779,6 +2779,32 @@ describe('ProfileModal', () => {
 
     expect(
       await screen.findByText('Could not download persona timeline CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(exportButton).not.toBeDisabled();
+  });
+
+  it('surfaces persona timeline Markdown failures and releases the download lock', async () => {
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineMarkdown).mockRejectedValueOnce(
+      new Error('boom'),
+    );
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(await screen.findByRole('button', {
+      name: 'Show The Analyst daily timeline',
+    }));
+    await screen.findByRole('region', { name: 'The Analyst daily activity timeline' });
+
+    const exportButton = screen.getByRole('button', {
+      name: 'Download The Analyst daily timeline Markdown',
+    });
+    fireEvent.click(exportButton);
+
+    expect(
+      await screen.findByText('Could not download persona timeline MARKDOWN — try again.'),
     ).toBeInTheDocument();
     expect(exportButton).not.toBeDisabled();
   });

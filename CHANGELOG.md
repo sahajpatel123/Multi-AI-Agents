@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Profile analytics can now download each persona's daily activity timeline
+  as a portable Markdown report with a summary, daily table, and export footer
 - Profile analytics can now download or copy the filtered weekly persona
   win-rate trend as a portable Markdown report, including empty-week and
   omitted-history honesty notes

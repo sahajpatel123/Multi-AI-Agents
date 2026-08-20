@@ -668,7 +668,7 @@ function PersonaActivityTimeline({
           {isExporting ? '⏳ Downloading…' : 'Download Markdown'}
         </button>
         <span style={{ fontSize: 10, color: '#A0A39A' }}>
-          Save daily rows for spreadsheets, scripts, or your own analysis.
+          Save daily rows in notes, docs, or analysis tools.
         </span>
       </div>
     </div>
