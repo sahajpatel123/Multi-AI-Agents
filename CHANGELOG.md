@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Export presets now have a complete typed frontend API layer (list,
+  template catalog, create-from-template, delete, and one-click download
+  via the backend's redirecting use endpoint) with input validation,
+  request-ID passthrough, and server-filename envelopes — the groundwork
+  for surfacing saved-response export presets in the UI
+
 ### Improved
 - The persona drill-down's category breakdown now ships a clipboard copy
   alongside its CSV and Markdown downloads ("Copy Category Breakdown

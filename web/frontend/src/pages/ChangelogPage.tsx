@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Export presets: a complete typed frontend API layer — list, templates, create-from-template, delete, and one-click download — groundwork for the upcoming presets UI',
       '[IMPROVED] Profile analytics: the category breakdown ships a clipboard copy beside its CSV and Markdown downloads, completing its download/copy matrix',
       '[NEW] Profile analytics: export a mind\'s per-category breakdown as a human-readable Markdown report — completing the by-category family alongside CSV',
       '[IMPROVED] Profile analytics: the category breakdown export matches its timeline siblings with a plain label and a pinned busy lifecycle',

@@ -4956,3 +4956,178 @@ export async function exportScoringAuditCsv(
   }
   return response.blob();
 }
+
+// ─── Export presets ─────────────────────────────────────────────────────────
+// Saved-response export configurations the backend persists per user
+// (routes/export_presets.py): reusable filter+format bundles with a dry-run
+// preview and a use endpoint that 307-redirects into /api/saved/export.
+
+export type ExportPreset = {
+  id: number;
+  name: string;
+  description: string | null;
+  preset_type: string;
+  format: string;
+  search: string | null;
+  persona_id: string | null;
+  min_score: number | null;
+  max_score: number | null;
+  sort: string | null;
+  position: number;
+  is_default: boolean;
+  last_used_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ExportPresetTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  preset_type: string;
+  format: string;
+  search: string | null;
+  persona_id: string | null;
+  min_score: number | null;
+  max_score: number | null;
+  sort: string | null;
+};
+
+function normalizeExportPreset(raw: Record<string, unknown>): ExportPreset {
+  return {
+    id: Number(raw.id),
+    name: String(raw.name || ''),
+    description: raw.description ? String(raw.description) : null,
+    preset_type: String(raw.preset_type || ''),
+    format: String(raw.format || ''),
+    search: raw.search ? String(raw.search) : null,
+    persona_id: raw.persona_id ? String(raw.persona_id) : null,
+    min_score: typeof raw.min_score === 'number' ? raw.min_score : null,
+    max_score: typeof raw.max_score === 'number' ? raw.max_score : null,
+    sort: raw.sort ? String(raw.sort) : null,
+    position: typeof raw.position === 'number' ? raw.position : 0,
+    is_default: raw.is_default === true,
+    last_used_at: raw.last_used_at ? String(raw.last_used_at) : null,
+    created_at: raw.created_at ? String(raw.created_at) : null,
+    updated_at: raw.updated_at ? String(raw.updated_at) : null,
+  };
+}
+
+export async function listExportPresets(): Promise<ExportPreset[]> {
+  const res = await apiFetch(`/api/export-presets`);
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to load export presets'), res));
+  }
+  // Tolerant of a bare array for resilience against old cached responses.
+  const data = await parseJsonSafely<
+    Array<Record<string, unknown>> | { presets?: Array<Record<string, unknown>> }
+  >(res);
+  const rawItems = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.presets)
+      ? data.presets
+      : [];
+  return rawItems.map(normalizeExportPreset);
+}
+
+export async function listExportPresetTemplates(): Promise<ExportPresetTemplate[]> {
+  const res = await apiFetch(`/api/export-presets/templates`);
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to load export preset templates'), res),
+    );
+  }
+  const data = (await parseJsonSafely<{ templates?: Array<Record<string, unknown>> }>(res)) || {};
+  return (Array.isArray(data.templates) ? data.templates : []).map((raw) => ({
+    id: String(raw.id || ''),
+    name: String(raw.name || ''),
+    description: String(raw.description || ''),
+    preset_type: String(raw.preset_type || ''),
+    format: String(raw.format || ''),
+    search: raw.search ? String(raw.search) : null,
+    persona_id: raw.persona_id ? String(raw.persona_id) : null,
+    min_score: typeof raw.min_score === 'number' ? raw.min_score : null,
+    max_score: typeof raw.max_score === 'number' ? raw.max_score : null,
+    sort: raw.sort ? String(raw.sort) : null,
+  }));
+}
+
+export async function createExportPresetFromTemplate(
+  templateId: string,
+  name?: string,
+): Promise<ExportPreset> {
+  const normalizedTemplateId = templateId.trim();
+  if (!normalizedTemplateId) {
+    throw new RangeError('templateId must not be empty');
+  }
+  const params = new URLSearchParams({ template_id: normalizedTemplateId });
+  const trimmedName = name?.trim();
+  if (trimmedName) {
+    params.set('name', trimmedName);
+  }
+  const res = await apiFetch(`/api/export-presets/from-template?${params.toString()}`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to create export preset from template'), res),
+    );
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Export preset creation returned no preset.');
+    })();
+  return normalizeExportPreset(data);
+}
+
+export async function deleteExportPreset(presetId: number): Promise<void> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  const res = await apiFetch(`/api/export-presets/${encodeURIComponent(String(presetId))}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to delete export preset'), res));
+  }
+}
+
+export type ExportPresetDownload = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function useExportPreset(
+  presetId: number,
+  fallbackExtension: string = 'csv',
+): Promise<ExportPresetDownload> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  const safeExtension = fallbackExtension.replace(/[^a-zA-Z0-9]/g, '') || 'csv';
+  // The backend answers with a 307 into /api/saved/export; fetch follows it
+  // transparently so this resolves to the actual file.
+  const response = await apiFetch(
+    `/api/export-presets/${encodeURIComponent(String(presetId))}/use`,
+    { method: 'POST' },
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to run export preset'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-preset-${presetId}-export.${safeExtension}`,
+  };
+}
