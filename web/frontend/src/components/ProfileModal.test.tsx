@@ -112,6 +112,9 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['{"total_personas":16,"personas":[]}'], { type: 'application/json' }),
     filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.json',
   };
+  Object.defineProperty(personaStatsOverviewJsonExport.blob, 'text', {
+    value: vi.fn().mockResolvedValue('{"total_personas":16,"personas":[]}'),
+  });
   const personaStatsOverviewCsvExport = {
     blob: new Blob(['persona_id,name,appearances'], { type: 'text/csv' }),
     filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.csv',
@@ -2596,7 +2599,7 @@ describe('ProfileModal', () => {
     });
     screen.getByRole('button', { name: /usage/i }).click();
 
-    const button = await screen.findByRole('button', { name: /persona stats json/i });
+    const button = await screen.findByRole('button', { name: /^🤖 persona stats json$/i });
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -2776,7 +2779,7 @@ describe('ProfileModal', () => {
       await screen.findByRole('combobox', { name: /persona stats overview window/i }),
       { target: { value: '365' } },
     );
-    const button = await screen.findByRole('button', { name: /persona stats json/i });
+    const button = await screen.findByRole('button', { name: /^🤖 persona stats json$/i });
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -2896,6 +2899,84 @@ describe('ProfileModal', () => {
 
     expect(
       await screen.findByText('Could not copy persona stats Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('copies the persona stats overview as structured JSON', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy persona stats json/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsOverviewJson).toHaveBeenCalledWith(30);
+      expect(hoistedMocks.copyJsonToClipboard).toHaveBeenCalledWith(
+        '{"total_personas":16,"personas":[]}',
+      );
+      expect(
+        screen.getByText('Copied persona stats JSON to the clipboard.'),
+      ).toBeInTheDocument();
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('copies the persona stats overview JSON for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona stats overview window/i }),
+      { target: { value: '90' } },
+    );
+    const button = await screen.findByRole('button', { name: /copy persona stats json/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsOverviewJson).toHaveBeenCalledWith(90);
+      expect(
+        screen.getByText('Copied persona stats JSON to the clipboard.'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('surfaces persona stats JSON clipboard failures and releases the copy lock', async () => {
+    vi.mocked(hoistedMocks.copyJsonToClipboard).mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy persona stats json/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy persona stats JSON — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces persona stats JSON copy fetch failures and releases the copy lock', async () => {
+    hoistedMocks.exportAnalyticsPersonaStatsOverviewJson.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy persona stats json/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy persona stats JSON — try again.'),
     ).toBeInTheDocument();
     expect(button).not.toBeDisabled();
   });

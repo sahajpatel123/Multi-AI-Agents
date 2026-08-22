@@ -4507,6 +4507,46 @@ export function ProfileModal() {
                   >
                     {activeExport === 'overview-copy-markdown' ? '⏳ Copying…' : '🤖 Copy Persona Stats Markdown'}
                   </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview-copy-json'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'overview-copy-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'overview-copy-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('overview-copy-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaStatsOverviewJson(overviewWindowDays);
+                        const copied = await copyJsonToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona stats JSON to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona stats JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona stats JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'overview-copy-json' ? '⏳ Copying…' : '🤖 Copy Persona Stats JSON'}
+                  </button>
                 </div>
 
                 <div
