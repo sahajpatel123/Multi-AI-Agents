@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failure feedback matching the other persona stats exports
 
 ### Fixed
+- CI is green again on main after three independent breakages: the backend
+  security pin-floor guard no longer dies to bash command-substitution on its
+  own comment text (extracted to scripts/check_security_floors.py), fifteen
+  export-helper tests use a shared cross-realm Blob assertion instead of
+  spuriously failing `toBeInstanceOf(Blob)` checks, and a stray blank line at
+  EOF no longer trips the whitespace/pre-commit gates
 - The persona stats overview CSV export no longer fails silently: download
   failures surface the server error with its request ID, blocked downloads
   report why, and saved files use the server-provided filename instead of a
