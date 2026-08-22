@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Export presets can now be deleted in bulk: a Select toggle in the panel
+  header swaps per-row actions for checkboxes, with a live "N selected"
+  bar and a disabled-at-zero Delete button. The backend's guardrail is
+  surfaced honestly — if the selection includes your default preset, the
+  refusal renders as an alert and the bar switches to an explicit
+  "Delete anyway" second click (retrying with force=true) instead of
+  silently bypassing protection or failing mysteriously
+
 ### Improved
 - Export preset rows now show when each was last downloaded ("used 5m
   ago") beside their filter summary — the backend has always stamped

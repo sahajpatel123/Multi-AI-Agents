@@ -10,6 +10,7 @@ import {
   renameExportPreset,
   reorderExportPresets,
   setDefaultExportPreset,
+  bulkDeleteExportPresets,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -496,6 +497,88 @@ describe('export preset API helpers', () => {
       );
       await expect(reorderExportPresets([3])).rejects.toThrow(
         'Failed to reorder export presets (Request ID: req-reorder-502)',
+      );
+    });
+  });
+
+  describe('bulkDeleteExportPresets', () => {
+    it('posts ids and the force flag, returning the deleted count', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'bulk_deleted', deleted_count: 2 }), {
+          status: 200,
+        }),
+      );
+
+      const res = await bulkDeleteExportPresets([3, 5], true);
+      expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [3, 5], force: true }),
+      });
+      expect(res).toEqual({ status: 'bulk_deleted', deletedCount: 2 });
+    });
+
+    it('defaults force to false', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'bulk_deleted', deleted_count: 1 }), {
+          status: 200,
+        }),
+      );
+
+      await bulkDeleteExportPresets([9]);
+      expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [9], force: false }),
+      });
+    });
+
+    it('validates the id list before fetching', async () => {
+      await expect(bulkDeleteExportPresets([])).rejects.toThrow(
+        'ids must contain at least one preset id',
+      );
+      await expect(bulkDeleteExportPresets([3, -1])).rejects.toThrow(
+        'every preset id must be a positive integer',
+      );
+      expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+    });
+
+    it('raises ApiError carrying the protected-default detail so callers can offer force', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            detail: {
+              error: 'default_preset_protected',
+              message: 'Cannot delete default preset(s) without force=true.',
+              protected_ids: [4],
+            },
+          }),
+          { status: 400 },
+        ),
+      );
+
+      try {
+        await bulkDeleteExportPresets([3, 4]);
+        expect.unreachable('should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ApiError);
+        const apiError = error as ApiError;
+        expect(apiError.status).toBe(400);
+        expect(apiError.message).toBe('Cannot delete default preset(s) without force=true.');
+        expect(apiError.detail).toMatchObject({ error: 'default_preset_protected' });
+      }
+    });
+
+    it('surfaces rate-limit failures with their message and request ID', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'Too many bulk delete requests.' }), {
+          status: 429,
+          headers: { 'x-request-id': 'req-bulk-429' },
+        }),
+      );
+
+      await expect(bulkDeleteExportPresets([3])).rejects.toThrow(
+        'Too many bulk delete requests. (Request ID: req-bulk-429)',
       );
     });
   });

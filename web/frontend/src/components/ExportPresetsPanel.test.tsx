@@ -5,16 +5,21 @@ import * as apiModule from '../api';
 import * as downloadModule from '../lib/downloadTextFile';
 
 vi.mock('../api', () => ({
+  // Mirrors the real ApiError shape (message, status, detail) so tests
+  // can attach structured backend details like default_preset_protected.
   ApiError: class ApiError extends Error {
     status: number;
-    constructor(message: string, status: number) {
+    detail: unknown;
+    constructor(message: string, status: number, detail?: unknown) {
       super(message);
       this.status = status;
+      this.detail = detail;
     }
   },
   listExportPresets: vi.fn(),
   listExportPresetTemplates: vi.fn(),
   createExportPresetFromTemplate: vi.fn(),
+  bulkDeleteExportPresets: vi.fn(),
   deleteExportPreset: vi.fn(),
   useExportPreset: vi.fn(),
   previewExportPreset: vi.fn(),
@@ -501,5 +506,91 @@ describe('ExportPresetsPanel', () => {
 
     expect(await screen.findByText('High Score Responses')).toBeInTheDocument();
     expect(screen.queryByText(/used .* ago/)).not.toBeInTheDocument();
+  });
+
+  it('selects presets in select mode and bulk-deletes them', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      { ...hoisted.presetCsv, id: 3, name: 'Alpha' },
+      { ...hoisted.presetCsv, id: 5, name: 'Beta' },
+    ]);
+    mockedApi.bulkDeleteExportPresets.mockResolvedValue({ status: 'bulk_deleted', deletedCount: 2 });
+    render(<ExportPresetsPanel />);
+
+    // Selection mode replaces the per-row actions with checkboxes.
+    fireEvent.click(await screen.findByRole('button', { name: /select export presets/i }));
+    expect(screen.queryByRole('button', { name: /download export preset alpha/i })).not
+      .toBeInTheDocument();
+
+    const alpha = screen.getByRole('checkbox', { name: /select export preset alpha/i });
+    const beta = screen.getByRole('checkbox', { name: /select export preset beta/i });
+    // Nothing selected yet — the delete button refuses to fire.
+    expect(screen.getByRole('button', { name: /delete selected export presets/i })).toBeDisabled();
+
+    fireEvent.click(alpha);
+    fireEvent.click(beta);
+    expect(alpha).toBeChecked();
+    expect(beta).toBeChecked();
+
+    fireEvent.click(screen.getByRole('button', { name: /delete selected export presets/i }));
+    await waitFor(() => {
+      expect(mockedApi.bulkDeleteExportPresets).toHaveBeenCalledWith([3, 5], false);
+      expect(screen.getByRole('status')).toHaveTextContent('Deleted 2 presets.');
+    });
+    // Both rows are gone and selection mode exited.
+    expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+    expect(screen.queryByText('Beta')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /select export preset/i })).not.toBeInTheDocument();
+  });
+
+  it('offers an explicit force retry when the default preset blocks the delete', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      { ...hoisted.presetCsv, id: 3, name: 'Alpha', is_default: true },
+      { ...hoisted.presetCsv, id: 5, name: 'Beta' },
+    ]);
+    mockedApi.bulkDeleteExportPresets
+      .mockRejectedValueOnce(
+        new apiModule.ApiError('Cannot delete default preset(s) without force=true.', 400, {
+          error: 'default_preset_protected',
+          protected_ids: [3],
+        }),
+      )
+      .mockResolvedValueOnce({ status: 'bulk_deleted', deletedCount: 2 });
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /select export presets/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /select export preset alpha/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /select export preset beta/i }));
+    fireEvent.click(screen.getByRole('button', { name: /delete selected export presets/i }));
+
+    // The refusal surfaces as an alert and the bar switches to an
+    // explicit confirmation, selection intact.
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Cannot delete default preset(s) without force=true.',
+    );
+    expect(screen.getByText(/default preset is in the selection/i)).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /confirm deleting selected presets including your default/i }),
+    );
+    await waitFor(() => {
+      expect(mockedApi.bulkDeleteExportPresets).toHaveBeenLastCalledWith([3, 5], true);
+      expect(screen.getByRole('status')).toHaveTextContent('Deleted 2 presets.');
+    });
+    expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+  });
+
+  it('cancel exits select mode and clears the selection', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([{ ...hoisted.presetCsv, id: 3, name: 'Alpha' }]);
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /select export presets/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /select export preset alpha/i }));
+    fireEvent.click(screen.getByRole('button', { name: /cancel selecting export presets/i }));
+
+    expect(mockedApi.bulkDeleteExportPresets).not.toHaveBeenCalled();
+    expect(screen.queryByRole('checkbox', { name: /select export preset/i })).not.toBeInTheDocument();
+    // Re-entering starts from a clean selection.
+    fireEvent.click(screen.getByRole('button', { name: /select export presets/i }));
+    expect(screen.getByRole('button', { name: /delete selected export presets/i })).toBeDisabled();
   });
 });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ApiError,
+  bulkDeleteExportPresets,
   createExportPresetFromTemplate,
   deleteExportPreset,
   listExportPresetTemplates,
@@ -75,6 +76,13 @@ export function ExportPresetsPanel() {
   // Inline rename: which preset's name is being edited and its draft value.
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  // Bulk delete: selection mode with per-row checkboxes. bulkBlocked
+  // records that the server refused the last attempt because the default
+  // preset is in the selection — the bar then offers an explicit
+  // "delete anyway" retry instead of hiding that guardrail.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkBlocked, setBulkBlocked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -238,6 +246,49 @@ export function ExportPresetsPanel() {
     [presets, runAction],
   );
 
+  const toggleSelected = useCallback((id: number) => {
+    setBulkBlocked(false);
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+    );
+  }, []);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds([]);
+    setBulkBlocked(false);
+  }, []);
+
+  const handleBulkDelete = useCallback(
+    (force: boolean) =>
+      runAction('bulk-delete', async () => {
+        try {
+          const result = await bulkDeleteExportPresets(selectedIds, force);
+          const deleted = new Set(selectedIds);
+          setPresets((current) =>
+            current ? current.filter((item) => !deleted.has(item.id)) : current,
+          );
+          exitSelectMode();
+          const noun = result.deletedCount === 1 ? 'preset' : 'presets';
+          return `Deleted ${result.deletedCount} ${noun}.`;
+        } catch (error) {
+          if (
+            error instanceof ApiError &&
+            error.detail !== null &&
+            typeof error.detail === 'object' &&
+            (error.detail as { error?: string }).error === 'default_preset_protected'
+          ) {
+            // Keep the selection so one click retries with force; the
+            // server's refusal renders as the alert and the bar switches
+            // to an explicit "delete anyway" confirmation.
+            setBulkBlocked(true);
+          }
+          throw error;
+        }
+      }),
+    [exitSelectMode, runAction, selectedIds],
+  );
+
   if (presets === null) {
     return (
       <div style={{ padding: '10px 0' }}>
@@ -278,15 +329,46 @@ export function ExportPresetsPanel() {
     <div style={{ padding: '10px 0' }} data-testid="export-presets-panel">
       <div
         style={{
-          fontSize: 10,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          color: '#A0A39A',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
           margin: '0 0 6px',
-          fontFamily: 'var(--vp-font-sans)',
         }}
       >
-        Export presets
+        <span
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: '#A0A39A',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          Export presets
+        </span>
+        {presets.length > 0 ? (
+          <button
+            type="button"
+            aria-pressed={selectMode}
+            aria-label={selectMode ? 'Finish selecting export presets' : 'Select export presets to delete'}
+            onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+            style={{
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 6,
+              color: '#4A3728',
+              cursor: 'pointer',
+              padding: '2px 7px',
+              fontSize: 9,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              fontFamily: 'var(--vp-font-sans)',
+            }}
+          >
+            {selectMode ? 'Done' : 'Select'}
+          </button>
+        ) : null}
       </div>
 
       {presets.length === 0 ? (
@@ -439,6 +521,16 @@ export function ExportPresetsPanel() {
                     </div>
                   ) : null}
                 </div>
+                {selectMode ? (
+                  <input
+                    type="checkbox"
+                    aria-label={`Select export preset ${preset.name}`}
+                    checked={selectedIds.includes(preset.id)}
+                    disabled={busyKey !== null}
+                    onChange={() => toggleSelected(preset.id)}
+                    style={{ width: 14, height: 14, flexShrink: 0, accentColor: '#5A8C6A' }}
+                  />
+                ) : (
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   {renamingId !== preset.id ? (
                     <>
@@ -603,6 +695,7 @@ export function ExportPresetsPanel() {
                     {deleting ? 'Deleting…' : 'Delete'}
                   </button>
                 </div>
+                )}
               </div>
               {openPreviews[preset.id] && previews[preset.id] ? (
                 <div
@@ -660,6 +753,76 @@ export function ExportPresetsPanel() {
           })}
         </ul>
       )}
+
+      {selectMode ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 6,
+            margin: '-2px 0 8px',
+          }}
+        >
+          <span style={{ fontSize: 10, color: '#A0A39A' }}>
+            {selectedIds.length} selected
+          </span>
+          <button
+            type="button"
+            disabled={selectedIds.length === 0 || busyKey !== null}
+            aria-busy={busyKey === 'bulk-delete'}
+            aria-label={
+              bulkBlocked
+                ? 'Confirm deleting selected presets including your default'
+                : 'Delete selected export presets'
+            }
+            onClick={() => void handleBulkDelete(bulkBlocked)}
+            style={{
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 6,
+              color: '#D85A30',
+              cursor: selectedIds.length === 0 || busyKey !== null ? 'wait' : 'pointer',
+              padding: '3px 8px',
+              fontSize: 10,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              fontFamily: 'var(--vp-font-sans)',
+            }}
+          >
+            {busyKey === 'bulk-delete'
+              ? 'Deleting…'
+              : bulkBlocked
+                ? 'Delete anyway'
+                : 'Delete selected'}
+          </button>
+          <button
+            type="button"
+            disabled={busyKey !== null}
+            aria-label="Cancel selecting export presets"
+            onClick={exitSelectMode}
+            style={{
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 6,
+              color: '#A0A39A',
+              cursor: busyKey !== null ? 'wait' : 'pointer',
+              padding: '3px 8px',
+              fontSize: 10,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              fontFamily: 'var(--vp-font-sans)',
+            }}
+          >
+            Cancel
+          </button>
+          {bulkBlocked ? (
+            <span style={{ fontSize: 10, color: '#D85A30' }}>
+              Your default preset is in the selection — deleting it needs a second click.
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       {presets.length === 0 && templates.length > 0 ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '0 0 8px' }}>

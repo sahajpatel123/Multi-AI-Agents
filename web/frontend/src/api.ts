@@ -5171,6 +5171,53 @@ export async function reorderExportPresets(
   };
 }
 
+export type ExportPresetBulkDeleteResult = {
+  status: string;
+  deletedCount: number;
+};
+
+export async function bulkDeleteExportPresets(
+  ids: number[],
+  force = false,
+): Promise<ExportPresetBulkDeleteResult> {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new RangeError('ids must contain at least one preset id');
+  }
+  if (!ids.every((id) => Number.isInteger(id) && id >= 1)) {
+    throw new RangeError('every preset id must be a positive integer');
+  }
+  const res = await apiFetch(`/api/export-presets/bulk-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, force }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{
+      detail?: { message?: string; error?: string } | string;
+    }>(res);
+    const message = getErrorMessage(err, 'Failed to delete export presets');
+    // The backend refuses to delete your default preset unless force is
+    // set; surface that as ApiError so callers can distinguish "retry
+    // with force" from every other failure.
+    if (
+      err &&
+      typeof err === 'object' &&
+      err.detail !== null &&
+      typeof err.detail === 'object' &&
+      err.detail.error === 'default_preset_protected'
+    ) {
+      throw new ApiError(message, res.status, err.detail);
+    }
+    throw new Error(withRequestId(message, res));
+  }
+  const data =
+    (await parseJsonSafely<{ status?: string; deleted_count?: number }>(res)) || {};
+  return {
+    status: String(data.status || 'bulk_deleted'),
+    deletedCount: typeof data.deleted_count === 'number' ? data.deleted_count : 0,
+  };
+}
+
 export async function deleteExportPreset(presetId: number): Promise<void> {  if (!Number.isInteger(presetId) || presetId < 1) {
     throw new RangeError('presetId must be a positive integer');
   }
