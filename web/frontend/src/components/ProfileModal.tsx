@@ -4356,6 +4356,7 @@ export function ProfileModal() {
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview-json'}
                     style={{
                       padding: '8px 12px',
                       borderRadius: 6,
@@ -4392,6 +4393,7 @@ export function ProfileModal() {
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview-markdown'}
                     style={{
                       padding: '8px 12px',
                       borderRadius: 6,

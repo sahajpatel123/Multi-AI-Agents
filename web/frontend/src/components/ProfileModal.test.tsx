@@ -2683,6 +2683,44 @@ describe('ProfileModal', () => {
     expect(button).not.toBeDisabled();
   });
 
+  it('labels only the active persona stats overview download while it is in progress', async () => {
+    let releaseExport: (() => void) | undefined;
+    const pendingExport = new Promise<typeof hoistedMocks.personaStatsOverviewJsonExport>(
+      (resolve) => {
+        releaseExport = () => resolve(hoistedMocks.personaStatsOverviewJsonExport);
+      },
+    );
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsOverviewJson).mockReturnValueOnce(
+      pendingExport,
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const jsonButton = await screen.findByRole('button', { name: /^🤖 persona stats json$/i });
+    const markdownButton = screen.getByRole('button', { name: /^🤖 persona stats markdown$/i });
+    fireEvent.click(jsonButton);
+
+    await waitFor(() => {
+      expect(jsonButton).toHaveTextContent('⏳ Downloading…');
+      expect(jsonButton).toHaveAttribute('aria-busy', 'true');
+    });
+    expect(markdownButton).toHaveTextContent('🤖 Persona Stats Markdown');
+    expect(markdownButton).toHaveAttribute('aria-busy', 'false');
+    expect(markdownButton).toBeDisabled();
+
+    await act(async () => {
+      releaseExport?.();
+    });
+    await waitFor(() => {
+      expect(jsonButton).not.toBeDisabled();
+      expect(jsonButton).toHaveAttribute('aria-busy', 'false');
+    });
+  });
+
   it('copies the persona stats overview as spreadsheet-aware CSV', async () => {
     renderModal();
     await waitFor(() => {
