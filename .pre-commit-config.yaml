@@ -25,18 +25,23 @@ repos:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
 
-  # JavaScript/TypeScript hooks
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v3.0.0
+  # JavaScript/TypeScript hooks.
+  # The mirrors-eslint remote hook is unusable here: its v3.0.0 tag predates
+  # the repo's own .pre-commit-hooks.yaml (InvalidManifestError on every
+  # run), and a nodeenv-installed eslint can't see web/frontend's flat
+  # config or plugins. Run the project's OWN eslint instead — same config
+  # CI uses, zero duplicate installs.
+  - repo: local
     hooks:
-      - id: eslint
-        files: \.[jt]sx?$
-        types: [file]
-        additional_dependencies:
-          - "eslint@9"
-          - "@eslint/js@9"
-          - "globals@15"
-          - "eslint-plugin-react-hooks@5"
+      - id: eslint-frontend
+        name: eslint (web/frontend)
+        # pre-commit passes repo-root-relative paths; strip the
+        # web/frontend/ prefix so eslint (run from that directory, where
+        # its flat config and node_modules live) sees package-relative ones.
+        entry: bash -c 'cd web/frontend && files=(); for f in "$@"; do files+=("${f#web/frontend/}"); done; npx eslint "${files[@]}"' --
+        language: system
+        files: ^web/frontend/.*\.[jt]sx?$
+        pass_filenames: true
 
   # Gitleaks for secret scanning
   - repo: https://github.com/gitleaks/gitleaks

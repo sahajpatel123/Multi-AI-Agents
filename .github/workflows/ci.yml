@@ -384,6 +384,19 @@ jobs:
         with:
           python-version: "3.11"
 
+      # The eslint hook is a local system hook that runs web/frontend's own
+      # eslint (the mirrors-eslint remote hook is broken upstream), so this
+      # job needs Node and the frontend dependency tree.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix web/frontend
+
       - name: Install pre-commit
         run: python -m pip install pre-commit
 
