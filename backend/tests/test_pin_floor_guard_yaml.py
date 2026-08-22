@@ -1,140 +1,84 @@
-"""Static-analysis regression test for the CI pin-floor guard.
+"""Behavioral regression tests for the security pin-floor guard.
 
-The pin-floor guard lives inside a `python -c "..."` heredoc in
-`.github/workflows/ci.yml`. It is invisible to pytest — easy to break
-silently, as the cycle-79 bash-quoting bug demonstrated. These tests
-parse the heredoc out of the workflow file and assert its structural
-invariants, so a future regression in the heredoc itself is caught
-locally before CI runs.
+The guard used to live inside a `python -c "..."` heredoc embedded in
+`.github/workflows/ci.yml`. Embedding Python in bash made it invisible
+to pytest and one stray backtick away from shell injection into its own
+comment text — which is exactly how it broke every CI run (cycle-79).
+It now lives in ``scripts/check_security_floors.py`` as a plain module,
+so these tests exercise the real implementation instead of grepping
+workflow YAML.
 
-What this test guards:
-  1. The Python block is syntactically valid (compile() succeeds).
-  2. The heredoc contains the expected FORBIDDEN entries — direct
-     python-jose/ecdsa reintroductions still fail.
-  3. The heredoc contains the resolved-tree walk via
-     importlib.metadata.distributions() (cycle-78 hardening).
-  4. The heredoc contains no inner double quotes inside the
-     python -c "..." block (cycle-79 bash-quoting bug).
-  5. The heredoc uses single-quoted string literals for all Python
-     string content (cycle-79 hardening).
+Two layers are guarded here:
 
-This is a structural guard, not a behavior test. Behavior is
-exercised by CI itself; this just makes the heredoc visible to the
-local test suite so a developer who edits the workflow without
-noticing the bash-quoting trap fails their local pytest run.
+  1. Wiring — ci.yml must still invoke the script, and the script must
+     expose the floors/bans established by past security audits. A
+     refactor that silently disconnects either side fails these tests.
+  2. Behavior — the checking functions themselves, against synthetic
+     requirements.txt content: clean trees pass, regressed pins fail,
+     missing pins fail, and forbidden packages (direct or transitive)
+     are caught.
 """
 
 from __future__ import annotations
 
-import re
+import importlib.util
 from pathlib import Path
 
 import pytest
 
-WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
-
-
-def _extract_pin_floor_block(text: str) -> tuple[str, int, int]:
-    """Return (python_source, start_line, end_line) of the python -c "..."
-    heredoc inside the 'Pin floor guard (security-required versions)'
-    step. Raises if the heredoc cannot be located.
-    """
-    step_re = re.compile(
-        r"name:\s*Pin floor guard[^\n]*\n\s*run:\s*\|\n(?P<indent>[ \t]*)(?P<body>.*?)(?=^\s*-?\s*name:\s|\Z)",
-        re.DOTALL | re.MULTILINE,
-    )
-    match = step_re.search(text)
-    assert match, "Pin floor guard step not found in ci.yml"
-    indent = match.group("indent")
-    body = match.group("body")
-    # The python -c "..." block is the first non-comment line that begins
-    # with `<indent>python -c "`. It spans from that line to the next
-    # line that begins with `<indent>"` and contains only a single `"`.
-    open_re = re.compile(
-        rf"^{re.escape(indent)}python -c \"\s*$",
-        re.MULTILINE,
-    )
-    open_match = open_re.search(body)
-    assert open_match, "Could not find opening `python -c \"` line"
-    after_open = body[open_match.end():]
-    close_re = re.compile(rf"^{re.escape(indent)}\"\s*$", re.MULTILINE)
-    close_match = close_re.search(after_open)
-    assert close_match, "Could not find closing `\"` line"
-    python_src = after_open[: close_match.start()].rstrip("\n")
-    # Trim the indent from each line so the Python source is unindented
-    # (matches what bash actually passes to python -c).
-    trimmed = "\n".join(
-        line[len(indent):] if line.startswith(indent) else line
-        for line in python_src.splitlines()
-    )
-    # Approximate line numbers relative to the workflow file.
-    prefix_lines = text[: text.index(body)].count("\n")
-    start_line = prefix_lines + open_match.endpos
-    end_line = prefix_lines + open_match.endpos + after_open[: close_match.end()].count("\n")
-    return trimmed, start_line, end_line
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "scripts" / "check_security_floors.py"
+WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
 @pytest.fixture(scope="module")
-def pin_floor_block() -> tuple[str, int, int]:
-    text = WORKFLOW.read_text()
-    return _extract_pin_floor_block(text)
+def guard():
+    spec = importlib.util.spec_from_file_location("check_security_floors", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
-def test_workflow_file_exists():
-    assert WORKFLOW.exists(), f"ci.yml not found at {WORKFLOW}"
+# --------------------------------------------------------------------------
+# Layer 1: wiring
+# --------------------------------------------------------------------------
 
 
-def test_python_block_is_syntactically_valid(pin_floor_block):
-    """The heredoc must be a syntactically valid Python program.
+def test_script_exists():
+    assert SCRIPT.exists(), f"guard script missing at {SCRIPT}"
 
-    A regression in indentation, unmatched brackets, or a typo would
-    silently break CI. compile() catches all of those.
+
+def test_ci_invokes_the_guard_script():
+    """The 'Pin floor guard' step must call the extracted script.
+
+    Guards against a workflow edit dropping the invocation while the
+    script itself keeps passing locally — CI would silently lose the
+    floor enforcement.
     """
-    src, _, _ = pin_floor_block
-    try:
-        compile(src, str(WORKFLOW), "exec")
-    except SyntaxError as e:
-        pytest.fail(f"pin-floor guard Python block is not syntactically valid: {e}")
+    import re
+
+    text = WORKFLOW.read_text()
+    match = re.search(
+        r"name:\s*Pin floor guard[^\n]*\n(?P<body>.*?)(?=^\s*- name:)",
+        text,
+        re.DOTALL | re.MULTILINE,
+    )
+    assert match, "Pin floor guard step not found in ci.yml"
+    assert "scripts/check_security_floors.py" in match.group("body")
 
 
-def test_forbidden_entries_include_python_jose_and_ecdsa(pin_floor_block):
+def test_forbidden_entries_include_python_jose_and_ecdsa(guard):
     """The cycle-1 migration dropped python-jose; the FORBIDDEN list
     must still guard against its reintroduction."""
-    src, _, _ = pin_floor_block
-    assert "'python-jose'" in src
-    assert "'ecdsa'" in src
-    assert "PYSEC-2026-1325" in src
+    assert "python-jose" in guard.FORBIDDEN
+    assert "ecdsa" in guard.FORBIDDEN
+    assert "PYSEC-2026-1325" in str(guard.FORBIDDEN)
 
 
-def test_resolved_tree_walk_present(pin_floor_block):
-    """The cycle-78 hardening added a resolved-tree walk via
-    importlib.metadata.distributions() so transitive reintroducers
-    are caught. A future commit that deletes this walk would re-open
-    the transitive reintroducer gap."""
-    src, _, _ = pin_floor_block
-    assert "importlib.metadata" in src
-    assert "_md.distributions()" in src
-
-
-def test_no_inner_double_quotes_in_python_block(pin_floor_block):
-    """Cycle 79: bash terminated the python -c \"...\" argument at the
-    first inner double quote, then tried to parse the rest as a
-    subshell. Guard against that regression by asserting the only
-    double quotes in the Python block are the outer python -c
-    wrappers (which are outside the parsed range)."""
-    src, _, _ = pin_floor_block
-    quotes = [(i, line) for i, line in enumerate(src.splitlines(), 1) if '"' in line]
-    assert not quotes, (
-        "Inner double quotes in pin-floor guard Python block — bash will "
-        "treat the first as the close of the python -c \"...\" argument:\n"
-        + "\n".join(f"  line {i}: {line}" for i, line in quotes)
-    )
-
-
-def test_required_floor_dict_present(pin_floor_block):
+def test_required_floor_dict_present(guard):
     """The REQUIRED pin-floor dict must list at least the packages the
     cycle-1+ security audits established as floor-critical."""
-    src, _, _ = pin_floor_block
     for pkg in (
         "fastapi",
         "pyasn1",
@@ -147,11 +91,103 @@ def test_required_floor_dict_present(pin_floor_block):
         "weasyprint",
         "pytest",
     ):
-        assert f"'{pkg}'" in src, f"REQUIRED floor missing for {pkg}"
+        assert pkg in guard.REQUIRED, f"REQUIRED floor missing for {pkg}"
 
 
-def test_block_prints_security_floor_ok_on_clean(pin_floor_block):
-    """The guard must end with a clear success marker so CI logs
-    show it ran (vs. silently no-op'ing on a malformed rewrite)."""
-    src, _, _ = pin_floor_block
-    assert "print('Security floor OK')" in src or 'print("Security floor OK")' in src
+def test_resolved_tree_walk_present(guard):
+    """Transitive reintroducers are caught via importlib.metadata."""
+    source = Path(guard.__file__).read_text()
+    assert "importlib.metadata" in source
+    assert "distributions()" in source
+
+
+def test_main_prints_success_marker_on_clean(guard, tmp_path, monkeypatch, capsys):
+    """The guard ends with a clear success marker so CI logs show it ran
+    (vs. silently no-op'ing on a malformed rewrite)."""
+    clean_text = "".join(
+        f"{pkg}=={ver}\n" for pkg, ver in guard.REQUIRED.items()
+    )
+    fake_requirements = tmp_path / "requirements.txt"
+    fake_requirements.write_text(clean_text)
+    monkeypatch.setattr(guard, "REQUIREMENTS_PATH", fake_requirements)
+    # A clean environment must not carry forbidden packages either; the
+    # test process's own environment qualifies only if it is clean, so
+    # force the resolved-tree walk to see nothing installed.
+    monkeypatch.setattr(guard, "check_forbidden_resolved", list)
+    assert guard.main() == 0
+    out = capsys.readouterr().out
+    assert "Security floor OK" in out
+
+
+# --------------------------------------------------------------------------
+# Layer 2: behavior
+# --------------------------------------------------------------------------
+
+
+# Snapshot of the floors at the time these tests were written; behavioral
+# tests below use it as synthetic input so they stay meaningful even if
+# test_required_floor_dict_present later allows new floors to be added.
+guard_REQUIRED_SNAPSHOT = {
+    "fastapi": "0.139.2",
+    "pyasn1": "0.6.4",
+    "PyJWT": "2.13.0",
+    "python-multipart": "0.0.32",
+    "cryptography": "50.0.0",
+    "Pillow": "12.3.0",
+    "python-dotenv": "1.2.2",
+    "markdown": "3.8.1",
+    "weasyprint": "69.0",
+    "pytest": "9.0.3",
+}
+
+
+def _requirements_text(**overrides) -> str:
+    pins = dict(guard_REQUIRED_SNAPSHOT)
+    pins.update(overrides)
+    return "".join(f"{pkg}=={ver}\n" for pkg, ver in pins.items())
+
+
+def test_clean_pins_pass(guard):
+    assert guard.check_pin_floors(_requirements_text()) == []
+
+
+def test_regressed_pin_is_caught(guard):
+    text = _requirements_text(cryptography="49.9.9")
+    failures = guard.check_pin_floors(text)
+    assert any("REGRESSED: cryptography==49.9.9" in f for f in failures)
+
+
+def test_missing_pin_is_caught(guard):
+    text = "\n".join(
+        line
+        for line in _requirements_text().splitlines()
+        if not line.startswith("PyJWT==")
+    )
+    failures = guard.check_pin_floors(text)
+    assert failures == ["MISSING: PyJWT==2.13.0"]
+
+
+def test_extra_pins_do_not_disturb_the_guard(guard):
+    text = _requirements_text() + "some-unrelated-package==1.0.0\n"
+    assert guard.check_pin_floors(text) == []
+
+
+def test_forbidden_direct_pin_is_caught(guard):
+    hits = guard.check_forbidden_direct("python-jose[cryptography]==3.3.0\n")
+    assert len(hits) == 1
+    assert "FORBIDDEN (direct): python-jose" in hits[0]
+
+
+def test_dep_name_strips_extras_and_specifiers(guard):
+    assert guard._dep_name("ecdsa>=0.19.0") == "ecdsa"
+    assert guard._dep_name("python-jose[cryptography]==3.5.0") == "python-jose"
+    assert guard._dep_name("ecdsa ; python_version < '3.11'") == "ecdsa"
+
+
+def test_check_forbidden_resolved_returns_list(guard):
+    """Smoke: the resolved-tree walk runs against the live environment
+    and returns violations only for installed forbidden packages."""
+    result = guard.check_forbidden_resolved()
+    assert isinstance(result, list)
+    for hit in result:
+        assert hit.startswith("FORBIDDEN (resolved):")
