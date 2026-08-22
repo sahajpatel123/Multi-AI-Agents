@@ -528,6 +528,13 @@ export function ExportPresetsPanel() {
                     checked={selectedIds.includes(preset.id)}
                     disabled={busyKey !== null}
                     onChange={() => toggleSelected(preset.id)}
+                    onKeyDown={(event) => {
+                      // Escape leaves selection mode entirely — the same
+                      // contract the inline rename editor honors.
+                      if (event.key === 'Escape') {
+                        exitSelectMode();
+                      }
+                    }}
                     style={{ width: 14, height: 14, flexShrink: 0, accentColor: '#5A8C6A' }}
                   />
                 ) : (
@@ -764,9 +771,53 @@ export function ExportPresetsPanel() {
             margin: '-2px 0 8px',
           }}
         >
-          <span style={{ fontSize: 10, color: '#A0A39A' }}>
+          <span aria-live="polite" style={{ fontSize: 10, color: '#A0A39A' }}>
             {selectedIds.length} selected
           </span>
+          <button
+            type="button"
+            disabled={
+              selectedIds.length === presets.length ||
+              presets.length === 0 ||
+              busyKey !== null
+            }
+            aria-label="Select every export preset"
+            onClick={() => setSelectedIds(presets.map((item) => item.id))}
+            style={{
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 6,
+              color: '#4A3728',
+              cursor: busyKey !== null ? 'wait' : 'pointer',
+              padding: '3px 8px',
+              fontSize: 10,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              fontFamily: 'var(--vp-font-sans)',
+            }}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length === 0 || busyKey !== null}
+            aria-label="Clear selected export presets"
+            onClick={() => setSelectedIds([])}
+            style={{
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 6,
+              color: '#4A3728',
+              cursor: busyKey !== null ? 'wait' : 'pointer',
+              padding: '3px 8px',
+              fontSize: 10,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              fontFamily: 'var(--vp-font-sans)',
+            }}
+          >
+            None
+          </button>
           <button
             type="button"
             disabled={selectedIds.length === 0 || busyKey !== null}

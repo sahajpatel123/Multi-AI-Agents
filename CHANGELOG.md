@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- Bulk-delete selection gets real ergonomics: All and None buttons keep
+  the selection one click away from complete or empty (and disable
+  honestly at exactly those states), the "N selected" count is a polite
+  live region so screen readers announce every change, and Escape on any
+  checkbox leaves selection mode — the same contract the inline rename
+  editor honors
+
 ### Added
 - Export presets can now be deleted in bulk: a Select toggle in the panel
   header swaps per-row actions for checkboxes, with a live "N selected"

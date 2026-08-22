@@ -593,4 +593,48 @@ describe('ExportPresetsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /select export presets/i }));
     expect(screen.getByRole('button', { name: /delete selected export presets/i })).toBeDisabled();
   });
+
+  it('selects everything with All and empties the selection with None', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      { ...hoisted.presetCsv, id: 3, name: 'Alpha' },
+      { ...hoisted.presetCsv, id: 5, name: 'Beta' },
+      { ...hoisted.presetCsv, id: 7, name: 'Gamma' },
+    ]);
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /select export presets/i }));
+    const all = screen.getByRole('button', { name: /select every export preset/i });
+    // A fresh selection is empty, so All is available.
+    expect(all).toBeEnabled();
+
+    // Selecting one manually doesn't complete the set.
+    fireEvent.click(screen.getByRole('checkbox', { name: /select export preset alpha/i }));
+    expect(all).toBeEnabled();
+
+    fireEvent.click(all);
+    expect(screen.getByText('3 selected')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /select export preset beta/i })).toBeChecked();
+    // Nothing left to add — All disables at a full selection.
+    expect(all).toBeDisabled();
+
+    const none = screen.getByRole('button', { name: /clear selected export presets/i });
+    fireEvent.click(none);
+    expect(screen.getByText('0 selected')).toBeInTheDocument();
+    expect(none).toBeDisabled();
+    expect(all).toBeEnabled();
+  });
+
+  it('exits selection mode when Escape is pressed on a checkbox', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([{ ...hoisted.presetCsv, id: 3, name: 'Alpha' }]);
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /select export presets/i }));
+    fireEvent.keyDown(
+      screen.getByRole('checkbox', { name: /select export preset alpha/i }),
+      { key: 'Escape' },
+    );
+
+    expect(mockedApi.bulkDeleteExportPresets).not.toHaveBeenCalled();
+    expect(screen.queryByRole('checkbox', { name: /select export preset/i })).not.toBeInTheDocument();
+  });
 });
