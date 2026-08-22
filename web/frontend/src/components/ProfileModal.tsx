@@ -4272,6 +4272,7 @@ export function ProfileModal() {
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview'}
                     style={{
                       padding: '8px 12px',
                       borderRadius: 6,
@@ -4286,17 +4287,24 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('overview');
+                      clearExportFeedback();
                       try {
-                        const blob = await exportAnalyticsPersonaStatsOverviewCsv(30);
-                        downloadBlobFile(blob, 'arena-persona-overview-30d.csv');
-                      } catch {
-                        // ignore error
+                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewCsv(30);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona stats CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona stats CSV — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
                     }}
                   >
-                    {activeExport === 'overview' ? '⏳ Downloading…' : '🤖 Persona Stats Export'}
+                    {activeExport === 'overview' ? '⏳ Downloading…' : '🤖 Persona Stats CSV'}
                   </button>
                   <button
                     type="button"

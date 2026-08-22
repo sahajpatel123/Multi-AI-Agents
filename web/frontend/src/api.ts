@@ -4675,13 +4675,34 @@ export async function exportAnalyticsActivityMarkdown(days: number = 30): Promis
   };
 }
 
-export async function exportAnalyticsPersonaStatsOverviewCsv(windowDays: number = 30): Promise<Blob> {
-  const response = await apiFetch(`/api/analytics/persona-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+export type AnalyticsPersonaStatsOverviewCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsOverviewCsv(
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsOverviewCsvExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/persona-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export persona stats overview CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona stats overview CSV'), response),
+      response.status,
+      err,
+    );
   }
-  return response.blob();
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-stats-overview-${windowDays}d.csv`,
+  };
 }
 
 export type AnalyticsPersonaStatsOverviewJsonExport = {

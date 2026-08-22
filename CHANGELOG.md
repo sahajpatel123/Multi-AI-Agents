@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The persona stats overview CSV export no longer fails silently: download
+  failures surface the server error with its request ID, blocked downloads
+  report why, and saved files use the server-provided filename instead of a
+  hardcoded one
+
 ### Added
 - Persona timeline JSON clipboard copy now ignores duplicate activations while
   an export is still in flight, preventing redundant requests and stale results

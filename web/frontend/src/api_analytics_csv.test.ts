@@ -316,18 +316,61 @@ describe('Analytics CSV export frontend API helpers', () => {
     });
   });
 
-  it('exportAnalyticsPersonaStatsOverviewCsv fetches expected endpoint', async () => {
+  it('exportAnalyticsPersonaStatsOverviewCsv returns the server filename', async () => {
     const mockBlob = new Blob(['persona_id,name'], { type: 'text/csv' });
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
-      new Response(mockBlob, { status: 200 })
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-persona-stats-overview-2026-08-01-to-2026-08-30.csv"',
+        },
+      })
     );
 
     const res = await exportAnalyticsPersonaStatsOverviewCsv(30);
-    expectBlob(res);
+    expectBlob(res.blob);
+    expect(res.filename).toBe(
+      'arena-persona-stats-overview-2026-08-01-to-2026-08-30.csv',
+    );
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/analytics/persona-stats/export.csv?window_days=30',
       {}
     );
+  });
+
+  it('falls back to a window-based filename when the overview CSV response omits one', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['persona_id,name'], { type: 'text/csv' }), { status: 200 }),
+    );
+
+    const res = await exportAnalyticsPersonaStatsOverviewCsv(7);
+    expectBlob(res.blob);
+    expect(res.filename).toBe('arena-persona-stats-overview-7d.csv');
+  });
+
+  it('rejects an invalid persona stats overview CSV window before fetching', async () => {
+    await expect(exportAnalyticsPersonaStatsOverviewCsv(0)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    await expect(exportAnalyticsPersonaStatsOverviewCsv(366)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('surfaces request IDs on persona stats overview CSV failures', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Too many persona-stats CSV exports' }), {
+        status: 429,
+        headers: { 'x-request-id': 'req-persona-stats-csv' },
+      }),
+    );
+
+    await expect(exportAnalyticsPersonaStatsOverviewCsv()).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many persona-stats CSV exports (Request ID: req-persona-stats-csv)',
+    });
   });
 
   it('exportAnalyticsPersonaStatsOverviewJson returns the server filename', async () => {

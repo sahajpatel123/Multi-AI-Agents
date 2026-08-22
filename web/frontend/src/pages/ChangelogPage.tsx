@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[FIXED] Profile analytics: persona stats CSV exports no longer fail silently — errors surface with their request ID and saved files use the server filename',
       '[NEW] Profile analytics: download the complete persona-stats overview as a human-readable Markdown report for notes and docs',
       '[NEW] Profile analytics: download the complete persona-stats overview as structured JSON for notebooks, scripts, and data analysis',
       '[IMPROVED] Profile analytics: persona timeline JSON clipboard copy ignores duplicate activations while an export is in flight, preventing redundant requests and stale results',

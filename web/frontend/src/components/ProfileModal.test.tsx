@@ -112,6 +112,10 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['{"total_personas":16,"personas":[]}'], { type: 'application/json' }),
     filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.json',
   };
+  const personaStatsOverviewCsvExport = {
+    blob: new Blob(['persona_id,name,appearances'], { type: 'text/csv' }),
+    filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.csv',
+  };
   const personaStatsOverviewMarkdownExport = {
     blob: new Blob(['# Arena — persona stats overview'], { type: 'text/markdown' }),
     filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.md',
@@ -153,6 +157,7 @@ const hoistedMocks = vi.hoisted(() => {
   personaTimelineJsonExport,
   personaTimelineMarkdownExport,
   personaStatsOverviewJsonExport,
+  personaStatsOverviewCsvExport,
   personaStatsOverviewMarkdownExport,
   summaryMarkdownBlob,
   summaryCsvBlob,
@@ -336,6 +341,7 @@ const hoistedMocks = vi.hoisted(() => {
   exportAnalyticsPersonaStatsTimelineCsv: vi.fn().mockResolvedValue(personaTimelineCsvExport),
   exportAnalyticsPersonaStatsTimelineJson: vi.fn().mockResolvedValue(personaTimelineJsonExport),
   exportAnalyticsPersonaStatsTimelineMarkdown: vi.fn().mockResolvedValue(personaTimelineMarkdownExport),
+  exportAnalyticsPersonaStatsOverviewCsv: vi.fn().mockResolvedValue(personaStatsOverviewCsvExport),
   exportAnalyticsPersonaStatsOverviewJson: vi.fn().mockResolvedValue(personaStatsOverviewJsonExport),
   exportAnalyticsPersonaStatsOverviewMarkdown: vi.fn().mockResolvedValue(personaStatsOverviewMarkdownExport),
   exportAnalyticsPersonaWinRateCsv: vi.fn().mockResolvedValue({
@@ -480,6 +486,7 @@ vi.mock('../api', () => ({
   getAnalyticsCategoryStats: hoistedMocks.getAnalyticsCategoryStats,
   getAnalyticsPersonaWinRate: hoistedMocks.getAnalyticsPersonaWinRate,
   getAnalyticsPersonaStatsTimeline: hoistedMocks.getAnalyticsPersonaStatsTimeline,
+  exportAnalyticsPersonaStatsOverviewCsv: hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaStatsOverviewJson: hoistedMocks.exportAnalyticsPersonaStatsOverviewJson,
   exportAnalyticsPersonaStatsOverviewMarkdown: hoistedMocks.exportAnalyticsPersonaStatsOverviewMarkdown,
   exportAnalyticsPersonaStatsTimelineCsv: hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv,
@@ -600,6 +607,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportUserUsageMarkdown).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaStatsTimeline).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsOverviewJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsOverviewMarkdown).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).mockClear();
@@ -2568,6 +2576,60 @@ describe('ProfileModal', () => {
         'arena-persona-stats-overview-2026-08-01-to-2026-08-30.md',
       );
     });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('downloads the persona stats overview as CSV', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /persona stats csv/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv).toHaveBeenCalledWith(30);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        hoistedMocks.personaStatsOverviewCsvExport.blob,
+        'arena-persona-stats-overview-2026-08-01-to-2026-08-30.csv',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces persona stats CSV download failures and releases the export lock', async () => {
+    hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /persona stats csv/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not download persona stats CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces a blocked persona stats CSV download and releases the export lock', async () => {
+    vi.mocked(downloadBlobFile).mockReturnValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /persona stats csv/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not download persona stats CSV — try again.'),
+    ).toBeInTheDocument();
     expect(button).not.toBeDisabled();
   });
 
