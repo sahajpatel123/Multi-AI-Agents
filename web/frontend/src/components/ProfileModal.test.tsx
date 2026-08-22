@@ -123,6 +123,9 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['# Arena — persona stats overview'], { type: 'text/markdown' }),
     filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.md',
   };
+  Object.defineProperty(personaStatsOverviewMarkdownExport.blob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — persona stats overview'),
+  });
   const summaryMarkdownBlob = new Blob(['# Arena — analytics summary'], {
     type: 'text/markdown',
   });
@@ -2613,7 +2616,7 @@ describe('ProfileModal', () => {
     });
     screen.getByRole('button', { name: /usage/i }).click();
 
-    const button = await screen.findByRole('button', { name: /persona stats markdown/i });
+    const button = await screen.findByRole('button', { name: /^🤖 persona stats markdown$/i });
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -2777,6 +2780,84 @@ describe('ProfileModal', () => {
 
     expect(
       await screen.findByText('Could not copy persona stats CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('copies the persona stats overview as Markdown for notes and docs', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy persona stats markdown/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsOverviewMarkdown).toHaveBeenCalledWith(30);
+      expect(hoistedMocks.copyMarkdownToClipboard).toHaveBeenCalledWith(
+        '# Arena — persona stats overview',
+      );
+      expect(
+        screen.getByText('Copied persona stats Markdown to the clipboard.'),
+      ).toBeInTheDocument();
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('copies the persona stats overview Markdown for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona stats overview window/i }),
+      { target: { value: '90' } },
+    );
+    const button = await screen.findByRole('button', { name: /copy persona stats markdown/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsOverviewMarkdown).toHaveBeenCalledWith(90);
+      expect(
+        screen.getByText('Copied persona stats Markdown to the clipboard.'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('surfaces persona stats Markdown clipboard failures and releases the copy lock', async () => {
+    vi.mocked(hoistedMocks.copyMarkdownToClipboard).mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy persona stats markdown/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy persona stats Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces persona stats Markdown copy fetch failures and releases the copy lock', async () => {
+    hoistedMocks.exportAnalyticsPersonaStatsOverviewMarkdown.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy persona stats markdown/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy persona stats Markdown — try again.'),
     ).toBeInTheDocument();
     expect(button).not.toBeDisabled();
   });

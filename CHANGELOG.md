@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   usage windows and stays locked while an export is in flight
 
 ### Added
+- Profile analytics can now copy the complete persona-stats overview as a
+  human-readable Markdown report straight from the dashboard, following the
+  selected persona-stats window, with honest clipboard-failure feedback
 - Profile analytics can now copy the complete persona-stats overview as
   spreadsheet-aware CSV straight from the dashboard, with honest clipboard-
   failure feedback matching the other persona stats exports
