@@ -5137,6 +5137,40 @@ export async function setDefaultExportPreset(presetId: number): Promise<ExportPr
   return normalizeExportPreset(data);
 }
 
+export type ExportPresetReorderResult = {
+  status: string;
+  updatedCount: number;
+};
+
+export async function reorderExportPresets(
+  orderedIds: number[],
+): Promise<ExportPresetReorderResult> {
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    throw new RangeError('orderedIds must contain at least one preset id');
+  }
+  if (!orderedIds.every((id) => Number.isInteger(id) && id >= 1)) {
+    throw new RangeError('every preset id must be a positive integer');
+  }
+  // The backend assigns each item's list index as its new position; ids
+  // that do not belong to the caller are silently skipped (no existence
+  // oracle), so the response only reports how many rows moved.
+  const res = await apiFetch(`/api/export-presets/reorder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: orderedIds.map((id) => ({ id })) }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to reorder export presets'), res));
+  }
+  const data =
+    (await parseJsonSafely<{ status?: string; updated_count?: number }>(res)) || {};
+  return {
+    status: String(data.status || 'reordered'),
+    updatedCount: typeof data.updated_count === 'number' ? data.updated_count : 0,
+  };
+}
+
 export async function deleteExportPreset(presetId: number): Promise<void> {  if (!Number.isInteger(presetId) || presetId < 1) {
     throw new RangeError('presetId must be a positive integer');
   }

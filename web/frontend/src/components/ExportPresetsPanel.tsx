@@ -7,6 +7,7 @@ import {
   listExportPresets,
   previewExportPreset,
   renameExportPreset,
+  reorderExportPresets,
   setDefaultExportPreset,
   useExportPreset,
   type ExportPreset,
@@ -189,6 +190,26 @@ export function ExportPresetsPanel() {
     [runAction],
   );
 
+  const handleMove = useCallback(
+    (preset: ExportPreset, direction: -1 | 1) =>
+      runAction(`move-${preset.id}`, async () => {
+        const current = presets ?? [];
+        const index = current.findIndex((item) => item.id === preset.id);
+        const targetIndex = index + direction;
+        if (index < 0 || targetIndex < 0 || targetIndex >= current.length) {
+          return `"${preset.name}" is already at the ${direction === -1 ? 'top' : 'bottom'}.`;
+        }
+        // State only changes after the server accepts the new order, so a
+        // failed request leaves the list exactly as it was.
+        const next = [...current];
+        [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+        await reorderExportPresets(next.map((item) => item.id));
+        setPresets(next.map((item, position) => ({ ...item, position })));
+        return `Moved "${preset.name}" ${direction === -1 ? 'up' : 'down'}.`;
+      }),
+    [presets, runAction],
+  );
+
   if (presets === null) {
     return (
       <div style={{ padding: '10px 0' }}>
@@ -246,7 +267,7 @@ export function ExportPresetsPanel() {
         </p>
       ) : (
         <ul style={{ listStyle: 'none', margin: '0 0 8px', padding: 0, display: 'grid', gap: 6 }}>
-          {presets.map((preset) => {
+          {presets.map((preset, index) => {
             const busy = busyKey === `use-${preset.id}`;
             const deleting = busyKey === `delete-${preset.id}`;
             const filters = [
@@ -380,6 +401,48 @@ export function ExportPresetsPanel() {
                   ) : null}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  {renamingId !== preset.id ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={busyKey !== null || index === 0}
+                        aria-busy={busyKey === `move-${preset.id}`}
+                        aria-label={`Move export preset ${preset.name} up`}
+                        onClick={() => void handleMove(preset, -1)}
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D8D0',
+                          borderRadius: 6,
+                          color: index === 0 ? '#E0D8D0' : '#4A3728',
+                          cursor: busyKey !== null ? 'wait' : 'pointer',
+                          padding: '3px 7px',
+                          fontSize: 10,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyKey !== null || index === presets.length - 1}
+                        aria-busy={busyKey === `move-${preset.id}`}
+                        aria-label={`Move export preset ${preset.name} down`}
+                        onClick={() => void handleMove(preset, 1)}
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D8D0',
+                          borderRadius: 6,
+                          color: index === presets.length - 1 ? '#E0D8D0' : '#4A3728',
+                          cursor: busyKey !== null ? 'wait' : 'pointer',
+                          padding: '3px 7px',
+                          fontSize: 10,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        ↓
+                      </button>
+                    </>
+                  ) : null}
                   {renamingId !== preset.id ? (
                   <button
                     type="button"

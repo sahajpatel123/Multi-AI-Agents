@@ -19,6 +19,7 @@ vi.mock('../api', () => ({
   useExportPreset: vi.fn(),
   previewExportPreset: vi.fn(),
   renameExportPreset: vi.fn(),
+  reorderExportPresets: vi.fn(),
   setDefaultExportPreset: vi.fn(),
 }));
 
@@ -413,5 +414,71 @@ describe('ExportPresetsPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Please slow down.');
     expect(screen.getByText(/alpha/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^make beta the default/i })).toBeInTheDocument();
+  });
+
+  it('moves a preset up and persists the swapped order', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      { ...hoisted.presetCsv, id: 3, name: 'Alpha', is_default: true },
+      { ...hoisted.presetCsv, id: 5, name: 'Beta', is_default: false },
+    ]);
+    mockedApi.reorderExportPresets.mockResolvedValue({ status: 'reordered', updatedCount: 2 });
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /move export preset beta up/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.reorderExportPresets).toHaveBeenCalledWith([5, 3]);
+      expect(screen.getByRole('status')).toHaveTextContent('Moved "Beta" up.');
+    });
+    // The rows swap in place without a refetch.
+    const names = screen.getAllByText(/^(Alpha|Beta)$/);
+    expect(names[0]).toHaveTextContent('Beta');
+    expect(names[1]).toHaveTextContent('Alpha');
+  });
+
+  it('hides Move up on the first row and Move down on the last row', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      { ...hoisted.presetCsv, id: 3, name: 'Alpha' },
+      { ...hoisted.presetCsv, id: 5, name: 'Beta' },
+    ]);
+    render(<ExportPresetsPanel />);
+
+    expect(
+      await screen.findByRole('button', { name: /move export preset alpha up/i }),
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: /move export preset beta down/i })).toBeDisabled();
+    // The interior edges still work.
+    expect(screen.getByRole('button', { name: /move export preset alpha down/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /move export preset beta up/i })).toBeEnabled();
+  });
+
+  it('restores the previous order when reordering fails', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      { ...hoisted.presetCsv, id: 3, name: 'Alpha' },
+      { ...hoisted.presetCsv, id: 5, name: 'Beta' },
+    ]);
+    mockedApi.reorderExportPresets.mockRejectedValue(
+      new apiModule.ApiError('Please slow down.', 429),
+    );
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /move export preset beta up/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Please slow down.');
+    const names = screen.getAllByText(/^(Alpha|Beta)$/);
+    expect(names[0]).toHaveTextContent('Alpha');
+    expect(names[1]).toHaveTextContent('Beta');
+  });
+
+  it('hides the move buttons while that row is being renamed', async () => {
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /rename export preset high score responses/i }),
+    );
+
+    expect(
+      screen.queryByRole('button', { name: /move export preset high score responses/i }),
+    ).not.toBeInTheDocument();
   });
 });

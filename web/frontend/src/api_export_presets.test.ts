@@ -8,6 +8,7 @@ import {
   useExportPreset,
   previewExportPreset,
   renameExportPreset,
+  reorderExportPresets,
   setDefaultExportPreset,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
@@ -441,6 +442,60 @@ describe('export preset API helpers', () => {
       );
       await expect(setDefaultExportPreset(3)).rejects.toThrow(
         'Failed to set the default export preset (Request ID: req-default-502)',
+      );
+    });
+  });
+
+  describe('reorderExportPresets', () => {
+    it('posts the ids as an items envelope and reports the updated count', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'reordered', updated_count: 3 }), { status: 200 }),
+      );
+
+      const res = await reorderExportPresets([5, 3, 9]);
+      expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [{ id: 5 }, { id: 3 }, { id: 9 }] }),
+      });
+      expect(res).toEqual({ status: 'reordered', updatedCount: 3 });
+    });
+
+    it('validates the id list before fetching', async () => {
+      await expect(reorderExportPresets([])).rejects.toThrow(
+        'orderedIds must contain at least one preset id',
+      );
+      await expect(reorderExportPresets([3, 0])).rejects.toThrow(
+        'every preset id must be a positive integer',
+      );
+      await expect(reorderExportPresets([3, 1.5])).rejects.toThrow(
+        'every preset id must be a positive integer',
+      );
+      expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+    });
+
+    it('surfaces rate-limit failures with their message and request ID', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'Too many export preset reorders.' }), {
+          status: 429,
+          headers: { 'x-request-id': 'req-reorder-429' },
+        }),
+      );
+
+      await expect(reorderExportPresets([3, 5])).rejects.toThrow(
+        'Too many export preset reorders. (Request ID: req-reorder-429)',
+      );
+    });
+
+    it('falls back to a friendly message when reordering fails silently', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response('bad gateway', {
+          status: 502,
+          headers: { 'x-request-id': 'req-reorder-502' },
+        }),
+      );
+      await expect(reorderExportPresets([3])).rejects.toThrow(
+        'Failed to reorder export presets (Request ID: req-reorder-502)',
       );
     });
   });

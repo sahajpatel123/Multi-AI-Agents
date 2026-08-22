@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Export presets are now reorderable from the sidebar panel: every row has
+  Move up / Move down controls that persist the new order through the
+  backend's reorder endpoint (list index becomes the saved position), so
+  the arrangement survives reloads. The swap only commits after the server
+  accepts it — a failed move restores the previous order and surfaces the
+  reason — and the edge rows' buttons disable honestly instead of lying
+  about moves they can't make
+
 ### Improved
 - Export presets now honor the backend's one-default-per-user rule in the
   UI: the current default wears a Default badge, every other row offers a
