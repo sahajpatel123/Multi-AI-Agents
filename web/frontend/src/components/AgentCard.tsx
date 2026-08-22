@@ -425,7 +425,7 @@ export function AgentCard({
                   >
                     Why?
                   </button>
-                  
+
                   {/* Tooltip */}
                   {showContradictionTooltip && (
                     <div
@@ -464,7 +464,7 @@ export function AgentCard({
                   )}
                 </div>
               )}
-              
+
               {showFullTake && canExpandFullTake ? (
                 <div>
                   <div className="agent-response-text" style={{ fontStyle: 'normal' }}>

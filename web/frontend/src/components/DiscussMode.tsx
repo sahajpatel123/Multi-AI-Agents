@@ -573,7 +573,7 @@ export function DiscussMode({
             setVerifyFeedback('idle');
             setIsStreaming(false);
             scrollToBottom({ force: stickToBottomRef.current });
-            
+
             // Refresh user count after successful discuss message
             if (onSuccess) onSuccess();
           },

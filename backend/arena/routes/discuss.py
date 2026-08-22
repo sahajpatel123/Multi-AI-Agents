@@ -181,7 +181,7 @@ async def discuss_with_agent(
     previous_responses = memory.short_term.get_agent_memory(
         session_id, request.agent_id, user_id=str(user.id)
     )
-    
+
     # Build context string for previous responses
     if previous_responses:
         prev_context = "YOUR PREVIOUS RESPONSES IN THIS SESSION:\n"
@@ -203,13 +203,13 @@ async def discuss_with_agent(
     try:
         # Get persona_id and route to appropriate API
         persona_id = get_persona_id_for_agent(request.agent_id, request.persona_ids)
-        
+
         # Build single user message from conversation history
         conversation_text = "\n\n".join(
             f"{msg.role.upper()}: {msg.content}" for msg in request.conversation_history
         )
         full_user_message = f"{conversation_text}\n\nUSER: {request.message}" if conversation_text else request.message
-        
+
         reply_content, _, _ = await call_persona(
             persona_id=persona_id,
             system_prompt=system_prompt,
@@ -296,7 +296,7 @@ async def stream_discuss(
     previous_responses = memory.short_term.get_agent_memory(
         session_id, request.agent_id, user_id=str(user.id)
     )
-    
+
     # Build context string for previous responses
     if previous_responses:
         prev_context = "YOUR PREVIOUS RESPONSES IN THIS SESSION:\n"
@@ -325,14 +325,14 @@ async def stream_discuss(
             persona_id = get_persona_id_for_agent(request.agent_id, request.persona_ids)
             model_type = get_model_for_persona(persona_id)
             route = get_route_for_persona(persona_id)
-            
+
             if model_type != "claude":
                 # Grok doesn't support streaming - get full response
                 conversation_text = "\n\n".join(
                     f"{msg.role.upper()}: {msg.content}" for msg in request.conversation_history
                 )
                 full_user_message = f"{conversation_text}\n\nUSER: {request.message}" if conversation_text else request.message
-                
+
                 content, _, _ = await call_persona(
                     persona_id=persona_id,
                     system_prompt=system_prompt,

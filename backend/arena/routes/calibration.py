@@ -538,14 +538,14 @@ async def export_calibration_history_csv(
     from fastapi.responses import Response
     import csv
     import io
-    
+
     orm_user = db.query(User).filter(User.id == user.id).first()
     if not orm_user:
         raise HTTPException(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
         )
-    
+
     enforce_user_rate_limit(
         user.id,
         scope="calibration_csv_export",
@@ -553,7 +553,7 @@ async def export_calibration_history_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait.",
     )
-    
+
     def _csv_safe(value) -> str:
         """Escape value for CSV to prevent formula injection."""
         if value is None:
@@ -562,7 +562,7 @@ async def export_calibration_history_csv(
         if s.startswith(("=", "+", "-", "@")):
             return "'" + s
         return s
-    
+
     # Get all calibration ratings for the user
     ratings = (
         db.query(ConfidenceRating)
@@ -570,10 +570,10 @@ async def export_calibration_history_csv(
         .order_by(ConfidenceRating.created_at.desc())
         .all()
     )
-    
+
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
     # Write header
     writer.writerow([
         "task_id",
@@ -583,21 +583,21 @@ async def export_calibration_history_csv(
         "verdict",
         "created_at",
     ])
-    
+
     # Write rows
     for row in ratings:
         try:
             sys_score = max(0, min(100, int(row.system_score or 0)))
         except (TypeError, ValueError):
             sys_score = 0
-        
+
         try:
             delta = max(-100, min(100, int(row.delta or 0)))
         except (TypeError, ValueError):
             delta = 0
-        
+
         verdict = _verdict_for_delta(delta)
-        
+
         writer.writerow([
             _csv_safe(row.task_id),
             _csv_safe(row.user_rating),
@@ -606,7 +606,7 @@ async def export_calibration_history_csv(
             _csv_safe(verdict),
             _csv_safe(row.created_at.isoformat() if row.created_at else ""),
         ])
-    
+
     filename = f"arena-calibration-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -636,7 +636,7 @@ async def export_calibration_history_json(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
         )
-    
+
     enforce_user_rate_limit(
         user.id,
         scope="calibration_json_export",
@@ -644,7 +644,7 @@ async def export_calibration_history_json(
         window_seconds=60,
         message="Too many JSON exports. Please wait.",
     )
-    
+
     # Get all calibration ratings for the user
     ratings = (
         db.query(ConfidenceRating)
@@ -652,7 +652,7 @@ async def export_calibration_history_json(
         .order_by(ConfidenceRating.created_at.desc())
         .all()
     )
-    
+
     # Format as JSON-serializable list
     items = []
     for row in ratings:
@@ -660,14 +660,14 @@ async def export_calibration_history_json(
             sys_score = max(0, min(100, int(row.system_score or 0)))
         except (TypeError, ValueError):
             sys_score = 0
-        
+
         try:
             delta = max(-100, min(100, int(row.delta or 0)))
         except (TypeError, ValueError):
             delta = 0
-        
+
         verdict = _verdict_for_delta(delta)
-        
+
         items.append({
             "task_id": row.task_id,
             "user_rating": row.user_rating,
@@ -676,7 +676,7 @@ async def export_calibration_history_json(
             "verdict": verdict,
             "created_at": row.created_at.isoformat() if row.created_at else None,
         })
-    
+
     filename = f"arena-calibration-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),

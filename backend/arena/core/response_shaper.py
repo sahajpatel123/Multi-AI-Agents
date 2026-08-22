@@ -145,7 +145,7 @@ async def assemble_payload(
 ) -> PromptResponse:
     """
     Assemble the final response payload.
-    
+
     - Ensures session_id exists
     - Formats the winner
     - Regenerates bad one-liners

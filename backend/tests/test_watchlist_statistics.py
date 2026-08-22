@@ -109,7 +109,7 @@ async def test_watchlist_statistics_multiple_items(app_client, make_user, db_ses
     item1 = _seed_watch(db_session, user.id, question="Bitcoin question")
     item2 = _seed_watch(db_session, user.id, question="Ethereum question")
     item3 = _seed_watch(db_session, user.id, question="Inactive question", is_active=False)
-    
+
     _seed_task(db_session, user.id, item1.id, score=90)
     _seed_task(db_session, user.id, item1.id, score=85)
     _seed_task(db_session, user.id, item2.id, score=75)

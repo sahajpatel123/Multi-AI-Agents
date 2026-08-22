@@ -38,7 +38,7 @@ def _seed_feedback(
         )
         db_session.add(task)
         db_session.flush()
-    
+
     feedback = AnswerFeedback(
         user_id=user_id,
         task_id=task_id,
@@ -56,7 +56,7 @@ async def test_feedback_csv_export(app_client, make_user, db_session):
     """Test CSV export of feedback."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_feedback(db_session, user.id, "task-1", verdict="correct", note="Good answer")
     _seed_feedback(db_session, user.id, "task-2", verdict="partial", note="Partial answer")
     _seed_feedback(db_session, user.id, "task-3", verdict="wrong", note="Wrong answer")
@@ -88,7 +88,7 @@ async def test_feedback_csv_with_verdict_filter(app_client, make_user, db_sessio
     """Test CSV export with verdict filter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_feedback(db_session, user.id, "task-1", verdict="correct")
     _seed_feedback(db_session, user.id, "task-2", verdict="partial")
     _seed_feedback(db_session, user.id, "task-3", verdict="correct")
@@ -209,7 +209,7 @@ async def test_feedback_csv_with_unknown_verdict(app_client, make_user, db_sessi
     """Test CSV export with unknown verdict returns empty."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_feedback(db_session, user.id, "task-1", verdict="correct")
     db_session.commit()
 
@@ -229,7 +229,7 @@ async def test_feedback_csv_formula_injection_defense(app_client, make_user, db_
     """Test CSV export defends against formula injection."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_feedback(db_session, user.id, "=cmd|'/c calc'!A1", note="=SUM(A1:B1)")
     db_session.commit()
 
@@ -264,7 +264,7 @@ async def test_feedback_json_export(app_client, make_user, db_session):
     """Test JSON export of feedback."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_feedback(db_session, user.id, "task-1", verdict="correct", note="Good answer")
     _seed_feedback(db_session, user.id, "task-2", verdict="partial", note="Partial answer")
     db_session.commit()
@@ -294,7 +294,7 @@ async def test_feedback_json_with_verdict_filter(app_client, make_user, db_sessi
     """Test JSON export with verdict filter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_feedback(db_session, user.id, "task-1", verdict="correct")
     _seed_feedback(db_session, user.id, "task-2", verdict="partial")
     _seed_feedback(db_session, user.id, "task-3", verdict="correct")

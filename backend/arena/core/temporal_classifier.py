@@ -22,13 +22,13 @@ async def classify_temporal(
     """Classify how quickly this answer will become outdated using DeepSeek V4 Flash."""
     from openai import AsyncOpenAI
     from arena.config import get_settings
-    
+
     settings = get_settings()
     client = AsyncOpenAI(
         api_key=settings.deepseek_api_key,
         base_url="https://api.deepseek.com"
     )
-    
+
     system_prompt = """Classify how quickly this answer will become outdated. Decay classes:
 - permanent: math/logic/philosophy. Never expires.
 - durable: science, history, institutions. 2-5yr.
@@ -43,9 +43,9 @@ Return ONLY valid JSON:
   "decay_reason": "one sentence",
   "time_sensitive_claims": ["claim1", "claim2"]
 }"""
-    
+
     user_prompt = f"Question: {question}\nAnswer: {final_answer}"
-    
+
     try:
         response = await wait_for(
             client.chat.completions.create(
@@ -59,20 +59,20 @@ Return ONLY valid JSON:
             ),
             timeout=25
         )
-        
+
         content = response.choices[0].message.content
         if not content:
             raise ValueError("Empty response from DeepSeek V4 Flash")
-        
+
         result = json.loads(content)
-        
+
         if not isinstance(result, dict):
             raise ValueError("Response is not a dict")
-        
+
         decay_class = result.get("decay_class", "durable")
         decay_reason = result.get("decay_reason", "")
         time_sensitive_claims = result.get("time_sensitive_claims", [])
-        
+
         now = utcnow_naive()
         if decay_class == "permanent":
             recheck_by = None
@@ -84,7 +84,7 @@ Return ONLY valid JSON:
             recheck_by = (now + timedelta(days=14)).strftime("%b %Y")
         else:
             recheck_by = None
-        
+
         half_life_map = {
             "permanent": "Timeless",
             "durable": "2–5 years",
@@ -92,7 +92,7 @@ Return ONLY valid JSON:
             "perishable": "Days to weeks"
         }
         half_life = half_life_map.get(decay_class, "2–5 years")
-        
+
         return {
             "decay_class": decay_class,
             "half_life": half_life,
@@ -100,7 +100,7 @@ Return ONLY valid JSON:
             "decay_reason": decay_reason,
             "time_sensitive_claims": time_sensitive_claims
         }
-        
+
     except Exception as exc:
         logger.warning(
             "Temporal classification failed; returning durable fallback: %s",

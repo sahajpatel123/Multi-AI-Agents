@@ -765,10 +765,10 @@ def get_watchlist_statistics(
     """
     # Get all watchlist items for the user
     items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id).all()
-    
+
     total_items = len(items)
     active_items = sum(1 for item in items if item.is_active)
-    
+
     # Get all agent tasks for watchlist items
     tasks = (
         db.query(AgentTask)
@@ -778,32 +778,32 @@ def get_watchlist_statistics(
         )
         .all()
     )
-    
+
     total_runs = len(tasks)
-    
+
     # Calculate score statistics
     scored_tasks = [t for t in tasks if isinstance(t.final_score, (int, float))]
     scored_runs = len(scored_tasks)
-    
+
     scores = [t.final_score for t in scored_tasks]
     avg_score = round(sum(scores) / len(scores), 1) if scores else None
     min_score = min(scores) if scores else None
     max_score = max(scores) if scores else None
-    
+
     # Calculate success rate: scored runs are considered successful
     success_rate = round((scored_runs / total_runs * 100), 1) if total_runs > 0 else 0.0
-    
+
     # Per-item statistics
     item_stats = {}
     for item in items:
         item_tasks = [t for t in tasks if t.watchlist_item_id == item.id]
         item_scored = [t for t in item_tasks if isinstance(t.final_score, (int, float))]
         item_scores = [t.final_score for t in item_scored]
-        
+
         last_run_at = None
         if item_tasks:
             last_run_at = max(t.created_at for t in item_tasks if t.created_at)
-        
+
         item_stats[item.id] = {
             "question": item.question,
             "run_count": len(item_tasks),
@@ -813,7 +813,7 @@ def get_watchlist_statistics(
             "is_active": item.is_active,
             "interval_hours": item.interval_hours,
         }
-    
+
     return {
         "total_items": total_items,
         "active_items": active_items,

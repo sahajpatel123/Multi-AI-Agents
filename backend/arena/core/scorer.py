@@ -102,12 +102,12 @@ Be fair and objective. Different perspectives have value — don't penalize unco
 
 class Scorer:
     """Evaluates and scores agent responses"""
-    
+
     def __init__(self):
         settings = get_settings()
         self.max_tokens = 512
         self.timeout = settings.timeout_seconds
-    
+
     def _format_responses_for_scoring(
         self,
         prompt: str,
@@ -117,22 +117,22 @@ class Scorer:
         """Format all responses into a single prompt for the scorer"""
         formatted = f"USER'S ORIGINAL PROMPT:\n{prompt}\n\n"
         formatted += "AGENT RESPONSES TO EVALUATE:\n\n"
-        
+
         for resp in responses:
             formatted += f"--- {resp.agent_id.upper()} ---\n"
             formatted += f"Response: {resp.verdict}\n"
             formatted += f"Confidence: {resp.confidence}%\n"
             formatted += f"Key Assumption: {resp.key_assumption}\n\n"
-        
+
         # Include integrity flags so scorer can penalize
         if integrity and integrity.flags:
             formatted += "INTEGRITY WARNINGS (penalize these agents):\n"
             for flag in integrity.flags:
                 formatted += f"- {flag}\n"
             formatted += "\n"
-        
+
         return formatted
-    
+
     async def score_responses(
         self,
         prompt: str,
@@ -150,14 +150,14 @@ class Scorer:
         Returns the ranked takes together with the judge's winner rationale
         so callers can surface it without a second scoring pass.
         """
-        
+
         scoring_prompt = self._format_responses_for_scoring(prompt, responses, integrity)
         started = time.monotonic()
         fallback_used = False
         reasoning: str | None = None
         criteria_breakdown: dict[str, Any] | None = None
         route = get_route_for_prompt(prompt=prompt, task="scoring", category=prompt_category)
-        
+
         try:
             result = await asyncio.wait_for(
                 route["client"].messages.create(
@@ -169,15 +169,15 @@ class Scorer:
                 ),
                 timeout=self.timeout,
             )
-            
+
             content = result.content[0].text.strip()
-            
+
             # Handle potential markdown code blocks
             if content.startswith("```"):
                 lines = content.split("\n")
                 content = "\n".join(lines[1:-1]) if lines[-1] == "```" else "\n".join(lines[1:])
                 content = content.strip()
-            
+
             data = json.loads(content)
             scores = data.get("scores", {})
             winner_id = data.get("winner", "agent_1")
@@ -195,7 +195,7 @@ class Scorer:
                 agent_names,
             )
             criteria_breakdown = data.get("criteria_breakdown")
-            
+
             # Build scored responses
             scored: list[ScoredAgent] = []
             for resp in responses:
@@ -207,9 +207,9 @@ class Scorer:
                         is_winner=(resp.agent_id == winner_id),
                     )
                 )
-            
+
             result_scored = scored
-            
+
         except Exception as e:
             # Fallback: return responses with default scores
             logger.warning("Scorer LLM call failed, using fallback scores: %s", e, exc_info=True)
@@ -251,7 +251,7 @@ class Scorer:
             reasoning=reasoning,
             fallback_used=fallback_used,
         )
-    
+
     def get_winner(self, scored_responses: list[ScoredAgent]) -> ScoredAgent | None:
         """Get the winning response from scored list"""
         for scored in scored_responses:

@@ -39,7 +39,7 @@ async def test_memory_summaries_csv_export(app_client, make_user, db_session):
     """Test CSV export of memory summaries."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_summary(db_session, user.id, "sess-1", summary_text="Bitcoin analysis session", category="finance")
     _seed_summary(db_session, user.id, "sess-2", summary_text="Ethereum research", category="crypto")
     db_session.commit()
@@ -64,7 +64,7 @@ async def test_memory_summaries_csv_with_category_filter(app_client, make_user, 
     """Test CSV export with category filter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_summary(db_session, user.id, "sess-1", category="finance")
     _seed_summary(db_session, user.id, "sess-2", category="crypto")
     _seed_summary(db_session, user.id, "sess-3", category="finance")
@@ -86,7 +86,7 @@ async def test_memory_summaries_csv_with_search_filter(app_client, make_user, db
     """Test CSV export with search filter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_summary(db_session, user.id, "sess-1", summary_text="Bitcoin analysis session")
     _seed_summary(db_session, user.id, "sess-2", summary_text="Ethereum research session")
     db_session.commit()
@@ -150,7 +150,7 @@ async def test_memory_summaries_csv_formula_injection_defense(app_client, make_u
     """Test CSV export defends against formula injection."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_summary(db_session, user.id, "=cmd|'/c calc'!A1", summary_text="=SUM(A1:B1)")
     db_session.commit()
 
@@ -200,7 +200,7 @@ async def test_memory_summaries_json_export(app_client, make_user, db_session):
     """Test JSON export of memory summaries."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_summary(db_session, user.id, "sess-1", summary_text="Bitcoin analysis")
     _seed_summary(db_session, user.id, "sess-2", summary_text="Ethereum research")
     db_session.commit()

@@ -253,7 +253,7 @@ class Settings(BaseSettings):
     def validate_secrets(self) -> None:
         """Validate that secrets are set and strong. Call once on startup."""
         errors = []
-        
+
         # --- SECRET_KEY ---
         if not self.secret_key:
             errors.append(

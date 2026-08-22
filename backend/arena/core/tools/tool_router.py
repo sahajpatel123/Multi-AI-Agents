@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 
 class ToolRouter:
     """Routes prompts to appropriate tools and executes them in parallel"""
-    
+
     def __init__(self):
         self.tools: List[Tool] = [
             CalculatorTool(),
             WebSearchTool(),
             DateTimeTool(),
         ]
-    
+
     async def execute_tools(self, prompt: str, **kwargs) -> Dict[str, ToolResult]:
         """
         Determine which tools should run and execute them in parallel.
@@ -29,7 +29,7 @@ class ToolRouter:
         Never raises - tools that fail return ToolResult with success=False.
         """
         logger.debug("[TOOL_ROUTER] Checking tools for prompt length=%s", len(prompt))
-        
+
         # Determine which tools should trigger
         tools_to_run = []
         for tool in self.tools:
@@ -37,19 +37,19 @@ class ToolRouter:
             logger.debug("[TOOL_ROUTER] %s should_trigger=%s", tool.name, should_trigger)
             if should_trigger:
                 tools_to_run.append(tool)
-        
+
         if not tools_to_run:
             logger.debug("[TOOL_ROUTER] No tools triggered")
             return {}
-        
+
         # Execute all triggered tools in parallel
         tasks = [
             tool.execute(prompt, **kwargs)
             for tool in tools_to_run
         ]
-        
+
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         # Build result dict, handling any exceptions
         tool_results = {}
         for tool, result in zip(tools_to_run, results):
@@ -75,9 +75,9 @@ class ToolRouter:
                 )
             else:
                 tool_results[tool.name] = result
-        
+
         return tool_results
-    
+
     def format_tool_context(self, tool_results: Dict[str, ToolResult]) -> str:
         """
         Format tool results for injection into agent system context.
@@ -85,24 +85,24 @@ class ToolRouter:
         """
         if not tool_results:
             return ""
-        
+
         # Filter to successful results only
         successful = {
             name: result
             for name, result in tool_results.items()
             if result.success
         }
-        
+
         if not successful:
             return ""
-        
+
         # Build context string
         lines = ["TOOL RESULTS (use these facts in your response):"]
         for name, result in successful.items():
             lines.append(f"  {result.to_context_string()}")
-        
+
         return "\n".join(lines)
-    
+
     def get_tool_summary(self, tool_results: Dict[str, ToolResult]) -> List[str]:
         """
         Get list of tool names that were successfully used.

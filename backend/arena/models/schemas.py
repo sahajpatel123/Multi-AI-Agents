@@ -61,7 +61,7 @@ class InputPipelineResult(BaseModel):
 
 class AgentConfig(BaseModel):
     """Configuration for a single agent"""
-    
+
     agent_id: str = Field(..., description="Unique identifier (e.g., 'agent_1')")
     agent_number: int = Field(..., ge=1, le=4, description="Agent number 1-4")
     persona_id: str | None = Field(None, description="Frontend persona identity for this slot")
@@ -73,7 +73,7 @@ class AgentConfig(BaseModel):
 
 class AgentResponse(BaseModel):
     """Response from a single agent - the core data contract"""
-    
+
     agent_id: str = Field(..., description="Which agent produced this response")
     agent_number: int = Field(..., ge=1, le=4, description="Agent number 1-4")
     verdict: str = Field(..., description="Full response text")
@@ -240,7 +240,7 @@ class ContradictionFlag(BaseModel):
 
 class ScoredAgent(BaseModel):
     """Agent response with scoring metadata"""
-    
+
     response: AgentResponse
     score: int = Field(..., ge=0, le=100, description="Score from the scorer")
     is_winner: bool = Field(False, description="Whether this agent won")
@@ -249,7 +249,7 @@ class ScoredAgent(BaseModel):
 
 class PromptResponse(BaseModel):
     """Complete response to a prompt request"""
-    
+
     request_id: str | None = Field(None, description="Request correlation ID (X-Request-ID) for this response")
     session_id: str = Field(..., description="Session ID for this conversation")
     prompt: str = Field(..., description="Original prompt")

@@ -219,4 +219,3 @@ Remove unverifiable claims.
             logger.warning("Failed to assign model_used for synthesis", exc_info=True)
 
     return bb
-

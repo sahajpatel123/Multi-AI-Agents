@@ -12,13 +12,13 @@ class ToolResult:
     success: bool
     data: Any
     error: Optional[str] = None
-    
+
     def to_context_string(self) -> str:
         """Format result for injection into agent context"""
         if not self.success:
             return f"[{self.tool_name}]: Failed - {self.error}"
         return f"[{self.tool_name}]: {self._format_data()}"
-    
+
     def _format_data(self) -> str:
         """Format data for display - override in subclasses if needed"""
         if isinstance(self.data, dict):
@@ -31,19 +31,19 @@ class ToolResult:
 
 class Tool(ABC):
     """Base class for all tools"""
-    
+
     @property
     @abstractmethod
     def name(self) -> str:
         """Tool identifier"""
         pass
-    
+
     @property
     @abstractmethod
     def description(self) -> str:
         """What this tool does"""
         pass
-    
+
     @abstractmethod
     async def execute(self, prompt: str, **kwargs) -> ToolResult:
         """
@@ -52,7 +52,7 @@ class Tool(ABC):
         Should never raise - catch exceptions and return ToolResult with success=False.
         """
         pass
-    
+
     @abstractmethod
     def should_trigger(self, prompt: str, **kwargs) -> bool:
         """

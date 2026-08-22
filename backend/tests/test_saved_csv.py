@@ -49,7 +49,7 @@ async def test_saved_csv_export(app_client, make_user, db_session):
     """Test CSV export of saved responses using new unified endpoint."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin question", score=90)
     _seed_saved(db_session, user.id, "save-2", prompt="Ethereum question", score=85)
     db_session.commit()
@@ -77,7 +77,7 @@ async def test_saved_csv_with_search_filter(app_client, make_user, db_session):
     """Test CSV export with search filter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin analysis", one_liner="Bitcoin is up")
     _seed_saved(db_session, user.id, "save-2", prompt="Ethereum analysis", one_liner="Ethereum is down")
     _seed_saved(db_session, user.id, "save-3", prompt="Bitcoin forecast", one_liner="Bitcoin will rise")
@@ -99,7 +99,7 @@ async def test_saved_csv_with_persona_filter(app_client, make_user, db_session):
     """Test CSV export with persona filter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", persona_id="analyst")
     _seed_saved(db_session, user.id, "save-2", persona_id="researcher")
     _seed_saved(db_session, user.id, "save-3", persona_id="analyst")
@@ -121,7 +121,7 @@ async def test_saved_csv_with_min_score_filter(app_client, make_user, db_session
     """Test CSV export with minimum score filter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", score=90)
     _seed_saved(db_session, user.id, "save-2", score=80)
     _seed_saved(db_session, user.id, "save-3", score=85)
@@ -143,7 +143,7 @@ async def test_saved_csv_with_sort(app_client, make_user, db_session):
     """Test CSV export with sort parameter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", score=90)
     _seed_saved(db_session, user.id, "save-2", score=80)
     _seed_saved(db_session, user.id, "save-3", score=85)
@@ -166,7 +166,7 @@ async def test_saved_csv_formula_injection_defense(app_client, make_user, db_ses
     """Test CSV export defends against formula injection."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "formula-test", prompt="=SUM(A1:B1)")
     db_session.commit()
 
@@ -218,7 +218,7 @@ async def test_saved_json_export(app_client, make_user, db_session):
     """Test JSON export of saved responses."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin question", score=90)
     _seed_saved(db_session, user.id, "save-2", prompt="Ethereum question", score=85)
     db_session.commit()
@@ -229,7 +229,7 @@ async def test_saved_json_export(app_client, make_user, db_session):
     )
     assert res.status_code == 200
     assert "application/json" in res.headers["content-type"]
-    
+
     data = res.json()
     assert "metadata" in data
     assert "data" in data
@@ -237,7 +237,7 @@ async def test_saved_json_export(app_client, make_user, db_session):
     assert data["metadata"]["total_count"] == 2
     assert "exported_at" in data["metadata"]
     assert len(data["data"]) == 2
-    
+
     # Check first item structure
     item = data["data"][0]
     assert "id" in item
@@ -251,7 +251,7 @@ async def test_saved_json_export_with_filters(app_client, make_user, db_session)
     """Test JSON export with filters."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin analysis", persona_id="analyst")
     _seed_saved(db_session, user.id, "save-2", prompt="Ethereum analysis", persona_id="researcher")
     db_session.commit()
@@ -261,7 +261,7 @@ async def test_saved_json_export_with_filters(app_client, make_user, db_session)
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
-    
+
     data = res.json()
     assert data["metadata"]["total_count"] == 1
     assert data["metadata"]["filters"]["persona_id"] == "analyst"
@@ -383,7 +383,7 @@ async def test_saved_export_default_format_is_csv(app_client, make_user, db_sess
     """Test that default format is CSV when not specified."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Test")
     db_session.commit()
 
@@ -400,7 +400,7 @@ async def test_saved_export_filename_has_timestamp(app_client, make_user, db_ses
     """Test that export filename includes timestamp for uniqueness."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Test")
     db_session.commit()
 
@@ -430,7 +430,7 @@ async def test_saved_xlsx_export(app_client, make_user, db_session):
     """Test XLSX export of saved responses."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin question", score=90)
     _seed_saved(db_session, user.id, "save-2", prompt="Ethereum question", score=85)
     db_session.commit()
@@ -441,13 +441,13 @@ async def test_saved_xlsx_export(app_client, make_user, db_session):
     )
     assert res.status_code == 200
     assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in res.headers["content-type"]
-    
+
     # Verify it's a valid XLSX file by checking magic bytes
     content = res.content
     assert len(content) > 0
     # XLSX files should start with PK magic number (ZIP format)
     assert content[:2] == b'PK'
-    
+
     # Verify filename
     content_disposition = res.headers["content-disposition"]
     assert ".xlsx" in content_disposition
@@ -458,7 +458,7 @@ async def test_saved_xlsx_export_with_filters(app_client, make_user, db_session)
     """Test XLSX export with filters."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin analysis", persona_id="analyst")
     _seed_saved(db_session, user.id, "save-2", prompt="Ethereum analysis", persona_id="researcher")
     db_session.commit()
@@ -469,7 +469,7 @@ async def test_saved_xlsx_export_with_filters(app_client, make_user, db_session)
     )
     assert res.status_code == 200
     assert ".xlsx" in res.headers["content-disposition"]
-    
+
     # Verify it's valid XLSX
     content = res.content
     assert content[:2] == b'PK'
@@ -509,7 +509,7 @@ async def test_saved_xlsx_export_filename_has_timestamp(app_client, make_user, d
     """Test that XLSX export filename includes timestamp."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Test")
     db_session.commit()
 
@@ -531,10 +531,10 @@ async def test_saved_xlsx_has_multiple_sheets(app_client, make_user, db_session)
         import openpyxl
     except ImportError:
         pytest.skip("openpyxl not available")
-    
+
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Test prompt")
     db_session.commit()
 
@@ -543,18 +543,18 @@ async def test_saved_xlsx_has_multiple_sheets(app_client, make_user, db_session)
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
-    
+
     # Load the XLSX file and check sheets
     wb = openpyxl.load_workbook(io.BytesIO(res.content))
     sheet_names = wb.sheetnames
-    
+
     assert "Summary" in sheet_names
     assert "Data" in sheet_names
-    
+
     # Check summary sheet content
     summary_ws = wb["Summary"]
     summary_content = [[cell.value for cell in row] for row in summary_ws.iter_rows()]
-    
+
     # Should contain export details
     assert any("Arena Saved Responses Export" in str(row) for row in summary_content)
     assert any("XLSX" in str(row) for row in summary_content)
@@ -601,10 +601,10 @@ async def test_saved_xlsx_has_styled_headers(app_client, make_user, db_session):
         import openpyxl
     except ImportError:
         pytest.skip("openpyxl not available")
-    
+
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Test prompt")
     db_session.commit()
 
@@ -613,15 +613,15 @@ async def test_saved_xlsx_has_styled_headers(app_client, make_user, db_session):
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
-    
+
     # Load and check header styling
     wb = openpyxl.load_workbook(io.BytesIO(res.content))
     data_ws = wb["Data"]
-    
+
     # Header should be in row 1
     header_cell = data_ws["A1"]
     assert header_cell.value == "ID"
-    
+
     # Check that header has bold font and fill (check attributes directly)
     assert hasattr(header_cell.font, 'bold')
     assert header_cell.font.bold
@@ -636,10 +636,10 @@ async def test_saved_xlsx_has_frozen_panes(app_client, make_user, db_session):
         import openpyxl
     except ImportError:
         pytest.skip("openpyxl not available")
-    
+
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_saved(db_session, user.id, "save-1", prompt="Test prompt")
     db_session.commit()
 
@@ -648,10 +648,10 @@ async def test_saved_xlsx_has_frozen_panes(app_client, make_user, db_session):
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
-    
+
     # Load and check frozen panes
     wb = openpyxl.load_workbook(io.BytesIO(res.content))
     data_ws = wb["Data"]
-    
+
     # Should have frozen panes at A2 (header row frozen)
     assert data_ws.freeze_panes == "A2"

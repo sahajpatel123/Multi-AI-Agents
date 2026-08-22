@@ -28,7 +28,7 @@ def cleanup_export_presets(db_session, make_user):
 async def test_create_export_preset(app_client, make_user, db_session, cleanup_export_presets):
     """Test creating an export preset."""
     user = cleanup_export_presets
-    
+
     res = await app_client.post(
         "/api/export-presets",
         json={
@@ -54,7 +54,7 @@ async def test_create_export_preset(app_client, make_user, db_session, cleanup_e
 async def test_list_export_presets_empty(app_client, make_user, db_session, cleanup_export_presets):
     """Test listing export presets when user has none."""
     user = cleanup_export_presets
-    
+
     res = await app_client.get(
         "/api/export-presets",
         headers=_pro_headers(user),
@@ -69,7 +69,7 @@ async def test_list_export_presets_empty(app_client, make_user, db_session, clea
 async def test_list_export_presets(app_client, make_user, db_session, cleanup_export_presets):
     """Test listing multiple export presets."""
     user = cleanup_export_presets
-    
+
     # Create a few presets
     await app_client.post(
         "/api/export-presets",
@@ -81,7 +81,7 @@ async def test_list_export_presets(app_client, make_user, db_session, cleanup_ex
         json={"name": "JSON Exports", "format": "json"},
         headers=_pro_headers(user),
     )
-    
+
     res = await app_client.get(
         "/api/export-presets",
         headers=_pro_headers(user),
@@ -90,12 +90,12 @@ async def test_list_export_presets(app_client, make_user, db_session, cleanup_ex
     data = res.json()
     assert data["total"] == 2
     assert len(data["presets"]) == 2
-    
+
     # Check both presets are present (order may vary based on position)
     preset_names = [p["name"] for p in data["presets"]]
     assert "JSON Exports" in preset_names
     assert "Bitcoin Exports" in preset_names
-    
+
     # Check that positions are set correctly (0 and 1)
     preset_positions = [p["position"] for p in data["presets"]]
     assert 0 in preset_positions
@@ -106,7 +106,7 @@ async def test_list_export_presets(app_client, make_user, db_session, cleanup_ex
 async def test_get_export_preset(app_client, make_user, db_session, cleanup_export_presets):
     """Test getting a specific export preset."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     create_res = await app_client.post(
         "/api/export-presets",
@@ -114,7 +114,7 @@ async def test_get_export_preset(app_client, make_user, db_session, cleanup_expo
         headers=_pro_headers(user),
     )
     preset_id = create_res.json()["id"]
-    
+
     # Get the preset
     res = await app_client.get(
         f"/api/export-presets/{preset_id}",
@@ -132,7 +132,7 @@ async def test_get_export_preset(app_client, make_user, db_session, cleanup_expo
 async def test_get_export_preset_not_found(app_client, make_user, db_session, cleanup_export_presets):
     """Test getting a non-existent export preset."""
     user = cleanup_export_presets
-    
+
     res = await app_client.get(
         "/api/export-presets/99999",
         headers=_pro_headers(user),
@@ -144,7 +144,7 @@ async def test_get_export_preset_not_found(app_client, make_user, db_session, cl
 async def test_get_export_preset_foreign_user(app_client, make_user, db_session, cleanup_export_presets):
     """Test that users cannot access other users' presets."""
     user = cleanup_export_presets
-    
+
     # Create a preset for the test user
     create_res = await app_client.post(
         "/api/export-presets",
@@ -152,11 +152,11 @@ async def test_get_export_preset_foreign_user(app_client, make_user, db_session,
         headers=_pro_headers(user),
     )
     preset_id = create_res.json()["id"]
-    
+
     # Try to access with a different user
     other_user = make_user(email="other_presets@example.com", tier=UserTier.PRO)
     db_session.commit()
-    
+
     res = await app_client.get(
         f"/api/export-presets/{preset_id}",
         headers={"Authorization": f"Bearer {create_access_token(other_user.id, other_user.email)}"},
@@ -168,7 +168,7 @@ async def test_get_export_preset_foreign_user(app_client, make_user, db_session,
 async def test_update_export_preset(app_client, make_user, db_session, cleanup_export_presets):
     """Test updating an export preset."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     create_res = await app_client.post(
         "/api/export-presets",
@@ -176,7 +176,7 @@ async def test_update_export_preset(app_client, make_user, db_session, cleanup_e
         headers=_pro_headers(user),
     )
     preset_id = create_res.json()["id"]
-    
+
     # Update the preset
     res = await app_client.put(
         f"/api/export-presets/{preset_id}",
@@ -194,7 +194,7 @@ async def test_update_export_preset(app_client, make_user, db_session, cleanup_e
 async def test_update_export_preset_partial(app_client, make_user, db_session, cleanup_export_presets):
     """Test partial update of export preset."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     create_res = await app_client.post(
         "/api/export-presets",
@@ -202,7 +202,7 @@ async def test_update_export_preset_partial(app_client, make_user, db_session, c
         headers=_pro_headers(user),
     )
     preset_id = create_res.json()["id"]
-    
+
     # Update only the sort
     res = await app_client.put(
         f"/api/export-presets/{preset_id}",
@@ -220,7 +220,7 @@ async def test_update_export_preset_partial(app_client, make_user, db_session, c
 async def test_delete_export_preset(app_client, make_user, db_session, cleanup_export_presets):
     """Test deleting an export preset."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     create_res = await app_client.post(
         "/api/export-presets",
@@ -228,7 +228,7 @@ async def test_delete_export_preset(app_client, make_user, db_session, cleanup_e
         headers=_pro_headers(user),
     )
     preset_id = create_res.json()["id"]
-    
+
     # Delete the preset
     res = await app_client.delete(
         f"/api/export-presets/{preset_id}",
@@ -238,7 +238,7 @@ async def test_delete_export_preset(app_client, make_user, db_session, cleanup_e
     data = res.json()
     assert data["status"] == "deleted"
     assert data["id"] == preset_id
-    
+
     # Verify it's gone
     get_res = await app_client.get(
         f"/api/export-presets/{preset_id}",
@@ -251,7 +251,7 @@ async def test_delete_export_preset(app_client, make_user, db_session, cleanup_e
 async def test_delete_export_preset_not_found(app_client, make_user, db_session, cleanup_export_presets):
     """Test deleting a non-existent export preset."""
     user = cleanup_export_presets
-    
+
     res = await app_client.delete(
         "/api/export-presets/99999",
         headers=_pro_headers(user),
@@ -264,7 +264,7 @@ async def test_export_presets_403_for_free_tier(app_client, make_user, db_sessio
     """Test that free tier users get 403 for export presets."""
     user = make_user(email="free_presets@example.com", tier=UserTier.FREE)
     db_session.commit()
-    
+
     res = await app_client.post(
         "/api/export-presets",
         json={"name": "Test"},
@@ -278,7 +278,7 @@ async def test_export_presets_max_limit(app_client, make_user, db_session, clean
     """Test that users cannot exceed the preset limit."""
     from arena.routes.export_presets import EXPORT_PRESETS_MAX_PER_USER
     user = cleanup_export_presets
-    
+
     # Manually insert presets directly to avoid rate limiting during test
     for i in range(EXPORT_PRESETS_MAX_PER_USER):
         preset = ExportPreset(
@@ -289,7 +289,7 @@ async def test_export_presets_max_limit(app_client, make_user, db_session, clean
         )
         db_session.add(preset)
     db_session.commit()
-    
+
     # Try to create one more via API - should fail
     res = await app_client.post(
         "/api/export-presets",
@@ -305,7 +305,7 @@ async def test_export_presets_max_limit(app_client, make_user, db_session, clean
 async def test_use_export_preset_redirects(app_client, make_user, db_session, cleanup_export_presets):
     """Test using an export preset redirects to export with preset parameters."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     create_res = await app_client.post(
         "/api/export-presets",
@@ -313,7 +313,7 @@ async def test_use_export_preset_redirects(app_client, make_user, db_session, cl
         headers=_pro_headers(user),
     )
     preset_id = create_res.json()["id"]
-    
+
     # Use the preset - should redirect to export endpoint
     res = await app_client.post(
         f"/api/export-presets/{preset_id}/use",
@@ -332,7 +332,7 @@ async def test_use_export_preset_redirects(app_client, make_user, db_session, cl
 async def test_export_preset_position_auto_increment(app_client, make_user, db_session, cleanup_export_presets):
     """Test that presets get auto-incremented positions."""
     user = cleanup_export_presets
-    
+
     # Create first preset - should get position 0
     res1 = await app_client.post(
         "/api/export-presets",
@@ -340,7 +340,7 @@ async def test_export_preset_position_auto_increment(app_client, make_user, db_s
         headers=_pro_headers(user),
     )
     assert res1.json()["position"] == 0
-    
+
     # Create second preset - should get position 1
     res2 = await app_client.post(
         "/api/export-presets",
@@ -348,7 +348,7 @@ async def test_export_preset_position_auto_increment(app_client, make_user, db_s
         headers=_pro_headers(user),
     )
     assert res2.json()["position"] == 1
-    
+
     # Create third preset - should get position 2
     res3 = await app_client.post(
         "/api/export-presets",
@@ -362,7 +362,7 @@ async def test_export_preset_position_auto_increment(app_client, make_user, db_s
 async def test_export_preset_default_flag(app_client, make_user, db_session, cleanup_export_presets):
     """Test default preset functionality."""
     user = cleanup_export_presets
-    
+
     # Create first preset as default
     res1 = await app_client.post(
         "/api/export-presets",
@@ -370,7 +370,7 @@ async def test_export_preset_default_flag(app_client, make_user, db_session, cle
         headers=_pro_headers(user),
     )
     assert res1.json()["is_default"] == True
-    
+
     # Create second preset - should not be default
     res2 = await app_client.post(
         "/api/export-presets",
@@ -378,14 +378,14 @@ async def test_export_preset_default_flag(app_client, make_user, db_session, cle
         headers=_pro_headers(user),
     )
     assert res2.json()["is_default"] == False
-    
+
     # Check that first preset is still default
     res = await app_client.get(
         f"/api/export-presets/{res1.json()['id']}",
         headers=_pro_headers(user),
     )
     assert res.json()["is_default"] == True
-    
+
     # Get default preset endpoint
     default_res = await app_client.get(
         "/api/export-presets/default",
@@ -394,7 +394,7 @@ async def test_export_preset_default_flag(app_client, make_user, db_session, cle
     default_data = default_res.json()
     assert default_data is not None, "Default preset should exist"
     assert default_data["id"] == res1.json()["id"]
-    
+
     # Set second preset as default - should un-set first
     update_res = await app_client.put(
         f"/api/export-presets/{res2.json()['id']}",
@@ -402,14 +402,14 @@ async def test_export_preset_default_flag(app_client, make_user, db_session, cle
         headers=_pro_headers(user),
     )
     assert update_res.json()["is_default"] == True
-    
+
     # Check that first preset is no longer default
     res = await app_client.get(
         f"/api/export-presets/{res1.json()['id']}",
         headers=_pro_headers(user),
     )
     assert res.json()["is_default"] == False
-    
+
     # Check default endpoint now returns second preset
     default_res2 = await app_client.get(
         "/api/export-presets/default",
@@ -424,7 +424,7 @@ async def test_export_preset_default_flag(app_client, make_user, db_session, cle
 async def test_export_preset_last_used_at(app_client, make_user, db_session, cleanup_export_presets):
     """Test that last_used_at is updated when preset is used."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     create_res = await app_client.post(
         "/api/export-presets",
@@ -432,20 +432,20 @@ async def test_export_preset_last_used_at(app_client, make_user, db_session, cle
         headers=_pro_headers(user),
     )
     preset_id = create_res.json()["id"]
-    
+
     # Check that last_used_at is None initially
     res = await app_client.get(
         f"/api/export-presets/{preset_id}",
         headers=_pro_headers(user),
     )
     assert res.json()["last_used_at"] is None
-    
+
     # Use the preset
     await app_client.post(
         f"/api/export-presets/{preset_id}/use",
         headers=_pro_headers(user),
     )
-    
+
     # Check that last_used_at is now set
     res = await app_client.get(
         f"/api/export-presets/{preset_id}",
@@ -458,7 +458,7 @@ async def test_export_preset_last_used_at(app_client, make_user, db_session, cle
 async def test_duplicate_export_preset(app_client, make_user, db_session, cleanup_export_presets):
     """Test duplicating an export preset."""
     user = cleanup_export_presets
-    
+
     # Create original preset
     create_res = await app_client.post(
         "/api/export-presets",
@@ -466,7 +466,7 @@ async def test_duplicate_export_preset(app_client, make_user, db_session, cleanu
         headers=_pro_headers(user),
     )
     original_id = create_res.json()["id"]
-    
+
     # Duplicate the preset
     dup_res = await app_client.post(
         f"/api/export-presets/{original_id}/duplicate",
@@ -480,7 +480,7 @@ async def test_duplicate_export_preset(app_client, make_user, db_session, cleanu
     assert "Copy" in dup_data["name"]
     assert dup_data["position"] == 6  # Should be original position + 1
     assert dup_data["is_default"] == False  # Duplicates are never default
-    
+
     # Verify the duplicated preset has the same settings
     get_res = await app_client.get(
         f"/api/export-presets/{dup_data['new_id']}",
@@ -521,7 +521,7 @@ async def test_duplicate_export_preset_preserves_max_score(app_client, make_user
 async def test_reorder_export_presets(app_client, make_user, db_session, cleanup_export_presets):
     """Test reordering export presets."""
     user = cleanup_export_presets
-    
+
     # Create three presets
     preset_ids = []
     for i in range(3):
@@ -531,14 +531,14 @@ async def test_reorder_export_presets(app_client, make_user, db_session, cleanup
             headers=_pro_headers(user),
         )
         preset_ids.append(res.json()["id"])
-    
+
     # Reorder them in reverse order
     reorder_body = [
         {"id": preset_ids[2]},  # Third preset -> position 0
         {"id": preset_ids[1]},  # Second preset -> position 1
         {"id": preset_ids[0]},  # First preset -> position 2
     ]
-    
+
     reorder_res = await app_client.post(
         "/api/export-presets/reorder",
         json={"items": reorder_body},
@@ -547,7 +547,7 @@ async def test_reorder_export_presets(app_client, make_user, db_session, cleanup
     assert reorder_res.status_code == 200
     assert reorder_res.json()["status"] == "reordered"
     assert reorder_res.json()["updated_count"] == 3
-    
+
     # Reorder again with a foreign preset mixed in - only owned presets count
     foreign_user = make_user(email="pro_presets_foreign@example.com", tier=UserTier.PRO)
     foreign_res = await app_client.post(
@@ -575,12 +575,12 @@ async def test_reorder_export_presets(app_client, make_user, db_session, cleanup
         headers=_pro_headers(user),
     )
     presets = list_res.json()["presets"]
-    
+
     # Should be ordered by position ascending
     assert presets[0]["id"] == preset_ids[2]
     assert presets[1]["id"] == preset_ids[1]
     assert presets[2]["id"] == preset_ids[0]
-    
+
     # Check positions are updated
     assert presets[0]["position"] == 0
     assert presets[1]["position"] == 1
@@ -591,7 +591,7 @@ async def test_reorder_export_presets(app_client, make_user, db_session, cleanup
 async def test_export_preset_new_fields_in_response(app_client, make_user, db_session, cleanup_export_presets):
     """Test that new fields (position, is_default, last_used_at, description) are in responses."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     create_res = await app_client.post(
         "/api/export-presets",
@@ -599,14 +599,14 @@ async def test_export_preset_new_fields_in_response(app_client, make_user, db_se
         headers=_pro_headers(user),
     )
     preset_id = create_res.json()["id"]
-    
+
     # Check create response has new fields
     data = create_res.json()
     assert "position" in data
     assert "is_default" in data
     assert "last_used_at" in data
     assert "description" in data
-    
+
     # Check list response has new fields
     list_res = await app_client.get(
         "/api/export-presets",
@@ -617,7 +617,7 @@ async def test_export_preset_new_fields_in_response(app_client, make_user, db_se
     assert "is_default" in preset_data
     assert "last_used_at" in preset_data
     assert "description" in preset_data
-    
+
     # Check get response has new fields
     get_res = await app_client.get(
         f"/api/export-presets/{preset_id}",
@@ -634,7 +634,7 @@ async def test_export_preset_new_fields_in_response(app_client, make_user, db_se
 async def test_export_presets_ordered_by_position(app_client, make_user, db_session, cleanup_export_presets):
     """Test that presets are ordered by position then updated_at."""
     user = cleanup_export_presets
-    
+
     # Create presets with specific positions
     await app_client.post(
         "/api/export-presets",
@@ -651,14 +651,14 @@ async def test_export_presets_ordered_by_position(app_client, make_user, db_sess
         json={"name": "Mango", "position": 1},
         headers=_pro_headers(user),
     )
-    
+
     # List should be ordered by position
     res = await app_client.get(
         "/api/export-presets",
         headers=_pro_headers(user),
     )
     presets = res.json()["presets"]
-    
+
     assert presets[0]["name"] == "Apple"
     assert presets[0]["position"] == 0
     assert presets[1]["name"] == "Mango"
@@ -672,7 +672,7 @@ async def test_export_presets_ordered_by_position(app_client, make_user, db_sess
 async def test_export_preset_description_create(app_client, make_user, db_session, cleanup_export_presets):
     """Test creating an export preset with description."""
     user = cleanup_export_presets
-    
+
     res = await app_client.post(
         "/api/export-presets",
         json={
@@ -692,7 +692,7 @@ async def test_export_preset_description_create(app_client, make_user, db_sessio
 async def test_export_preset_description_update(app_client, make_user, db_session, cleanup_export_presets):
     """Test updating an export preset description."""
     user = cleanup_export_presets
-    
+
     # Create preset without description
     create_res = await app_client.post(
         "/api/export-presets",
@@ -701,7 +701,7 @@ async def test_export_preset_description_update(app_client, make_user, db_sessio
     )
     preset_id = create_res.json()["id"]
     assert create_res.json()["description"] is None
-    
+
     # Update with description
     update_res = await app_client.put(
         f"/api/export-presets/{preset_id}",
@@ -710,7 +710,7 @@ async def test_export_preset_description_update(app_client, make_user, db_sessio
     )
     assert update_res.status_code == 200
     assert update_res.json()["description"] == "Updated description"
-    
+
     # Verify via get
     get_res = await app_client.get(
         f"/api/export-presets/{preset_id}",
@@ -723,20 +723,20 @@ async def test_export_preset_description_update(app_client, make_user, db_sessio
 async def test_export_preset_description_in_list(app_client, make_user, db_session, cleanup_export_presets):
     """Test that description appears in list response."""
     user = cleanup_export_presets
-    
+
     # Create preset with description
     await app_client.post(
         "/api/export-presets",
         json={"name": "Described Preset", "description": "A preset with description"},
         headers=_pro_headers(user),
     )
-    
+
     # List presets
     list_res = await app_client.get(
         "/api/export-presets",
         headers=_pro_headers(user),
     )
-    
+
     assert list_res.status_code == 200
     presets = list_res.json()["presets"]
     assert len(presets) >= 1
@@ -750,7 +750,7 @@ async def test_export_preset_description_in_list(app_client, make_user, db_sessi
 async def test_export_preset_description_duplicate(app_client, make_user, db_session, cleanup_export_presets):
     """Test that description is copied when duplicating a preset."""
     user = cleanup_export_presets
-    
+
     # Create original preset with description
     create_res = await app_client.post(
         "/api/export-presets",
@@ -758,17 +758,17 @@ async def test_export_preset_description_duplicate(app_client, make_user, db_ses
         headers=_pro_headers(user),
     )
     original_id = create_res.json()["id"]
-    
+
     # Duplicate the preset
     dup_res = await app_client.post(
         f"/api/export-presets/{original_id}/duplicate",
         headers=_pro_headers(user),
     )
-    
+
     assert dup_res.status_code == 200
     dup_data = dup_res.json()
     new_id = dup_data["new_id"]
-    
+
     # Verify the duplicate has the same description
     get_res = await app_client.get(
         f"/api/export-presets/{new_id}",
@@ -782,14 +782,14 @@ async def test_export_preset_description_duplicate(app_client, make_user, db_ses
 async def test_export_preset_description_null(app_client, make_user, db_session, cleanup_export_presets):
     """Test that presets without description have null/None description."""
     user = cleanup_export_presets
-    
+
     # Create preset without description
     res = await app_client.post(
         "/api/export-presets",
         json={"name": "No Description"},
         headers=_pro_headers(user),
     )
-    
+
     assert res.status_code == 200
     data = res.json()
     assert data["description"] is None
@@ -799,7 +799,7 @@ async def test_export_preset_description_null(app_client, make_user, db_session,
 async def test_export_preset_description_max_length(app_client, make_user, db_session, cleanup_export_presets):
     """Test that description respects max length of 500 characters."""
     user = cleanup_export_presets
-    
+
     # Create preset with exactly 500 character description
     description_500 = "a" * 500
     res = await app_client.post(
@@ -809,7 +809,7 @@ async def test_export_preset_description_max_length(app_client, make_user, db_se
     )
     assert res.status_code == 200
     assert res.json()["description"] == description_500
-    
+
     # Try to create preset with 501 character description - should be rejected
     description_501 = "a" * 501
     res = await app_client.post(
@@ -824,7 +824,7 @@ async def test_export_preset_description_max_length(app_client, make_user, db_se
 async def test_export_preset_description_empty_string(app_client, make_user, db_session, cleanup_export_presets):
     """Test that empty string description is treated as None."""
     user = cleanup_export_presets
-    
+
     # Create preset with empty string description
     res = await app_client.post(
         "/api/export-presets",
@@ -841,7 +841,7 @@ async def test_export_preset_description_empty_string(app_client, make_user, db_
 async def test_export_preset_description_update_to_empty(app_client, make_user, db_session, cleanup_export_presets):
     """Test updating description to empty/None."""
     user = cleanup_export_presets
-    
+
     # Create preset with description
     create_res = await app_client.post(
         "/api/export-presets",
@@ -849,7 +849,7 @@ async def test_export_preset_description_update_to_empty(app_client, make_user, 
         headers=_pro_headers(user),
     )
     preset_id = create_res.json()["id"]
-    
+
     # Update to remove description - use empty string (None in request body means "don't change")
     update_res = await app_client.put(
         f"/api/export-presets/{preset_id}",
@@ -866,7 +866,7 @@ async def test_export_preset_description_update_to_empty(app_client, make_user, 
 async def test_export_presets_search_by_name(app_client, make_user, db_session, cleanup_export_presets):
     """Test searching presets by name."""
     user = cleanup_export_presets
-    
+
     # Create presets with different names
     await app_client.post(
         "/api/export-presets",
@@ -883,7 +883,7 @@ async def test_export_presets_search_by_name(app_client, make_user, db_session, 
         json={"name": "Solana Exports", "description": "For Solana"},
         headers=_pro_headers(user),
     )
-    
+
     # Search for Bitcoin
     res = await app_client.get(
         "/api/export-presets?search=Bitcoin",
@@ -899,7 +899,7 @@ async def test_export_presets_search_by_name(app_client, make_user, db_session, 
 async def test_export_presets_search_by_description(app_client, make_user, db_session, cleanup_export_presets):
     """Test searching presets by description."""
     user = cleanup_export_presets
-    
+
     # Create presets with different descriptions
     await app_client.post(
         "/api/export-presets",
@@ -916,7 +916,7 @@ async def test_export_presets_search_by_description(app_client, make_user, db_se
         json={"name": "Preset 3", "description": "Monthly export preset"},
         headers=_pro_headers(user),
     )
-    
+
     # Search for "export" (appears in all descriptions)
     res = await app_client.get(
         "/api/export-presets?search=export",
@@ -931,14 +931,14 @@ async def test_export_presets_search_by_description(app_client, make_user, db_se
 async def test_export_presets_search_case_insensitive(app_client, make_user, db_session, cleanup_export_presets):
     """Test that search is case-insensitive."""
     user = cleanup_export_presets
-    
+
     # Create preset with lowercase name
     await app_client.post(
         "/api/export-presets",
         json={"name": "bitcoin exports", "description": "for bitcoin"},
         headers=_pro_headers(user),
     )
-    
+
     # Search with uppercase
     res = await app_client.get(
         "/api/export-presets?search=BITCOIN",
@@ -954,14 +954,14 @@ async def test_export_presets_search_case_insensitive(app_client, make_user, db_
 async def test_export_presets_search_no_results(app_client, make_user, db_session, cleanup_export_presets):
     """Test search with no matching results."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     await app_client.post(
         "/api/export-presets",
         json={"name": "Bitcoin Exports"},
         headers=_pro_headers(user),
     )
-    
+
     # Search for something that doesn't exist
     res = await app_client.get(
         "/api/export-presets?search=NonExistent",
@@ -977,14 +977,14 @@ async def test_export_presets_search_no_results(app_client, make_user, db_sessio
 async def test_export_presets_search_partial_match(app_client, make_user, db_session, cleanup_export_presets):
     """Test that search performs partial matching."""
     user = cleanup_export_presets
-    
+
     # Create preset
     await app_client.post(
         "/api/export-presets",
         json={"name": "Bitcoin Price Analysis"},
         headers=_pro_headers(user),
     )
-    
+
     # Search for partial match
     res = await app_client.get(
         "/api/export-presets?search=Price",
@@ -1001,7 +1001,7 @@ async def test_export_presets_search_partial_match(app_client, make_user, db_ses
 async def test_export_presets_filter_by_format(app_client, make_user, db_session, cleanup_export_presets):
     """Test filtering presets by format."""
     user = cleanup_export_presets
-    
+
     # Create presets with different formats
     await app_client.post(
         "/api/export-presets",
@@ -1018,7 +1018,7 @@ async def test_export_presets_filter_by_format(app_client, make_user, db_session
         json={"name": "XLSX Preset", "format": "xlsx"},
         headers=_pro_headers(user),
     )
-    
+
     # Filter by csv format
     res = await app_client.get(
         "/api/export-presets?format=csv",
@@ -1034,7 +1034,7 @@ async def test_export_presets_filter_by_format(app_client, make_user, db_session
 async def test_export_presets_filter_by_preset_type(app_client, make_user, db_session, cleanup_export_presets):
     """Test filtering presets by preset_type."""
     user = cleanup_export_presets
-    
+
     # Create presets with different types
     await app_client.post(
         "/api/export-presets",
@@ -1046,7 +1046,7 @@ async def test_export_presets_filter_by_preset_type(app_client, make_user, db_se
         json={"name": "Session Preset", "preset_type": "sessions"},
         headers=_pro_headers(user),
     )
-    
+
     # Filter by saved type
     res = await app_client.get(
         "/api/export-presets?preset_type=saved",
@@ -1062,7 +1062,7 @@ async def test_export_presets_filter_by_preset_type(app_client, make_user, db_se
 async def test_export_presets_combined_filters(app_client, make_user, db_session, cleanup_export_presets):
     """Test combining search and format filters."""
     user = cleanup_export_presets
-    
+
     # Create various presets
     await app_client.post(
         "/api/export-presets",
@@ -1079,7 +1079,7 @@ async def test_export_presets_combined_filters(app_client, make_user, db_session
         json={"name": "Ethereum CSV", "format": "csv", "description": "Ethereum exports in CSV"},
         headers=_pro_headers(user),
     )
-    
+
     # Search for Bitcoin AND filter by csv format
     res = await app_client.get(
         "/api/export-presets?search=Bitcoin&format=csv",
@@ -1095,14 +1095,14 @@ async def test_export_presets_combined_filters(app_client, make_user, db_session
 async def test_export_presets_filter_no_match(app_client, make_user, db_session, cleanup_export_presets):
     """Test filter with no matching results."""
     user = cleanup_export_presets
-    
+
     # Create only json presets
     await app_client.post(
         "/api/export-presets",
         json={"name": "JSON Preset", "format": "json"},
         headers=_pro_headers(user),
     )
-    
+
     # Filter by csv (no matches)
     res = await app_client.get(
         "/api/export-presets?format=csv",
@@ -1118,14 +1118,14 @@ async def test_export_presets_filter_no_match(app_client, make_user, db_session,
 async def test_export_presets_search_sanitization(app_client, make_user, db_session, cleanup_export_presets):
     """Test that search input is properly sanitized."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     await app_client.post(
         "/api/export-presets",
         json={"name": "Test Preset"},
         headers=_pro_headers(user),
     )
-    
+
     # Search with potentially problematic input (should be sanitized)
     res = await app_client.get(
         "/api/export-presets?search=<script>alert('xss')</script>",
@@ -1142,7 +1142,7 @@ async def test_export_presets_search_sanitization(app_client, make_user, db_sess
 async def test_bulk_delete_export_presets(app_client, make_user, db_session, cleanup_export_presets):
     """Test bulk deleting multiple export presets."""
     user = cleanup_export_presets
-    
+
     # Create multiple presets
     preset_ids = []
     for i in range(5):
@@ -1152,7 +1152,7 @@ async def test_bulk_delete_export_presets(app_client, make_user, db_session, cle
             headers=_pro_headers(user),
         )
         preset_ids.append(res.json()["id"])
-    
+
     # Bulk delete them
     res = await app_client.post(
         "/api/export-presets/bulk-delete",
@@ -1164,7 +1164,7 @@ async def test_bulk_delete_export_presets(app_client, make_user, db_session, cle
     assert data["status"] == "bulk_deleted"
     assert data["deleted_count"] == 5
     assert len(data["deleted_ids"]) == 5
-    
+
     # Verify they are actually deleted
     list_res = await app_client.get(
         "/api/export-presets",
@@ -1177,7 +1177,7 @@ async def test_bulk_delete_export_presets(app_client, make_user, db_session, cle
 async def test_bulk_delete_export_presets_partial(app_client, make_user, db_session, cleanup_export_presets):
     """Test bulk delete with some valid and some invalid IDs."""
     user = cleanup_export_presets
-    
+
     # Create 3 presets
     preset_ids = []
     for i in range(3):
@@ -1187,7 +1187,7 @@ async def test_bulk_delete_export_presets_partial(app_client, make_user, db_sess
             headers=_pro_headers(user),
         )
         preset_ids.append(res.json()["id"])
-    
+
     # Bulk delete with some valid and some invalid IDs
     # preset_ids[0] and preset_ids[1] are valid, 99999 and 99998 don't exist
     res = await app_client.post(
@@ -1208,7 +1208,7 @@ async def test_bulk_delete_export_presets_partial(app_client, make_user, db_sess
 async def test_bulk_delete_export_presets_foreign_user(app_client, make_user, db_session, cleanup_export_presets):
     """Test that bulk delete doesn't delete other users' presets."""
     user = cleanup_export_presets
-    
+
     # Create a preset for the test user
     res1 = await app_client.post(
         "/api/export-presets",
@@ -1216,18 +1216,18 @@ async def test_bulk_delete_export_presets_foreign_user(app_client, make_user, db
         headers=_pro_headers(user),
     )
     my_preset_id = res1.json()["id"]
-    
+
     # Create another user with a preset
     other_user = make_user(email="other_bulk@example.com", tier=UserTier.PRO)
     db_session.commit()
-    
+
     res2 = await app_client.post(
         "/api/export-presets",
         json={"name": "Other User Preset"},
         headers={"Authorization": f"Bearer {create_access_token(other_user.id, other_user.email)}"},
     )
     other_preset_id = res2.json()["id"]
-    
+
     # Try to bulk delete both presets as the first user
     # Should only delete my_preset_id, not other_preset_id
     res = await app_client.post(
@@ -1241,7 +1241,7 @@ async def test_bulk_delete_export_presets_foreign_user(app_client, make_user, db
     assert data["foreign_count"] == 1
     assert my_preset_id in data["deleted_ids"]
     assert other_preset_id in data["foreign_ids"]
-    
+
     # Verify the other user's preset still exists
     get_res = await app_client.get(
         f"/api/export-presets/{other_preset_id}",
@@ -1254,7 +1254,7 @@ async def test_bulk_delete_export_presets_foreign_user(app_client, make_user, db
 async def test_bulk_delete_export_presets_empty_list(app_client, make_user, db_session, cleanup_export_presets):
     """Test bulk delete with empty list (should be rejected by Pydantic)."""
     user = cleanup_export_presets
-    
+
     res = await app_client.post(
         "/api/export-presets/bulk-delete",
         json={"ids": []},
@@ -1268,7 +1268,7 @@ async def test_bulk_delete_export_presets_empty_list(app_client, make_user, db_s
 async def test_bulk_delete_export_presets_too_many(app_client, make_user, db_session, cleanup_export_presets):
     """Test bulk delete with too many IDs (should be rejected by Pydantic)."""
     user = cleanup_export_presets
-    
+
     # Try to delete 51 presets (max is 50)
     res = await app_client.post(
         "/api/export-presets/bulk-delete",
@@ -1284,7 +1284,7 @@ async def test_bulk_delete_export_presets_too_many(app_client, make_user, db_ses
 async def test_bulk_delete_protected_default_preset(app_client, make_user, db_session, cleanup_export_presets):
     """Test that bulk delete protects default presets without force flag."""
     user = cleanup_export_presets
-    
+
     # Create a preset and set it as default
     res1 = await app_client.post(
         "/api/export-presets",
@@ -1292,7 +1292,7 @@ async def test_bulk_delete_protected_default_preset(app_client, make_user, db_se
         headers=_pro_headers(user),
     )
     default_id = res1.json()["id"]
-    
+
     # Create another preset
     res2 = await app_client.post(
         "/api/export-presets",
@@ -1300,7 +1300,7 @@ async def test_bulk_delete_protected_default_preset(app_client, make_user, db_se
         headers=_pro_headers(user),
     )
     regular_id = res2.json()["id"]
-    
+
     # Try to bulk delete both (without force) - should fail
     res = await app_client.post(
         "/api/export-presets/bulk-delete",
@@ -1311,7 +1311,7 @@ async def test_bulk_delete_protected_default_preset(app_client, make_user, db_se
     data = res.json()
     assert data["detail"]["error"] == "default_preset_protected"
     assert default_id in data["detail"]["protected_ids"]
-    
+
     # Verify no presets were deleted
     list_res = await app_client.get(
         "/api/export-presets",
@@ -1324,7 +1324,7 @@ async def test_bulk_delete_protected_default_preset(app_client, make_user, db_se
 async def test_bulk_delete_default_preset_with_force(app_client, make_user, db_session, cleanup_export_presets):
     """Test that bulk delete allows deleting default preset with force=true."""
     user = cleanup_export_presets
-    
+
     # Create a preset and set it as default
     res1 = await app_client.post(
         "/api/export-presets",
@@ -1332,7 +1332,7 @@ async def test_bulk_delete_default_preset_with_force(app_client, make_user, db_s
         headers=_pro_headers(user),
     )
     default_id = res1.json()["id"]
-    
+
     # Create another preset
     res2 = await app_client.post(
         "/api/export-presets",
@@ -1340,7 +1340,7 @@ async def test_bulk_delete_default_preset_with_force(app_client, make_user, db_s
         headers=_pro_headers(user),
     )
     regular_id = res2.json()["id"]
-    
+
     # Bulk delete both with force=true - should succeed
     res = await app_client.post(
         "/api/export-presets/bulk-delete",
@@ -1352,7 +1352,7 @@ async def test_bulk_delete_default_preset_with_force(app_client, make_user, db_s
     assert data["deleted_count"] == 2
     assert default_id in data["deleted_ids"]
     assert regular_id in data["deleted_ids"]
-    
+
     # Verify both presets were deleted
     list_res = await app_client.get(
         "/api/export-presets",
@@ -1365,7 +1365,7 @@ async def test_bulk_delete_default_preset_with_force(app_client, make_user, db_s
 async def test_bulk_delete_force_default_false(app_client, make_user, db_session, cleanup_export_presets):
     """Test that force=false (or omitted) still protects default preset."""
     user = cleanup_export_presets
-    
+
     # Create a default preset
     res = await app_client.post(
         "/api/export-presets",
@@ -1373,7 +1373,7 @@ async def test_bulk_delete_force_default_false(app_client, make_user, db_session
         headers=_pro_headers(user),
     )
     default_id = res.json()["id"]
-    
+
     # Try to delete with force=false - should still fail
     res = await app_client.post(
         "/api/export-presets/bulk-delete",
@@ -1389,7 +1389,7 @@ async def test_bulk_delete_force_default_false(app_client, make_user, db_session
 async def test_export_presets_export_all(app_client, make_user, db_session, cleanup_export_presets):
     """Test exporting all presets as JSON."""
     user = cleanup_export_presets
-    
+
     # Create some presets
     await app_client.post(
         "/api/export-presets",
@@ -1401,7 +1401,7 @@ async def test_export_presets_export_all(app_client, make_user, db_session, clea
         json={"name": "Preset 2", "description": "Second preset", "format": "json"},
         headers=_pro_headers(user),
     )
-    
+
     # Export all presets
     res = await app_client.get(
         "/api/export-presets/export",
@@ -1413,7 +1413,7 @@ async def test_export_presets_export_all(app_client, make_user, db_session, clea
     assert data["user_id"] == user.id
     assert data["total_presets"] == 2
     assert len(data["presets"]) == 2
-    
+
     # Verify preset data is correct
     preset_names = [p["name"] for p in data["presets"]]
     assert "Preset 1" in preset_names
@@ -1424,7 +1424,7 @@ async def test_export_presets_export_all(app_client, make_user, db_session, clea
 async def test_export_presets_export_empty(app_client, make_user, db_session, cleanup_export_presets):
     """Test exporting when user has no presets."""
     user = cleanup_export_presets
-    
+
     # Export with no presets
     res = await app_client.get(
         "/api/export-presets/export",
@@ -1441,7 +1441,7 @@ async def test_export_presets_export_empty(app_client, make_user, db_session, cl
 async def test_export_presets_import_basic(app_client, make_user, db_session, cleanup_export_presets):
     """Test importing presets from JSON."""
     user = cleanup_export_presets
-    
+
     # Import presets
     res = await app_client.post(
         "/api/export-presets/import",
@@ -1459,7 +1459,7 @@ async def test_export_presets_import_basic(app_client, make_user, db_session, cl
     assert data["imported_count"] == 2
     assert data["skipped_count"] == 0
     assert len(data["imported_ids"]) == 2
-    
+
     # Verify presets were created
     list_res = await app_client.get(
         "/api/export-presets",
@@ -1473,7 +1473,7 @@ async def test_export_presets_import_with_limit(app_client, make_user, db_sessio
     """Test that import respects the preset limit."""
     from arena.routes.export_presets import EXPORT_PRESETS_MAX_PER_USER
     user = cleanup_export_presets
-    
+
     # Manually insert presets up to the limit
     for i in range(EXPORT_PRESETS_MAX_PER_USER):
         preset = ExportPreset(
@@ -1484,7 +1484,7 @@ async def test_export_presets_import_with_limit(app_client, make_user, db_sessio
         )
         db_session.add(preset)
     db_session.commit()
-    
+
     # Try to import more presets - should fail
     res = await app_client.post(
         "/api/export-presets/import",
@@ -1499,7 +1499,7 @@ async def test_export_presets_import_with_limit(app_client, make_user, db_sessio
 async def test_export_import_roundtrip(app_client, make_user, db_session, cleanup_export_presets):
     """Test that exported presets can be re-imported."""
     user = cleanup_export_presets
-    
+
     # Create some presets
     original_presets = [
         {"name": "Roundtrip Preset 1", "description": "Description for Roundtrip Preset 1", "min_score": 40, "max_score": 70},
@@ -1511,7 +1511,7 @@ async def test_export_import_roundtrip(app_client, make_user, db_session, cleanu
             json=preset_data,
             headers=_pro_headers(user),
         )
-    
+
     # Export all presets
     export_res = await app_client.get(
         "/api/export-presets/export",
@@ -1519,28 +1519,28 @@ async def test_export_import_roundtrip(app_client, make_user, db_session, cleanu
     )
     exported_data = export_res.json()
     assert "version" in exported_data
-    
+
     # Get all preset IDs to delete them
     list_res_before = await app_client.get(
         "/api/export-presets",
         headers=_pro_headers(user),
     )
     preset_ids = [p["id"] for p in list_res_before.json()["presets"]]
-    
+
     # Delete all presets
     await app_client.post(
         "/api/export-presets/bulk-delete",
         json={"ids": preset_ids, "force": True},
         headers=_pro_headers(user),
     )
-    
+
     # Verify all deleted
     list_res = await app_client.get(
         "/api/export-presets",
         headers=_pro_headers(user),
     )
     assert list_res.json()["total"] == 0
-    
+
     # Re-import the exported presets
     import_res = await app_client.post(
         "/api/export-presets/import",
@@ -1549,7 +1549,7 @@ async def test_export_import_roundtrip(app_client, make_user, db_session, cleanu
     )
     assert import_res.status_code == 200
     assert import_res.json()["imported_count"] == 2
-    
+
     # Verify presets were restored
     list_res = await app_client.get(
         "/api/export-presets",
@@ -1572,18 +1572,18 @@ async def test_export_import_roundtrip(app_client, make_user, db_session, cleanu
 async def test_export_presets_import_duplicate_names(app_client, make_user, db_session, cleanup_export_presets):
     """Test that importing presets with duplicate names appends a suffix."""
     user = cleanup_export_presets
-    
+
     # Create a preset with a specific name
     await app_client.post(
         "/api/export-presets",
         json={"name": "My Preset"},
         headers=_pro_headers(user),
     )
-    
+
     # Import a preset with the same name
     from datetime import datetime
     today_str = datetime.utcnow().strftime('%Y%m%d')
-    
+
     res = await app_client.post(
         "/api/export-presets/import",
         json={"presets": [{"name": "My Preset"}]},
@@ -1593,7 +1593,7 @@ async def test_export_presets_import_duplicate_names(app_client, make_user, db_s
     data = res.json()
     assert data["imported_count"] == 1
     assert "My Preset" in data["duplicated_names"]
-    
+
     # Verify the imported preset has a modified name
     list_res = await app_client.get(
         "/api/export-presets",
@@ -1601,7 +1601,7 @@ async def test_export_presets_import_duplicate_names(app_client, make_user, db_s
     )
     presets = list_res.json()["presets"]
     assert len(presets) == 2
-    
+
     # One should be "My Preset" (original) and one should have the suffix
     names = [p["name"] for p in presets]
     assert "My Preset" in names
@@ -1614,14 +1614,14 @@ async def test_export_presets_import_duplicate_names(app_client, make_user, db_s
 async def test_export_presets_import_version_metadata(app_client, make_user, db_session, cleanup_export_presets):
     """Test that export includes version metadata."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     await app_client.post(
         "/api/export-presets",
         json={"name": "Test Preset"},
         headers=_pro_headers(user),
     )
-    
+
     # Export presets
     res = await app_client.get(
         "/api/export-presets/export",
@@ -1638,7 +1638,7 @@ async def test_export_presets_import_version_metadata(app_client, make_user, db_
 async def test_list_export_preset_templates(app_client, make_user, db_session, cleanup_export_presets):
     """Test listing available preset templates."""
     user = cleanup_export_presets
-    
+
     res = await app_client.get(
         "/api/export-presets/templates",
         headers=_pro_headers(user),
@@ -1648,7 +1648,7 @@ async def test_list_export_preset_templates(app_client, make_user, db_session, c
     assert "templates" in data
     assert len(data["templates"]) > 0
     assert data["total"] > 0
-    
+
     # Verify template structure
     for template in data["templates"]:
         assert "id" in template
@@ -1661,7 +1661,7 @@ async def test_list_export_preset_templates(app_client, make_user, db_session, c
 async def test_create_preset_from_template(app_client, make_user, db_session, cleanup_export_presets):
     """Test creating a preset from a template."""
     user = cleanup_export_presets
-    
+
     # Create preset from high_score template
     res = await app_client.post(
         "/api/export-presets/from-template?template_id=high_score",
@@ -1675,7 +1675,7 @@ async def test_create_preset_from_template(app_client, make_user, db_session, cl
     assert data["min_score"] == 80
     assert data["format"] == "csv"
     assert data["sort"] == "score"
-    
+
     # Verify the preset was actually created
     list_res = await app_client.get(
         "/api/export-presets",
@@ -1688,7 +1688,7 @@ async def test_create_preset_from_template(app_client, make_user, db_session, cl
 async def test_create_preset_from_nonexistent_template(app_client, make_user, db_session, cleanup_export_presets):
     """Test creating a preset from a non-existent template."""
     user = cleanup_export_presets
-    
+
     res = await app_client.post(
         "/api/export-presets/from-template?template_id=nonexistent",
         headers=_pro_headers(user),
@@ -1702,7 +1702,7 @@ async def test_create_preset_from_template_at_limit(app_client, make_user, db_se
     """Test that creating from template respects the preset limit."""
     from arena.routes.export_presets import EXPORT_PRESETS_MAX_PER_USER
     user = cleanup_export_presets
-    
+
     # Manually insert presets up to the limit
     for i in range(EXPORT_PRESETS_MAX_PER_USER):
         preset = ExportPreset(
@@ -1713,7 +1713,7 @@ async def test_create_preset_from_template_at_limit(app_client, make_user, db_se
         )
         db_session.add(preset)
     db_session.commit()
-    
+
     # Try to create from template - should fail
     res = await app_client.post(
         "/api/export-presets/from-template?template_id=high_score",
@@ -1727,7 +1727,7 @@ async def test_create_preset_from_template_at_limit(app_client, make_user, db_se
 async def test_create_preset_from_template_with_custom_name(app_client, make_user, db_session, cleanup_export_presets):
     """Test creating a preset from a template with a custom name override."""
     user = cleanup_export_presets
-    
+
     # Create preset from template with custom name
     custom_name = "My Custom High Score Preset"
     res = await app_client.post(
@@ -1742,7 +1742,7 @@ async def test_create_preset_from_template_with_custom_name(app_client, make_use
     assert data["template_id"] == "high_score"
     assert data["min_score"] == 80
     assert data["format"] == "csv"
-    
+
     # Verify the preset was created with the custom name
     list_res = await app_client.get(
         "/api/export-presets",
@@ -1757,7 +1757,7 @@ async def test_create_preset_from_template_with_custom_name(app_client, make_use
 async def test_create_preset_from_template_without_custom_name(app_client, make_user, db_session, cleanup_export_presets):
     """Test creating a preset from a template without custom name generates timestamp-suffixed name."""
     user = cleanup_export_presets
-    
+
     # Create preset from template without custom name
     res = await app_client.post(
         "/api/export-presets/from-template?template_id=high_score",
@@ -1777,10 +1777,10 @@ async def test_create_preset_from_template_without_custom_name(app_client, make_
 async def test_create_preset_from_template_all_templates(app_client, make_user, db_session, cleanup_export_presets):
     """Test that all template IDs are valid and can create presets."""
     user = cleanup_export_presets
-    
-    template_ids = ["high_score", "recent", "bitcoin_all", "high_score_json", "all_responses", 
+
+    template_ids = ["high_score", "recent", "bitcoin_all", "high_score_json", "all_responses",
                    "ethereum_all", "top_scoring", "low_score", "medium_score"]
-    
+
     for template_id in template_ids:
         res = await app_client.post(
             "/api/export-presets/from-template",
@@ -1791,7 +1791,7 @@ async def test_create_preset_from_template_all_templates(app_client, make_user, 
         data = res.json()
         assert data["status"] == "created_from_template"
         assert data["template_id"] == template_id
-    
+
     # Verify all presets were created
     list_res = await app_client.get(
         "/api/export-presets",
@@ -1804,7 +1804,7 @@ async def test_create_preset_from_template_all_templates(app_client, make_user, 
 async def test_create_preset_from_template_uses_custom_name(app_client, make_user, db_session, cleanup_export_presets):
     """Test that custom name is used exactly as provided (after basic sanitization)."""
     user = cleanup_export_presets
-    
+
     # Create with a specific custom name
     custom_name = "My Special Preset"
     res = await app_client.post(
@@ -1816,7 +1816,7 @@ async def test_create_preset_from_template_uses_custom_name(app_client, make_use
     data = res.json()
     # The name should be exactly what we provided
     assert data["name"] == custom_name
-    
+
     # Also test with whitespace that should be stripped
     custom_name_with_spaces = "  My Preset  "
     res2 = await app_client.post(
@@ -1834,7 +1834,7 @@ async def test_create_preset_from_template_uses_custom_name(app_client, make_use
 async def test_create_export_preset_with_max_score(app_client, make_user, db_session, cleanup_export_presets):
     """Test creating an export preset with max_score."""
     user = cleanup_export_presets
-    
+
     res = await app_client.post(
         "/api/export-presets",
         json={
@@ -1858,7 +1858,7 @@ async def test_create_export_preset_with_max_score(app_client, make_user, db_ses
 async def test_update_export_preset_max_score(app_client, make_user, db_session, cleanup_export_presets):
     """Test updating an export preset max_score."""
     user = cleanup_export_presets
-    
+
     # Create a preset
     create_res = await app_client.post(
         "/api/export-presets",
@@ -1867,7 +1867,7 @@ async def test_update_export_preset_max_score(app_client, make_user, db_session,
     )
     assert create_res.status_code == 200
     preset_id = create_res.json()["id"]
-    
+
     # Update with max_score
     update_res = await app_client.put(
         f"/api/export-presets/{preset_id}",
@@ -1884,7 +1884,7 @@ async def test_update_export_preset_max_score(app_client, make_user, db_session,
 async def test_create_preset_from_template_with_max_score(app_client, make_user, db_session, cleanup_export_presets):
     """Test creating a preset from the low_score template which has max_score=49."""
     user = cleanup_export_presets
-    
+
     res = await app_client.post(
         "/api/export-presets/from-template?template_id=low_score",
         headers=_pro_headers(user),
@@ -1901,14 +1901,14 @@ async def test_create_preset_from_template_with_max_score(app_client, make_user,
 async def test_list_export_presets_includes_max_score(app_client, make_user, db_session, cleanup_export_presets):
     """Test that list endpoint includes max_score in response."""
     user = cleanup_export_presets
-    
+
     # Create preset with max_score
     await app_client.post(
         "/api/export-presets",
         json={"name": "Test Preset", "format": "csv", "max_score": 90},
         headers=_pro_headers(user),
     )
-    
+
     # List presets
     res = await app_client.get(
         "/api/export-presets",
@@ -1924,7 +1924,7 @@ async def test_list_export_presets_includes_max_score(app_client, make_user, db_
 async def test_create_preset_invalid_score_range(app_client, make_user, db_session, cleanup_export_presets):
     """Test that creating a preset with min_score > max_score fails."""
     user = cleanup_export_presets
-    
+
     res = await app_client.post(
         "/api/export-presets",
         json={
@@ -1943,7 +1943,7 @@ async def test_create_preset_invalid_score_range(app_client, make_user, db_sessi
 async def test_update_preset_invalid_score_range(app_client, make_user, db_session, cleanup_export_presets):
     """Test that updating a preset with min_score > max_score fails."""
     user = cleanup_export_presets
-    
+
     # Create a preset first
     create_res = await app_client.post(
         "/api/export-presets",
@@ -1951,7 +1951,7 @@ async def test_update_preset_invalid_score_range(app_client, make_user, db_sessi
         headers=_pro_headers(user),
     )
     preset_id = create_res.json()["id"]
-    
+
     # Try to update with invalid range
     res = await app_client.put(
         f"/api/export-presets/{preset_id}",
@@ -1966,7 +1966,7 @@ async def test_update_preset_invalid_score_range(app_client, make_user, db_sessi
 async def test_create_preset_from_medium_score_template(app_client, make_user, db_session, cleanup_export_presets):
     """Test creating a preset from the medium_score template which has both min and max."""
     user = cleanup_export_presets
-    
+
     res = await app_client.post(
         "/api/export-presets/from-template?template_id=medium_score",
         headers=_pro_headers(user),
@@ -1983,7 +1983,7 @@ async def test_create_preset_from_medium_score_template(app_client, make_user, d
 async def test_list_export_presets_filter_by_max_score(app_client, make_user, db_session, cleanup_export_presets):
     """Test filtering presets by max_score."""
     user = cleanup_export_presets
-    
+
     # Create presets with different max_scores
     await app_client.post(
         "/api/export-presets",
@@ -2000,7 +2000,7 @@ async def test_list_export_presets_filter_by_max_score(app_client, make_user, db
         json={"name": "Preset 3", "format": "csv"},
         headers=_pro_headers(user),
     )
-    
+
     # Filter by max_score=50
     res = await app_client.get(
         "/api/export-presets?max_score=50",

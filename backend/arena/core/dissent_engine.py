@@ -23,10 +23,10 @@ async def generate_dissent_report(
     """Generate dissenting positions using GPT-4o."""
     from openai import AsyncOpenAI
     from arena.config import get_settings
-    
+
     settings = get_settings()
     client = AsyncOpenAI(api_key=settings.openai_api_key)
-    
+
     system_prompt = """You are a devil's advocate analyst. Given a final answer and its critique, identify 2-3 legitimate dissenting positions a reasonable expert might hold that were not reflected in the final answer. Be intellectually honest, not contrarian for its own sake.
 
 Return ONLY valid JSON:
@@ -41,11 +41,11 @@ Return ONLY valid JSON:
   ],
   "minority_view_summary": "string"
 }"""
-    
+
     user_prompt = f"""Original question: {question}
 Final answer: {final_answer}
 Critique output: {critique_output}"""
-    
+
     try:
         response = await wait_for(
             client.chat.completions.create(
@@ -58,21 +58,21 @@ Critique output: {critique_output}"""
             ),
             timeout=25
         )
-        
+
         content = response.choices[0].message.content
         if not content:
             raise ValueError("Empty response from GPT-4o")
-        
+
         result = json.loads(content)
-        
+
         if not isinstance(result, dict):
             raise ValueError("Response is not a dict")
-        
+
         if "positions" not in result or "minority_view_summary" not in result:
             raise ValueError("Missing required fields")
-        
+
         return result
-        
+
     except Exception:
         # Surface the underlying parse/format error so we can spot LLM drift
         # without needing to reproduce a 4xx from the API. The call falls

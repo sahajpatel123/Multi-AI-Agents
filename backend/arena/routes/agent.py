@@ -2273,23 +2273,23 @@ async def list_orchestrations(
         window_seconds=60,
         message="Too many orchestration list requests. Please slow down.",
     )
-    
+
     offset = (page - 1) * per_page
-    
+
     # Base query
     query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
-    
+
     # Apply status filter
     if status:
         query = query.filter(Orchestration.status == status)
-    
+
     # Get total count
     total = query.count()
-    
+
     # Get paginated results
     orchestrations = query.order_by(Orchestration.created_at.desc())
     orchestrations = orchestrations.offset(offset).limit(per_page).all()
-    
+
     # Format results
     items = []
     for orch in orchestrations:
@@ -2302,7 +2302,7 @@ async def list_orchestrations(
             "task_ids": task_ids,
             "synthesis_preview": orch.synthesis[:200] if orch.synthesis else None,
         })
-    
+
     return JSONResponse(content={
         "request_id": correlation_request_id(http_request),
         "success": True,
@@ -2334,22 +2334,22 @@ async def export_orchestrations_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait.",
     )
-    
+
     from arena.routes.analytics import _csv_safe
     import csv
     import io
-    
+
     # Get all orchestrations (not paginated for CSV)
     query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
-    
+
     if status:
         query = query.filter(Orchestration.status == status)
-    
+
     orchestrations = query.order_by(Orchestration.created_at.desc()).all()
-    
+
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
     # Write header
     writer.writerow([
         "id",
@@ -2359,7 +2359,7 @@ async def export_orchestrations_csv(
         "task_ids",
         "synthesis_preview",
     ])
-    
+
     # Write rows
     for orch in orchestrations:
         task_ids = list(orch.task_ids or [])
@@ -2371,7 +2371,7 @@ async def export_orchestrations_csv(
             _csv_safe(";".join(task_ids)),
             _csv_safe((orch.synthesis or "")[:200]),
         ])
-    
+
     filename = f"arena-orchestrations-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -3826,9 +3826,9 @@ async def get_watchlist_statistics(
         window_seconds=60,
         message="Too many statistics requests. Please wait a moment.",
     )
-    
+
     from arena.core.agent_memory import get_watchlist_statistics
-    
+
     stats = get_watchlist_statistics(db, user.id)
     return JSONResponse(content={"success": True, **stats})
 
@@ -3851,7 +3851,7 @@ async def get_watchlist_statistics_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait a moment.",
     )
-    
+
     from arena.core.agent_memory import get_watchlist_statistics
     import csv
     import io
@@ -3872,7 +3872,7 @@ async def get_watchlist_statistics_csv(
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
 
     stats = get_watchlist_statistics(db, user.id)
-    
+
     # Write summary row
     writer.writerow(["Watchlist Statistics Summary"])
     writer.writerow(["Metric", "Value"])
@@ -3885,7 +3885,7 @@ async def get_watchlist_statistics_csv(
     writer.writerow(["Maximum Score", stats["max_score"] if stats["max_score"] is not None else ""])
     writer.writerow(["Success Rate (%)", stats["success_rate"]])
     writer.writerow([])
-    
+
     # Write per-item statistics
     writer.writerow(["Per-Item Statistics"])
     writer.writerow([
@@ -3898,7 +3898,7 @@ async def get_watchlist_statistics_csv(
         "Average Score",
         "Last Run At",
     ])
-    
+
     for item_id, item_stats in stats["per_item_stats"].items():
         writer.writerow([
             _stats_csv_safe(item_id),
@@ -3910,7 +3910,7 @@ async def get_watchlist_statistics_csv(
             _stats_csv_safe(item_stats["avg_score"] if item_stats["avg_score"] is not None else ""),
             _stats_csv_safe(item_stats["last_run_at"] if item_stats["last_run_at"] else ""),
         ])
-    
+
     filename = f"arena-watchlist-stats-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -4354,14 +4354,14 @@ async def export_feedback_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait.",
     )
-    
+
     from arena.db_models import AnswerFeedback, AgentTask
     from arena.core.http_headers import content_disposition_attachment
     from fastapi.responses import Response
     from arena.core.datetime_utils import utcnow_naive
     import csv
     import io
-    
+
     def _csv_safe(value) -> str:
         """Escape value for CSV to prevent formula injection."""
         if value is None:
@@ -4370,23 +4370,23 @@ async def export_feedback_csv(
         if s.startswith(("=", "+", "-", "@")):
             return "'" + s
         return s
-    
+
     # Get all feedback with task title
     q = (
         db.query(AnswerFeedback, AgentTask)
         .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
         .filter(AnswerFeedback.user_id == user.id)
     )
-    
+
     q = _apply_feedback_export_filters(
         q,
         verdict=verdict,
         from_date=from_date,
         to_date=to_date,
     )
-    
+
     rows = q.order_by(AnswerFeedback.created_at.desc(), AnswerFeedback.id.desc()).all()
-    
+
     # Format items
     items = []
     for feedback, task in rows:
@@ -4398,10 +4398,10 @@ async def export_feedback_csv(
             "note": feedback.note,
             "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
         })
-    
+
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
     # Write header
     writer.writerow([
         "id",
@@ -4411,7 +4411,7 @@ async def export_feedback_csv(
         "note",
         "created_at",
     ])
-    
+
     # Write rows
     for item in items:
         writer.writerow([
@@ -4422,7 +4422,7 @@ async def export_feedback_csv(
             _csv_safe(item.get("note")),
             _csv_safe(item.get("created_at")),
         ])
-    
+
     filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -4467,29 +4467,29 @@ async def export_feedback_json(
         window_seconds=60,
         message="Too many JSON exports. Please wait.",
     )
-    
+
     from arena.db_models import AnswerFeedback, AgentTask
     from arena.core.datetime_utils import utcnow_naive
     from fastapi.responses import Response
     from arena.core.http_headers import content_disposition_attachment
     import json
-    
+
     # Get all feedback with task title
     q = (
         db.query(AnswerFeedback, AgentTask)
         .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
         .filter(AnswerFeedback.user_id == user.id)
     )
-    
+
     q = _apply_feedback_export_filters(
         q,
         verdict=verdict,
         from_date=from_date,
         to_date=to_date,
     )
-    
+
     rows = q.order_by(AnswerFeedback.created_at.desc(), AnswerFeedback.id.desc()).all()
-    
+
     # Format items
     items = []
     for feedback, task in rows:
@@ -4501,7 +4501,7 @@ async def export_feedback_json(
             "note": feedback.note,
             "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
         })
-    
+
     filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -4792,16 +4792,16 @@ async def export_agent_history_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait.",
     )
-    
+
     from arena.core.agent_memory import get_user_task_history
     from arena.routes.analytics import _csv_safe
     from arena.core.tier_config import normalize_tier, get_tier_str
     import csv
     import io
-    
+
     tier = normalize_tier(get_tier_str(user))
     retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
-    
+
     # Get all matching tasks (not paginated for CSV export)
     # Use a large per_page to get all results
     history = get_user_task_history(
@@ -4815,10 +4815,10 @@ async def export_agent_history_csv(
         orchestration_id=orchestration_id,
         sort=sort,
     )
-    
+
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
     # Write header
     writer.writerow([
         "task_id",
@@ -4831,7 +4831,7 @@ async def export_agent_history_csv(
         "orchestration_id",
         "watchlist_item_id",
     ])
-    
+
     # Write rows
     for item in history.get("tasks", []):
         writer.writerow([
@@ -4845,7 +4845,7 @@ async def export_agent_history_csv(
             _csv_safe(item.get("orchestration_id")),
             _csv_safe(item.get("watchlist_item_id")),
         ])
-    
+
     filename = f"arena-history-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -4883,14 +4883,14 @@ async def export_agent_history_json(
         window_seconds=60,
         message="Too many JSON exports. Please wait.",
     )
-    
+
     from arena.core.agent_memory import get_user_task_history
     from arena.core.tier_config import normalize_tier, get_tier_str
     import json
-    
+
     tier = normalize_tier(get_tier_str(user))
     retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
-    
+
     # Get all matching tasks
     history = get_user_task_history(
         db=db,
@@ -4903,10 +4903,10 @@ async def export_agent_history_json(
         orchestration_id=orchestration_id,
         sort=sort,
     )
-    
+
     # Return tasks as JSON array
     tasks = history.get("tasks", [])
-    
+
     filename = f"arena-history-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),

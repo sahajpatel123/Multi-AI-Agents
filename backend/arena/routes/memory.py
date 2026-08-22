@@ -481,13 +481,13 @@ async def export_summaries_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
         raise HTTPException(
             status_code=403,
             detail={"error": "feature_not_allowed", "message": "Memory export requires Plus or Pro."},
         )
-    
+
     def _csv_safe(value) -> str:
         """Escape value for CSV to prevent formula injection."""
         if value is None:
@@ -496,7 +496,7 @@ async def export_summaries_csv(
         if s.startswith(("=", "+", "-", "@")):
             return "'" + s
         return s
-    
+
     _validate_summary_date_range(from_date, to_date)
     # Get all matching summaries (not paginated for CSV).
     q = _apply_summary_filters(
@@ -507,16 +507,16 @@ async def export_summaries_csv(
         from_date=from_date,
         to_date=to_date,
     )
-    
+
     summaries = _order_summary_query(q, sort).all()
-    
+
     import csv
     import io
     from arena.core.datetime_utils import utcnow_naive
-    
+
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
     # Write header
     writer.writerow([
         "id",
@@ -529,7 +529,7 @@ async def export_summaries_csv(
         "main_topics",
         "compressed_at",
     ])
-    
+
     # Write rows
     for row in summaries:
         writer.writerow([
@@ -543,11 +543,11 @@ async def export_summaries_csv(
             _csv_safe(";".join(row.main_topics or [])),
             _csv_safe(row.compressed_at.isoformat() if row.compressed_at else ""),
         ])
-    
+
     filename = f"arena-memory-summaries-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     from fastapi.responses import Response
     from arena.core.http_headers import content_disposition_attachment
-    
+
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
         "X-Content-Type-Options": "nosniff",
@@ -583,13 +583,13 @@ async def export_summaries_json(
         window_seconds=60,
         message="Too many JSON exports. Please wait.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
         raise HTTPException(
             status_code=403,
             detail={"error": "feature_not_allowed", "message": "Memory export requires Plus or Pro."},
         )
-    
+
     _validate_summary_date_range(from_date, to_date)
     # Get all matching summaries (not paginated for export).
     q = _apply_summary_filters(
@@ -600,12 +600,12 @@ async def export_summaries_json(
         from_date=from_date,
         to_date=to_date,
     )
-    
+
     summaries = _order_summary_query(q, sort).all()
-    
+
     import json
     from arena.core.datetime_utils import utcnow_naive
-    
+
     # Format as JSON-serializable list
     items = []
     for row in summaries:
@@ -620,11 +620,11 @@ async def export_summaries_json(
             "main_topics": list(row.main_topics or []),
             "compressed_at": row.compressed_at.isoformat() if row.compressed_at else None,
         })
-    
+
     filename = f"arena-memory-summaries-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
     from fastapi.responses import Response
     from arena.core.http_headers import content_disposition_attachment
-    
+
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
         "X-Content-Type-Options": "nosniff",
