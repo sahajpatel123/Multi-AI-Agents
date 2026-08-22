@@ -155,4 +155,3 @@ async def test_persona_stats_overview_markdown_uses_its_own_rate_limit_scope(
         f"user:analytics_persona_stats_all_markdown:{user.id}",
         f"user:analytics_persona_stats_all:{user.id}",
     ]
-
