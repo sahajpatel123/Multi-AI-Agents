@@ -481,4 +481,25 @@ describe('ExportPresetsPanel', () => {
       screen.queryByRole('button', { name: /move export preset high score responses/i }),
     ).not.toBeInTheDocument();
   });
+
+  it('shows how long ago a preset was last used', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      {
+        ...hoisted.presetCsv,
+        last_used_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      },
+    ]);
+    render(<ExportPresetsPanel />);
+
+    expect(await screen.findByText(/used 5m ago/)).toBeInTheDocument();
+    // The stamp shares the metadata line with the filter summary.
+    expect(screen.getByText(/score ≥ 80/)).toHaveTextContent('used 5m ago');
+  });
+
+  it('omits the last-used stamp when a preset has never been downloaded', async () => {
+    render(<ExportPresetsPanel />);
+
+    expect(await screen.findByText('High Score Responses')).toBeInTheDocument();
+    expect(screen.queryByText(/used .* ago/)).not.toBeInTheDocument();
+  });
 });

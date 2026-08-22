@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- Export preset rows now show when each was last downloaded ("used 5m
+  ago") beside their filter summary — the backend has always stamped
+  last_used_at on every download, but the UI never surfaced it, so there
+  was no way to tell which presets earn their place. Never-used presets
+  show nothing instead of a dangling label
+
 ### Added
 - Export presets are now reorderable from the sidebar panel: every row has
   Move up / Move down controls that persist the new order through the

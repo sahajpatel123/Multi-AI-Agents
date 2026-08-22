@@ -31,6 +31,34 @@ const PREVIEW_SORT_LABELS: Record<string, string> = {
   pinned: 'pinned takes first',
 };
 
+function formatTimeAgo(timestamp: string): string {
+  // Defensive against invalid input — `new Date('invalid')` returns
+  // NaN without throwing, which would propagate and render as
+  // "NaNm ago" in the UI.
+  const ms = Date.parse(timestamp);
+  if (Number.isNaN(ms)) return '';
+  const diffMs = Date.now() - ms;
+  // Future timestamps (clock skew between client and server) show
+  // as 'just now' rather than negative durations.
+  if (diffMs < 0) return 'just now';
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  // A year+ old is more useful as an absolute date than a vague
+  // "412d ago" — the sidebar is small and absolute dates are easier
+  // to scan than huge numbers.
+  if (diffDays >= 365) {
+    return new Date(ms).toLocaleDateString();
+  }
+  return `${diffDays}d ago`;
+}
+
 export function ExportPresetsPanel() {
   const [presets, setPresets] = useState<ExportPreset[] | null>(null);
   const [templates, setTemplates] = useState<ExportPresetTemplate[]>([]);
@@ -277,6 +305,13 @@ export function ExportPresetsPanel() {
             ]
               .filter(Boolean)
               .join(' · ');
+            // The backend stamps last_used_at on every download; an empty
+            // format (unparseable timestamp) means no stamp at all rather
+            // than a dangling "used".
+            const formattedAgo = preset.last_used_at
+              ? formatTimeAgo(preset.last_used_at)
+              : null;
+            const usedLabel = formattedAgo ? `used ${formattedAgo}` : null;
             return (
               <li
                 key={preset.id}
@@ -355,8 +390,12 @@ export function ExportPresetsPanel() {
                     ) : null}
                   </div>
                   )}
-                  {filters && renamingId !== preset.id ? (
-                    <div style={{ fontSize: 10, color: '#A0A39A' }}>{filters}</div>
+                  {(filters || usedLabel) && renamingId !== preset.id ? (
+                    <div style={{ fontSize: 10, color: '#A0A39A' }}>
+                      {filters}
+                      {filters && usedLabel ? ' · ' : null}
+                      {usedLabel}
+                    </div>
                   ) : null}
                   {renamingId === preset.id ? (
                     <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
