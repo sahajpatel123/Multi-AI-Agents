@@ -52,12 +52,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
-  # Check for debug statements
+  # Secret-key checks. `detect-aws-secret-key` was removed: no version of
+  # pre-commit-hooks has ever shipped that hook id, so pre-commit aborted
+  # environment validation before running ANY hook in this file. AWS
+  # credentials remain covered by gitleaks' default ruleset above.
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: detect-private-key
-      - id: detect-aws-secret-key
 
   # Check for TODO/FIXME comments that should be addressed
   - repo: local
