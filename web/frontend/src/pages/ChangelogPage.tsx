@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[FIXED] Profile analytics: category-stats, persona timeline, and by-category CSV exports now preserve the server request ID in error messages',
       '[NEW] Profile analytics: copy the complete persona-stats overview as structured JSON for notebooks and scripts — download/copy parity across all three formats',
       '[NEW] Profile analytics: copy the complete persona-stats overview as a human-readable Markdown report for notes and docs without downloading',
       '[IMPROVED] Profile analytics: every persona-stats overview export now follows a selected window (7/30/90/365 days) instead of a hardcoded 30 days',

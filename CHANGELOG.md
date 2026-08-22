@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failure feedback matching the other persona stats exports
 
 ### Fixed
+- The category-stats CSV, persona timeline CSV, and by-category CSV exports
+  no longer strip the server request ID from rate-limit and error messages,
+  making support diagnostics actionable across every export route in the app
 - CI is green again on main after three independent breakages: the backend
   security pin-floor guard no longer dies to bash command-substitution on its
   own comment text (extracted to scripts/check_security_floors.py), fifteen

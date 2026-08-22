@@ -4458,7 +4458,11 @@ export async function exportAnalyticsCategoryStatsCsv(windowDays: number = 30): 
   const response = await apiFetch(`/api/analytics/category-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export category stats CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export category stats CSV'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }
@@ -4784,7 +4788,11 @@ export async function exportAnalyticsPersonaStatsTimelineCsv(
   const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/timeline/export.csv?days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export persona timeline CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona timeline CSV'), response),
+      response.status,
+      err,
+    );
   }
   const safePersonaId = normalizedPersonaId.replace(/[^a-zA-Z0-9_-]/g, '-');
   return {
@@ -4867,7 +4875,11 @@ export async function exportAnalyticsPersonaStatsByCategoryCsv(personaId: string
   const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(personaId)}/by-category/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export persona category stats CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona category stats CSV'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }

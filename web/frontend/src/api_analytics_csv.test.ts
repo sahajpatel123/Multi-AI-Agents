@@ -310,6 +310,48 @@ describe('Analytics CSV export frontend API helpers', () => {
     });
   });
 
+  it('surfaces request IDs on category stats CSV failures', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Too many category CSV exports' }), {
+        status: 429,
+        headers: { 'x-request-id': 'req-category-stats-csv' },
+      }),
+    );
+
+    await expect(exportAnalyticsCategoryStatsCsv()).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many category CSV exports (Request ID: req-category-stats-csv)',
+    });
+  });
+
+  it('surfaces request IDs on persona timeline CSV failures', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Too many timeline exports' }), {
+        status: 429,
+        headers: { 'x-request-id': 'req-persona-timeline-csv' },
+      }),
+    );
+
+    await expect(exportAnalyticsPersonaStatsTimelineCsv('analyst')).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many timeline exports (Request ID: req-persona-timeline-csv)',
+    });
+  });
+
+  it('surfaces request IDs on by-category CSV failures', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Too many category breakdown exports' }), {
+        status: 429,
+        headers: { 'x-request-id': 'req-by-category-csv' },
+      }),
+    );
+
+    await expect(exportAnalyticsPersonaStatsByCategoryCsv('analyst')).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many category breakdown exports (Request ID: req-by-category-csv)',
+    });
+  });
+
   it('exportAnalyticsPersonaStatsOverviewCsv returns the server filename', async () => {
     const mockBlob = new Blob(['persona_id,name'], { type: 'text/csv' });
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
