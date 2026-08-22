@@ -2702,6 +2702,51 @@ describe('ProfileModal', () => {
     expect(button).not.toBeDisabled();
   });
 
+  it('copies the persona stats overview CSV for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona stats overview window/i }),
+      { target: { value: '90' } },
+    );
+    const button = await screen.findByRole('button', { name: /copy persona stats csv/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv).toHaveBeenCalledWith(90);
+      expect(
+        screen.getByText('Copied persona stats CSV to the clipboard.'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('downloads the persona stats overview JSON for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona stats overview window/i }),
+      { target: { value: '365' } },
+    );
+    const button = await screen.findByRole('button', { name: /persona stats json/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsOverviewJson).toHaveBeenCalledWith(365);
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        hoistedMocks.personaStatsOverviewJsonExport.blob,
+        'arena-persona-stats-overview-2026-08-01-to-2026-08-30.json',
+      );
+    });
+  });
+
   it('surfaces persona stats CSV clipboard failures and releases the copy lock', async () => {
     vi.mocked(hoistedMocks.copyCsvToClipboard).mockResolvedValueOnce(false);
     renderModal();

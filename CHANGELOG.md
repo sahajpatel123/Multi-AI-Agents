@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- Persona stats overview exports (CSV download, JSON download, Markdown
+  download, CSV clipboard copy) now follow a selected persona-stats window
+  instead of a hardcoded 30 days; the selector sits beside the summary and
+  usage windows and stays locked while an export is in flight
+
 ### Added
 - Profile analytics can now copy the complete persona-stats overview as
   spreadsheet-aware CSV straight from the dashboard, with honest clipboard-

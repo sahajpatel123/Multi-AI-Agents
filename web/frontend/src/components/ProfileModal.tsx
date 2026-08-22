@@ -292,6 +292,7 @@ function TabIconHelp({ active }: { active: boolean }) {
 const PLACEHOLDER_HISTORY = [8, 14, 11, 19, 15, 22, 17, 12, 25, 18, 14, 21, 10, 28];
 const SUMMARY_EXPORT_WINDOWS = [7, 30, 90, 365] as const;
 const USAGE_EXPORT_WINDOWS = [7, 14, 30, 90, 365] as const;
+const PERSONA_STATS_OVERVIEW_WINDOWS = [7, 30, 90, 365] as const;
 const PERSONA_WIN_RATE_WINDOWS = [7, 30, 90] as const;
 const PERSONA_WIN_RATE_MIN_APPEARANCES = [1, 3, 5, 10] as const;
 type PersonaWinRateSort = 'win_rate' | 'appearances' | 'wins' | 'name';
@@ -936,6 +937,7 @@ export function ProfileModal() {
   const [categoryStatsReload, setCategoryStatsReload] = useState(0);
   const [summaryExportWindowDays, setSummaryExportWindowDays] = useState(30);
   const [usageExportWindowDays, setUsageExportWindowDays] = useState(14);
+  const [overviewWindowDays, setOverviewWindowDays] = useState(30);
   const [winRate, setWinRate] = useState<AnalyticsPersonaWinRateResponse | null>(null);
   const [winRateLoading, setWinRateLoading] = useState(false);
   const [winRateErr, setWinRateErr] = useState<string | null>(null);
@@ -2985,6 +2987,44 @@ export function ProfileModal() {
                       ))}
                     </select>
                   </label>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    <span>Persona stats window</span>
+                    <select
+                      aria-label="Persona stats overview window"
+                      disabled={activeExport !== null}
+                      value={overviewWindowDays}
+                      onChange={(event) => {
+                        clearExportFeedback();
+                        setOverviewWindowDays(Number(event.target.value));
+                      }}
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        opacity: activeExport !== null ? 0.65 : 1,
+                      }}
+                    >
+                      {PERSONA_STATS_OVERVIEW_WINDOWS.map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
                 {exportError ? (
                   <p
@@ -4296,7 +4336,7 @@ export function ProfileModal() {
                       setActiveExport('overview');
                       clearExportFeedback();
                       try {
-                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewCsv(30);
+                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewCsv(overviewWindowDays);
                         if (!downloadBlobFile(blob, filename)) {
                           setExportError('Could not download persona stats CSV — try again.');
                         }
@@ -4332,7 +4372,7 @@ export function ProfileModal() {
                       setActiveExport('overview-json');
                       clearExportFeedback();
                       try {
-                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewJson(30);
+                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewJson(overviewWindowDays);
                         if (!downloadBlobFile(blob, filename)) {
                           setExportError('Could not download persona stats JSON — try again.');
                         }
@@ -4368,7 +4408,7 @@ export function ProfileModal() {
                       setActiveExport('overview-markdown');
                       clearExportFeedback();
                       try {
-                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewMarkdown(30);
+                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewMarkdown(overviewWindowDays);
                         if (!downloadBlobFile(blob, filename)) {
                           setExportError('Could not download persona stats Markdown — try again.');
                         }
@@ -4405,7 +4445,7 @@ export function ProfileModal() {
                       setActiveExport('overview-copy-csv');
                       clearExportFeedback();
                       try {
-                        const { blob } = await exportAnalyticsPersonaStatsOverviewCsv(30);
+                        const { blob } = await exportAnalyticsPersonaStatsOverviewCsv(overviewWindowDays);
                         const copied = await copyCsvToClipboard(await blob.text());
                         if (copied) {
                           setExportNotice('Copied persona stats CSV to the clipboard.');

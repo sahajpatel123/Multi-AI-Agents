@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[IMPROVED] Profile analytics: every persona-stats overview export now follows a selected window (7/30/90/365 days) instead of a hardcoded 30 days',
       '[NEW] Profile analytics: copy the complete persona-stats overview as spreadsheet-aware CSV straight from the dashboard',
       '[FIXED] Profile analytics: persona stats CSV exports no longer fail silently — errors surface with their request ID and saved files use the server filename',
       '[NEW] Profile analytics: download the complete persona-stats overview as a human-readable Markdown report for notes and docs',
