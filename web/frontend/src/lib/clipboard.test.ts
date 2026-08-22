@@ -5,6 +5,7 @@ import {
   copyMarkdownToClipboard,
   copyToClipboard,
 } from './clipboard';
+import { expectBlob } from '../test/blob';
 
 describe('copyToClipboard', () => {
   afterEach(() => {
@@ -91,8 +92,8 @@ describe('copyToClipboard', () => {
     expect(await copyCsvToClipboard('\uFEFFa,b\r\n1,2\r\n')).toBe(true);
     expect(write).toHaveBeenCalledTimes(1);
     const item = write.mock.calls[0][0][0] as { data: Record<string, Blob> };
-    expect(item.data['text/csv']).toBeInstanceOf(Blob);
-    expect(item.data['text/plain']).toBeInstanceOf(Blob);
+    expectBlob(item.data['text/csv']);
+    expectBlob(item.data['text/plain']);
   });
 
   it('falls back to plain text when ClipboardItem is unavailable', async () => {
@@ -121,8 +122,8 @@ describe('copyToClipboard', () => {
     expect(await copyMarkdownToClipboard('# Arena usage\n')).toBe(true);
     expect(write).toHaveBeenCalledTimes(1);
     const item = write.mock.calls[0][0][0] as { data: Record<string, Blob> };
-    expect(item.data['text/markdown']).toBeInstanceOf(Blob);
-    expect(item.data['text/plain']).toBeInstanceOf(Blob);
+    expectBlob(item.data['text/markdown']);
+    expectBlob(item.data['text/plain']);
   });
 
   it('falls back to plain text when Markdown clipboard support is unavailable', async () => {
@@ -151,8 +152,8 @@ describe('copyToClipboard', () => {
     expect(await copyJsonToClipboard('{"rows":[]}')).toBe(true);
     expect(write).toHaveBeenCalledTimes(1);
     const item = write.mock.calls[0][0][0] as { data: Record<string, Blob> };
-    expect(item.data['application/json']).toBeInstanceOf(Blob);
-    expect(item.data['text/plain']).toBeInstanceOf(Blob);
+    expectBlob(item.data['application/json']);
+    expectBlob(item.data['text/plain']);
   });
 
   it('falls back to plain text when JSON clipboard support is unavailable', async () => {
