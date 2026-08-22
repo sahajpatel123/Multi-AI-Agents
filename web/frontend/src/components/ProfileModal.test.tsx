@@ -1327,6 +1327,44 @@ describe('ProfileModal', () => {
     });
   });
 
+  it('surfaces activity Markdown download failures and releases the export lock', async () => {
+    hoistedMocks.exportAnalyticsActivityMarkdown.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', {
+      name: /^🗓️ activity markdown export$/i,
+    });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not download activity Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces a blocked activity Markdown download and releases the export lock', async () => {
+    vi.mocked(downloadBlobFile).mockReturnValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', {
+      name: /^🗓️ activity markdown export$/i,
+    });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not download activity Markdown — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
   it('copies analytics activity CSV for the selected window', async () => {
     renderModal();
     await waitFor(() => {

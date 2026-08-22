@@ -4069,11 +4069,18 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('activity-markdown');
+                      clearExportFeedback();
                       try {
                         const { blob, filename } = await exportAnalyticsActivityMarkdown(activityWindowDays);
-                        downloadBlobFile(blob, filename);
-                      } catch {
-                        // ignore error
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download activity Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download activity Markdown — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
