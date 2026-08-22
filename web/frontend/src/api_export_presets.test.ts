@@ -8,6 +8,7 @@ import {
   useExportPreset,
   previewExportPreset,
   renameExportPreset,
+  setDefaultExportPreset,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -403,6 +404,43 @@ describe('export preset API helpers', () => {
       );
       await expect(renameExportPreset(3, 'New name')).rejects.toThrow(
         'Please slow down. (Request ID: req-rename-429)',
+      );
+    });
+  });
+
+  describe('setDefaultExportPreset', () => {
+    it('puts only the is_default flag and returns the updated preset', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'updated', ...presetFixture, is_default: true }), {
+          status: 200,
+        }),
+      );
+
+      const res = await setDefaultExportPreset(3);
+      expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/3', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_default: true }),
+      });
+      expect(res.is_default).toBe(true);
+    });
+
+    it('validates the id before fetching', async () => {
+      await expect(setDefaultExportPreset(-2)).rejects.toThrow(
+        'presetId must be a positive integer',
+      );
+      expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+    });
+
+    it('surfaces failures with a friendly fallback when no detail is sent', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response('bad gateway', {
+          status: 502,
+          headers: { 'x-request-id': 'req-default-502' },
+        }),
+      );
+      await expect(setDefaultExportPreset(3)).rejects.toThrow(
+        'Failed to set the default export preset (Request ID: req-default-502)',
       );
     });
   });

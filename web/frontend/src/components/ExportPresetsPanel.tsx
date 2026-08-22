@@ -7,6 +7,7 @@ import {
   listExportPresets,
   previewExportPreset,
   renameExportPreset,
+  setDefaultExportPreset,
   useExportPreset,
   type ExportPreset,
   type ExportPresetPreview,
@@ -169,6 +170,25 @@ export function ExportPresetsPanel() {
     [renameValue, runAction],
   );
 
+  const handleMakeDefault = useCallback(
+    (preset: ExportPreset) =>
+      runAction(`default-${preset.id}`, async () => {
+        // The backend clears every other default in the same transaction;
+        // mirror that locally so the badges stay consistent without a refetch.
+        await setDefaultExportPreset(preset.id);
+        setPresets((current) =>
+          current
+            ? current.map((item) => ({
+                ...item,
+                is_default: item.id === preset.id,
+              }))
+            : current,
+        );
+        return `"${preset.name}" is now the default export preset.`;
+      }),
+    [runAction],
+  );
+
   if (presets === null) {
     return (
       <div style={{ padding: '10px 0' }}>
@@ -295,6 +315,23 @@ export function ExportPresetsPanel() {
                     >
                       {preset.format}
                     </span>
+                    {preset.is_default ? (
+                      <span
+                        title="This preset is your default export"
+                        style={{
+                          marginLeft: 6,
+                          fontSize: 9,
+                          letterSpacing: '0.05em',
+                          textTransform: 'uppercase',
+                          color: '#5A8C6A',
+                          border: '0.5px solid #5A8C6A',
+                          borderRadius: 4,
+                          padding: '0 4px',
+                        }}
+                      >
+                        Default
+                      </span>
+                    ) : null}
                   </div>
                   )}
                   {filters && renamingId !== preset.id ? (
@@ -368,6 +405,30 @@ export function ExportPresetsPanel() {
                   >
                     Rename
                   </button>
+                  ) : null}
+                  {!preset.is_default && renamingId !== preset.id ? (
+                    <button
+                      type="button"
+                      disabled={busyKey !== null}
+                      aria-busy={busyKey === `default-${preset.id}`}
+                      aria-label={`Make ${preset.name} the default export preset`}
+                      onClick={() => void handleMakeDefault(preset)}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        color:
+                          busyKey === `default-${preset.id}` ? '#A0A39A' : '#5A8C6A',
+                        cursor: busyKey !== null ? 'wait' : 'pointer',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {busyKey === `default-${preset.id}` ? 'Setting…' : 'Make default'}
+                    </button>
                   ) : null}
                   <button
                     type="button"

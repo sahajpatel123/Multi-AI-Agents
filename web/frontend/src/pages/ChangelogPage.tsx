@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[IMPROVED] Export presets: the panel honors one-default-per-user with a Default badge and a one-click Make default action',
       '[NEW] Export presets: rename presets inline from the sidebar panel — Enter saves, Escape cancels, failures keep your draft',
       '[IMPROVED] Export presets: the dry-run preview now shows the effective sort order and search term beside the match count',
       '[NEW] Export presets: a dry-run Preview toggle per preset — counts exactly how many takes an export would return, samples the top few, cached so re-opening never refetches',

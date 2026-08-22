@@ -19,6 +19,7 @@ vi.mock('../api', () => ({
   useExportPreset: vi.fn(),
   previewExportPreset: vi.fn(),
   renameExportPreset: vi.fn(),
+  setDefaultExportPreset: vi.fn(),
 }));
 
 vi.mock('../lib/downloadTextFile', () => ({
@@ -352,5 +353,65 @@ describe('ExportPresetsPanel', () => {
     expect(
       screen.getByRole('button', { name: /^save name for export preset/i }),
     ).toBeDisabled();
+  });
+
+  it('shows the default badge and offers Make default only on other rows', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      hoisted.presetCsv,
+      { ...hoisted.presetCsv, id: 9, name: 'Recent Responses', format: 'json', is_default: false },
+      { ...hoisted.presetCsv, id: 4, name: 'The Chosen One', is_default: true },
+    ]);
+    render(<ExportPresetsPanel />);
+
+    expect(await screen.findByText('Default')).toBeInTheDocument();
+    // Non-default rows can be promoted…
+    expect(screen.getByRole('button', { name: /^make high score responses the default/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^make recent responses the default/i })).toBeInTheDocument();
+    // …but the current default cannot.
+    expect(
+      screen.queryByRole('button', { name: /^make the chosen one the default/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('promotes a preset to default and moves the badge in place', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      { ...hoisted.presetCsv, id: 3, name: 'Alpha', is_default: true },
+      { ...hoisted.presetCsv, id: 5, name: 'Beta', is_default: false },
+    ]);
+    mockedApi.setDefaultExportPreset.mockResolvedValue({
+      ...hoisted.presetCsv,
+      id: 5,
+      name: 'Beta',
+      is_default: true,
+    });
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^make beta the default/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.setDefaultExportPreset).toHaveBeenCalledWith(5);
+      expect(screen.getByRole('status')).toHaveTextContent('"Beta" is now the default');
+    });
+    expect(screen.getByText('Default')).toBeInTheDocument();
+    // Beta no longer offers promotion; Alpha now does.
+    expect(screen.queryByRole('button', { name: /^make beta the default/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^make alpha the default/i })).toBeInTheDocument();
+  });
+
+  it('surfaces a failed default switch as an alert without moving the badge', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      { ...hoisted.presetCsv, id: 3, name: 'Alpha', is_default: true },
+      { ...hoisted.presetCsv, id: 5, name: 'Beta', is_default: false },
+    ]);
+    mockedApi.setDefaultExportPreset.mockRejectedValue(
+      new apiModule.ApiError('Please slow down.', 429),
+    );
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^make beta the default/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Please slow down.');
+    expect(screen.getByText(/alpha/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^make beta the default/i })).toBeInTheDocument();
   });
 });

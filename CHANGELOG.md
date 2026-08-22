@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- Export presets now honor the backend's one-default-per-user rule in the
+  UI: the current default wears a Default badge, every other row offers a
+  one-click Make default action, and switching moves the badge in place
+  without a refetch — failures surface honestly and leave the badge where
+  it was
+
 ### Added
 - Export presets can now be renamed inline from the sidebar panel (the
   backend's update route finally has a frontend surface): a Rename button

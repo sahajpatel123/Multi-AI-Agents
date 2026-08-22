@@ -5112,6 +5112,31 @@ export async function renameExportPreset(
   return normalizeExportPreset(data);
 }
 
+export async function setDefaultExportPreset(presetId: number): Promise<ExportPreset> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  // The backend keeps exactly one default per user: setting this flag
+  // clears every other preset's default in the same transaction.
+  const res = await apiFetch(`/api/export-presets/${encodeURIComponent(String(presetId))}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_default: true }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to set the default export preset'), res),
+    );
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Setting the default export preset returned no preset.');
+    })();
+  return normalizeExportPreset(data);
+}
+
 export async function deleteExportPreset(presetId: number): Promise<void> {  if (!Number.isInteger(presetId) || presetId < 1) {
     throw new RangeError('presetId must be a positive integer');
   }
