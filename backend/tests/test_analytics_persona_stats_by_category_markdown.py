@@ -307,3 +307,32 @@ async def test_md_uppercase_persona_id_normalized(
     assert res.status_code == 200
     # Filename uses canonical lowercase form.
     assert "arena-by-category-analyst-" in res.headers["content-disposition"]
+
+
+@pytest.mark.asyncio
+async def test_md_escapes_hostile_category_labels(app_client, make_user, db_session):
+    """prompt_category is freeform on ScoringAudit, so an unknown category
+    label can carry Markdown-breaking characters. The report must escape
+    them (pipes and newlines) so the table cannot be broken or used to
+    smuggle layout into a pasted report."""
+    user = make_user(email="pbcm-escape@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst"],
+        category="tricky|label\nnewline",
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/by-category/export.md?window_days=7",
+    headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    text = res.text
+    # Pipe escaped so the cell cannot split the table row; newline
+    # flattened so one category stays one table row.
+    assert "| tricky\\|label newline | 1 | 1 | 100.0% |" in text
+    # And the raw, unescaped forms never appear as a cell.
+    assert "\n| tricky|label" not in text

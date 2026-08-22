@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- The persona drill-down's category breakdown now ships a clipboard copy
+  alongside its CSV and Markdown downloads ("Copy Category Breakdown
+  Markdown"), matching the timeline family's full download/copy matrix;
+  the backend Markdown report also pins escaping tests so freeform
+  category labels cannot break table layout or smuggle Markdown into a
+  pasted report
+
 ### Added
 - Persona drill-downs can now export a mind's per-category breakdown as a
   human-readable Markdown report (summary rollup, category table, and the

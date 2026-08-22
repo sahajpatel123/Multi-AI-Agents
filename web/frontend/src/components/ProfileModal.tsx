@@ -1042,6 +1042,34 @@ export function ProfileModal() {
       setActiveExport(null);
     }
   }, [clearExportFeedback, overviewWindowDays]);
+  const handlePersonaCategoryCopyMarkdown = useCallback(async (
+    personaId: string,
+    personaLabel: string,
+  ) => {
+    const exportKey = `persona-category-${personaId}-copy-markdown`;
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const { blob } = await exportAnalyticsPersonaStatsByCategoryMarkdown(
+        personaId,
+        overviewWindowDays,
+      );
+      const copied = await copyMarkdownToClipboard(await blob.text());
+      if (copied) {
+        setExportNotice(`Copied ${personaLabel} category breakdown Markdown to the clipboard.`);
+      } else {
+        setExportError(`Could not copy ${personaLabel} category breakdown Markdown — try again.`);
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : `Could not copy ${personaLabel} category breakdown Markdown — try again.`,
+      );
+    } finally {
+      setActiveExport(null);
+    }
+  }, [clearExportFeedback, overviewWindowDays]);
   const handlePersonaTimelineCopy = useCallback(async (
     timeline: AnalyticsPersonaStatsTimelineResponse,
   ) => {
@@ -2931,6 +2959,38 @@ export function ProfileModal() {
                                           {activeExport === `persona-category-${row.persona_id}-markdown`
                                             ? '⏳ Exporting…'
                                             : 'Category Breakdown Markdown'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={activeExport !== null}
+                                          aria-busy={
+                                            activeExport === `persona-category-${row.persona_id}-copy-markdown`
+                                          }
+                                          onClick={() => {
+                                            void handlePersonaCategoryCopyMarkdown(row.persona_id, row.name);
+                                          }}
+                                          style={{
+                                            padding: '3px 7px',
+                                            border: '0.5px solid #E0D5C5',
+                                            borderRadius: 5,
+                                            background:
+                                              activeExport === `persona-category-${row.persona_id}-copy-markdown`
+                                                ? '#EDE4D8'
+                                                : '#F0E8DC',
+                                            color: '#4A3728',
+                                            fontSize: 10,
+                                            cursor: activeExport !== null ? 'wait' : 'pointer',
+                                            fontFamily: 'var(--vp-font-sans)',
+                                            opacity:
+                                              activeExport !== null &&
+                                              activeExport !== `persona-category-${row.persona_id}-copy-markdown`
+                                                ? 0.6
+                                                : 1,
+                                          }}
+                                        >
+                                          {activeExport === `persona-category-${row.persona_id}-copy-markdown`
+                                            ? '⏳ Copying…'
+                                            : 'Copy Category Breakdown Markdown'}
                                         </button>
                                       </div>
                                       {personaTimelineLoading ? (

@@ -116,6 +116,9 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['# Arena — The Analyst category breakdown'], { type: 'text/markdown' }),
     filename: 'arena-persona-category-analyst-2026-08-01-to-2026-08-30.md',
   };
+  Object.defineProperty(personaCategoryMarkdownExport.blob, 'text', {
+    value: vi.fn().mockResolvedValue('# Arena — The Analyst category breakdown'),
+  });
   const personaStatsOverviewJsonExport = {
     blob: new Blob(['{"total_personas":16,"personas":[]}'], { type: 'application/json' }),
     filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.json',
@@ -3041,7 +3044,7 @@ describe('ProfileModal', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
     );
-    const button = await screen.findByRole('button', { name: /category breakdown markdown/i });
+    const button = await screen.findByRole('button', { name: /^category breakdown markdown$/i });
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -3071,7 +3074,7 @@ describe('ProfileModal', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
     );
-    const button = await screen.findByRole('button', { name: /category breakdown markdown/i });
+    const button = await screen.findByRole('button', { name: /^category breakdown markdown$/i });
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -3095,7 +3098,7 @@ describe('ProfileModal', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
     );
-    const button = await screen.findByRole('button', { name: /category breakdown markdown/i });
+    const button = await screen.findByRole('button', { name: /^category breakdown markdown$/i });
     fireEvent.click(button);
 
     expect(
@@ -3124,7 +3127,7 @@ describe('ProfileModal', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
     );
-    const button = await screen.findByRole('button', { name: /category breakdown markdown/i });
+    const button = await screen.findByRole('button', { name: /^category breakdown markdown$/i });
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -3139,6 +3142,105 @@ describe('ProfileModal', () => {
       expect(button).not.toBeDisabled();
       expect(button).toHaveAttribute('aria-busy', 'false');
       expect(button).toHaveTextContent('Category Breakdown Markdown');
+    });
+  });
+
+  it('copies the persona category breakdown Markdown to the clipboard', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const button = await screen.findByRole('button', {
+      name: /copy category breakdown markdown/i,
+    });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsByCategoryMarkdown).toHaveBeenCalledWith(
+        'analyst',
+        30,
+      );
+      expect(hoistedMocks.copyMarkdownToClipboard).toHaveBeenCalledWith(
+        '# Arena — The Analyst category breakdown',
+      );
+      expect(
+        screen.getByText('Copied The Analyst category breakdown Markdown to the clipboard.'),
+      ).toBeInTheDocument();
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces persona category Markdown copy failures honestly', async () => {
+    hoistedMocks.exportAnalyticsPersonaStatsByCategoryMarkdown.mockRejectedValueOnce(
+      new Error('boom'),
+    );
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const button = await screen.findByRole('button', {
+      name: /copy category breakdown markdown/i,
+    });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText(
+        'Could not copy The Analyst category breakdown Markdown — try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('labels the category Markdown copy as busy only while it is in flight', async () => {
+    let releaseExport: (() => void) | undefined;
+    const pendingExport = new Promise<typeof hoistedMocks.personaCategoryMarkdownExport>(
+      (resolve) => {
+        releaseExport = () => resolve(hoistedMocks.personaCategoryMarkdownExport);
+      },
+    );
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsByCategoryMarkdown).mockReturnValueOnce(
+      pendingExport,
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const button = await screen.findByRole('button', {
+      name: /copy category breakdown markdown/i,
+    });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(button).toHaveTextContent('⏳ Copying…');
+      expect(button).toHaveAttribute('aria-busy', 'true');
+    });
+
+    await act(async () => {
+      releaseExport?.();
+    });
+    await waitFor(() => {
+      expect(hoistedMocks.copyMarkdownToClipboard).toHaveBeenCalledWith(
+        '# Arena — The Analyst category breakdown',
+      );
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute('aria-busy', 'false');
+      expect(button).toHaveTextContent('Copy Category Breakdown Markdown');
     });
   });
 
