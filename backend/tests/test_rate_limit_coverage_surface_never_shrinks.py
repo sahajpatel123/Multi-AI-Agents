@@ -72,6 +72,7 @@ def test_covered_files_matches_pinned_lower_bound():
         "auth.py",
         "metrics.py",
         "export_presets.py",
+        "public_agent.py",
     }
 
     actual = set(_extract_covered_files_from_coverage_test())

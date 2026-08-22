@@ -72,6 +72,7 @@ COVERED_FILES = [
     "auth.py",
     "metrics.py",
     "export_presets.py",
+    "public_agent.py",
 ]
 
 # Acceptable defenses inside a handler body. Match each as a regex.
@@ -156,12 +157,49 @@ def _function_body(py_file: Path, start_line: int) -> str:
     return "\n".join(lines[start_idx:end])
 
 
+def _module_helper_body(source: str, name: str) -> str:
+    """Return the full text of a module-level `def name(...)` helper.
+
+    Route handlers increasingly delegate their setup — authz gate plus
+    rate-limit bucket — to a shared `_prepare_*` helper so CSV/JSON/MD
+    exports of one report cannot drift apart. A handler that calls such a
+    helper IS protected even though its own body never names a defense
+    pattern; scanning only the handler body then produces false gaps
+    (agent.py's feedback-summary exports hit exactly this).
+    """
+    match = re.search(
+        # Stop at the next genuine top-level construct — a def, class,
+        # decorator, or module-level assignment. A naive `^\S` terminator
+        # truncates at continuation lines of the signature itself (e.g. a
+        # closing `) -> tuple[dict, str]:` at column 0), silently dropping
+        # the whole body.
+        rf"^def {re.escape(name)}\(.*?"
+        rf"(?=^def |^class |^@|^[A-Za-z_][A-Za-z0-9_]*\s*[=:]\s*\S|\Z)",
+        source,
+        re.DOTALL | re.MULTILINE,
+    )
+    return match.group(0) if match else ""
+
+
 def _route_is_protected(method: str, path: str, py_file: Path, line_no: int) -> tuple[bool, list[str]]:
     """Return (protected, missing_defenses). `missing_defenses` is the list of
     defense patterns the handler DIDN'T match — useful for diagnostics.
     """
+    source = py_file.read_text()
     body = _function_body(py_file, line_no)
-    matched = [name for name, pat in DEFENSES.items() if pat.search(body)]
+    # Follow the route's private-helper calls one level deep so a defense
+    # applied inside a shared `_prepare_*` helper counts for every format
+    # sibling that calls it. Module-level helpers only (indented methods and
+    # nested defs are ignored) and each helper body is included at most once.
+    helper_text = ""
+    seen_helpers: set[str] = set()
+    for callee in re.findall(r"\b(_[a-zA-Z_]+)\s*\(", body):
+        if callee in seen_helpers:
+            continue
+        seen_helpers.add(callee)
+        helper_text += "\n" + _module_helper_body(source, callee)
+    combined = body + helper_text
+    matched = [name for name, pat in DEFENSES.items() if pat.search(combined)]
     return (bool(matched), [name for name in DEFENSES if name not in matched])
 
 
