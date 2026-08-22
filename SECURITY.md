@@ -54,7 +54,12 @@ This project implements the following security practices:
 - **Dependency review**: GitHub Actions dependency-review gate fails PRs that
   introduce HIGH/CRITICAL dependency vulnerabilities
 - **Pin floors**: CI guards the minimum security-required versions for
-  critical Python and Node packages
+  critical Python and Node packages via
+  `scripts/check_security_floors.py` (single source of truth invoked by both
+  the backend and frontend jobs; also enforces the python-jose/ecdsa ban and
+  a resolved-environment walk that catches transitive reintroducers.
+  Behavioral regression tests live in
+  `backend/tests/test_pin_floor_guard_yaml.py`)
 - **Dependency consistency**: `pip check` runs in backend CI and the
   scheduled dependency-security workflow to catch dependency resolution
   inconsistencies
