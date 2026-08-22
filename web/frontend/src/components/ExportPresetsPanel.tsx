@@ -5,8 +5,10 @@ import {
   deleteExportPreset,
   listExportPresetTemplates,
   listExportPresets,
+  previewExportPreset,
   useExportPreset,
   type ExportPreset,
+  type ExportPresetPreview,
   type ExportPresetTemplate,
 } from '../api';
 import { downloadBlobFile } from '../lib/downloadTextFile';
@@ -26,6 +28,11 @@ export function ExportPresetsPanel() {
   const [status, setStatus] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  // Dry-run previews are fetched lazily per preset and cached, so opening
+  // the panel never fires one request per row and re-opening a preview
+  // never refetches.
+  const [previews, setPreviews] = useState<Record<number, ExportPresetPreview>>({});
+  const [openPreviews, setOpenPreviews] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +114,35 @@ export function ExportPresetsPanel() {
     [runAction],
   );
 
+  const handleTogglePreview = useCallback(
+    async (preset: ExportPreset) => {
+      const isOpen = openPreviews[preset.id] === true;
+      setOpenPreviews((current) => ({ ...current, [preset.id]: !isOpen }));
+      if (isOpen || previews[preset.id]) return;
+      const key = `preview-${preset.id}`;
+      setBusyKey(key);
+      setActionError(null);
+      try {
+        const preview = await previewExportPreset(preset.id);
+        setPreviews((current) => ({ ...current, [preset.id]: preview }));
+      } catch (error) {
+        // Collapse on failure so a stale spinner never lingers and the
+        // alert is the only visible signal.
+        setOpenPreviews((current) => ({ ...current, [preset.id]: false }));
+        setActionError(
+          error instanceof ApiError
+            ? error.message
+            : error instanceof Error && error.message
+              ? error.message
+              : 'Something went wrong — try again.',
+        );
+      } finally {
+        setBusyKey(null);
+      }
+    },
+    [openPreviews, previews],
+  );
+
   if (presets === null) {
     return (
       <div style={{ padding: '10px 0' }}>
@@ -178,16 +214,13 @@ export function ExportPresetsPanel() {
               <li
                 key={preset.id}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 8,
                   border: '0.5px solid #E0D8D0',
                   borderRadius: 6,
                   padding: '6px 8px',
                 }}
               >
-                <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ minWidth: 0 }}>
                   <div
                     style={{
                       fontSize: 12,
@@ -215,6 +248,34 @@ export function ExportPresetsPanel() {
                   ) : null}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    disabled={busyKey !== null}
+                    aria-busy={busyKey === `preview-${preset.id}`}
+                    aria-expanded={
+                      openPreviews[preset.id] === true && Boolean(previews[preset.id])
+                    }
+                    aria-label={`Preview export preset ${preset.name}`}
+                    onClick={() => void handleTogglePreview(preset)}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      color: busyKey === `preview-${preset.id}` ? '#A0A39A' : '#4A3728',
+                      cursor: busyKey !== null ? 'wait' : 'pointer',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    {busyKey === `preview-${preset.id}`
+                      ? 'Counting…'
+                      : openPreviews[preset.id] && previews[preset.id]
+                        ? 'Hide count'
+                        : 'Preview'}
+                  </button>
                   <button
                     type="button"
                     disabled={busyKey !== null}
@@ -258,7 +319,49 @@ export function ExportPresetsPanel() {
                     {deleting ? 'Deleting…' : 'Delete'}
                   </button>
                 </div>
-              </li>
+              </div>
+              {openPreviews[preset.id] && previews[preset.id] ? (
+                <div
+                  style={{
+                    borderTop: '0.5px solid #E0D8D0',
+                    padding: '6px 8px 2px',
+                    fontSize: 11,
+                    color: '#A0A39A',
+                  }}
+                >
+                  <strong style={{ color: '#4A3728', fontWeight: 600 }}>
+                    {previews[preset.id].matchCount}
+                  </strong>{' '}
+                  {previews[preset.id].matchCount === 1 ? 'take matches' : 'takes match'}
+                  {previews[preset.id].sample.length > 0 ? (
+                    <ul
+                      style={{
+                        listStyle: 'none',
+                        margin: '4px 0 0',
+                        padding: 0,
+                        display: 'grid',
+                        gap: 2,
+                      }}
+                    >
+                      {previews[preset.id].sample.slice(0, 3).map((row) => (
+                        <li key={row.id}>
+                          {row.persona_name ? `${row.persona_name}: ` : ''}
+                          {row.one_liner}
+                          {row.score !== null ? ` (${row.score})` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {previews[preset.id].truncated &&
+                  previews[preset.id].sample.length > 0 ? (
+                    <div style={{ marginTop: 2 }}>
+                      +{previews[preset.id].matchCount - previews[preset.id].sample.length} more in
+                      the full export
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </li>
             );
           })}
         </ul>

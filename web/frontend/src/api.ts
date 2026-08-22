@@ -5131,3 +5131,48 @@ export async function useExportPreset(
       `arena-preset-${presetId}-export.${safeExtension}`,
   };
 }
+
+export type ExportPresetPreviewRow = {
+  id: number;
+  persona_name: string | null;
+  score: number | null;
+  one_liner: string;
+  saved_at: string | null;
+};
+
+export type ExportPresetPreview = {
+  matchCount: number;
+  sample: ExportPresetPreviewRow[];
+  truncated: boolean;
+};
+
+export async function previewExportPreset(presetId: number): Promise<ExportPresetPreview> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  // Read-only dry run: counts the exact rows a real export would return
+  // without touching last_used_at.
+  const res = await apiFetch(
+    `/api/export-presets/${encodeURIComponent(String(presetId))}/preview`,
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to preview export preset'), res));
+  }
+  const data = (await parseJsonSafely<Record<string, unknown>>(res)) || {};
+  const rawSample = Array.isArray(data.preview) ? data.preview : [];
+  return {
+    matchCount: typeof data.match_count === 'number' ? data.match_count : 0,
+    truncated: data.truncated === true,
+    sample: rawSample.map((row) => {
+      const record = row as Record<string, unknown>;
+      return {
+        id: Number(record.id),
+        persona_name: record.persona_name ? String(record.persona_name) : null,
+        score: typeof record.score === 'number' ? record.score : null,
+        one_liner: String(record.one_liner || ''),
+        saved_at: record.saved_at ? String(record.saved_at) : null,
+      };
+    }),
+  };
+}

@@ -6,6 +6,7 @@ import {
   createExportPresetFromTemplate,
   deleteExportPreset,
   useExportPreset,
+  previewExportPreset,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -260,6 +261,99 @@ describe('export preset API helpers', () => {
           'Too many export preset uses. (Request ID: req-preset-use)',
         );
       }
+    });
+  });
+
+  describe('previewExportPreset', () => {
+    it('normalizes the dry-run payload', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            preset_id: 3,
+            match_count: 12,
+            preview: [
+              {
+                id: 7,
+                persona_id: 'analyst',
+                persona_name: 'The Analyst',
+                score: 92,
+                confidence: 88,
+                one_liner: 'Anchor the claim.',
+                saved_at: '2026-08-06T20:00:00Z',
+              },
+            ],
+            preview_limit: 5,
+            truncated: true,
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const res = await previewExportPreset(3);
+      expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/3/preview', {});
+      expect(res).toEqual({
+        matchCount: 12,
+        truncated: true,
+        sample: [
+          {
+            id: 7,
+            persona_name: 'The Analyst',
+            score: 92,
+            one_liner: 'Anchor the claim.',
+            saved_at: '2026-08-06T20:00:00Z',
+          },
+        ],
+      });
+    });
+
+    it('tolerates a payload with no sample rows', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ match_count: 0, preview: [], truncated: false }), {
+          status: 200,
+        }),
+      );
+      const res = await previewExportPreset(3);
+      expect(res.matchCount).toBe(0);
+      expect(res.sample).toEqual([]);
+      expect(res.truncated).toBe(false);
+    });
+
+    it('validates the id before fetching', async () => {
+      await expect(previewExportPreset(0)).rejects.toThrow('presetId must be a positive integer');
+      expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+    });
+
+    it('surfaces server messages with request IDs', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'not_found' }), {
+          status: 404,
+          headers: { 'x-request-id': 'req-preview-404' },
+        }),
+      );
+      await expect(previewExportPreset(99)).rejects.toThrow(
+        'not_found (Request ID: req-preview-404)',
+      );
+    });
+
+    it('falls back to the friendly message when the body has no detail', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response('bad gateway', {
+          status: 502,
+          headers: { 'x-request-id': 'req-preview-502' },
+        }),
+      );
+      await expect(previewExportPreset(99)).rejects.toThrow(
+        'Failed to preview export preset (Request ID: req-preview-502)',
+      );
+    });
+
+    it('falls back to a friendly message when the body has no detail', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: { message: 'Preset is gone.' } }), {
+          status: 404,
+        }),
+      );
+      await expect(previewExportPreset(99)).rejects.toThrow('Preset is gone.');
     });
   });
 });

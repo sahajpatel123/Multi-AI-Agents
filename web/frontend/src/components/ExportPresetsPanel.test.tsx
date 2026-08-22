@@ -17,6 +17,7 @@ vi.mock('../api', () => ({
   createExportPresetFromTemplate: vi.fn(),
   deleteExportPreset: vi.fn(),
   useExportPreset: vi.fn(),
+  previewExportPreset: vi.fn(),
 }));
 
 vi.mock('../lib/downloadTextFile', () => ({
@@ -178,6 +179,79 @@ describe('ExportPresetsPanel', () => {
     await waitFor(() => {
       expect(mockedApi.createExportPresetFromTemplate).toHaveBeenCalledWith('high_score');
       expect(screen.getByText('High Score Responses')).toBeInTheDocument();
+    });
+  });
+
+  it('previews a preset lazily and shows the match count with samples', async () => {
+    mockedApi.previewExportPreset.mockResolvedValue({
+      matchCount: 12,
+      truncated: true,
+      sample: [
+        { id: 7, persona_name: 'The Analyst', score: 92, one_liner: 'Anchor the claim.', saved_at: null },
+        { id: 8, persona_name: null, score: null, one_liner: 'Second take.', saved_at: null },
+      ],
+    });
+    render(<ExportPresetsPanel />);
+
+    const button = await screen.findByRole('button', {
+      name: /preview export preset high score responses/i,
+    });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(mockedApi.previewExportPreset).toHaveBeenCalledWith(3);
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button).toHaveTextContent('Hide count');
+    });
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText(/takes match/)).toBeInTheDocument();
+    expect(screen.getByText('The Analyst: Anchor the claim. (92)')).toBeInTheDocument();
+    expect(screen.getByText('Second take.')).toBeInTheDocument();
+    expect(
+      screen.getByText(/\+10 more in the full export/),
+    ).toBeInTheDocument();
+  });
+
+  it('caches a preview so hiding and re-showing does not refetch', async () => {
+    mockedApi.previewExportPreset.mockResolvedValue({
+      matchCount: 2,
+      truncated: false,
+      sample: [],
+    });
+    render(<ExportPresetsPanel />);
+
+    const button = await screen.findByRole('button', {
+      name: /preview export preset high score responses/i,
+    });
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(button).toHaveTextContent('Hide count');
+    });
+
+    fireEvent.click(button);
+    expect(await screen.findByRole('button', { name: /preview export preset high score responses/i }))
+      .toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+    });
+    expect(mockedApi.previewExportPreset).toHaveBeenCalledTimes(1);
+  });
+
+  it('collapses the preview and surfaces an alert when the dry run fails', async () => {
+    mockedApi.previewExportPreset.mockRejectedValue(new Error('not_found'));
+    render(<ExportPresetsPanel />);
+
+    const button = await screen.findByRole('button', {
+      name: /preview export preset high score responses/i,
+    });
+    fireEvent.click(button);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('not_found');
+    await waitFor(() => {
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(button).toHaveTextContent('Preview');
     });
   });
 });

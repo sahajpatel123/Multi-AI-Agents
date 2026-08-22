@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Export presets now show a dry-run preview before downloading: each row
+  has a Preview toggle that counts the exact takes the export would return
+  (via the backend's read-only dry-run endpoint) and samples the top few
+  with their mind and score — fetched lazily per preset, cached so
+  re-opening never refetches, collapsing honestly on failure
+
+### Added
 - Export presets are now surfaced in the sidebar's saved-takes section: a
   new panel lists each preset with its format and filter summary,
   downloads it in one click through the backend's redirecting use
