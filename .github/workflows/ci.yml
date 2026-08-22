@@ -18,6 +18,14 @@ on:
       - 'design/**'
       - 'arena-video/**'
       - 'app/**'
+  # Catch-up verdicts. Runs keep getting cancelled mid-flight by an actor
+  # outside this repo's config (every new push coincides with the previous
+  # run dying, while cancel-in-progress is false everywhere), so individual
+  # commits often never reach a completed red/green. The scheduled run on
+  # latest main guarantees a trustworthy full-suite result at least this
+  # often, regardless of push storms.
+  schedule:
+    - cron: "23 */4 * * *"
   workflow_dispatch:
 
 # Keep in-flight runs running when a new commit lands. Cancelling on every
