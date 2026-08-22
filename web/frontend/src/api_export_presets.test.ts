@@ -7,6 +7,7 @@ import {
   deleteExportPreset,
   useExportPreset,
   previewExportPreset,
+  renameExportPreset,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -359,6 +360,50 @@ describe('export preset API helpers', () => {
         }),
       );
       await expect(previewExportPreset(99)).rejects.toThrow('Preset is gone.');
+    });
+  });
+
+  describe('renameExportPreset', () => {
+    it('puts a trimmed name and returns the updated preset', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ status: 'updated', ...presetFixture, name: 'Weekly digest' }),
+          { status: 200 },
+        ),
+      );
+
+      const res = await renameExportPreset(3, '  Weekly digest  ');
+      expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/3', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Weekly digest' }),
+      });
+      expect(res.name).toBe('Weekly digest');
+    });
+
+    it('validates the id and name before fetching', async () => {
+      await expect(renameExportPreset(0, 'x')).rejects.toThrow(
+        'presetId must be a positive integer',
+      );
+      await expect(renameExportPreset(3, '   ')).rejects.toThrow(
+        'name must be between 1 and 100 characters',
+      );
+      await expect(renameExportPreset(3, 'x'.repeat(101))).rejects.toThrow(
+        'name must be between 1 and 100 characters',
+      );
+      expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+    });
+
+    it('surfaces server messages with request IDs', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'Please slow down.' }), {
+          status: 429,
+          headers: { 'x-request-id': 'req-rename-429' },
+        }),
+      );
+      await expect(renameExportPreset(3, 'New name')).rejects.toThrow(
+        'Please slow down. (Request ID: req-rename-429)',
+      );
     });
   });
 });

@@ -6,6 +6,7 @@ import {
   listExportPresetTemplates,
   listExportPresets,
   previewExportPreset,
+  renameExportPreset,
   useExportPreset,
   type ExportPreset,
   type ExportPresetPreview,
@@ -41,6 +42,9 @@ export function ExportPresetsPanel() {
   // never refetches.
   const [previews, setPreviews] = useState<Record<number, ExportPresetPreview>>({});
   const [openPreviews, setOpenPreviews] = useState<Record<number, boolean>>({});
+  // Inline rename: which preset's name is being edited and its draft value.
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -123,8 +127,7 @@ export function ExportPresetsPanel() {
   );
 
   const handleTogglePreview = useCallback(
-    async (preset: ExportPreset) => {
-      const isOpen = openPreviews[preset.id] === true;
+    async (preset: ExportPreset) => {      const isOpen = openPreviews[preset.id] === true;
       setOpenPreviews((current) => ({ ...current, [preset.id]: !isOpen }));
       if (isOpen || previews[preset.id]) return;
       const key = `preview-${preset.id}`;
@@ -149,6 +152,21 @@ export function ExportPresetsPanel() {
       }
     },
     [openPreviews, previews],
+  );
+
+  const handleRenameSave = useCallback(
+    (preset: ExportPreset) =>
+      runAction(`rename-${preset.id}`, async () => {
+        const updated = await renameExportPreset(preset.id, renameValue);
+        setPresets((current) =>
+          current
+            ? current.map((item) => (item.id === preset.id ? updated : item))
+            : current,
+        );
+        setRenamingId(null);
+        return `Renamed to "${updated.name}".`;
+      }),
+    [renameValue, runAction],
   );
 
   if (presets === null) {
@@ -229,6 +247,33 @@ export function ExportPresetsPanel() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ minWidth: 0 }}>
+                  {renamingId === preset.id ? (
+                    <input
+                      type="text"
+                      value={renameValue}
+                      autoFocus
+                      maxLength={100}
+                      aria-label={`Rename export preset ${preset.name}`}
+                      onChange={(event) => setRenameValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                          setRenamingId(null);
+                        } else if (event.key === 'Enter' && renameValue.trim()) {
+                          void handleRenameSave(preset);
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        fontSize: 12,
+                        color: '#4A3728',
+                        background: '#FAF7F4',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 5,
+                        padding: '2px 6px',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    />
+                  ) : (
                   <div
                     style={{
                       fontSize: 12,
@@ -251,11 +296,79 @@ export function ExportPresetsPanel() {
                       {preset.format}
                     </span>
                   </div>
-                  {filters ? (
+                  )}
+                  {filters && renamingId !== preset.id ? (
                     <div style={{ fontSize: 10, color: '#A0A39A' }}>{filters}</div>
+                  ) : null}
+                  {renamingId === preset.id ? (
+                    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        disabled={busyKey !== null || !renameValue.trim()}
+                        aria-busy={busyKey === `rename-${preset.id}`}
+                        aria-label={`Save name for export preset ${preset.name}`}
+                        onClick={() => void handleRenameSave(preset)}
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D8D0',
+                          borderRadius: 6,
+                          color: '#5A8C6A',
+                          cursor: busyKey !== null ? 'wait' : 'pointer',
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        {busyKey === `rename-${preset.id}` ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyKey !== null}
+                        aria-label={`Cancel renaming export preset ${preset.name}`}
+                        onClick={() => setRenamingId(null)}
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D8D0',
+                          borderRadius: 6,
+                          color: '#A0A39A',
+                          cursor: busyKey !== null ? 'wait' : 'pointer',
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   ) : null}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  {renamingId !== preset.id ? (
+                  <button
+                    type="button"
+                    disabled={busyKey !== null}
+                    aria-busy={false}
+                    aria-label={`Rename export preset ${preset.name}`}
+                    onClick={() => {
+                      setRenamingId(preset.id);
+                      setRenameValue(preset.name);
+                    }}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      color: '#4A3728',
+                      cursor: busyKey !== null ? 'wait' : 'pointer',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    Rename
+                  </button>
+                  ) : null}
                   <button
                     type="button"
                     disabled={busyKey !== null}

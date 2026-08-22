@@ -18,6 +18,7 @@ vi.mock('../api', () => ({
   deleteExportPreset: vi.fn(),
   useExportPreset: vi.fn(),
   previewExportPreset: vi.fn(),
+  renameExportPreset: vi.fn(),
 }));
 
 vi.mock('../lib/downloadTextFile', () => ({
@@ -283,5 +284,73 @@ describe('ExportPresetsPanel', () => {
       expect(button).toHaveAttribute('aria-expanded', 'false');
       expect(button).toHaveTextContent('Preview');
     });
+  });
+
+  it('renames a preset inline: save updates the row, cancel never calls the api', async () => {
+    mockedApi.renameExportPreset.mockResolvedValue({
+      ...hoisted.presetCsv,
+      name: 'Weekly digest',
+    });
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /rename export preset high score responses/i }),
+    );
+
+    const input = await screen.findByRole('textbox', { name: /rename export preset/i });
+    // Cancel path first: no API call, original row untouched.
+    fireEvent.change(input, { target: { value: 'Weekly digest' } });
+    fireEvent.click(screen.getByRole('button', { name: /cancel renaming export preset/i }));
+    expect(mockedApi.renameExportPreset).not.toHaveBeenCalled();
+    expect(screen.getByText('High Score Responses')).toBeInTheDocument();
+
+    // Now the real rename.
+    fireEvent.click(screen.getByRole('button', { name: /rename export preset high score responses/i }));
+    fireEvent.change(
+      screen.getByRole('textbox', { name: /rename export preset high score responses/i }),
+      { target: { value: 'Weekly digest' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^save name for export preset/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.renameExportPreset).toHaveBeenCalledWith(3, 'Weekly digest');
+      expect(screen.getByText('Weekly digest')).toBeInTheDocument();
+      expect(screen.queryByText('High Score Responses')).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Renamed to "Weekly digest".');
+    });
+  });
+
+  it('surfaces a failed rename as an alert and keeps the editor open', async () => {
+    mockedApi.renameExportPreset.mockRejectedValue(
+      new apiModule.ApiError('Please slow down.', 429),
+    );
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /rename export preset high score responses/i }),
+    );
+    const input = screen.getByRole('textbox', { name: /rename export preset high score responses/i });
+    fireEvent.change(input, { target: { value: 'Better name' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save name for export preset/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Please slow down.');
+    // The editor stays open with the draft intact so nothing is lost.
+    expect(screen.getByRole('textbox', { name: /rename export preset high score responses/i }))
+      .toBeInTheDocument();
+    expect(screen.getByDisplayValue('Better name')).toBeInTheDocument();
+  });
+
+  it('disables saving a rename when the draft is blank', async () => {
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /rename export preset high score responses/i }),
+    );
+    const input = await screen.findByRole('textbox', { name: /rename export preset high score responses/i });
+    fireEvent.change(input, { target: { value: '   ' } });
+
+    expect(
+      screen.getByRole('button', { name: /^save name for export preset/i }),
+    ).toBeDisabled();
   });
 });

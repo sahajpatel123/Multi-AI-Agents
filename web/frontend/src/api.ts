@@ -5084,8 +5084,35 @@ export async function createExportPresetFromTemplate(
   return normalizeExportPreset(data);
 }
 
-export async function deleteExportPreset(presetId: number): Promise<void> {
+export async function renameExportPreset(
+  presetId: number,
+  name: string,
+): Promise<ExportPreset> {
   if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  const trimmedName = name.trim();
+  if (!trimmedName || trimmedName.length > 100) {
+    throw new RangeError('name must be between 1 and 100 characters');
+  }
+  const res = await apiFetch(`/api/export-presets/${encodeURIComponent(String(presetId))}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: trimmedName }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to rename export preset'), res));
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Export preset rename returned no preset.');
+    })();
+  return normalizeExportPreset(data);
+}
+
+export async function deleteExportPreset(presetId: number): Promise<void> {  if (!Number.isInteger(presetId) || presetId < 1) {
     throw new RangeError('presetId must be a positive integer');
   }
   const res = await apiFetch(`/api/export-presets/${encodeURIComponent(String(presetId))}`, {

@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Export presets: rename presets inline from the sidebar panel — Enter saves, Escape cancels, failures keep your draft',
       '[IMPROVED] Export presets: the dry-run preview now shows the effective sort order and search term beside the match count',
       '[NEW] Export presets: a dry-run Preview toggle per preset — counts exactly how many takes an export would return, samples the top few, cached so re-opening never refetches',
       '[NEW] Export presets: a panel in the sidebar\'s saved-takes section — one-click downloads, per-preset deletion, template quick-adds, and honest busy/error states',

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Export presets can now be renamed inline from the sidebar panel (the
+  backend's update route finally has a frontend surface): a Rename button
+  swaps the name for an editor with Save/Cancel, Enter commits and Escape
+  cancels, blank drafts can't be saved, failed renames surface the server
+  message with the draft intact, and the row updates in place on success
+
 ### Improved
 - The export-preset dry-run preview now describes itself: the effective
   sort order (newest first, highest score first, pinned takes first, or
