@@ -2982,6 +2982,42 @@ describe('ProfileModal', () => {
     expect(button).not.toBeDisabled();
   });
 
+  it('labels the persona category breakdown as busy only while its export is in flight', async () => {
+    let releaseExport: (() => void) | undefined;
+    const pendingExport = new Promise<typeof hoistedMocks.personaCategoryCsvExport>((resolve) => {
+      releaseExport = () => resolve(hoistedMocks.personaCategoryCsvExport);
+    });
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsByCategoryCsv).mockReturnValueOnce(
+      pendingExport,
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const button = await screen.findByRole('button', { name: /category breakdown csv/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(button).toHaveTextContent('⏳ Exporting…');
+      expect(button).toHaveAttribute('aria-busy', 'true');
+    });
+
+    await act(async () => {
+      releaseExport?.();
+    });
+    await waitFor(() => {
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute('aria-busy', 'false');
+      expect(button).toHaveTextContent('Category Breakdown CSV');
+    });
+  });
+
   it('copies the persona stats overview as structured JSON', async () => {
     renderModal();
     await waitFor(() => {

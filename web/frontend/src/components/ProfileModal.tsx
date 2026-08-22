@@ -2894,7 +2894,7 @@ export function ProfileModal() {
                                         >
                                           {activeExport === `persona-category-${row.persona_id}-csv`
                                             ? '⏳ Exporting…'
-                                            : '🧭 Category Breakdown CSV'}
+                                            : 'Category Breakdown CSV'}
                                         </button>
                                       </div>
                                       {personaTimelineLoading ? (

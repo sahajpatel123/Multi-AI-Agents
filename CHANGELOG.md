@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of a hardcoded 30 days; the selector sits beside the summary and
   usage windows and stays locked while an export is in flight
 
+### Improved
+- The persona drill-down's category breakdown export now matches its
+  timeline siblings: plain action label, and a deferred-export test pins
+  the full busy lifecycle so the button can never read available while a
+  download is in flight
+
 ### Added
 - Persona drill-downs in profile analytics can now export a mind's full
   per-category breakdown as CSV (category rows with appearances, wins, and
