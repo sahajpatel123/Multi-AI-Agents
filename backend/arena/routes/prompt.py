@@ -274,18 +274,12 @@ async def submit_prompt(
             )
 
         agent_timings: dict[str, int] = {}
-        t_agents = time.monotonic()
-        responses, tools_used = await orchestrator.run_all_agents(
-            pipeline_result.enriched_prompt,
-            agents=active_agents,
-            persona_ids=body.persona_ids,
-            user_id=user.id if memory_enabled else None,
-            db=db if memory_enabled else None,
-            session_id=session_id,
-            tracker=tracker,
-            cost=cost,
-        )
-        agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
+
+        # The model fan-out runs further down, gated by the response-cache
+        # check. An earlier revision also ran it eagerly here, so every
+        # prompt executed the four-model round twice (2x provider spend)
+        # and silently discarded the first result's answers. Keep exactly
+        # one call site.
 
         cache_status: str | None = None
         cache_key: str | None = None
@@ -331,6 +325,7 @@ async def submit_prompt(
                 db=db if memory_enabled else None,
                 session_id=session_id,
                 tracker=tracker,
+                cost=cost,
                 request_context=format_follow_up_context(body.context),
                 tool_results=precomputed_tool_results,
             )

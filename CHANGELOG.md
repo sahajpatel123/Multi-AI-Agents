@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Persona drill-downs can now export a mind's per-category breakdown as a
+  human-readable Markdown report (summary rollup, category table, and the
+  fallback-wins honesty note), completing the by-category export family
+  alongside CSV — new backend route with its own rate-limit scope, frontend
+  helper following the envelope pattern, and a second drill-down button that
+  follows the selected persona-stats window
+
 ### Improved
 - Persona stats overview exports (CSV download, JSON download, Markdown
   download, CSV clipboard copy) now follow a selected persona-stats window

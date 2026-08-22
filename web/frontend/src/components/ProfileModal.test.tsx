@@ -112,6 +112,10 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['category,appearances,wins'], { type: 'text/csv' }),
     filename: 'arena-persona-category-analyst-2026-08-01-to-2026-08-30.csv',
   };
+  const personaCategoryMarkdownExport = {
+    blob: new Blob(['# Arena — The Analyst category breakdown'], { type: 'text/markdown' }),
+    filename: 'arena-persona-category-analyst-2026-08-01-to-2026-08-30.md',
+  };
   const personaStatsOverviewJsonExport = {
     blob: new Blob(['{"total_personas":16,"personas":[]}'], { type: 'application/json' }),
     filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.json',
@@ -171,6 +175,7 @@ const hoistedMocks = vi.hoisted(() => {
   personaTimelineMarkdownExport,
   personaStatsOverviewJsonExport,
   personaCategoryCsvExport,
+  personaCategoryMarkdownExport,
   personaStatsOverviewCsvExport,
   personaStatsOverviewMarkdownExport,
   summaryMarkdownBlob,
@@ -356,6 +361,9 @@ const hoistedMocks = vi.hoisted(() => {
   exportAnalyticsPersonaStatsTimelineJson: vi.fn().mockResolvedValue(personaTimelineJsonExport),
   exportAnalyticsPersonaStatsTimelineMarkdown: vi.fn().mockResolvedValue(personaTimelineMarkdownExport),
   exportAnalyticsPersonaStatsByCategoryCsv: vi.fn().mockResolvedValue(personaCategoryCsvExport),
+  exportAnalyticsPersonaStatsByCategoryMarkdown: vi
+    .fn()
+    .mockResolvedValue(personaCategoryMarkdownExport),
   exportAnalyticsPersonaStatsOverviewCsv: vi.fn().mockResolvedValue(personaStatsOverviewCsvExport),
   exportAnalyticsPersonaStatsOverviewJson: vi.fn().mockResolvedValue(personaStatsOverviewJsonExport),
   exportAnalyticsPersonaStatsOverviewMarkdown: vi.fn().mockResolvedValue(personaStatsOverviewMarkdownExport),
@@ -502,6 +510,8 @@ vi.mock('../api', () => ({
   getAnalyticsPersonaWinRate: hoistedMocks.getAnalyticsPersonaWinRate,
   getAnalyticsPersonaStatsTimeline: hoistedMocks.getAnalyticsPersonaStatsTimeline,
   exportAnalyticsPersonaStatsByCategoryCsv: hoistedMocks.exportAnalyticsPersonaStatsByCategoryCsv,
+  exportAnalyticsPersonaStatsByCategoryMarkdown:
+    hoistedMocks.exportAnalyticsPersonaStatsByCategoryMarkdown,
   exportAnalyticsPersonaStatsOverviewCsv: hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaStatsOverviewJson: hoistedMocks.exportAnalyticsPersonaStatsOverviewJson,
   exportAnalyticsPersonaStatsOverviewMarkdown: hoistedMocks.exportAnalyticsPersonaStatsOverviewMarkdown,
@@ -626,6 +636,9 @@ describe('ProfileModal', () => {
     // mockReset (not mockClear) so an unconsumed mockRejectedValueOnce from an
     // earlier test cannot leak a one-shot failure into a later test's export.
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsByCategoryCsv).mockClear();
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsByCategoryMarkdown)
+      .mockReset()
+      .mockResolvedValue(hoistedMocks.personaCategoryMarkdownExport);
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv)
       .mockReset()
       .mockResolvedValue(hoistedMocks.personaStatsOverviewCsvExport);
@@ -3015,6 +3028,117 @@ describe('ProfileModal', () => {
       expect(button).not.toBeDisabled();
       expect(button).toHaveAttribute('aria-busy', 'false');
       expect(button).toHaveTextContent('Category Breakdown CSV');
+    });
+  });
+
+  it('downloads the persona category breakdown as Markdown from the drill-down', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const button = await screen.findByRole('button', { name: /category breakdown markdown/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsByCategoryMarkdown).toHaveBeenCalledWith(
+        'analyst',
+        30,
+      );
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        hoistedMocks.personaCategoryMarkdownExport.blob,
+        'arena-persona-category-analyst-2026-08-01-to-2026-08-30.md',
+      );
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('downloads the persona category Markdown breakdown for the selected window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /persona stats overview window/i }),
+      { target: { value: '365' } },
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const button = await screen.findByRole('button', { name: /category breakdown markdown/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsByCategoryMarkdown).toHaveBeenCalledWith(
+        'analyst',
+        365,
+      );
+    });
+  });
+
+  it('surfaces persona category Markdown download failures and releases the export lock', async () => {
+    hoistedMocks.exportAnalyticsPersonaStatsByCategoryMarkdown.mockRejectedValueOnce(
+      new Error('boom'),
+    );
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const button = await screen.findByRole('button', { name: /category breakdown markdown/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not download The Analyst category breakdown — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('labels the persona category Markdown breakdown as busy only while its export is in flight', async () => {
+    let releaseExport: (() => void) | undefined;
+    const pendingExport = new Promise<typeof hoistedMocks.personaCategoryMarkdownExport>(
+      (resolve) => {
+        releaseExport = () => resolve(hoistedMocks.personaCategoryMarkdownExport);
+      },
+    );
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsByCategoryMarkdown).mockReturnValueOnce(
+      pendingExport,
+    );
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /show the analyst daily timeline/i }),
+    );
+    const button = await screen.findByRole('button', { name: /category breakdown markdown/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(button).toHaveTextContent('⏳ Exporting…');
+      expect(button).toHaveAttribute('aria-busy', 'true');
+    });
+
+    await act(async () => {
+      releaseExport?.();
+    });
+    await waitFor(() => {
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute('aria-busy', 'false');
+      expect(button).toHaveTextContent('Category Breakdown Markdown');
     });
   });
 

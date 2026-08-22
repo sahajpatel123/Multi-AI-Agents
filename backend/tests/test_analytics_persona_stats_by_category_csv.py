@@ -176,8 +176,11 @@ async def test_csv_filename_includes_persona_and_window(
     assert cd.startswith("attachment; filename=")
     assert "arena-by-category-analyst-" in cd
     assert ".csv" in cd
-    from datetime import date
-    assert date.today().isoformat() in cd
+    # The server stamps UTC dates, so compare against UTC's today — not
+    # the local one (they differ whenever this machine is ahead of UTC).
+    from arena.core.datetime_utils import utcnow_naive
+
+    assert utcnow_naive().date().isoformat() in cd
 
 
 @pytest.mark.asyncio

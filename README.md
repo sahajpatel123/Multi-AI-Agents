@@ -152,6 +152,7 @@ GET  /api/analytics/persona-stats/export.json   Download the all-personas summar
 GET  /api/analytics/persona-stats/export.md   Download the all-personas summary as a human-readable Markdown report
 GET  /api/analytics/persona-stats/:persona_id/by-category   Full per-category breakdown for one persona (one row per category with appearances/wins/win_rate)
 GET  /api/analytics/persona-stats/:persona_id/by-category/export.csv   Same data as text/csv with footer rollup
+GET  /api/analytics/persona-stats/:persona_id/by-category/export.md   Same data as a human-readable Markdown report with summary and honesty note
 GET  /api/analytics/persona-stats/:persona_id/timeline   Per-persona daily timeline of wins and appearances (sparkline-ready, contiguous zero-fill)
 GET  /api/analytics/persona-stats/:persona_id/timeline/export.csv   Same data as text/csv with footer rollup
 GET  /api/analytics/persona-stats/:persona_id/timeline/export.json  Same data as structured JSON with window metadata

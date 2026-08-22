@@ -3950,6 +3950,113 @@ async def analytics_persona_stats_by_category_csv(
     )
 
 
+@router.get("/analytics/persona-stats/{persona_id}/by-category/export.md")
+async def analytics_persona_stats_by_category_markdown(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+) -> Response:
+    """Markdown export of the per-persona per-category breakdown.
+
+    Completes the by-category family (CSV + JSON + Markdown), mirroring
+    the timeline export trio. Reuses the JSON by-category route's
+    computation so the report cannot drift from the dashboard's view,
+    and carries its own user-scoped rate-limit scope so a report download
+    cannot consume dashboard, CSV, or JSON capacity.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_by_category_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many by-category Markdown exports. Limit is 60 per hour.",
+    )
+
+    # Reuse the JSON route so the math cannot drift.
+    payload = await analytics_persona_stats_by_category(
+        persona_id=pid,
+        user=user,
+        db=db,
+        window_days=window_days,
+    )
+
+    name = _markdown_cell(payload["name"])
+    overall_rate = (
+        payload["total_wins"] / payload["total_appearances"]
+        if payload["total_appearances"]
+        else 0.0
+    )
+    lines = [
+        f"# Arena — {name} category breakdown",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Appearances:** {payload['total_appearances']}",
+        f"- **Wins:** {payload['total_wins']}",
+        f"- **Overall win rate:** {overall_rate:.1%}",
+        f"- **Categories engaged:** {len(payload['categories'])}",
+        f"- **Uncategorized appearances:** {payload['uncategorized_appearances']}",
+        f"- **Uncategorized wins:** {payload['uncategorized_wins']}",
+        "",
+        "## Categories",
+        "",
+        "| Category | Appearances | Wins | Win rate |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for row in payload["categories"]:
+        label = (
+            f"{row['category']} *(uncategorized)*"
+            if row["is_uncategorized"]
+            else _markdown_cell(row["category"])
+        )
+        lines.append(
+            f"| {label} | {row['appearances']} | "
+            f"{row['wins']} | {row['win_rate']:.1%} |"
+        )
+    lines.extend(
+        [
+            "",
+            "_Wins exclude fallback scorings; appearances include every panel appearance._",
+            "",
+            "---",
+            "_Exported from Arena_",
+            "",
+        ]
+    )
+
+    filename = (
+        f"arena-by-category-{pid}-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/scoring-audit/{session_id}")
 async def analytics_scoring_audit_detail(
     session_id: str,

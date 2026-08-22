@@ -23,6 +23,7 @@ import {
   exportAnalyticsCategoryStatsJson,
   exportAnalyticsCategoryStatsMarkdown,
   exportAnalyticsPersonaStatsByCategoryCsv,
+  exportAnalyticsPersonaStatsByCategoryMarkdown,
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaStatsOverviewJson,
   exportAnalyticsPersonaStatsOverviewMarkdown,
@@ -1018,15 +1019,16 @@ export function ProfileModal() {
   const handlePersonaCategoryExport = useCallback(async (
     personaId: string,
     personaLabel: string,
+    format: 'csv' | 'markdown' = 'csv',
   ) => {
-    const exportKey = `persona-category-${personaId}-csv`;
+    const exportKey = `persona-category-${personaId}-${format}`;
+    const fetchExport = format === 'markdown'
+      ? exportAnalyticsPersonaStatsByCategoryMarkdown
+      : exportAnalyticsPersonaStatsByCategoryCsv;
     setActiveExport(exportKey);
     clearExportFeedback();
     try {
-      const { blob, filename } = await exportAnalyticsPersonaStatsByCategoryCsv(
-        personaId,
-        overviewWindowDays,
-      );
+      const { blob, filename } = await fetchExport(personaId, overviewWindowDays);
       if (!downloadBlobFile(blob, filename)) {
         setExportError(`Could not download ${personaLabel} category breakdown — try again.`);
       }
@@ -2861,6 +2863,8 @@ export function ProfileModal() {
                                         style={{
                                           display: 'flex',
                                           justifyContent: 'flex-end',
+                                          gap: 6,
+                                          flexWrap: 'wrap',
                                           padding: '6px 0',
                                         }}
                                       >
@@ -2895,6 +2899,38 @@ export function ProfileModal() {
                                           {activeExport === `persona-category-${row.persona_id}-csv`
                                             ? '⏳ Exporting…'
                                             : 'Category Breakdown CSV'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={activeExport !== null}
+                                          aria-busy={
+                                            activeExport === `persona-category-${row.persona_id}-markdown`
+                                          }
+                                          onClick={() => {
+                                            void handlePersonaCategoryExport(row.persona_id, row.name, 'markdown');
+                                          }}
+                                          style={{
+                                            padding: '3px 7px',
+                                            border: '0.5px solid #E0D5C5',
+                                            borderRadius: 5,
+                                            background:
+                                              activeExport === `persona-category-${row.persona_id}-markdown`
+                                                ? '#EDE4D8'
+                                                : '#F0E8DC',
+                                            color: '#4A3728',
+                                            fontSize: 10,
+                                            cursor: activeExport !== null ? 'wait' : 'pointer',
+                                            fontFamily: 'var(--vp-font-sans)',
+                                            opacity:
+                                              activeExport !== null &&
+                                              activeExport !== `persona-category-${row.persona_id}-markdown`
+                                                ? 0.6
+                                                : 1,
+                                          }}
+                                        >
+                                          {activeExport === `persona-category-${row.persona_id}-markdown`
+                                            ? '⏳ Exporting…'
+                                            : 'Category Breakdown Markdown'}
                                         </button>
                                       </div>
                                       {personaTimelineLoading ? (

@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Profile analytics: export a mind\'s per-category breakdown as a human-readable Markdown report — completing the by-category family alongside CSV',
       '[IMPROVED] Profile analytics: the category breakdown export matches its timeline siblings with a plain label and a pinned busy lifecycle',
       '[NEW] Profile analytics: export a mind\'s full per-category breakdown as CSV from its drill-down, following the selected window',
       '[FIXED] Profile analytics: category-stats, persona timeline, and by-category CSV exports now preserve the server request ID in error messages',

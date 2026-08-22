@@ -14,6 +14,7 @@ import {
   exportAnalyticsPersonaStatsOverviewMarkdown,
   exportAnalyticsPersonaStatsTimelineCsv,
   exportAnalyticsPersonaStatsByCategoryCsv,
+  exportAnalyticsPersonaStatsByCategoryMarkdown,
   exportAgentWatchlistHistoryCsv,
   exportAgentWatchlistHistoryJson,
 } from './api';
@@ -352,6 +353,22 @@ describe('Analytics CSV export frontend API helpers', () => {
     });
   });
 
+  it('surfaces request IDs on by-category Markdown failures', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Too many category breakdown exports' }), {
+        status: 429,
+        headers: { 'x-request-id': 'req-by-category-md' },
+      }),
+    );
+
+    await expect(
+      exportAnalyticsPersonaStatsByCategoryMarkdown('analyst'),
+    ).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many category breakdown exports (Request ID: req-by-category-md)',
+    });
+  });
+
   it('exportAnalyticsPersonaStatsOverviewCsv returns the server filename', async () => {
     const mockBlob = new Blob(['persona_id,name'], { type: 'text/csv' });
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
@@ -560,6 +577,54 @@ describe('Analytics CSV export frontend API helpers', () => {
     await expect(exportAnalyticsPersonaStatsByCategoryCsv('analyst', 366)).rejects.toThrow(
       'windowDays must be an integer between 1 and 365',
     );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('exportAnalyticsPersonaStatsByCategoryMarkdown returns the server filename', async () => {
+    const mockBlob = new Blob(['# Arena — category breakdown'], { type: 'text/markdown' });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-persona-category-gpt-4o-2026-08-01-to-2026-08-30.md"',
+        },
+      })
+    );
+
+    const res = await exportAnalyticsPersonaStatsByCategoryMarkdown('gpt-4o', 30);
+    expectBlob(res.blob);
+    expect(res.filename).toBe(
+      'arena-persona-category-gpt-4o-2026-08-01-to-2026-08-30.md',
+    );
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/analytics/persona-stats/gpt-4o/by-category/export.md?window_days=30',
+      {}
+    );
+  });
+
+  it('falls back to a safe window-based Markdown filename when the by-category response omits one', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['# Arena — category breakdown'], { type: 'text/markdown' }), {
+        status: 200,
+      }),
+    );
+
+    const res = await exportAnalyticsPersonaStatsByCategoryMarkdown(' claude/opus ', 7);
+    expectBlob(res.blob);
+    expect(res.filename).toBe('arena-persona-category-claude-opus-7d.md');
+  });
+
+  it('rejects invalid by-category Markdown export inputs before fetching', async () => {
+    await expect(exportAnalyticsPersonaStatsByCategoryMarkdown('   ')).rejects.toThrow(
+      'personaId must not be empty',
+    );
+    await expect(
+      exportAnalyticsPersonaStatsByCategoryMarkdown('analyst', 0),
+    ).rejects.toThrow('windowDays must be an integer between 1 and 365');
+    await expect(
+      exportAnalyticsPersonaStatsByCategoryMarkdown('analyst', 366),
+    ).rejects.toThrow('windowDays must be an integer between 1 and 365');
     expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
   });
 
