@@ -4385,6 +4385,46 @@ export function ProfileModal() {
                   >
                     {activeExport === 'overview-markdown' ? '⏳ Downloading…' : '🤖 Persona Stats Markdown'}
                   </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview-copy-csv'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'overview-copy-csv' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'overview-copy-csv' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('overview-copy-csv');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaStatsOverviewCsv(30);
+                        const copied = await copyCsvToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona stats CSV to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona stats CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona stats CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'overview-copy-csv' ? '⏳ Copying…' : '🤖 Copy Persona Stats CSV'}
+                  </button>
                 </div>
 
                 <div

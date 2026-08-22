@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Profile analytics can now copy the complete persona-stats overview as
+  spreadsheet-aware CSV straight from the dashboard, with honest clipboard-
+  failure feedback matching the other persona stats exports
+
 ### Fixed
 - The persona stats overview CSV export no longer fails silently: download
   failures surface the server error with its request ID, blocked downloads

@@ -116,6 +116,9 @@ const hoistedMocks = vi.hoisted(() => {
     blob: new Blob(['persona_id,name,appearances'], { type: 'text/csv' }),
     filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.csv',
   };
+  Object.defineProperty(personaStatsOverviewCsvExport.blob, 'text', {
+    value: vi.fn().mockResolvedValue('persona_id,name,appearances'),
+  });
   const personaStatsOverviewMarkdownExport = {
     blob: new Blob(['# Arena — persona stats overview'], { type: 'text/markdown' }),
     filename: 'arena-persona-stats-overview-2026-08-01-to-2026-08-30.md',
@@ -607,7 +610,11 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportUserUsageMarkdown).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(hoistedMocks.getAnalyticsPersonaStatsTimeline).mockClear();
-    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv).mockClear();
+    // mockReset (not mockClear) so an unconsumed mockRejectedValueOnce from an
+    // earlier test cannot leak a one-shot failure into a later test's export.
+    vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv)
+      .mockReset()
+      .mockResolvedValue(hoistedMocks.personaStatsOverviewCsvExport);
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsOverviewJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsOverviewMarkdown).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineCsv).mockClear();
@@ -620,10 +627,12 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendMarkdown).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateMarkdown).mockClear();
-    vi.mocked(hoistedMocks.copyToClipboard).mockClear().mockResolvedValue(true);
-    vi.mocked(hoistedMocks.copyJsonToClipboard).mockClear().mockResolvedValue(true);
-    vi.mocked(hoistedMocks.copyCsvToClipboard).mockClear().mockResolvedValue(true);
-    vi.mocked(hoistedMocks.copyMarkdownToClipboard).mockClear().mockResolvedValue(true);
+    // mockReset (not mockClear) so an unconsumed mockResolvedValueOnce from an
+    // earlier test cannot leak a one-shot failure into a later test's copy.
+    vi.mocked(hoistedMocks.copyToClipboard).mockReset().mockResolvedValue(true);
+    vi.mocked(hoistedMocks.copyJsonToClipboard).mockReset().mockResolvedValue(true);
+    vi.mocked(hoistedMocks.copyCsvToClipboard).mockReset().mockResolvedValue(true);
+    vi.mocked(hoistedMocks.copyMarkdownToClipboard).mockReset().mockResolvedValue(true);
     vi.mocked(hoistedMocks.exportAgentFeedbackCsv).mockClear();
     vi.mocked(hoistedMocks.exportAgentFeedbackJson).mockClear();
     vi.mocked(hoistedMocks.exportAgentFeedbackMarkdown).mockClear();
@@ -2624,7 +2633,7 @@ describe('ProfileModal', () => {
     });
     screen.getByRole('button', { name: /usage/i }).click();
 
-    const button = await screen.findByRole('button', { name: /persona stats csv/i });
+    const button = await screen.findByRole('button', { name: /^🤖 persona stats csv$/i });
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -2645,7 +2654,7 @@ describe('ProfileModal', () => {
     });
     screen.getByRole('button', { name: /usage/i }).click();
 
-    const button = await screen.findByRole('button', { name: /persona stats csv/i });
+    const button = await screen.findByRole('button', { name: /^🤖 persona stats csv$/i });
     fireEvent.click(button);
 
     expect(
@@ -2662,11 +2671,67 @@ describe('ProfileModal', () => {
     });
     screen.getByRole('button', { name: /usage/i }).click();
 
-    const button = await screen.findByRole('button', { name: /persona stats csv/i });
+    const button = await screen.findByRole('button', { name: /^🤖 persona stats csv$/i });
     fireEvent.click(button);
 
     expect(
       await screen.findByText('Could not download persona stats CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('copies the persona stats overview as spreadsheet-aware CSV', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy persona stats csv/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv).toHaveBeenCalledWith(30);
+      expect(hoistedMocks.copyCsvToClipboard).toHaveBeenCalledWith(
+        'persona_id,name,appearances',
+      );
+      expect(
+        screen.getByText('Copied persona stats CSV to the clipboard.'),
+      ).toBeInTheDocument();
+    });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces persona stats CSV clipboard failures and releases the copy lock', async () => {
+    vi.mocked(hoistedMocks.copyCsvToClipboard).mockResolvedValueOnce(false);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy persona stats csv/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy persona stats CSV — try again.'),
+    ).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+
+  it('surfaces persona stats CSV copy fetch failures and releases the copy lock', async () => {
+    hoistedMocks.exportAnalyticsPersonaStatsOverviewCsv.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const button = await screen.findByRole('button', { name: /copy persona stats csv/i });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText('Could not copy persona stats CSV — try again.'),
     ).toBeInTheDocument();
     expect(button).not.toBeDisabled();
   });
