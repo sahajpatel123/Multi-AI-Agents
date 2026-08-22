@@ -22,6 +22,7 @@ import {
   exportAnalyticsCategoryStatsCsv,
   exportAnalyticsCategoryStatsJson,
   exportAnalyticsCategoryStatsMarkdown,
+  exportAnalyticsPersonaStatsByCategoryCsv,
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaStatsOverviewJson,
   exportAnalyticsPersonaStatsOverviewMarkdown,
@@ -1014,6 +1015,31 @@ export function ProfileModal() {
       setActiveExport(null);
     }
   }, [clearExportFeedback]);
+  const handlePersonaCategoryExport = useCallback(async (
+    personaId: string,
+    personaLabel: string,
+  ) => {
+    const exportKey = `persona-category-${personaId}-csv`;
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const { blob, filename } = await exportAnalyticsPersonaStatsByCategoryCsv(
+        personaId,
+        overviewWindowDays,
+      );
+      if (!downloadBlobFile(blob, filename)) {
+        setExportError(`Could not download ${personaLabel} category breakdown — try again.`);
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : `Could not download ${personaLabel} category breakdown — try again.`,
+      );
+    } finally {
+      setActiveExport(null);
+    }
+  }, [clearExportFeedback, overviewWindowDays]);
   const handlePersonaTimelineCopy = useCallback(async (
     timeline: AnalyticsPersonaStatsTimelineResponse,
   ) => {
@@ -2831,6 +2857,46 @@ export function ProfileModal() {
                                         borderTop: '0.5px solid #E0D5C5',
                                       }}
                                     >
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          justifyContent: 'flex-end',
+                                          padding: '6px 0',
+                                        }}
+                                      >
+                                        <button
+                                          type="button"
+                                          disabled={activeExport !== null}
+                                          aria-busy={
+                                            activeExport === `persona-category-${row.persona_id}-csv`
+                                          }
+                                          onClick={() => {
+                                            void handlePersonaCategoryExport(row.persona_id, row.name);
+                                          }}
+                                          style={{
+                                            padding: '3px 7px',
+                                            border: '0.5px solid #E0D5C5',
+                                            borderRadius: 5,
+                                            background:
+                                              activeExport === `persona-category-${row.persona_id}-csv`
+                                                ? '#EDE4D8'
+                                                : '#F0E8DC',
+                                            color: '#4A3728',
+                                            fontSize: 10,
+                                            cursor: activeExport !== null ? 'wait' : 'pointer',
+                                            fontFamily: 'var(--vp-font-sans)',
+                                            opacity:
+                                              activeExport !== null &&
+                                              activeExport !== `persona-category-${row.persona_id}-csv`
+                                                ? 0.6
+                                                : 1,
+                                          }}
+                                        >
+                                          {activeExport === `persona-category-${row.persona_id}-csv`
+                                            ? '⏳ Exporting…'
+                                            : '🧭 Category Breakdown CSV'}
+                                        </button>
+                                      </div>
                                       {personaTimelineLoading ? (
                                         <span role="status" style={{ display: 'block', padding: '10px 0', color: '#A0A39A', fontSize: 11 }}>
                                           Loading daily timeline…

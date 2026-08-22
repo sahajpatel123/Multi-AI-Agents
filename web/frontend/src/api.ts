@@ -4871,8 +4871,25 @@ export async function exportAnalyticsPersonaStatsTimelineMarkdown(
   };
 }
 
-export async function exportAnalyticsPersonaStatsByCategoryCsv(personaId: string, windowDays: number = 30): Promise<Blob> {
-  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(personaId)}/by-category/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+export type AnalyticsPersonaStatsByCategoryCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsByCategoryCsv(
+  personaId: string,
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsByCategoryCsvExport> {
+  const normalizedPersonaId = personaId.trim();
+  if (!normalizedPersonaId) {
+    throw new RangeError('personaId must not be empty');
+  }
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/by-category/export.csv?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(
@@ -4881,7 +4898,12 @@ export async function exportAnalyticsPersonaStatsByCategoryCsv(personaId: string
       err,
     );
   }
-  return response.blob();
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-category-${normalizedPersonaId.replace(/[^a-zA-Z0-9_-]/g, '-')}-${windowDays}d.csv`,
+  };
 }
 
 export async function exportScoringAuditCsv(

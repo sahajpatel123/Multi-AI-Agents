@@ -520,18 +520,47 @@ describe('Analytics CSV export frontend API helpers', () => {
     expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
   });
 
-  it('exportAnalyticsPersonaStatsByCategoryCsv encodes persona ID safely', async () => {
+  it('exportAnalyticsPersonaStatsByCategoryCsv returns the server filename', async () => {
     const mockBlob = new Blob(['category,wins'], { type: 'text/csv' });
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
-      new Response(mockBlob, { status: 200 })
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-persona-category-gpt-4o-2026-08-01-to-2026-08-30.csv"',
+        },
+      })
     );
 
     const res = await exportAnalyticsPersonaStatsByCategoryCsv('gpt-4o', 30);
-    expectBlob(res);
+    expectBlob(res.blob);
+    expect(res.filename).toBe(
+      'arena-persona-category-gpt-4o-2026-08-01-to-2026-08-30.csv',
+    );
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/analytics/persona-stats/gpt-4o/by-category/export.csv?window_days=30',
       {}
     );
+  });
+
+  it('falls back to a safe window-based filename when the by-category response omits one', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['category,wins'], { type: 'text/csv' }), { status: 200 }),
+    );
+
+    const res = await exportAnalyticsPersonaStatsByCategoryCsv(' claude/opus ', 7);
+    expectBlob(res.blob);
+    expect(res.filename).toBe('arena-persona-category-claude-opus-7d.csv');
+  });
+
+  it('rejects invalid by-category export inputs before fetching', async () => {
+    await expect(exportAnalyticsPersonaStatsByCategoryCsv('   ')).rejects.toThrow(
+      'personaId must not be empty',
+    );
+    await expect(exportAnalyticsPersonaStatsByCategoryCsv('analyst', 366)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
   });
 
   it('exportAgentWatchlistHistoryCsv encodes item ID and clamps limit', async () => {

@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   usage windows and stays locked while an export is in flight
 
 ### Added
+- Persona drill-downs in profile analytics can now export a mind's full
+  per-category breakdown as CSV (category rows with appearances, wins, and
+  win rate plus a rollup footer), following the selected persona-stats
+  window with honest failure feedback — surfacing the previously
+  API-only export route in the UI
 - Profile analytics can now copy the complete persona-stats overview as
   structured JSON straight from the dashboard for notebooks and scripts,
   following the selected persona-stats window, with honest clipboard-
