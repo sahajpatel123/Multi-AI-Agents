@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Export presets are now surfaced in the sidebar's saved-takes section: a
+  new panel lists each preset with its format and filter summary,
+  downloads it in one click through the backend's redirecting use
+  endpoint, and deletes it — with per-action busy states, honest
+  success/failure feedback, a retry on load failure, and template
+  quick-add chips when no presets exist yet
+
+### Added
 - Export presets now have a complete typed frontend API layer (list,
   template catalog, create-from-template, delete, and one-click download
   via the backend's redirecting use endpoint) with input validation,

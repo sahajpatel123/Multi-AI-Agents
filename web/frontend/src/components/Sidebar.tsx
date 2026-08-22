@@ -34,6 +34,7 @@ import type {
   SessionSummary,
 } from '../api';
 import { AgentDot } from './AgentDot';
+import { ExportPresetsPanel } from './ExportPresetsPanel';
 import { HighlightQuery } from './HighlightQuery';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
@@ -4549,6 +4550,7 @@ export function Sidebar({
                                 : ''}
                   </div>
                 ) : null}
+                <ExportPresetsPanel />
                 <div style={{ marginBottom: 8 }}>
                   {savedMindOptions.length > 2 ? (
                     <div
