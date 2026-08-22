@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { expectBlob } from './test/blob';
 import { exportUserUsageJson } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -27,7 +28,7 @@ describe('exportUserUsageJson', () => {
     );
 
     const res = await exportUserUsageJson();
-    expect(res.blob).toBeInstanceOf(Blob);
+    expectBlob(res.blob);
     expect(res.filename).toBe(
       'arena-usage-2026-07-29-to-2026-08-11.json',
     );
@@ -45,7 +46,7 @@ describe('exportUserUsageJson', () => {
     );
 
     const res = await exportUserUsageJson();
-    expect(res.blob).toBeInstanceOf(Blob);
+    expectBlob(res.blob);
     expect(res.filename).toBe('arena-usage-14d.json');
   });
 

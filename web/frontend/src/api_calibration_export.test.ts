@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { expectBlob } from './test/blob';
 import {
   exportCalibrationHistoryCsv,
   exportCalibrationHistoryJson,
@@ -32,7 +33,7 @@ describe('Calibration history export helpers', () => {
     );
 
     const res = await exportCalibrationHistoryCsv();
-    expect(res.blob).toBeInstanceOf(Blob);
+    expectBlob(res.blob);
     expect(res.filename).toBe('arena-calibration-7-20260812.csv');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/calibration/history/export.csv',
@@ -48,7 +49,7 @@ describe('Calibration history export helpers', () => {
     );
 
     const res = await exportCalibrationHistoryCsv();
-    expect(res.blob).toBeInstanceOf(Blob);
+    expectBlob(res.blob);
     expect(res.filename).toBe('arena-calibration-history.csv');
   });
 
@@ -67,7 +68,7 @@ describe('Calibration history export helpers', () => {
     );
 
     const res = await exportCalibrationHistoryJson();
-    expect(res.blob).toBeInstanceOf(Blob);
+    expectBlob(res.blob);
     expect(res.filename).toBe('arena-calibration-7-20260812.json');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/calibration/history/export.json',
@@ -101,7 +102,7 @@ describe('Calibration history export helpers', () => {
     );
 
     const res = await exportCalibrationHistoryMarkdown();
-    expect(res.blob).toBeInstanceOf(Blob);
+    expectBlob(res.blob);
     expect(res.filename).toBe('arena-calibration-7-20260812.md');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/calibration/history/export.md',

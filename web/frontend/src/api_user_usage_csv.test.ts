@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { expectBlob } from './test/blob';
 import { exportUserUsageCsv } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -24,7 +25,7 @@ describe('exportUserUsageCsv', () => {
     );
 
     const res = await exportUserUsageCsv();
-    expect(res.blob).toBeInstanceOf(Blob);
+    expectBlob(res.blob);
     expect(res.filename).toBe('arena-usage-2026-07-29-to-2026-08-11.csv');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/user/usage/export.csv',

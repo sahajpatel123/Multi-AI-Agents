@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { expectBlob } from './test/blob';
 import { deleteMemorySummaries, exportMemorySummaries, listMemorySummaries } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -23,7 +24,7 @@ describe('exportMemorySummaries', () => {
 
     const result = await exportMemorySummaries('csv', { search: 'IPO notes' });
 
-    expect(result.blob).toBeInstanceOf(Blob);
+    expectBlob(result.blob);
     expect(result.filename).toBe('arena-memory-summaries-1.csv');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/memory/summaries/export.csv?search=IPO+notes',

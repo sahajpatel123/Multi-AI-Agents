@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { expectBlob } from './test/blob';
 import {
   exportAgentFeedbackCsv,
   exportAgentFeedbackJson,
@@ -28,7 +29,7 @@ describe('Agent answer feedback export helper', () => {
 
     const result = await exportAgentFeedbackCsv();
 
-    expect(result.blob).toBeInstanceOf(Blob);
+    expectBlob(result.blob);
     expect(result.filename).toBe('arena-feedback-7-20260818.csv');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/agent/feedback/export.csv', {});
   });
@@ -113,7 +114,7 @@ describe('Agent answer feedback export helper', () => {
 
     const result = await exportAgentFeedbackJson();
 
-    expect(result.blob).toBeInstanceOf(Blob);
+    expectBlob(result.blob);
     expect(result.filename).toBe('arena-feedback-7-20260818.json');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/agent/feedback/export.json', {});
   });
@@ -152,7 +153,7 @@ describe('Agent answer feedback export helper', () => {
 
     const result = await exportAgentFeedbackMarkdown();
 
-    expect(result.blob).toBeInstanceOf(Blob);
+    expectBlob(result.blob);
     expect(result.filename).toBe('arena-feedback-7-20260818.md');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/agent/feedback/export.md', {});
   });

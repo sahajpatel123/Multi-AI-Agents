@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { expectBlob } from './test/blob';
 import {
   ApiError,
   exportAgentFeedbackSummaryCsv,
@@ -175,7 +176,7 @@ describe('Agent feedback summary frontend API helper', () => {
 
     const result = await exportAgentFeedbackSummaryCsv(7);
 
-    expect(result.blob).toBeInstanceOf(Blob);
+    expectBlob(result.blob);
     expect(result.filename).toBe('arena-feedback-activity-7-20260818.csv');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/agent/feedback/summary/export.csv?window_days=7',
@@ -208,7 +209,7 @@ describe('Agent feedback summary frontend API helper', () => {
 
     const result = await exportAgentFeedbackSummaryJson(7);
 
-    expect(result.blob).toBeInstanceOf(Blob);
+    expectBlob(result.blob);
     expect(result.filename).toBe('arena-feedback-activity-7-20260818.json');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/agent/feedback/summary/export.json?window_days=7',
@@ -241,7 +242,7 @@ describe('Agent feedback summary frontend API helper', () => {
 
     const result = await exportAgentFeedbackSummaryMarkdown(7);
 
-    expect(result.blob).toBeInstanceOf(Blob);
+    expectBlob(result.blob);
     expect(result.filename).toBe('arena-feedback-activity-7-20260818.md');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/agent/feedback/summary/export.md?window_days=7',

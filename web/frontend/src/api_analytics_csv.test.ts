@@ -18,17 +18,11 @@ import {
   exportAgentWatchlistHistoryJson,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
+import { expectBlob } from './test/blob';
 
 vi.mock('./lib/apiFetch', () => ({
   apiFetch: vi.fn(),
 }));
-
-function expectBlob(value: unknown): void {
-  // `Response.blob()` can return a Blob from a different JavaScript realm
-  // (Node's undici vs jsdom/global Blob), so `toBeInstanceOf(Blob)` can fail
-  // spuriously in CI. This cross-realm-safe check only accepts real Blobs.
-  expect(Object.prototype.toString.call(value)).toBe('[object Blob]');
-}
 
 describe('Analytics CSV export frontend API helpers', () => {
   beforeEach(() => {
