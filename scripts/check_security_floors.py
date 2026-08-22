@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Security pin-floor guard for backend dependencies.
+"""Security pin-floor guard for backend and frontend dependencies.
 
 Run from the repository root:
 
     python scripts/check_security_floors.py
 
-This replaces the inline ``python -c "..."`` block that previously lived in
-ci.yml. Embedding Python inside a bash double-quoted string made the guard
-one stray backtick away from executing arbitrary shell (a comment containing
-`` `pip show` `` literally triggered command substitution and failed every
-run). As a real script it is testable, diffable, and free of quoting traps.
+This replaces two inline guards that previously lived in ci.yml: a
+``python -c "..."`` block for the backend and a ``node -e "..."`` block for
+the frontend. Embedding interpreters inside bash double-quoted strings made
+each guard one stray backtick away from executing arbitrary shell (a comment
+containing `` `pip show` `` literally triggered command substitution and
+failed every run). As real scripts they are testable, diffable, and free of
+quoting traps.
 
 Enforced invariants:
 
@@ -18,17 +20,21 @@ Enforced invariants:
   * packages in FORBIDDEN must not appear as direct pins in
     backend/requirements.txt;
   * packages in FORBIDDEN must not be resolvable in the live environment,
-    including as transitive dependencies of anything else installed.
+    including as transitive dependencies of anything else installed;
+  * every package in FRONTEND_REQUIRED stays at or above its floor in
+    web/frontend/package.json (dependencies or devDependencies).
 """
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS_PATH = ROOT / "backend" / "requirements.txt"
+FRONTEND_PACKAGE_JSON = ROOT / "web" / "frontend" / "package.json"
 
 # Defense-in-depth: even if a future pip-audit database update silently drops
 # a vulnerable-package match, the floors below must stay. A regression to any
@@ -54,6 +60,13 @@ FORBIDDEN = {
     "ecdsa": "transitive of python-jose; eliminated via PyJWT",
 }
 
+# Frontend floors, migrated verbatim from the old node -e block.
+FRONTEND_REQUIRED = {
+    "react-router-dom": "7.14.2",
+    "postcss": "8.5.23",  # GHSA-fxqj-rqcc-2cmp fixed in 8.5.23+
+    "vitest": "4.1.10",
+}
+
 
 def _version_key(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in version.split("."))
@@ -71,6 +84,34 @@ def check_pin_floors(text: str) -> list[str]:
         if _version_key(match.group(1)) < _version_key(min_version):
             failures.append(
                 f"REGRESSED: {package}=={match.group(1)} (require >= {min_version})"
+            )
+    return failures
+
+
+def check_frontend_floors(package_json: dict) -> list[str]:
+    """Return violations for frontend floors in parsed package.json.
+
+    npm ranges are compared on their numeric floor: a leading ``^``/``~`` is
+    stripped so the declared minimum is what gets checked. Anything the
+    pattern can't parse is reported as UNPARSED rather than silently passed.
+    """
+    merged = {
+        **(package_json.get("dependencies") or {}),
+        **(package_json.get("devDependencies") or {}),
+    }
+    failures: list[str] = []
+    for package, min_version in FRONTEND_REQUIRED.items():
+        raw = merged.get(package)
+        if raw is None:
+            failures.append(f"MISSING: {package}>={min_version}")
+            continue
+        match = re.match(r"^[\^~]?(\d+(?:\.\d+)+)", str(raw))
+        if not match:
+            failures.append(f"UNPARSED: {package} = {raw}")
+            continue
+        if _version_key(match.group(1)) < _version_key(min_version):
+            failures.append(
+                f"REGRESSED: {package}@{match.group(1)} (require >= {min_version})"
             )
     return failures
 
@@ -131,13 +172,22 @@ def main() -> int:
     failures = check_pin_floors(text)
     forbidden_hits = check_forbidden_direct(text) + check_forbidden_resolved()
 
-    if failures or forbidden_hits:
+    try:
+        package_json = json.loads(FRONTEND_PACKAGE_JSON.read_text(encoding="utf-8"))
+        frontend_failures = check_frontend_floors(package_json)
+    except FileNotFoundError:
+        frontend_failures = [f"MISSING FILE: {FRONTEND_PACKAGE_JSON}"]
+
+    if failures or forbidden_hits or frontend_failures:
         print("Security floor violations:")
-        for violation in failures + forbidden_hits:
+        for violation in failures + forbidden_hits + frontend_failures:
             print(f"  - {violation}")
         return 1
 
-    print(f"Security floor OK ({len(REQUIRED)} floors, {len(FORBIDDEN)} banned)")
+    print(
+        f"Security floor OK ({len(REQUIRED)} backend floors, "
+        f"{len(FORBIDDEN)} banned, {len(FRONTEND_REQUIRED)} frontend floors)"
+    )
     return 0
 
 

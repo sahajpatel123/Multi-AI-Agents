@@ -191,3 +191,54 @@ def test_check_forbidden_resolved_returns_list(guard):
     assert isinstance(result, list)
     for hit in result:
         assert hit.startswith("FORBIDDEN (resolved):")
+
+
+# --------------------------------------------------------------------------
+# Frontend floors (migrated out of ci.yml's inline node -e block)
+# --------------------------------------------------------------------------
+
+
+def test_ci_no_longer_embeds_the_node_inline_guard():
+    """The node -e pin-floor block must stay out of ci.yml — its floors
+    live in scripts/check_security_floors.py now. If this fails, someone
+    re-inlined interpreter code into a bash string (the quoting-trap class
+    of bug that broke CI before)."""
+    text = WORKFLOW.read_text()
+    assert "node -e" not in text, "inline node code reintroduced into ci.yml"
+    assert "react-router-dom" not in text, "frontend floors belong in the script"
+
+
+def test_frontend_floor_dict_present(guard):
+    for pkg in ("react-router-dom", "postcss", "vitest"):
+        assert pkg in guard.FRONTEND_REQUIRED, f"frontend floor missing: {pkg}"
+
+
+def _package_json(**overrides) -> dict:
+    pins = {
+        "react-router-dom": "^7.14.2",
+        "postcss": "^8.5.23",
+        "vitest": "^4.1.10",
+    }
+    pins.update(overrides)
+    return {"dependencies": {}, "devDependencies": pins}
+
+
+def test_frontend_clean_pins_pass(guard):
+    assert guard.check_frontend_floors(_package_json()) == []
+
+
+def test_frontend_regressed_pin_is_caught(guard):
+    failures = guard.check_frontend_floors(_package_json(postcss="^8.4.0"))
+    assert any("REGRESSED: postcss@8.4.0" in f for f in failures)
+
+
+def test_frontend_missing_pin_is_caught(guard):
+    pins = _package_json()
+    pins["devDependencies"].pop("vitest")
+    failures = guard.check_frontend_floors(pins)
+    assert failures == ["MISSING: vitest>=4.1.10"]
+
+
+def test_frontend_unparseable_range_is_caught(guard):
+    failures = guard.check_frontend_floors(_package_json(vitest="workspace:*"))
+    assert any("UNPARSED: vitest = workspace:*" in f for f in failures)
