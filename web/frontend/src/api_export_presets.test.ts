@@ -271,6 +271,7 @@ describe('export preset API helpers', () => {
           JSON.stringify({
             preset_id: 3,
             match_count: 12,
+            filters: { search: null, sort: 'score' },
             preview: [
               {
                 id: 7,
@@ -294,6 +295,8 @@ describe('export preset API helpers', () => {
       expect(res).toEqual({
         matchCount: 12,
         truncated: true,
+        sort: 'score',
+        search: null,
         sample: [
           {
             id: 7,
@@ -306,7 +309,7 @@ describe('export preset API helpers', () => {
       });
     });
 
-    it('tolerates a payload with no sample rows', async () => {
+    it('tolerates a payload with no sample rows or filters block', async () => {
       vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
         new Response(JSON.stringify({ match_count: 0, preview: [], truncated: false }), {
           status: 200,
@@ -316,6 +319,8 @@ describe('export preset API helpers', () => {
       expect(res.matchCount).toBe(0);
       expect(res.sample).toEqual([]);
       expect(res.truncated).toBe(false);
+      expect(res.sort).toBeNull();
+      expect(res.search).toBeNull();
     });
 
     it('validates the id before fetching', async () => {

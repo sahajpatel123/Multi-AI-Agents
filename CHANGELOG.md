@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- The export-preset dry-run preview now describes itself: the effective
+  sort order (newest first, highest score first, pinned takes first, or
+  oldest first) and any search term the server actually applied render
+  beside the match count, so the preview matches what the download will
+  do even when a preset was saved with unusual settings
+
 ### Added
 - Export presets now show a dry-run preview before downloading: each row
   has a Preview toggle that counts the exact takes the export would return

@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[IMPROVED] Export presets: the dry-run preview now shows the effective sort order and search term beside the match count',
       '[NEW] Export presets: a dry-run Preview toggle per preset — counts exactly how many takes an export would return, samples the top few, cached so re-opening never refetches',
       '[NEW] Export presets: a panel in the sidebar\'s saved-takes section — one-click downloads, per-preset deletion, template quick-adds, and honest busy/error states',
       '[NEW] Export presets: a complete typed frontend API layer — list, templates, create-from-template, delete, and one-click download — groundwork for the upcoming presets UI',

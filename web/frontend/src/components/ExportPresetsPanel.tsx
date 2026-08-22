@@ -20,6 +20,14 @@ import { downloadBlobFile } from '../lib/downloadTextFile';
  * and per-preset deletion — every action with its own busy key and
  * honest success/failure feedback.
  */
+/** Human labels for the sort orders the saved-export query supports. */
+const PREVIEW_SORT_LABELS: Record<string, string> = {
+  newest: 'newest first',
+  oldest: 'oldest first',
+  score: 'highest score first',
+  pinned: 'pinned takes first',
+};
+
 export function ExportPresetsPanel() {
   const [presets, setPresets] = useState<ExportPreset[] | null>(null);
   const [templates, setTemplates] = useState<ExportPresetTemplate[]>([]);
@@ -333,6 +341,16 @@ export function ExportPresetsPanel() {
                     {previews[preset.id].matchCount}
                   </strong>{' '}
                   {previews[preset.id].matchCount === 1 ? 'take matches' : 'takes match'}
+                  {(() => {
+                    const preview = previews[preset.id];
+                    const descriptors = [
+                      preview.sort ? PREVIEW_SORT_LABELS[preview.sort] || preview.sort : null,
+                      preview.search ? `matching “${preview.search}”` : null,
+                    ].filter(Boolean);
+                    return descriptors.length > 0 ? (
+                      <span> · {descriptors.join(' · ')}</span>
+                    ) : null;
+                  })()}
                   {previews[preset.id].sample.length > 0 ? (
                     <ul
                       style={{

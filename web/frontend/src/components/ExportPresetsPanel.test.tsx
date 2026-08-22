@@ -186,6 +186,8 @@ describe('ExportPresetsPanel', () => {
     mockedApi.previewExportPreset.mockResolvedValue({
       matchCount: 12,
       truncated: true,
+      sort: 'score',
+      search: null,
       sample: [
         { id: 7, persona_name: 'The Analyst', score: 92, one_liner: 'Anchor the claim.', saved_at: null },
         { id: 8, persona_name: null, score: null, one_liner: 'Second take.', saved_at: null },
@@ -205,11 +207,39 @@ describe('ExportPresetsPanel', () => {
     });
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText(/takes match/)).toBeInTheDocument();
+    // The effective sort the dry run applied is described in place.
+    expect(screen.getByText(/highest score first/)).toBeInTheDocument();
     expect(screen.getByText('The Analyst: Anchor the claim. (92)')).toBeInTheDocument();
     expect(screen.getByText('Second take.')).toBeInTheDocument();
     expect(
       screen.getByText(/\+10 more in the full export/),
     ).toBeInTheDocument();
+  });
+
+  it('describes an effective search term alongside the sort order', async () => {
+    mockedApi.previewExportPreset.mockResolvedValue({
+      matchCount: 4,
+      truncated: false,
+      sort: 'newest',
+      search: 'Bitcoin',
+      sample: [],
+    });
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /preview export preset high score responses/i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockedApi.previewExportPreset).toHaveBeenCalled();
+    });
+    // The count, effective sort, and search term render as adjacent
+    // segments inside one line.
+    const line = screen.getByText(/takes match/);
+    expect(line).toHaveTextContent('newest first');
+    expect(line).toHaveTextContent('matching “Bitcoin”');
   });
 
   it('caches a preview so hiding and re-showing does not refetch', async () => {

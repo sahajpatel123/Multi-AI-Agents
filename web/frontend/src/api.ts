@@ -5144,6 +5144,10 @@ export type ExportPresetPreview = {
   matchCount: number;
   sample: ExportPresetPreviewRow[];
   truncated: boolean;
+  // Effective filters the dry run actually applied (server-normalized),
+  // so the panel can describe the export it previews.
+  sort: string | null;
+  search: string | null;
 };
 
 export async function previewExportPreset(presetId: number): Promise<ExportPresetPreview> {
@@ -5161,9 +5165,15 @@ export async function previewExportPreset(presetId: number): Promise<ExportPrese
   }
   const data = (await parseJsonSafely<Record<string, unknown>>(res)) || {};
   const rawSample = Array.isArray(data.preview) ? data.preview : [];
+  const filters =
+    data.filters && typeof data.filters === 'object'
+      ? (data.filters as Record<string, unknown>)
+      : {};
   return {
     matchCount: typeof data.match_count === 'number' ? data.match_count : 0,
     truncated: data.truncated === true,
+    sort: filters.sort ? String(filters.sort) : null,
+    search: filters.search ? String(filters.search) : null,
     sample: rawSample.map((row) => {
       const record = row as Record<string, unknown>;
       return {
