@@ -5,24 +5,15 @@ import { useAuth } from '../hooks/useAuth';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import '../styles/verdict-public-nav.css';
 
+// The primary mast only has room for a curated few links: at 19 entries
+// it measured ~1430px wide and forced a horizontal scrollbar on every
+// public page below ~1700px viewport (caught by the docs-page E2E
+// tablet-edge geometry check once the E2E job finally ran). Every route
+// stays reachable via PERSONAS and the hamburger menu (MENU_LINKS).
 const PRIMARY_LINKS = [
   { label: 'PRODUCT', path: '/product' },
   { label: 'PERSONAS', path: '/personas' },
   { label: 'PLAYGROUND', path: '/persona-playground' },
-  { label: 'MATCH', path: '/persona-match' },
-  { label: 'BATTLE', path: '/persona-battle' },
-  { label: 'WHEEL', path: '/persona-wheel' },
-  { label: 'TRIVIA', path: '/persona-trivia' },
-  { label: 'SPEED', path: '/persona-speed' },
-  { label: 'ROAST', path: '/persona-roast' },
-  { label: 'CHALLENGE', path: '/persona-challenge' },
-  { label: 'DUEL', path: '/persona-duel' },
-  { label: 'ECHO', path: '/persona-echo' },
-  { label: 'COUNCIL', path: '/persona-council' },
-  { label: 'DILEMMA', path: '/persona-dilemma' },
-  { label: 'FORECAST', path: '/persona-forecast' },
-  { label: 'MOSAIC', path: '/persona-mosaic' },
-  { label: 'LIBRARY', path: '/persona-library' },
   { label: 'PRICING', path: '/pricing' },
   { label: 'DOCS', path: '/docs' },
 ] as const;

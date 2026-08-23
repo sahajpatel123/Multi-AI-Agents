@@ -20,22 +20,15 @@ describe('shared public Prism navigation (source structure)', () => {
     expect(src).toContain('dialog.querySelectorAll<HTMLElement>');
     expect(src).toContain('className="vp-menu-close"');
     expect(src).toContain('menuButtonRef.current?.focus()');
+    // The primary mast carries the curated five (it overflowed every
+    // common viewport once the persona games piled in); the games stay
+    // pinned via their MENU_LINKS entries below.
     expect(src).toContain("{ label: 'PRODUCT', path: '/product' }");
+    expect(src).toContain("{ label: 'PERSONAS', path: '/personas' }");
     expect(src).toContain("{ label: 'PLAYGROUND', path: '/persona-playground' }");
-    expect(src).toContain("{ label: 'MATCH', path: '/persona-match' }");
-    expect(src).toContain("{ label: 'BATTLE', path: '/persona-battle' }");
-    expect(src).toContain("{ label: 'WHEEL', path: '/persona-wheel' }");
-    expect(src).toContain("{ label: 'TRIVIA', path: '/persona-trivia' }");
-    expect(src).toContain("{ label: 'SPEED', path: '/persona-speed' }");
-    expect(src).toContain("{ label: 'ROAST', path: '/persona-roast' }");
-    expect(src).toContain("{ label: 'CHALLENGE', path: '/persona-challenge' }");
-    expect(src).toContain("{ label: 'DUEL', path: '/persona-duel' }");
-    expect(src).toContain("{ label: 'ECHO', path: '/persona-echo' }");
-    expect(src).toContain("{ label: 'COUNCIL', path: '/persona-council' }");
-    expect(src).toContain("{ label: 'DILEMMA', path: '/persona-dilemma' }");
-    expect(src).toContain("{ label: 'FORECAST', path: '/persona-forecast' }");
-    expect(src).toContain("{ label: 'MOSAIC', path: '/persona-mosaic' }");
-    expect(src).toContain("{ label: 'LIBRARY', path: '/persona-library' }");
+    expect(src).toContain("{ label: 'PRICING', path: '/pricing' }");
+    expect(src).toContain("{ label: 'DOCS', path: '/docs' }");
+    expect(src).not.toContain("{ label: 'MATCH', path: '/persona-match' }");
     expect(src).toContain("{ number: '04', label: 'Persona Playground', path: '/persona-playground' }");
     expect(src).toContain("{ number: '05', label: 'Persona Match', path: '/persona-match' }");
     expect(src).toContain("{ number: '06', label: 'Persona Battle', path: '/persona-battle' }");
