@@ -98,6 +98,100 @@ export function formatArenaRecentsExport(opts: {
 }
 
 /**
+ * JSON export of sidebar recents (full list or current filter).
+ * Keeps the same normalized fields as the markdown snapshot so consumers can
+ * round-trip titles, prompts, winners, and timestamps programmatically.
+ */
+export function formatArenaRecentsJsonExport(opts: {
+  items: ArenaRecentExportItem[];
+  totalCount?: number | null;
+  filterNote?: string | null;
+  exportedAt?: string;
+}): string {
+  const items = (opts.items || []).map((item) => ({
+    title: displayTitle(item),
+    prompt: (item.prompt || '').trim() || null,
+    category: categoryLabel(item.category) || null,
+    winnerName: (item.winnerName || '').trim() || null,
+    timestamp: item.timestamp || null,
+    turnId: (item.turnId || '').trim() || null,
+  }));
+  return JSON.stringify(
+    {
+      exported_from: 'arena',
+      exported_at: opts.exportedAt || new Date().toISOString(),
+      total_recents:
+        typeof opts.totalCount === 'number' && Number.isFinite(opts.totalCount)
+          ? opts.totalCount
+          : null,
+      filter_note: (opts.filterNote || '').trim() || null,
+      count: items.length,
+      items,
+    },
+    null,
+    2,
+  ) + '\n';
+}
+
+
+/**
+ * CSV export of sidebar recents (full list or current filter).
+ * The first row is headers; every cell is quoted so commas/newlines in
+ * prompts cannot break the column layout. Prompt, title, and winner names
+ * are user- and model-controlled text, so cells that could be interpreted
+ * as spreadsheet formulas are neutralized (OWASP CWE-1236), matching the
+ * watchlist and agent-history CSV exporters.
+ */
+export function formatArenaRecentsCsvExport(opts: { items: ArenaRecentExportItem[] }): string {
+  const CSV_FORMULA_PREFIXES: readonly string[] = ['=', '+', '-', '@', '\t', '\r'];
+
+  const csvSafe = (value: string | number | boolean | null | undefined): string => {
+    const raw = value == null ? '' : String(value);
+    // Spreadsheets commonly ignore leading whitespace before deciding whether
+    // a cell is a formula, so check the first significant character, not just
+    // the raw first byte.
+    const firstSignificant = raw.trimStart()[0] || '';
+    return CSV_FORMULA_PREFIXES.includes(firstSignificant) ? `'${raw}` : raw;
+  };
+
+  const csvCell = (value: string | number | boolean | null | undefined): string =>
+    `"${csvSafe(value).replace(/"/g, '""')}"`;
+
+  const items = (opts.items || []).map((item) => ({
+    title: displayTitle(item),
+    prompt: (item.prompt || '').trim() || '',
+    category: categoryLabel(item.category) || '',
+    winnerName: (item.winnerName || '').trim() || '',
+    timestamp: item.timestamp || '',
+    turnId: (item.turnId || '').trim() || '',
+  }));
+  const headers = [
+    'title',
+    'prompt',
+    'category',
+    'winnerName',
+    'timestamp',
+    'turnId',
+  ];
+  const lines: string[] = [headers.map(csvCell).join(',')];
+  items.forEach((item) => {
+    lines.push(
+      [
+        item.title,
+        item.prompt,
+        item.category,
+        item.winnerName,
+        item.timestamp,
+        item.turnId,
+      ]
+        .map(csvCell)
+        .join(','),
+    );
+  });
+  return lines.join('\n') + '\n';
+}
+
+/**
  * Clipboard text for a single Arena recent turn (markdown snapshot).
  * Prefer full context over bare prompt so notes outside the app stay useful.
  */

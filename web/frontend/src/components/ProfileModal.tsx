@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import '../styles/profile-modal.css';
@@ -7,10 +7,47 @@ import {
   cancelAgentAddon,
   cancelSubscription,
   deleteMcpIntegration,
+  exportAgentFeedbackCsv,
+  exportAgentFeedbackJson,
+  exportAgentFeedbackMarkdown,
+  exportAgentFeedbackSummaryCsv,
+  exportAgentFeedbackSummaryJson,
+  exportAgentFeedbackSummaryMarkdown,
+  exportCalibrationHistoryCsv,
+  exportCalibrationHistoryJson,
+  exportCalibrationHistoryMarkdown,
+  exportAnalyticsActivityJson,
+  exportAnalyticsActivityCsv,
+  exportAnalyticsActivityMarkdown,
   exportAnalyticsCategoryStatsCsv,
+  exportAnalyticsCategoryStatsJson,
+  exportAnalyticsCategoryStatsMarkdown,
+  exportAnalyticsPersonaStatsByCategoryCsv,
+  exportAnalyticsPersonaStatsByCategoryMarkdown,
   exportAnalyticsPersonaStatsOverviewCsv,
+  exportAnalyticsPersonaStatsOverviewJson,
+  exportAnalyticsPersonaStatsOverviewMarkdown,
+  exportAnalyticsPersonaStatsTimelineCsv,
+  exportAnalyticsPersonaStatsTimelineJson,
+  exportAnalyticsPersonaStatsTimelineMarkdown,
   exportAnalyticsPersonaWinRateCsv,
+  exportAnalyticsPersonaWinRateTrendCsv,
+  exportAnalyticsPersonaWinRateTrendJson,
+  exportAnalyticsPersonaWinRateTrendMarkdown,
+  exportAnalyticsPersonaWinRateJson,
+  exportAnalyticsPersonaWinRateMarkdown,
   exportAnalyticsSummaryCsv,
+  exportAnalyticsSummaryJson,
+  exportAnalyticsSummaryMarkdown,
+  exportUserUsageCsv,
+  exportUserUsageJson,
+  exportUserUsageMarkdown,
+  getAnalyticsActivity,
+  getAnalyticsCategoryStats,
+  getAnalyticsPersonaWinRate,
+  getAnalyticsPersonaStatsTimeline,
+  getAgentFeedbackSummary,
+  getCalibrationHistory,
   getCalibrationStats,
   getMcpIntegrations,
   getRecentAgentFeedback,
@@ -20,12 +57,28 @@ import {
   patchUserProfile,
   postMcpManualConnect,
   reactivateAgentAddon,
+  type AnalyticsActivityResponse,
+  type AnalyticsCategoryStatsResponse,
+  type AnalyticsPersonaWinRateResponse,
+  type AnalyticsPersonaWinRateTrendPoint,
+  type AnalyticsPersonaStatsTimelineResponse,
+  type AgentFeedbackSummary,
+  type AgentFeedbackExportDateRange,
+  type AgentFeedbackVerdict,
   type AnswerFeedbackStats,
+  type CalibrationHistoryResponse,
+  type CalibrationHistorySort,
   type RecentFeedbackItem,
   type SubscriptionStatusResponse,
   type UserUsageResponse,
 } from '../api';
 import { downloadBlobFile } from '../lib/downloadTextFile';
+import {
+  copyCsvToClipboard,
+  copyJsonToClipboard,
+  copyMarkdownToClipboard,
+  copyToClipboard,
+} from '../lib/clipboard';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { safeLocalStorage } from '../lib/safeStorage';
@@ -70,6 +123,90 @@ function formatInrPaise(paise: number): string {
 
 function formatRelativeConnected(iso: string | null): string {
   return formatRelativePast(iso, { fallback: 'recently', localeAfterDays: 14 });
+}
+
+function formatCalibrationDate(iso: string | null): string {
+  if (!iso) return 'Unknown date';
+  return iso.slice(0, 10);
+}
+
+function formatSignedDelta(delta: number): string {
+  return delta > 0 ? `+${delta}` : String(delta);
+}
+
+const CALIBRATION_HISTORY_SORT_LABELS: Record<CalibrationHistorySort, string> = {
+  newest: 'Newest first',
+  oldest: 'Oldest first',
+  delta_desc: 'Underestimates first',
+  delta_asc: 'Overestimates first',
+};
+
+function CalibrationHistoryPagination({
+  page,
+  totalPages,
+  onPrevious,
+  onNext,
+}: {
+  page: number;
+  totalPages: number;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  const safeTotalPages = Math.max(1, totalPages);
+  const isFirstPage = page <= 1;
+  const isLastPage = page >= safeTotalPages;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+        marginTop: 10,
+      }}
+    >
+      <span style={{ fontSize: 10, color: '#A0A39A' }}>
+        Page {page} of {safeTotalPages}
+      </span>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button
+          type="button"
+          aria-label="Previous calibration history page"
+          disabled={isFirstPage}
+          onClick={onPrevious}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: '#F0E8DC',
+            color: '#4A3728',
+            cursor: isFirstPage ? 'not-allowed' : 'pointer',
+            opacity: isFirstPage ? 0.5 : 1,
+          }}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          aria-label="Next calibration history page"
+          disabled={isLastPage}
+          onClick={onNext}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: '#F0E8DC',
+            color: '#4A3728',
+            cursor: isLastPage ? 'not-allowed' : 'pointer',
+            opacity: isLastPage ? 0.5 : 1,
+          }}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function TabIconAccount({ active }: { active: boolean }) {
@@ -155,6 +292,49 @@ function TabIconHelp({ active }: { active: boolean }) {
 }
 
 const PLACEHOLDER_HISTORY = [8, 14, 11, 19, 15, 22, 17, 12, 25, 18, 14, 21, 10, 28];
+const SUMMARY_EXPORT_WINDOWS = [7, 30, 90, 365] as const;
+const USAGE_EXPORT_WINDOWS = [7, 14, 30, 90, 365] as const;
+const PERSONA_STATS_OVERVIEW_WINDOWS = [7, 30, 90, 365] as const;
+const PERSONA_WIN_RATE_WINDOWS = [7, 30, 90] as const;
+const PERSONA_WIN_RATE_MIN_APPEARANCES = [1, 3, 5, 10] as const;
+type PersonaWinRateSort = 'win_rate' | 'appearances' | 'wins' | 'name';
+const PERSONA_WIN_RATE_SORT_LABELS: Record<PersonaWinRateSort, string> = {
+  win_rate: 'Win rate',
+  appearances: 'Appearances',
+  wins: 'Wins',
+  name: 'Name',
+};
+const ACTIVITY_HIGHLIGHT_WINDOWS = [7, 30, 90] as const;
+const FEEDBACK_ACTIVITY_WINDOWS = [7, 30, 90] as const;
+type PersonaTimelineExportFormat = 'csv' | 'json' | 'markdown';
+type PersonaTimelineAction = PersonaTimelineExportFormat | 'copy' | 'copy-csv' | 'copy-json';
+
+function sortPersonaWinRateRows(
+  rows: AnalyticsPersonaWinRateResponse['personas'],
+  sort: PersonaWinRateSort,
+): AnalyticsPersonaWinRateResponse['personas'] {
+  return [...rows].sort((a, b) => {
+    if (sort === 'name') {
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+        a.persona_id.localeCompare(b.persona_id);
+    }
+
+    const primary = sort === 'win_rate'
+      ? b.win_rate - a.win_rate
+      : sort === 'appearances'
+        ? b.appearances - a.appearances
+        : b.wins - a.wins;
+    return primary || b.win_rate - a.win_rate || b.appearances - a.appearances ||
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+      a.persona_id.localeCompare(b.persona_id);
+  });
+}
+
+function formatCategoryPersona(personaId: string): string {
+  return personaId
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 function UsageChart({
   data,
@@ -206,6 +386,511 @@ function UsageChart({
   return <canvas ref={canvasRef} style={{ width: '100%', height: 90, display: 'block' }} />;
 }
 
+function WinRateTrendSparkline({
+  trend,
+  personaName,
+  color,
+  omittedAppearances = 0,
+}: {
+  trend: AnalyticsPersonaWinRateTrendPoint[];
+  personaName: string;
+  color: string;
+  omittedAppearances?: number;
+}) {
+  const width = 72;
+  const height = 20;
+  const padding = 2;
+  const omittedLabel =
+    omittedAppearances > 0
+      ? `, ${omittedAppearances} older appearance${omittedAppearances === 1 ? '' : 's'} not plotted`
+      : '';
+  const omittedBadge =
+    omittedAppearances > 0 ? (
+      <span
+        style={{ color: '#A0A39A', fontSize: 10, whiteSpace: 'nowrap' }}
+        title={`${omittedAppearances} older appearance${omittedAppearances === 1 ? '' : 's'} not plotted`}
+      >
+        +{omittedAppearances} older
+      </span>
+    ) : null;
+
+  const points = trend.map((point, index) => ({
+    index,
+    x:
+      trend.length > 1
+        ? (index / (trend.length - 1)) * (width - padding * 2) + padding
+        : width / 2,
+    y:
+      point.win_rate === null
+        ? null
+        : height - padding - point.win_rate * (height - padding * 2),
+  }));
+
+  if (!points.some((p) => p.y !== null)) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ color: '#A0A39A', fontSize: 10, fontFamily: 'var(--vp-font-sans)' }}>
+          no data
+        </span>
+        {omittedBadge}
+      </span>
+    );
+  }
+
+  // Gaps are real: split the polyline into consecutive non-null runs so an
+  // absent week renders as a break, not as a drawn 0% dip.
+  const runs: { x: number; y: number }[][] = [];
+  let current: { x: number; y: number }[] = [];
+  const plotted: { index: number; x: number; y: number }[] = [];
+  for (const p of points) {
+    if (p.y === null) {
+      if (current.length > 0) {
+        runs.push(current);
+        current = [];
+      }
+    } else {
+      current.push({ x: p.x, y: p.y });
+      plotted.push({ index: p.index, x: p.x, y: p.y });
+    }
+  }
+  if (current.length > 0) runs.push(current);
+
+  // Only accept hex colors from the API; anything else falls back to the
+  // accent so a bad metadata value can never distort the chart.
+  const stroke = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#F0B84E';
+  const label = trend
+    .map((p) => (p.win_rate === null ? 'no data' : `${Math.round(p.win_rate * 100)}%`))
+    .join(', ');
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={`${personaName} win rate trend over the last ${trend.length} weeks: ${label}${omittedLabel}`}
+      >
+        <title>{`${personaName} — weekly win rate: ${label}${omittedLabel}`}</title>
+        {runs.map((run, i) => (
+          <polyline
+            key={i}
+            points={run.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ))}
+        {plotted.map((p) => (
+          <circle key={p.index} cx={p.x} cy={p.y} r={1.5} fill={stroke} />
+        ))}
+      </svg>
+      {omittedBadge}
+    </span>
+  );
+}
+
+function PersonaActivityTimeline({
+  timeline,
+  color,
+  activeAction,
+  onExport,
+  onCopyMarkdown,
+  onCopyCsv,
+  onCopyJson,
+}: {
+  timeline: AnalyticsPersonaStatsTimelineResponse;
+  color: string;
+  activeAction: PersonaTimelineAction | null;
+  onExport: (format: PersonaTimelineExportFormat) => void;
+  onCopyMarkdown: () => void;
+  onCopyCsv: () => void;
+  onCopyJson: () => void;
+}) {
+  const isBusy = activeAction !== null;
+  const maxAppearances = Math.max(
+    ...timeline.timeline.map((point) => point.appearances),
+    1,
+  );
+  const barColor = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#F0B84E';
+
+  return (
+    <div
+      role="region"
+      aria-label={`${timeline.name} daily activity timeline`}
+      style={{
+        padding: '10px 0 4px',
+        color: '#A0A39A',
+        fontFamily: 'var(--vp-font-sans)',
+      }}
+    >
+      <div
+        role="list"
+        aria-label={`${timeline.name} activity by day`}
+        style={{
+          display: 'flex',
+          alignItems: 'stretch',
+          gap: 2,
+          height: 48,
+        }}
+      >
+        {timeline.timeline.map((point) => {
+          const appearanceHeight = point.appearances > 0
+            ? Math.max(8, (point.appearances / maxAppearances) * 100)
+            : 2;
+          const winHeight = point.wins > 0
+            ? Math.max(5, (point.wins / maxAppearances) * 100)
+            : 0;
+          const label = `${point.date}: ${point.wins} win${point.wins === 1 ? '' : 's'}, ${point.appearances} appearance${point.appearances === 1 ? '' : 's'} (${Math.round(point.win_rate * 100)}%)`;
+          return (
+            <span
+              key={point.date}
+              role="listitem"
+              aria-label={label}
+              title={label}
+              style={{
+                position: 'relative',
+                flex: 1,
+                minWidth: 2,
+                borderRadius: 2,
+                background: '#EDE4D8',
+                overflow: 'hidden',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  height: `${appearanceHeight}%`,
+                  background: '#A0A39A',
+                  opacity: 0.45,
+                }}
+              />
+              {winHeight > 0 ? (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    bottom: 0,
+                    left: 0,
+                    height: `${winHeight}%`,
+                    background: barColor,
+                  }}
+                />
+              ) : null}
+            </span>
+          );
+        })}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginTop: 7,
+          fontSize: 11,
+        }}
+      >
+        <span>
+          {timeline.total_wins} win{timeline.total_wins === 1 ? '' : 's'} / {timeline.total_appearances} appearance{timeline.total_appearances === 1 ? '' : 's'} in {timeline.days} days
+        </span>
+        <span>
+          {timeline.best_day
+            ? `Peak ${timeline.best_day}: ${timeline.best_day_wins}/${timeline.best_day_appearances}`
+            : 'No winning day yet'}
+        </span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10 }}>
+        <span>{timeline.window_start}</span>
+        <span>today · {timeline.window_end}</span>
+      </div>
+      <span
+        role="note"
+        style={{
+          display: 'block',
+          marginTop: 8,
+          color: '#8C7355',
+          fontSize: 10,
+          lineHeight: 1.35,
+        }}
+      >
+        Wins exclude fallback scorings; appearances include every panel appearance.
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 9 }}>
+        <button
+          type="button"
+          aria-label={`Download ${timeline.name} daily timeline CSV`}
+          aria-busy={activeAction === 'csv'}
+          disabled={isBusy}
+          onClick={() => onExport('csv')}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isBusy ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {activeAction === 'csv' ? '⏳ Downloading…' : 'Download CSV'}
+        </button>
+        <button
+          type="button"
+          aria-label={`Download ${timeline.name} daily timeline JSON`}
+          aria-busy={activeAction === 'json'}
+          disabled={isBusy}
+          onClick={() => onExport('json')}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isBusy ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {activeAction === 'json' ? '⏳ Downloading…' : 'Download JSON'}
+        </button>
+        <button
+          type="button"
+          aria-label={`Download ${timeline.name} daily timeline Markdown`}
+          aria-busy={activeAction === 'markdown'}
+          disabled={isBusy}
+          onClick={() => onExport('markdown')}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isBusy ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {activeAction === 'markdown' ? '⏳ Downloading…' : 'Download Markdown'}
+        </button>
+        <button
+          type="button"
+          aria-label={`Copy ${timeline.name} daily timeline Markdown`}
+          aria-busy={activeAction === 'copy'}
+          disabled={isBusy}
+          onClick={onCopyMarkdown}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isBusy ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {activeAction === 'copy' ? '⏳ Copying…' : 'Copy Markdown'}
+        </button>
+        <button
+          type="button"
+          aria-label={`Copy ${timeline.name} daily timeline CSV`}
+          aria-busy={activeAction === 'copy-csv'}
+          disabled={isBusy}
+          onClick={onCopyCsv}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isBusy ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {activeAction === 'copy-csv' ? '⏳ Copying…' : 'Copy CSV'}
+        </button>
+        <button
+          type="button"
+          aria-label={`Copy ${timeline.name} daily timeline JSON`}
+          aria-busy={activeAction === 'copy-json'}
+          disabled={isBusy}
+          onClick={onCopyJson}
+          style={{
+            padding: '4px 8px',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 5,
+            background: isBusy ? '#EDE4D8' : '#F0E8DC',
+            color: '#4A3728',
+            fontSize: 10,
+            cursor: isBusy ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {activeAction === 'copy-json' ? '⏳ Copying…' : 'Copy JSON'}
+        </button>
+        <span style={{ fontSize: 10, color: '#A0A39A' }}>
+          Save daily rows in notes, docs, or analysis tools — copy JSON for scripts, CSV into a spreadsheet, or the report into a Markdown editor.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function FeedbackActivityTrend({
+  summary,
+}: {
+  summary: AgentFeedbackSummary;
+}) {
+  const width = 240;
+  const height = 56;
+  const trend = summary.daily_trend;
+  const maxCount = Math.max(...trend.map((point) => point.count), 1);
+  const activeDays = trend.filter((point) => point.count > 0).length;
+  const windowTotal = trend.reduce((total, point) => total + point.count, 0);
+  const peakCount = Math.max(...trend.map((point) => point.count), 0);
+  const windowVerdicts = trend.reduce(
+    (totals, point) => ({
+      correct: totals.correct + point.verdicts.correct,
+      partial: totals.partial + point.verdicts.partial,
+      wrong: totals.wrong + point.verdicts.wrong,
+    }),
+    { correct: 0, partial: 0, wrong: 0 },
+  );
+  const knownVerdictTotal =
+    windowVerdicts.correct + windowVerdicts.partial + windowVerdicts.wrong;
+  const otherTotal = Math.max(windowTotal - knownVerdictTotal, 0);
+  const otherLabel = otherTotal > 0 ? `, ${otherTotal} other` : '';
+  const slotWidth = width / Math.max(trend.length, 1);
+  const barWidth = Math.max(1, slotWidth - (trend.length >= 30 ? 0.8 : 2));
+  const ariaLabel =
+    `Feedback activity over the last ${summary.window_days} days: ` +
+    `${windowTotal} rating${windowTotal === 1 ? '' : 's'} across ${activeDays} active day${activeDays === 1 ? '' : 's'}; ` +
+    `peak ${peakCount} in one day; ${windowVerdicts.correct} correct, ` +
+    `${windowVerdicts.partial} partial, ${windowVerdicts.wrong} wrong${otherLabel}.`;
+
+  return (
+    <div>
+      <svg
+        width="100%"
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={ariaLabel}
+        preserveAspectRatio="none"
+        style={{ display: 'block' }}
+      >
+        <title>{ariaLabel}</title>
+        <line x1="0" y1={height - 3} x2={width} y2={height - 3} stroke="#E0D5C5" strokeWidth="1" />
+        {trend.map((point, index) => {
+          const barHeight = point.count > 0
+            ? Math.max(3, (point.count / maxCount) * (height - 10))
+            : 1;
+          const pointVerdictTotal =
+            point.verdicts.correct + point.verdicts.partial + point.verdicts.wrong;
+          const pointOther = Math.max(point.count - pointVerdictTotal, 0);
+          const segments = [
+            { key: 'correct', count: point.verdicts.correct, color: '#639922' },
+            { key: 'partial', count: point.verdicts.partial, color: '#BA7517' },
+            { key: 'wrong', count: point.verdicts.wrong, color: '#C0392B' },
+            { key: 'other', count: pointOther, color: '#A0A39A' },
+          ].filter((segment) => segment.count > 0);
+          let renderedHeight = 0;
+          return (
+            <g key={point.date}>
+              <title>
+                {`${point.date}: ${point.count} rating${point.count === 1 ? '' : 's'}; ` +
+                  `${point.verdicts.correct} correct, ${point.verdicts.partial} partial, ` +
+                  `${point.verdicts.wrong} wrong${pointOther > 0 ? `, ${pointOther} other` : ''}.`}
+              </title>
+              <rect
+                x={index * slotWidth + (slotWidth - barWidth) / 2}
+                y={height - 3 - barHeight}
+                width={barWidth}
+                height={barHeight}
+                rx={Math.min(1.5, barWidth / 2)}
+                fill="#8C7355"
+                opacity={point.count > 0 ? 0.12 : 0.28}
+              />
+              {segments.map((segment) => {
+                const segmentHeight = (segment.count / point.count) * barHeight;
+                const segmentY = height - 3 - renderedHeight - segmentHeight;
+                renderedHeight += segmentHeight;
+                return (
+                  <rect
+                    key={`${point.date}-${segment.key}`}
+                    x={index * slotWidth + (slotWidth - barWidth) / 2}
+                    y={segmentY}
+                    width={barWidth}
+                    height={segmentHeight}
+                    rx={Math.min(1.5, barWidth / 2)}
+                    fill={segment.color}
+                    opacity={index === trend.length - 1 ? 1 : 0.9}
+                  />
+                );
+              })}
+            </g>
+          );
+        })}
+      </svg>
+      <div
+        role="list"
+        aria-label="Feedback activity verdict breakdown"
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '5px 10px',
+          marginTop: 7,
+          color: '#A0A39A',
+          fontSize: 10,
+        }}
+      >
+        {[
+          { label: 'Correct', count: windowVerdicts.correct, color: '#639922' },
+          { label: 'Partial', count: windowVerdicts.partial, color: '#BA7517' },
+          { label: 'Wrong', count: windowVerdicts.wrong, color: '#C0392B' },
+          ...(otherTotal > 0 ? [{ label: 'Other', count: otherTotal, color: '#A0A39A' }] : []),
+        ].map((item) => (
+          <span
+            key={item.label}
+            role="listitem"
+            aria-label={`${item.label}: ${item.count}`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <span
+              aria-hidden="true"
+              style={{ width: 6, height: 6, borderRadius: 2, background: item.color }}
+            />
+            {item.label} {item.count}
+          </span>
+        ))}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginTop: 6,
+          color: '#A0A39A',
+          fontSize: 11,
+        }}
+      >
+        <span>{windowTotal} in window</span>
+        <span>{activeDays} active day{activeDays === 1 ? '' : 's'}</span>
+        <span>Peak {peakCount}/day</span>
+      </div>
+    </div>
+  );
+}
+
 function planFeatures(tier: string): string[] {
   const t = tier.toUpperCase();
   if (t === 'PRO') {
@@ -243,6 +928,31 @@ export function ProfileModal() {
   const [usage, setUsage] = useState<UserUsageResponse | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageErr, setUsageErr] = useState<string | null>(null);
+  const [activity, setActivity] = useState<AnalyticsActivityResponse | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityErr, setActivityErr] = useState<string | null>(null);
+  const [activityReload, setActivityReload] = useState(0);
+  const [activityWindowDays, setActivityWindowDays] = useState(30);
+  const [categoryStats, setCategoryStats] = useState<AnalyticsCategoryStatsResponse | null>(null);
+  const [categoryStatsLoading, setCategoryStatsLoading] = useState(false);
+  const [categoryStatsErr, setCategoryStatsErr] = useState<string | null>(null);
+  const [categoryStatsReload, setCategoryStatsReload] = useState(0);
+  const [summaryExportWindowDays, setSummaryExportWindowDays] = useState(30);
+  const [usageExportWindowDays, setUsageExportWindowDays] = useState(14);
+  const [overviewWindowDays, setOverviewWindowDays] = useState(30);
+  const [winRate, setWinRate] = useState<AnalyticsPersonaWinRateResponse | null>(null);
+  const [winRateLoading, setWinRateLoading] = useState(false);
+  const [winRateErr, setWinRateErr] = useState<string | null>(null);
+  const [winRateReload, setWinRateReload] = useState(0);
+  const [winRateWindowDays, setWinRateWindowDays] = useState(30);
+  const [winRateMinAppearances, setWinRateMinAppearances] = useState(1);
+  const [winRateIncludeFallback, setWinRateIncludeFallback] = useState(false);
+  const [winRateSort, setWinRateSort] = useState<PersonaWinRateSort>('win_rate');
+  const [personaTimelinePersonaId, setPersonaTimelinePersonaId] = useState<string | null>(null);
+  const [personaTimeline, setPersonaTimeline] = useState<AnalyticsPersonaStatsTimelineResponse | null>(null);
+  const [personaTimelineLoading, setPersonaTimelineLoading] = useState(false);
+  const [personaTimelineErr, setPersonaTimelineErr] = useState<string | null>(null);
+  const [personaTimelineReload, setPersonaTimelineReload] = useState(0);
   const [calStats, setCalStats] = useState<{
     total_ratings?: number;
     avg_delta?: number;
@@ -251,14 +961,251 @@ export function ProfileModal() {
     recent_ratings?: Array<{ delta?: number; created_at?: string }>;
   } | null>(null);
   const [activeExport, setActiveExport] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const personaTimelineCopyCsvRunRef = useRef(0);
+  const personaTimelineCopyJsonRunRef = useRef(0);
+  const personaTimelineCopyJsonInFlightRef = useRef(false);
+  const clearExportFeedback = useCallback(() => {
+    setExportError(null);
+    setExportNotice(null);
+  }, []);
+  const invalidatePersonaTimelineCopyRuns = useCallback(() => {
+    personaTimelineCopyCsvRunRef.current += 1;
+    personaTimelineCopyJsonRunRef.current += 1;
+    personaTimelineCopyJsonInFlightRef.current = false;
+    setActiveExport((current) => (
+      current?.startsWith('persona-timeline-') &&
+      (current.endsWith('-copy-csv') || current.endsWith('-copy-json'))
+        ? null
+        : current
+    ));
+  }, []);
+  const togglePersonaTimeline = useCallback((personaId: string) => {
+    invalidatePersonaTimelineCopyRuns();
+    const closing = personaTimelinePersonaId === personaId;
+    setPersonaTimelinePersonaId(closing ? null : personaId);
+    setPersonaTimeline(null);
+    setPersonaTimelineErr(null);
+    setPersonaTimelineLoading(!closing);
+  }, [invalidatePersonaTimelineCopyRuns, personaTimelinePersonaId]);
+  const handlePersonaTimelineExport = useCallback(async (
+    timeline: AnalyticsPersonaStatsTimelineResponse,
+    format: PersonaTimelineExportFormat,
+  ) => {
+    const exportKey = `persona-timeline-${timeline.persona_id}-${format}`;
+    const formatLabel = format === 'markdown' ? 'MARKDOWN' : format.toUpperCase();
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const exportData = format === 'json'
+        ? await exportAnalyticsPersonaStatsTimelineJson(timeline.persona_id, timeline.days)
+        : format === 'markdown'
+          ? await exportAnalyticsPersonaStatsTimelineMarkdown(timeline.persona_id, timeline.days)
+          : await exportAnalyticsPersonaStatsTimelineCsv(timeline.persona_id, timeline.days);
+      if (!downloadBlobFile(exportData.blob, exportData.filename)) {
+        setExportError(`Could not download persona timeline ${formatLabel} — try again.`);
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : `Could not download persona timeline ${formatLabel} — try again.`,
+      );
+    } finally {
+      setActiveExport(null);
+    }
+  }, [clearExportFeedback]);
+  const handlePersonaCategoryExport = useCallback(async (
+    personaId: string,
+    personaLabel: string,
+    format: 'csv' | 'markdown' = 'csv',
+  ) => {
+    const exportKey = `persona-category-${personaId}-${format}`;
+    const fetchExport = format === 'markdown'
+      ? exportAnalyticsPersonaStatsByCategoryMarkdown
+      : exportAnalyticsPersonaStatsByCategoryCsv;
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const { blob, filename } = await fetchExport(personaId, overviewWindowDays);
+      if (!downloadBlobFile(blob, filename)) {
+        setExportError(`Could not download ${personaLabel} category breakdown — try again.`);
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : `Could not download ${personaLabel} category breakdown — try again.`,
+      );
+    } finally {
+      setActiveExport(null);
+    }
+  }, [clearExportFeedback, overviewWindowDays]);
+  const handlePersonaCategoryCopyMarkdown = useCallback(async (
+    personaId: string,
+    personaLabel: string,
+  ) => {
+    const exportKey = `persona-category-${personaId}-copy-markdown`;
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const { blob } = await exportAnalyticsPersonaStatsByCategoryMarkdown(
+        personaId,
+        overviewWindowDays,
+      );
+      const copied = await copyMarkdownToClipboard(await blob.text());
+      if (copied) {
+        setExportNotice(`Copied ${personaLabel} category breakdown Markdown to the clipboard.`);
+      } else {
+        setExportError(`Could not copy ${personaLabel} category breakdown Markdown — try again.`);
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : `Could not copy ${personaLabel} category breakdown Markdown — try again.`,
+      );
+    } finally {
+      setActiveExport(null);
+    }
+  }, [clearExportFeedback, overviewWindowDays]);
+  const handlePersonaTimelineCopy = useCallback(async (
+    timeline: AnalyticsPersonaStatsTimelineResponse,
+  ) => {
+    const exportKey = `persona-timeline-${timeline.persona_id}-copy`;
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const { blob } = await exportAnalyticsPersonaStatsTimelineMarkdown(
+        timeline.persona_id,
+        timeline.days,
+      );
+      const copied = await copyMarkdownToClipboard(await blob.text());
+      if (copied) {
+        setExportNotice(`Copied ${timeline.name} daily timeline Markdown to the clipboard.`);
+      } else {
+        setExportError(`Could not copy ${timeline.name} daily timeline Markdown — try again.`);
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : `Could not copy ${timeline.name} daily timeline Markdown — try again.`,
+      );
+    } finally {
+      setActiveExport(null);
+    }
+  }, [clearExportFeedback]);
+  const handlePersonaTimelineCopyJson = useCallback(async (
+    timeline: AnalyticsPersonaStatsTimelineResponse,
+  ) => {
+    if (personaTimelineCopyJsonInFlightRef.current) return;
+    personaTimelineCopyJsonInFlightRef.current = true;
+    const exportKey = `persona-timeline-${timeline.persona_id}-copy-json`;
+    const runId = ++personaTimelineCopyJsonRunRef.current;
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const { blob } = await exportAnalyticsPersonaStatsTimelineJson(
+        timeline.persona_id,
+        timeline.days,
+      );
+      if (personaTimelineCopyJsonRunRef.current !== runId) return;
+      const json = await blob.text();
+      if (personaTimelineCopyJsonRunRef.current !== runId) return;
+      const copied = await copyJsonToClipboard(json);
+      if (personaTimelineCopyJsonRunRef.current !== runId) return;
+      if (copied) {
+        setExportNotice(`Copied ${timeline.name} daily timeline JSON to the clipboard.`);
+      } else {
+        setExportError(`Could not copy ${timeline.name} daily timeline JSON — try again.`);
+      }
+    } catch (error) {
+      if (personaTimelineCopyJsonRunRef.current !== runId) return;
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : `Could not copy ${timeline.name} daily timeline JSON — try again.`,
+      );
+    } finally {
+      if (personaTimelineCopyJsonRunRef.current === runId) {
+        personaTimelineCopyJsonInFlightRef.current = false;
+        setActiveExport(null);
+      }
+    }
+  }, [clearExportFeedback]);
+  const handlePersonaTimelineCopyCsv = useCallback(async (
+    timeline: AnalyticsPersonaStatsTimelineResponse,
+  ) => {
+    const exportKey = `persona-timeline-${timeline.persona_id}-copy-csv`;
+    const runId = ++personaTimelineCopyCsvRunRef.current;
+    setActiveExport(exportKey);
+    clearExportFeedback();
+    try {
+      const { blob } = await exportAnalyticsPersonaStatsTimelineCsv(
+        timeline.persona_id,
+        timeline.days,
+      );
+      if (personaTimelineCopyCsvRunRef.current !== runId) return;
+      const csv = await blob.text();
+      if (personaTimelineCopyCsvRunRef.current !== runId) return;
+      const copied = await copyCsvToClipboard(csv);
+      if (personaTimelineCopyCsvRunRef.current !== runId) return;
+      if (copied) {
+        setExportNotice(`Copied ${timeline.name} daily timeline CSV to the clipboard.`);
+      } else {
+        setExportError(`Could not copy ${timeline.name} daily timeline CSV — try again.`);
+      }
+    } catch (error) {
+      if (personaTimelineCopyCsvRunRef.current !== runId) return;
+      setExportError(
+        error instanceof ApiError
+          ? error.message
+          : `Could not copy ${timeline.name} daily timeline CSV — try again.`,
+      );
+    } finally {
+      if (personaTimelineCopyCsvRunRef.current === runId) {
+        setActiveExport(null);
+      }
+    }
+  }, [clearExportFeedback]);
   const [calLoading, setCalLoading] = useState(false);
   const [calErr, setCalErr] = useState<string | null>(null);
+  const [calHistory, setCalHistory] = useState<CalibrationHistoryResponse | null>(null);
+  const [calHistoryLoading, setCalHistoryLoading] = useState(false);
+  const [calHistoryErr, setCalHistoryErr] = useState<string | null>(null);
+  const [calHistoryOpen, setCalHistoryOpen] = useState(false);
+  const [calHistoryPage, setCalHistoryPage] = useState(1);
+  const [calHistorySort, setCalHistorySort] = useState<CalibrationHistorySort>('newest');
+  const [calHistoryReload, setCalHistoryReload] = useState(0);
   const [fbAcc, setFbAcc] = useState<AnswerFeedbackStats | null>(null);
   const [fbAccLoading, setFbAccLoading] = useState(false);
   const [fbAccErr, setFbAccErr] = useState<string | null>(null);
   const [recentFb, setRecentFb] = useState<RecentFeedbackItem[]>([]);
   const [recentFbLoading, setRecentFbLoading] = useState(false);
   const [recentFbErr, setRecentFbErr] = useState<string | null>(null);
+  const [recentFbVerdict, setRecentFbVerdict] = useState<AgentFeedbackVerdict | ''>('');
+  const [feedbackSummary, setFeedbackSummary] = useState<AgentFeedbackSummary | null>(null);
+  const [feedbackSummaryLoading, setFeedbackSummaryLoading] = useState(false);
+  const [feedbackSummaryErr, setFeedbackSummaryErr] = useState<string | null>(null);
+  const [feedbackSummaryWindowDays, setFeedbackSummaryWindowDays] = useState(30);
+  const [feedbackSummaryReload, setFeedbackSummaryReload] = useState(0);
+  const [feedbackExportVerdict, setFeedbackExportVerdict] = useState<AgentFeedbackVerdict | ''>('');
+  const [feedbackExportFromDate, setFeedbackExportFromDate] = useState('');
+  const [feedbackExportToDate, setFeedbackExportToDate] = useState('');
+
+  const feedbackExportDateRange: AgentFeedbackExportDateRange | undefined =
+    feedbackExportFromDate || feedbackExportToDate
+      ? {
+          fromDate: feedbackExportFromDate || undefined,
+          toDate: feedbackExportToDate || undefined,
+        }
+      : undefined;
+  const feedbackExportDateRangeInvalid =
+    !!feedbackExportFromDate &&
+    !!feedbackExportToDate &&
+    feedbackExportFromDate > feedbackExportToDate;
 
   const [sub, setSub] = useState<SubscriptionStatusResponse | null>(null);
   const [subLoading, setSubLoading] = useState(false);
@@ -323,6 +1270,176 @@ export function ProfileModal() {
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
     let cancelled = false;
+    setFeedbackSummaryLoading(true);
+    setFeedbackSummaryErr(null);
+    void getAgentFeedbackSummary(feedbackSummaryWindowDays)
+      .then((summary) => {
+        if (!cancelled) setFeedbackSummary(summary);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFeedbackSummaryErr('Could not load feedback activity');
+          setFeedbackSummary(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setFeedbackSummaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, feedbackSummaryWindowDays, feedbackSummaryReload]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage' || !calHistoryOpen) return;
+    let cancelled = false;
+    setCalHistoryLoading(true);
+    setCalHistoryErr(null);
+    void getCalibrationHistory({ page: calHistoryPage, perPage: 5, sort: calHistorySort })
+      .then((history) => {
+        if (!cancelled) setCalHistory(history);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCalHistoryErr('Could not load calibration history');
+          setCalHistory(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCalHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, calHistoryOpen, calHistoryPage, calHistorySort, calHistoryReload]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
+    setActivityLoading(true);
+    setActivityErr(null);
+    void getAnalyticsActivity(activityWindowDays)
+      .then((a) => {
+        if (!cancelled) setActivity(a);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setActivityErr('Could not load activity highlights');
+          setActivity(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setActivityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, activityReload, activityWindowDays]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
+    setCategoryStatsLoading(true);
+    setCategoryStatsErr(null);
+    void getAnalyticsCategoryStats(activityWindowDays)
+      .then((stats) => {
+        if (!cancelled) setCategoryStats(stats);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCategoryStatsErr('Could not load category performance');
+          setCategoryStats(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCategoryStatsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, activityWindowDays, categoryStatsReload]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
+    setWinRateLoading(true);
+    setWinRateErr(null);
+    const request = winRateIncludeFallback
+      ? getAnalyticsPersonaWinRate(winRateWindowDays, winRateMinAppearances, true)
+      : getAnalyticsPersonaWinRate(winRateWindowDays, winRateMinAppearances);
+    void request
+      .then((w) => {
+        if (!cancelled) setWinRate(w);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWinRateErr('Could not load persona win rates');
+          setWinRate(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setWinRateLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    activeTab,
+    winRateReload,
+    winRateWindowDays,
+    winRateMinAppearances,
+    winRateIncludeFallback,
+  ]);
+
+  useEffect(() => {
+    setPersonaTimelinePersonaId(null);
+    setPersonaTimeline(null);
+    setPersonaTimelineErr(null);
+    setPersonaTimelineLoading(false);
+  }, [isOpen, activeTab, winRateReload, winRateWindowDays, winRateMinAppearances, winRateIncludeFallback]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage' || !personaTimelinePersonaId) return;
+    let cancelled = false;
+    setPersonaTimelineLoading(true);
+    setPersonaTimelineErr(null);
+    void getAnalyticsPersonaStatsTimeline(personaTimelinePersonaId, winRateWindowDays)
+      .then((data) => {
+        if (!cancelled) setPersonaTimeline(data);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPersonaTimeline(null);
+          setPersonaTimelineErr(
+            error instanceof ApiError ? error.message : 'Could not load persona activity timeline',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPersonaTimelineLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, personaTimelinePersonaId, personaTimelineReload, winRateWindowDays]);
+
+  useEffect(() => () => {
+    // A timeline can be hidden, refreshed, or abandoned with the modal. Do
+    // not let a late clipboard export response repaint feedback for a different view.
+    invalidatePersonaTimelineCopyRuns();
+  }, [
+    isOpen,
+    activeTab,
+    personaTimelinePersonaId,
+    personaTimelineReload,
+    winRateWindowDays,
+    invalidatePersonaTimelineCopyRuns,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
     setCalLoading(true);
     setCalErr(null);
     void getCalibrationStats()
@@ -361,9 +1478,17 @@ export function ProfileModal() {
       .finally(() => {
         if (!cancelled) setFbAccLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
     setRecentFbLoading(true);
     setRecentFbErr(null);
-    void getRecentAgentFeedback(10)
+    void getRecentAgentFeedback(10, recentFbVerdict || undefined)
       .then((items) => {
         if (!cancelled) setRecentFb(items);
       })
@@ -379,7 +1504,7 @@ export function ProfileModal() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, activeTab]);
+  }, [isOpen, activeTab, recentFbVerdict]);
 
   const refreshMcp = useCallback(async () => {
     setMcpLoading(true);
@@ -405,6 +1530,12 @@ export function ProfileModal() {
     const t = window.setTimeout(() => setMcpToast(null), 2000);
     return () => clearTimeout(t);
   }, [mcpToast]);
+
+  useEffect(() => {
+    if (!exportNotice) return;
+    const t = window.setTimeout(() => setExportNotice(null), 2000);
+    return () => clearTimeout(t);
+  }, [exportNotice]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1171,15 +2302,910 @@ export function ProfileModal() {
                 </div>
                 <div
                   style={{
-                    fontSize: 10,
-                    textTransform: 'uppercase',
-                    color: '#A0A39A',
-                    letterSpacing: '0.10em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
                     margin: '22px 0 10px',
                   }}
                 >
-                  Analytics exports (CSV)
+                  <span
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      color: '#A0A39A',
+                      letterSpacing: '0.10em',
+                    }}
+                  >
+                    Activity highlights · {activityWindowDays} days
+                  </span>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    <span>Window</span>
+                    <select
+                      aria-label="Activity highlights window"
+                      disabled={activeExport !== null}
+                      value={activityWindowDays}
+                      onChange={(event) => {
+                        clearExportFeedback();
+                        setActivityWindowDays(Number(event.target.value));
+                      }}
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        opacity: activeExport !== null ? 0.65 : 1,
+                      }}
+                    >
+                      {ACTIVITY_HIGHLIGHT_WINDOWS.map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
+                {activityLoading ? (
+                  <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }} role="status">
+                    <MicroLoader label="Loading activity highlights" />
+                  </div>
+                ) : activityErr ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <p style={{ fontSize: 13, color: '#8C7355', margin: 0 }} aria-live="polite">
+                      {activityErr}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Retry loading activity highlights"
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                      onClick={() => setActivityReload((n) => n + 1)}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : activity ? (
+                  <div role="group" aria-label="Activity highlights">
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
+                      {[
+                        {
+                          n: `${activity.current_streak} day${activity.current_streak === 1 ? '' : 's'}`,
+                          l: 'Current streak',
+                        },
+                        {
+                          n: `${activity.longest_streak} day${activity.longest_streak === 1 ? '' : 's'}`,
+                          l: 'Longest streak',
+                        },
+                        { n: activity.active_days, l: 'Active days' },
+                      ].map((t) => (
+                        <div key={t.l} style={{ background: '#F0E8DC', borderRadius: 8, padding: '12px 14px' }}>
+                          <div style={{ fontSize: 18, color: '#F3F0E7', fontWeight: 500, fontFamily: 'var(--vp-font-sans)' }}>{t.n}</div>
+                          <div style={{ fontSize: 10, color: '#A0A39A', marginTop: 3, letterSpacing: '0.04em' }}>{t.l}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+                      {[
+                        { n: activity.totals.prompts, l: 'Prompts' },
+                        { n: activity.totals.debates, l: 'Debates' },
+                        { n: activity.totals.discusses, l: 'Discusses' },
+                        { n: activity.totals.agent_runs, l: 'Agent runs' },
+                      ].map((t) => (
+                        <div key={t.l} style={{ background: '#EDE4D8', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 16, color: '#F3F0E7', fontWeight: 500, fontFamily: 'var(--vp-font-sans)' }}>{t.n.toLocaleString()}</div>
+                          <div style={{ fontSize: 9, color: '#A0A39A', marginTop: 2, letterSpacing: '0.04em' }}>{t.l}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {activity.busiest_day ? (
+                      <p style={{ fontSize: 12, color: '#8C7355', margin: '0 0 16px' }}>
+                        Busiest day:{' '}
+                        <strong style={{ color: '#F0B84E' }}>{activity.busiest_day}</strong> (
+                        {activity.busiest_day_count} actions)
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      color: '#A0A39A',
+                      letterSpacing: '0.10em',
+                    }}
+                  >
+                    Category performance · {activityWindowDays} days
+                  </div>
+                </div>
+                {categoryStatsLoading ? (
+                  <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }} role="status">
+                    <MicroLoader label="Loading category performance" />
+                  </div>
+                ) : categoryStatsErr ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <p style={{ fontSize: 13, color: '#8C7355', margin: 0 }} aria-live="polite">
+                      {categoryStatsErr}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Retry loading category performance"
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                      onClick={() => setCategoryStatsReload((n) => n + 1)}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : categoryStats ? (
+                  <div role="group" aria-label="Category performance">
+                    {categoryStats.categories.length === 0 ? (
+                      <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                        No prompt categories recorded in the last {activityWindowDays} days yet.
+                      </p>
+                    ) : (
+                      <>
+                        <p style={{ fontSize: 12, color: '#8C7355', margin: '0 0 10px' }}>
+                          Most active:{' '}
+                          <strong style={{ color: '#F0B84E' }}>
+                            {categoryStats.most_active_category || '—'}
+                          </strong>{' '}
+                          · {categoryStats.total_appearances} scored rounds
+                        </p>
+                        <div style={{ overflowX: 'auto' }}>
+                          <table
+                            style={{
+                              width: '100%',
+                              minWidth: 440,
+                              borderCollapse: 'collapse',
+                              fontFamily: 'var(--vp-font-sans)',
+                              fontSize: 12,
+                            }}
+                          >
+                            <caption style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+                              Category performance for the selected activity window
+                            </caption>
+                            <thead>
+                              <tr>
+                                <th style={{ textAlign: 'left', color: '#A0A39A', fontWeight: 500, padding: '4px 8px 8px 0' }}>
+                                  Category
+                                </th>
+                                <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>
+                                  Rounds
+                                </th>
+                                <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>
+                                  Wins
+                                </th>
+                                <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>
+                                  Rate
+                                </th>
+                                <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>
+                                  Best mind
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {categoryStats.categories.map((row) => (
+                                <tr key={row.category}>
+                                  <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', color: '#F3F0E7' }}>
+                                    {row.category}
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                    {row.appearances}
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                    {row.wins}
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#F0B84E' }}>
+                                    {Math.round(row.win_rate * 100)}%
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                    {row.best_persona_id ? formatCategoryPersona(row.best_persona_id) : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      color: '#A0A39A',
+                      letterSpacing: '0.10em',
+                    }}
+                  >
+                    Persona win rates · {winRateWindowDays} days
+                  </div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        color: '#A0A39A',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      <span>Window</span>
+                      <select
+                        aria-label="Persona win-rate window"
+                        disabled={activeExport !== null}
+                        value={winRateWindowDays}
+                        onChange={(event) => {
+                          clearExportFeedback();
+                          setWinRateWindowDays(Number(event.target.value));
+                        }}
+                        style={{
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 5,
+                          background: '#F0E8DC',
+                          color: '#F3F0E7',
+                          padding: '4px 6px',
+                          fontSize: 11,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        {PERSONA_WIN_RATE_WINDOWS.map((days) => (
+                          <option key={days} value={days}>
+                            {days} days
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        color: '#A0A39A',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      <span>Minimum sample</span>
+                      <select
+                        aria-label="Persona win-rate minimum appearances"
+                        disabled={activeExport !== null}
+                        value={winRateMinAppearances}
+                        onChange={(event) => {
+                          clearExportFeedback();
+                          setWinRateMinAppearances(Number(event.target.value));
+                        }}
+                        style={{
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 5,
+                          background: '#F0E8DC',
+                          color: '#F3F0E7',
+                          padding: '4px 6px',
+                          fontSize: 11,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        {PERSONA_WIN_RATE_MIN_APPEARANCES.map((appearances) => (
+                          <option key={appearances} value={appearances}>
+                            {appearances === 1 ? 'Any sample' : `${appearances}+ appearances`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        color: '#A0A39A',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      <span>Sort</span>
+                      <select
+                        aria-label="Persona win-rate sort"
+                        value={winRateSort}
+                        onChange={(event) => setWinRateSort(event.target.value as PersonaWinRateSort)}
+                        style={{
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 5,
+                          background: '#F0E8DC',
+                          color: '#F3F0E7',
+                          padding: '4px 6px',
+                          fontSize: 11,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        {Object.entries(PERSONA_WIN_RATE_SORT_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label
+                      title="Fallback scorings have an arbitrary winner because the scorer could not judge the panel."
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        color: '#A0A39A',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label="Include fallback scorings"
+                        disabled={activeExport !== null}
+                        checked={winRateIncludeFallback}
+                        onChange={(event) => {
+                          clearExportFeedback();
+                          setWinRateIncludeFallback(event.target.checked);
+                        }}
+                      />
+                      <span>Include fallback</span>
+                    </label>
+                  </div>
+                </div>
+                {winRateLoading ? (
+                  <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }} role="status">
+                    <MicroLoader label="Loading persona win rates" />
+                  </div>
+                ) : winRateErr ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <p style={{ fontSize: 13, color: '#8C7355', margin: 0 }} aria-live="polite">
+                      {winRateErr}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Retry loading persona win rates"
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        border: '0.5px solid var(--vp-rule-dark, #E0D5C5)',
+                        background: 'var(--vp-carbon-3, #F0E8DC)',
+                        color: 'var(--vp-ivory, #F3F0E7)',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                      onClick={() => setWinRateReload((n) => n + 1)}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : winRate ? (
+                  <>
+                    {winRate.include_fallback ? (
+                      <p
+                        role="note"
+                        style={{
+                          fontSize: 11,
+                          color: '#8C5A2C',
+                          margin: '0 0 10px',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Includes {winRate.fallback_exchanges} fallback scoring
+                        {winRate.fallback_exchanges === 1 ? '' : 's'}; those winners are provisional because the panel was not judged.
+                      </p>
+                    ) : null}
+                    {winRate.personas.length === 0 ? (
+                      <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                        {winRate.scored_exchanges === 0 && winRate.fallback_exchanges > 0
+                          ? `No judged panels in the last ${winRateWindowDays} days yet — fallback scorings are excluded.`
+                            : winRate.scored_exchanges === 0 && winRate.unattributed_exchanges > 0
+                              ? `No panels with recorded appearances in the last ${winRateWindowDays} days yet.`
+                              : winRate.min_appearances > 1
+                                ? `No persona reached the ${winRate.min_appearances}-appearance minimum in the last ${winRateWindowDays} days.`
+                                : `No scored panels in the last ${winRateWindowDays} days yet.`}
+                      </p>
+                    ) : (
+                      <div role="group" aria-label="Persona win rates">
+                      {(() => {
+                        const bestRow = winRate.best_persona_id
+                          ? winRate.personas.find((row) => row.persona_id === winRate.best_persona_id)
+                          : undefined;
+                        return bestRow ? (
+                          <p style={{ fontSize: 12, color: '#8C7355', margin: '0 0 10px' }}>
+                            Best:{' '}
+                            <strong style={{ color: '#F0B84E' }}>{bestRow.name}</strong>{' '}
+                            ({Math.round(bestRow.win_rate * 100)}% across {bestRow.appearances} panels)
+                          </p>
+                        ) : null;
+                      })()}
+                      <table
+                        style={{
+                          width: '100%',
+                          borderCollapse: 'collapse',
+                          fontFamily: 'var(--vp-font-sans)',
+                          fontSize: 12,
+                        }}
+                      >
+                        <thead>
+                          <tr>
+                            <th
+                              aria-sort={winRateSort === 'name' ? 'ascending' : undefined}
+                              style={{ textAlign: 'left', color: '#A0A39A', fontWeight: 500, padding: '4px 8px 8px 0' }}
+                            >
+                              Persona
+                            </th>
+                            <th style={{ textAlign: 'left', color: '#A0A39A', fontWeight: 500, padding: '4px 8px 8px 0' }}>Trend</th>
+                            <th
+                              aria-sort={winRateSort === 'appearances' ? 'descending' : undefined}
+                              style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}
+                            >
+                              Appearances
+                            </th>
+                            <th
+                              aria-sort={winRateSort === 'wins' ? 'descending' : undefined}
+                              style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}
+                            >
+                              Wins
+                            </th>
+                            <th
+                              aria-sort={winRateSort === 'win_rate' ? 'descending' : undefined}
+                              style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}
+                            >
+                              Rate
+                            </th>
+                            <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>
+                              Daily
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortPersonaWinRateRows(winRate.personas, winRateSort).map((row) => {
+                            const isTimelineOpen = personaTimelinePersonaId === row.persona_id;
+                            const timelinePanelId = `persona-timeline-${row.persona_id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+                            return (
+                              <Fragment key={row.persona_id}>
+                                <tr style={{ opacity: row.low_confidence ? 0.65 : 1 }}>
+                                  <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', color: '#F3F0E7' }}>
+                                    {row.color ? (
+                                      <span
+                                        style={{
+                                          display: 'inline-block',
+                                          width: 8,
+                                          height: 8,
+                                          borderRadius: '50%',
+                                          background: row.color,
+                                          marginRight: 6,
+                                        }}
+                                      />
+                                    ) : null}
+                                    {row.name}
+                                    {row.low_confidence ? (
+                                      <span
+                                        title={`Fewer than ${winRate.low_confidence_threshold} scored appearances — treat as provisional`}
+                                        style={{ color: '#A0A39A', fontSize: 10, marginLeft: 6 }}
+                                      >
+                                        low sample
+                                      </span>
+                                    ) : null}
+                                  </td>
+                                  <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', verticalAlign: 'middle' }}>
+                                    <WinRateTrendSparkline
+                                      trend={row.trend}
+                                      personaName={row.name}
+                                      color={row.color}
+                                      omittedAppearances={row.trend_omitted_appearances}
+                                    />
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                    {row.appearances}
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                    {row.wins}
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#F0B84E' }}>
+                                    {Math.round(row.win_rate * 100)}%
+                                  </td>
+                                  <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5' }}>
+                                    <button
+                                      type="button"
+                                      aria-expanded={isTimelineOpen}
+                                      aria-controls={timelinePanelId}
+                                      aria-label={`${isTimelineOpen ? 'Hide' : 'Show'} ${row.name} daily timeline`}
+                                      onClick={() => togglePersonaTimeline(row.persona_id)}
+                                      style={{
+                                        padding: '3px 7px',
+                                        border: '0.5px solid #E0D5C5',
+                                        borderRadius: 5,
+                                        background: isTimelineOpen ? '#EDE4D8' : '#F0E8DC',
+                                        color: '#4A3728',
+                                        fontSize: 10,
+                                        cursor: 'pointer',
+                                        fontFamily: 'var(--vp-font-sans)',
+                                      }}
+                                    >
+                                      {isTimelineOpen ? 'Hide' : 'Details'}
+                                    </button>
+                                  </td>
+                                </tr>
+                                {isTimelineOpen ? (
+                                  <tr>
+                                    <td
+                                      id={timelinePanelId}
+                                      colSpan={6}
+                                      style={{
+                                        padding: '0 8px 8px 0',
+                                        borderTop: '0.5px solid #E0D5C5',
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          justifyContent: 'flex-end',
+                                          gap: 6,
+                                          flexWrap: 'wrap',
+                                          padding: '6px 0',
+                                        }}
+                                      >
+                                        <button
+                                          type="button"
+                                          disabled={activeExport !== null}
+                                          aria-busy={
+                                            activeExport === `persona-category-${row.persona_id}-csv`
+                                          }
+                                          onClick={() => {
+                                            void handlePersonaCategoryExport(row.persona_id, row.name);
+                                          }}
+                                          style={{
+                                            padding: '3px 7px',
+                                            border: '0.5px solid #E0D5C5',
+                                            borderRadius: 5,
+                                            background:
+                                              activeExport === `persona-category-${row.persona_id}-csv`
+                                                ? '#EDE4D8'
+                                                : '#F0E8DC',
+                                            color: '#4A3728',
+                                            fontSize: 10,
+                                            cursor: activeExport !== null ? 'wait' : 'pointer',
+                                            fontFamily: 'var(--vp-font-sans)',
+                                            opacity:
+                                              activeExport !== null &&
+                                              activeExport !== `persona-category-${row.persona_id}-csv`
+                                                ? 0.6
+                                                : 1,
+                                          }}
+                                        >
+                                          {activeExport === `persona-category-${row.persona_id}-csv`
+                                            ? '⏳ Exporting…'
+                                            : 'Category Breakdown CSV'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={activeExport !== null}
+                                          aria-busy={
+                                            activeExport === `persona-category-${row.persona_id}-markdown`
+                                          }
+                                          onClick={() => {
+                                            void handlePersonaCategoryExport(row.persona_id, row.name, 'markdown');
+                                          }}
+                                          style={{
+                                            padding: '3px 7px',
+                                            border: '0.5px solid #E0D5C5',
+                                            borderRadius: 5,
+                                            background:
+                                              activeExport === `persona-category-${row.persona_id}-markdown`
+                                                ? '#EDE4D8'
+                                                : '#F0E8DC',
+                                            color: '#4A3728',
+                                            fontSize: 10,
+                                            cursor: activeExport !== null ? 'wait' : 'pointer',
+                                            fontFamily: 'var(--vp-font-sans)',
+                                            opacity:
+                                              activeExport !== null &&
+                                              activeExport !== `persona-category-${row.persona_id}-markdown`
+                                                ? 0.6
+                                                : 1,
+                                          }}
+                                        >
+                                          {activeExport === `persona-category-${row.persona_id}-markdown`
+                                            ? '⏳ Exporting…'
+                                            : 'Category Breakdown Markdown'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={activeExport !== null}
+                                          aria-busy={
+                                            activeExport === `persona-category-${row.persona_id}-copy-markdown`
+                                          }
+                                          onClick={() => {
+                                            void handlePersonaCategoryCopyMarkdown(row.persona_id, row.name);
+                                          }}
+                                          style={{
+                                            padding: '3px 7px',
+                                            border: '0.5px solid #E0D5C5',
+                                            borderRadius: 5,
+                                            background:
+                                              activeExport === `persona-category-${row.persona_id}-copy-markdown`
+                                                ? '#EDE4D8'
+                                                : '#F0E8DC',
+                                            color: '#4A3728',
+                                            fontSize: 10,
+                                            cursor: activeExport !== null ? 'wait' : 'pointer',
+                                            fontFamily: 'var(--vp-font-sans)',
+                                            opacity:
+                                              activeExport !== null &&
+                                              activeExport !== `persona-category-${row.persona_id}-copy-markdown`
+                                                ? 0.6
+                                                : 1,
+                                          }}
+                                        >
+                                          {activeExport === `persona-category-${row.persona_id}-copy-markdown`
+                                            ? '⏳ Copying…'
+                                            : 'Copy Category Breakdown Markdown'}
+                                        </button>
+                                      </div>
+                                      {personaTimelineLoading ? (
+                                        <span role="status" style={{ display: 'block', padding: '10px 0', color: '#A0A39A', fontSize: 11 }}>
+                                          Loading daily timeline…
+                                        </span>
+                                      ) : personaTimelineErr ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0' }}>
+                                          <span role="alert" style={{ color: '#8C7355', fontSize: 11 }}>
+                                            {personaTimelineErr}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => setPersonaTimelineReload((value) => value + 1)}
+                                            style={{
+                                              padding: '3px 7px',
+                                              border: '0.5px solid #E0D5C5',
+                                              borderRadius: 5,
+                                              background: '#F0E8DC',
+                                              color: '#4A3728',
+                                              fontSize: 10,
+                                              cursor: 'pointer',
+                                            }}
+                                          >
+                                            Retry
+                                          </button>
+                                        </div>
+                                      ) : personaTimeline ? (
+                                        <PersonaActivityTimeline
+                                          timeline={personaTimeline}
+                                          color={row.color}
+                                          activeAction={
+                                            (['csv', 'json', 'markdown', 'copy', 'copy-csv', 'copy-json'] as const).find(
+                                              (action) => activeExport === `persona-timeline-${personaTimeline.persona_id}-${action}`,
+                                            ) ?? null
+                                          }
+                                          onExport={(format) => {
+                                            void handlePersonaTimelineExport(personaTimeline, format);
+                                          }}
+                                          onCopyMarkdown={() => {
+                                            void handlePersonaTimelineCopy(personaTimeline);
+                                          }}
+                                          onCopyCsv={() => {
+                                            void handlePersonaTimelineCopyCsv(personaTimeline);
+                                          }}
+                                          onCopyJson={() => {
+                                            void handlePersonaTimelineCopyJson(personaTimeline);
+                                          }}
+                                        />
+                                      ) : null}
+                                    </td>
+                                  </tr>
+                                ) : null}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      </div>
+                    )}
+                  </>
+                ) : null}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      color: '#A0A39A',
+                      letterSpacing: '0.10em',
+                    }}
+                  >
+                    Data exports
+                  </div>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    <span>Summary window</span>
+                    <select
+                      aria-label="Analytics summary export window"
+                      disabled={activeExport !== null}
+                      value={summaryExportWindowDays}
+                      onChange={(event) => {
+                        clearExportFeedback();
+                        setSummaryExportWindowDays(Number(event.target.value));
+                      }}
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        opacity: activeExport !== null ? 0.65 : 1,
+                      }}
+                    >
+                      {SUMMARY_EXPORT_WINDOWS.map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    <span>Usage window</span>
+                    <select
+                      aria-label="Usage export window"
+                      disabled={activeExport !== null}
+                      value={usageExportWindowDays}
+                      onChange={(event) => {
+                        clearExportFeedback();
+                        setUsageExportWindowDays(Number(event.target.value));
+                      }}
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        opacity: activeExport !== null ? 0.65 : 1,
+                      }}
+                    >
+                      {USAGE_EXPORT_WINDOWS.map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    <span>Persona stats window</span>
+                    <select
+                      aria-label="Persona stats overview window"
+                      disabled={activeExport !== null}
+                      value={overviewWindowDays}
+                      onChange={(event) => {
+                        clearExportFeedback();
+                        setOverviewWindowDays(Number(event.target.value));
+                      }}
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        opacity: activeExport !== null ? 0.65 : 1,
+                      }}
+                    >
+                      {PERSONA_STATS_OVERVIEW_WINDOWS.map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {exportError ? (
+                  <p
+                    role="alert"
+                    aria-live="polite"
+                    style={{ fontSize: 12, color: '#993C1D', margin: '0 0 10px' }}
+                  >
+                    {exportError}
+                  </p>
+                ) : null}
+                {exportNotice ? (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    style={{ fontSize: 12, color: '#3F6B4A', margin: '0 0 10px' }}
+                  >
+                    {exportNotice}
+                  </p>
+                ) : null}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
                   <button
                     type="button"
@@ -1198,17 +3224,216 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('summary');
+                      clearExportFeedback();
                       try {
-                        const blob = await exportAnalyticsSummaryCsv(30);
-                        downloadBlobFile(blob, 'arena-analytics-summary-30d.csv');
-                      } catch {
-                        // ignore error
+                        const blob = await exportAnalyticsSummaryCsv(summaryExportWindowDays);
+                        if (!downloadBlobFile(blob, `arena-analytics-summary-${summaryExportWindowDays}d.csv`)) {
+                          setExportError('Could not download analytics summary CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download analytics summary CSV — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
                     }}
                   >
                     {activeExport === 'summary' ? '⏳ Downloading…' : '📊 Summary Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'summary-copy-csv'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'summary-copy-csv' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'summary-copy-csv' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('summary-copy-csv');
+                      clearExportFeedback();
+                      try {
+                        const blob = await exportAnalyticsSummaryCsv(summaryExportWindowDays);
+                        const copied = await copyCsvToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied analytics summary CSV to the clipboard.');
+                        } else {
+                          setExportError('Could not copy analytics summary CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy analytics summary CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'summary-copy-csv' ? '⏳ Copying…' : '📊 Copy Summary CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'summary-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'summary-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('summary-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsSummaryJson(summaryExportWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download analytics summary JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download analytics summary JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'summary-json' ? '⏳ Downloading…' : '📊 Summary JSON Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'summary-copy-json'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'summary-copy-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'summary-copy-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('summary-copy-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsSummaryJson(summaryExportWindowDays);
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied analytics summary JSON to the clipboard.');
+                        } else {
+                          setExportError('Could not copy analytics summary JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy analytics summary JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'summary-copy-json' ? '⏳ Copying…' : '📊 Copy Summary JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'summary-markdown' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'summary-markdown' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('summary-markdown');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsSummaryMarkdown(summaryExportWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download analytics summary Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download analytics summary Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'summary-markdown' ? '⏳ Downloading…' : '📊 Summary Markdown Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'summary-copy'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'summary-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'summary-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('summary-copy');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsSummaryMarkdown(summaryExportWindowDays);
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied analytics summary Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy analytics summary Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy analytics summary Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'summary-copy' ? '⏳ Copying…' : '📊 Copy Summary Markdown'}
                   </button>
                   <button
                     type="button"
@@ -1227,17 +3452,500 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('win-rate');
+                      clearExportFeedback();
                       try {
-                        const blob = await exportAnalyticsPersonaWinRateCsv(30);
-                        downloadBlobFile(blob, 'arena-persona-win-rates-30d.csv');
-                      } catch {
-                        // ignore error
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateCsv(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate CSV — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
                     }}
                   >
                     {activeExport === 'win-rate' ? '⏳ Downloading…' : '🏆 Win Rates Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'win-rate-trend'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateTrendCsv(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate trend CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate trend CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend' ? '⏳ Downloading…' : '🏆 Win Rates Trend CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'win-rate-trend-json'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateTrendJson(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate trend JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate trend JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend-json' ? '⏳ Downloading…' : '🏆 Win Rates Trend JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-label="Copy persona win-rate trend JSON"
+                    aria-busy={activeExport === 'win-rate-trend-copy-json'}
+                    title="Copy the filtered persona win-rate trend as JSON"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend-copy-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend-copy-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend-copy-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaWinRateTrendJson(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        const copied = await copyJsonToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona win-rate trend JSON to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona win-rate trend JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona win-rate trend JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend-copy-json' ? '⏳ Copying…' : '🏆 Copy Win Rates Trend JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-label="Copy persona win-rate trend CSV"
+                    aria-busy={activeExport === 'win-rate-trend-copy'}
+                    title="Copy the filtered persona win-rate trend as CSV"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend-copy');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaWinRateTrendCsv(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        const copied = await copyCsvToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona win-rate trend CSV to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona win-rate trend CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona win-rate trend CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend-copy' ? '⏳ Copying…' : '🏆 Copy Win Rates Trend CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'win-rate-trend-md'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend-md' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend-md' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend-md');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateTrendMarkdown(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate trend Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate trend Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend-md' ? '⏳ Downloading…' : '🏆 Win Rates Trend Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-label="Copy persona win-rate trend Markdown"
+                    aria-busy={activeExport === 'win-rate-trend-copy-md'}
+                    title="Copy the filtered persona win-rate trend as Markdown"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-trend-copy-md' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-trend-copy-md' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-trend-copy-md');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaWinRateTrendMarkdown(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        const copied = await copyMarkdownToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona win-rate trend Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona win-rate trend Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona win-rate trend Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-trend-copy-md' ? '⏳ Copying…' : '🏆 Copy Win Rates Trend Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'win-rate-copy-csv'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-copy-csv' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-copy-csv' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-copy-csv');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaWinRateCsv(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        const copied = await copyCsvToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona win-rate CSV to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona win-rate CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona win-rate CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-copy-csv' ? '⏳ Copying…' : '🏆 Copy Win Rates CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-md' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-md' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-md');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateMarkdown(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-md' ? '⏳ Downloading…' : '🏆 Win Rates Markdown Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-copy');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaWinRateMarkdown(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona win rates Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona win-rate Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona win-rate Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-copy' ? '⏳ Copying…' : '🏆 Copy Win Rates Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateJson(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona win-rate JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona win-rate JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-json' ? '⏳ Downloading…' : '🏆 Win Rates JSON Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'win-rate-copy-json'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-copy-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-copy-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-copy-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaWinRateJson(
+                          winRateWindowDays,
+                          winRateMinAppearances,
+                          winRateIncludeFallback,
+                        );
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona win-rate JSON to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona win-rate JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona win-rate JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-copy-json' ? '⏳ Copying…' : '🏆 Copy Win Rates JSON'}
                   </button>
                   <button
                     type="button"
@@ -1256,21 +3964,524 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('category');
+                      clearExportFeedback();
                       try {
-                        const blob = await exportAnalyticsCategoryStatsCsv(30);
-                        downloadBlobFile(blob, 'arena-category-stats-30d.csv');
-                      } catch {
-                        // ignore error
+                        const blob = await exportAnalyticsCategoryStatsCsv(activityWindowDays);
+                        if (!downloadBlobFile(blob, `arena-category-stats-${activityWindowDays}d.csv`)) {
+                          setExportError('Could not download category stats CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download category stats CSV — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
                     }}
                   >
-                    {activeExport === 'category' ? '⏳ Downloading…' : '📂 Categories Export'}
+                    {activeExport === 'category'
+                      ? '⏳ Downloading…'
+                      : `📂 Categories Export · ${activityWindowDays}d`}
                   </button>
                   <button
                     type="button"
                     disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'category-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'category-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('category-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsCategoryStatsJson(activityWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download category stats JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download category stats JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'category-json' ? '⏳ Downloading…' : '📂 Categories JSON Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'category-markdown' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'category-markdown' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('category-markdown');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsCategoryStatsMarkdown(activityWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download category stats Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download category stats Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'category-markdown'
+                      ? '⏳ Downloading…'
+                      : '📂 Categories Markdown Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'category-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'category-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('category-copy');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsCategoryStatsMarkdown(activityWindowDays);
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied category stats Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy category stats Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy category stats Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'category-copy'
+                      ? '⏳ Copying…'
+                      : '📂 Copy Categories Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'activity' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'activity' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('activity');
+                      clearExportFeedback();
+                      try {
+                        const blob = await exportAnalyticsActivityCsv(activityWindowDays);
+                        if (!downloadBlobFile(blob, `arena-activity-${activityWindowDays}d.csv`)) {
+                          setExportError('Could not download activity CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download activity CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'activity'
+                      ? '⏳ Downloading…'
+                      : `🗓️ Activity Export · ${activityWindowDays}d`}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'activity-copy-csv'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'activity-copy-csv' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'activity-copy-csv' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('activity-copy-csv');
+                      clearExportFeedback();
+                      try {
+                        const blob = await exportAnalyticsActivityCsv(activityWindowDays);
+                        const copied = await copyCsvToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied activity CSV to the clipboard.');
+                        } else {
+                          setExportError('Could not copy activity CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy activity CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'activity-copy-csv' ? '⏳ Copying…' : '🗓️ Copy Activity CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'activity-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'activity-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('activity-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsActivityJson(activityWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download activity JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download activity JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'activity-json' ? '⏳ Downloading…' : '🗓️ Activity JSON Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'activity-copy-json'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'activity-copy-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'activity-copy-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('activity-copy-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsActivityJson(activityWindowDays);
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied activity JSON to the clipboard.');
+                        } else {
+                          setExportError('Could not copy activity JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy activity JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'activity-copy-json' ? '⏳ Copying…' : '🗓️ Copy Activity JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'activity-markdown' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'activity-markdown' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('activity-markdown');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsActivityMarkdown(activityWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download activity Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download activity Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'activity-markdown' ? '⏳ Downloading…' : '🗓️ Activity Markdown Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'activity-copy'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'activity-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'activity-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('activity-copy');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsActivityMarkdown(activityWindowDays);
+                        const copied = await copyToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied activity Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy activity Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy activity Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'activity-copy' ? '⏳ Copying…' : '🗓️ Copy Activity Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'usage-history' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'usage-history' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('usage-history');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportUserUsageCsv(usageExportWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download usage CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download usage CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'usage-history' ? '⏳ Downloading…' : '📈 Usage History Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'usage-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'usage-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('usage-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportUserUsageJson(usageExportWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download usage JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download usage JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'usage-json' ? '⏳ Downloading…' : '🧾 Usage JSON Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'usage-markdown' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'usage-markdown' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('usage-markdown');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportUserUsageMarkdown(usageExportWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download usage Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download usage Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'usage-markdown' ? '⏳ Downloading…' : '📝 Usage Markdown Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'usage-copy'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'usage-copy' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'usage-copy' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('usage-copy');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportUserUsageMarkdown(usageExportWindowDays);
+                        const copied = await copyMarkdownToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied usage Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy usage Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy usage Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'usage-copy' ? '⏳ Copying…' : '📝 Copy Usage Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview'}
                     style={{
                       padding: '8px 12px',
                       borderRadius: 6,
@@ -1285,17 +4496,218 @@ export function ProfileModal() {
                     }}
                     onClick={async () => {
                       setActiveExport('overview');
+                      clearExportFeedback();
                       try {
-                        const blob = await exportAnalyticsPersonaStatsOverviewCsv(30);
-                        downloadBlobFile(blob, 'arena-persona-overview-30d.csv');
-                      } catch {
-                        // ignore error
+                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewCsv(overviewWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona stats CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona stats CSV — try again.',
+                        );
                       } finally {
                         setActiveExport(null);
                       }
                     }}
                   >
-                    {activeExport === 'overview' ? '⏳ Downloading…' : '🤖 Persona Stats Export'}
+                    {activeExport === 'overview' ? '⏳ Downloading…' : '🤖 Persona Stats CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview-json'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'overview-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'overview-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('overview-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewJson(overviewWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona stats JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona stats JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'overview-json' ? '⏳ Downloading…' : '🤖 Persona Stats JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview-markdown'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'overview-markdown' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'overview-markdown' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('overview-markdown');
+                      clearExportFeedback();
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaStatsOverviewMarkdown(overviewWindowDays);
+                        if (!downloadBlobFile(blob, filename)) {
+                          setExportError('Could not download persona stats Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not download persona stats Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'overview-markdown' ? '⏳ Downloading…' : '🤖 Persona Stats Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview-copy-csv'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'overview-copy-csv' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'overview-copy-csv' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('overview-copy-csv');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaStatsOverviewCsv(overviewWindowDays);
+                        const copied = await copyCsvToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona stats CSV to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona stats CSV — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona stats CSV — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'overview-copy-csv' ? '⏳ Copying…' : '🤖 Copy Persona Stats CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview-copy-markdown'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'overview-copy-markdown' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'overview-copy-markdown' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('overview-copy-markdown');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaStatsOverviewMarkdown(overviewWindowDays);
+                        const copied = await copyMarkdownToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona stats Markdown to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona stats Markdown — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona stats Markdown — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'overview-copy-markdown' ? '⏳ Copying…' : '🤖 Copy Persona Stats Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    aria-busy={activeExport === 'overview-copy-json'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'overview-copy-json' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#4A3728',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'overview-copy-json' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('overview-copy-json');
+                      clearExportFeedback();
+                      try {
+                        const { blob } = await exportAnalyticsPersonaStatsOverviewJson(overviewWindowDays);
+                        const copied = await copyJsonToClipboard(await blob.text());
+                        if (copied) {
+                          setExportNotice('Copied persona stats JSON to the clipboard.');
+                        } else {
+                          setExportError('Could not copy persona stats JSON — try again.');
+                        }
+                      } catch (error) {
+                        setExportError(
+                          error instanceof ApiError
+                            ? error.message
+                            : 'Could not copy persona stats JSON — try again.',
+                        );
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'overview-copy-json' ? '⏳ Copying…' : '🤖 Copy Persona Stats JSON'}
                   </button>
                 </div>
 
@@ -1404,6 +4816,359 @@ export function ProfileModal() {
                         );
                       })}
                     </div>
+                    <button
+                      type="button"
+                      aria-expanded={calHistoryOpen}
+                      onClick={() => {
+                        setCalHistoryOpen((open) => {
+                          if (!open) {
+                            setCalHistoryPage(1);
+                            setCalHistorySort('newest');
+                            setCalHistoryErr(null);
+                          }
+                          return !open;
+                        });
+                      }}
+                      style={{
+                        marginTop: 14,
+                        padding: 0,
+                        border: 'none',
+                        background: 'none',
+                        color: '#F0B84E',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontFamily: 'var(--vp-font-sans)',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      {calHistoryOpen
+                        ? 'Hide calibration history'
+                        : `View calibration history (${calStats.total_ratings ?? 0})`}
+                    </button>
+                    {calHistoryOpen ? (
+                      <div
+                        role="region"
+                        aria-label="Calibration history"
+                        style={{
+                          marginTop: 12,
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          background: '#F8F2EA',
+                          border: '0.5px solid #E0D5C5',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            marginBottom: 10,
+                          }}
+                        >
+                          <label
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              color: '#A0A39A',
+                              fontSize: 11,
+                              fontFamily: 'var(--vp-font-sans)',
+                            }}
+                          >
+                            <span>Sort</span>
+                            <select
+                              aria-label="Calibration history sort"
+                              value={calHistorySort}
+                              onChange={(event) => {
+                                setCalHistorySort(event.target.value as CalibrationHistorySort);
+                                setCalHistoryPage(1);
+                                setCalHistoryErr(null);
+                              }}
+                              style={{
+                                border: '0.5px solid #E0D5C5',
+                                borderRadius: 5,
+                                background: '#F0E8DC',
+                                color: '#4A3728',
+                                padding: '4px 6px',
+                                fontSize: 11,
+                                fontFamily: 'var(--vp-font-sans)',
+                              }}
+                            >
+                              {Object.entries(CALIBRATION_HISTORY_SORT_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {calHistoryLoading ? (
+                          <div style={{ padding: 8, display: 'flex', justifyContent: 'center' }}>
+                            <MicroLoader />
+                          </div>
+                        ) : calHistoryErr ? (
+                          <div style={{ fontSize: 12, color: '#8C7355' }}>
+                            <span>{calHistoryErr}</span>{' '}
+                            <button
+                              type="button"
+                              onClick={() => setCalHistoryReload((reload) => reload + 1)}
+                              style={{
+                                padding: 0,
+                                border: 'none',
+                                background: 'none',
+                                color: '#F0B84E',
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                              }}
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        ) : calHistory && (calHistory.ratings.length > 0 || calHistory.total_pages > 1) ? (
+                          <>
+                            {calHistory.ratings.length ? (
+                              <>
+                                <div style={{ fontSize: 10, color: '#A0A39A', marginBottom: 6 }}>
+                                  {CALIBRATION_HISTORY_SORT_LABELS[calHistorySort]} · {calHistory.total} total rating
+                                  {calHistory.total === 1 ? '' : 's'}
+                                </div>
+                                <div style={{ display: 'grid', gap: 6 }}>
+                                  {calHistory.ratings.map((rating) => {
+                                    const delta = Number(rating.delta ?? 0);
+                                    return (
+                                      <div
+                                        key={rating.id}
+                                        title={`Task ${rating.task_id}`}
+                                        aria-label={`${formatCalibrationDate(rating.created_at)}: rated ${rating.user_rating} out of 5, delta ${formatSignedDelta(delta)}, ${rating.verdict}`}
+                                        style={{
+                                          display: 'grid',
+                                          gridTemplateColumns: '72px 42px 48px minmax(0, 1fr)',
+                                          alignItems: 'center',
+                                          gap: 6,
+                                          fontSize: 11,
+                                          color: '#4A3728',
+                                        }}
+                                      >
+                                        <span>{formatCalibrationDate(rating.created_at)}</span>
+                                        <span>{rating.user_rating}/5</span>
+                                        <span
+                                          style={{
+                                            color: Math.abs(delta) <= 10 ? '#639922' : delta > 0 ? '#BA7517' : '#C0392B',
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          Δ {formatSignedDelta(delta)}
+                                        </span>
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {rating.verdict}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            ) : (
+                              <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                                No calibration ratings on this page.
+                              </p>
+                            )}
+                            <CalibrationHistoryPagination
+                              page={calHistoryPage}
+                              totalPages={calHistory.total_pages}
+                              onPrevious={() => setCalHistoryPage((page) => Math.max(1, page - 1))}
+                              onNext={() =>
+                                setCalHistoryPage((page) =>
+                                  Math.min(Math.max(1, calHistory.total_pages), page + 1),
+                                )
+                              }
+                            />
+                          </>
+                        ) : (
+                          <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                            No calibration ratings found.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+                    <div
+                      style={{
+                        marginTop: 14,
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                        gap: 8,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        disabled={activeExport !== null}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 6,
+                          border: '0.5px solid #E0D5C5',
+                          background:
+                            activeExport === 'calibration-csv' ? '#EDE4D8' : '#F0E8DC',
+                          color: '#4A3728',
+                          fontSize: 12,
+                          cursor: activeExport !== null ? 'wait' : 'pointer',
+                          textAlign: 'left',
+                          fontFamily: 'var(--vp-font-sans)',
+                          opacity:
+                            activeExport !== null && activeExport !== 'calibration-csv'
+                              ? 0.6
+                              : 1,
+                        }}
+                        onClick={async () => {
+                          setActiveExport('calibration-csv');
+                          clearExportFeedback();
+                          try {
+                            const { blob, filename } = await exportCalibrationHistoryCsv();
+                            if (!downloadBlobFile(blob, filename)) {
+                              setExportError('Could not download calibration CSV — try again.');
+                            }
+                          } catch (error) {
+                            setExportError(
+                              error instanceof ApiError
+                                ? error.message
+                                : 'Could not download calibration CSV — try again.',
+                            );
+                          } finally {
+                            setActiveExport(null);
+                          }
+                        }}
+                      >
+                        {activeExport === 'calibration-csv'
+                          ? '⏳ Downloading…'
+                          : '🎯 Calibration CSV Export'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={activeExport !== null}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 6,
+                          border: '0.5px solid #E0D5C5',
+                          background:
+                            activeExport === 'calibration-json' ? '#EDE4D8' : '#F0E8DC',
+                          color: '#4A3728',
+                          fontSize: 12,
+                          cursor: activeExport !== null ? 'wait' : 'pointer',
+                          textAlign: 'left',
+                          fontFamily: 'var(--vp-font-sans)',
+                          opacity:
+                            activeExport !== null && activeExport !== 'calibration-json'
+                              ? 0.6
+                              : 1,
+                        }}
+                        onClick={async () => {
+                          setActiveExport('calibration-json');
+                          clearExportFeedback();
+                          try {
+                            const { blob, filename } = await exportCalibrationHistoryJson();
+                            if (!downloadBlobFile(blob, filename)) {
+                              setExportError('Could not download calibration JSON — try again.');
+                            }
+                          } catch (error) {
+                            setExportError(
+                              error instanceof ApiError
+                                ? error.message
+                                : 'Could not download calibration JSON — try again.',
+                            );
+                          } finally {
+                            setActiveExport(null);
+                          }
+                        }}
+                      >
+                        {activeExport === 'calibration-json'
+                          ? '⏳ Downloading…'
+                          : '🎯 Calibration JSON Export'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={activeExport !== null}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 6,
+                          border: '0.5px solid #E0D5C5',
+                          background:
+                            activeExport === 'calibration-markdown' ? '#EDE4D8' : '#F0E8DC',
+                          color: '#4A3728',
+                          fontSize: 12,
+                          cursor: activeExport !== null ? 'wait' : 'pointer',
+                          textAlign: 'left',
+                          fontFamily: 'var(--vp-font-sans)',
+                          opacity:
+                            activeExport !== null && activeExport !== 'calibration-markdown'
+                              ? 0.6
+                              : 1,
+                        }}
+                        onClick={async () => {
+                          setActiveExport('calibration-markdown');
+                          clearExportFeedback();
+                          try {
+                            const { blob, filename } = await exportCalibrationHistoryMarkdown();
+                            if (!downloadBlobFile(blob, filename)) {
+                              setExportError('Could not download calibration Markdown — try again.');
+                            }
+                          } catch (error) {
+                            setExportError(
+                              error instanceof ApiError
+                                ? error.message
+                                : 'Could not download calibration Markdown — try again.',
+                            );
+                          } finally {
+                            setActiveExport(null);
+                          }
+                        }}
+                      >
+                        {activeExport === 'calibration-markdown'
+                          ? '⏳ Downloading…'
+                          : '🎯 Calibration Markdown Export'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={activeExport !== null}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 6,
+                          border: '0.5px solid #E0D5C5',
+                          background:
+                            activeExport === 'calibration-copy' ? '#EDE4D8' : '#F0E8DC',
+                          color: '#4A3728',
+                          fontSize: 12,
+                          cursor: activeExport !== null ? 'wait' : 'pointer',
+                          textAlign: 'left',
+                          fontFamily: 'var(--vp-font-sans)',
+                          opacity:
+                            activeExport !== null && activeExport !== 'calibration-copy'
+                              ? 0.6
+                              : 1,
+                        }}
+                        onClick={async () => {
+                          setActiveExport('calibration-copy');
+                          clearExportFeedback();
+                          try {
+                            const { blob } = await exportCalibrationHistoryMarkdown();
+                            const copied = await copyToClipboard(await blob.text());
+                            if (copied) {
+                              setExportNotice('Copied calibration Markdown to the clipboard.');
+                            } else {
+                              setExportError('Could not copy calibration Markdown — try again.');
+                            }
+                          } catch (error) {
+                            setExportError(
+                              error instanceof ApiError
+                                ? error.message
+                                : 'Could not copy calibration Markdown — try again.',
+                            );
+                          } finally {
+                            setActiveExport(null);
+                          }
+                        }}
+                      >
+                        {activeExport === 'calibration-copy'
+                          ? '⏳ Copying…'
+                          : '🎯 Copy Calibration Markdown'}
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>
@@ -1478,7 +5243,328 @@ export function ProfileModal() {
                     margin: '22px 0 10px',
                   }}
                 >
-                  Recent ratings
+                  Feedback activity
+                </div>
+                {feedbackSummaryLoading ? (
+                  <div style={{ padding: 16, display: 'flex', justifyContent: 'center' }}>
+                    <MicroLoader label="Loading feedback activity" />
+                  </div>
+                ) : feedbackSummaryErr ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }} role="alert">
+                      {feedbackSummaryErr}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackSummaryReload((reload) => reload + 1)}
+                      style={{
+                        padding: 0,
+                        border: 'none',
+                        background: 'none',
+                        color: '#F0B84E',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontFamily: 'var(--vp-font-sans)',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : feedbackSummary ? (
+                  <div
+                    style={{
+                      background: '#F0E8DC',
+                      borderRadius: 10,
+                      padding: '14px 16px',
+                      border: '0.5px solid #E0D5C5',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        marginBottom: 10,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13, color: '#F3F0E7', fontWeight: 500 }}>
+                          Ratings over time
+                        </div>
+                        <div style={{ fontSize: 11, color: '#A0A39A', marginTop: 3 }}>
+                          Daily activity, bucketed in UTC
+                        </div>
+                      </div>
+                      <label
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          color: '#A0A39A',
+                          fontSize: 11,
+                          fontFamily: 'var(--vp-font-sans)',
+                        }}
+                      >
+                        <span>Window</span>
+                        <select
+                          aria-label="Feedback activity window"
+                          value={feedbackSummaryWindowDays}
+                          onChange={(event) => {
+                            clearExportFeedback();
+                            setFeedbackSummaryWindowDays(Number(event.target.value));
+                          }}
+                          style={{
+                            border: '0.5px solid #E0D5C5',
+                            borderRadius: 5,
+                            background: '#EDE4D8',
+                            color: '#4A3728',
+                            padding: '4px 6px',
+                            fontSize: 11,
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        >
+                          {FEEDBACK_ACTIVITY_WINDOWS.map((days) => (
+                            <option key={days} value={days}>
+                              {days} days
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <FeedbackActivityTrend summary={feedbackSummary} />
+                    {feedbackSummary.total > 0 &&
+                    feedbackSummary.daily_trend.every((point) => point.count === 0) ? (
+                      <p style={{ fontSize: 11, color: '#A0A39A', margin: '8px 0 0' }}>
+                        No ratings in this window. Lifetime total: {feedbackSummary.total}.
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={activeExport !== null}
+                      style={{
+                        width: '100%',
+                        marginTop: 10,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: activeExport === 'feedback-summary-csv' ? '#EDE4D8' : '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--vp-font-sans)',
+                        opacity: activeExport !== null && activeExport !== 'feedback-summary-csv' ? 0.6 : 1,
+                      }}
+                      onClick={async () => {
+                        setActiveExport('feedback-summary-csv');
+                        clearExportFeedback();
+                        try {
+                          const { blob, filename } = await exportAgentFeedbackSummaryCsv(
+                            feedbackSummaryWindowDays,
+                          );
+                          if (!downloadBlobFile(blob, filename)) {
+                            setExportError('Could not download feedback activity CSV — try again.');
+                          }
+                        } catch (error) {
+                          setExportError(
+                            error instanceof ApiError
+                              ? error.message
+                              : 'Could not download feedback activity CSV — try again.',
+                          );
+                        } finally {
+                          setActiveExport(null);
+                        }
+                      }}
+                    >
+                      {activeExport === 'feedback-summary-csv'
+                        ? '⏳ Downloading…'
+                        : '🧭 Feedback Activity CSV Export'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeExport !== null}
+                      style={{
+                        width: '100%',
+                        marginTop: 8,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: activeExport === 'feedback-summary-json' ? '#EDE4D8' : '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--vp-font-sans)',
+                        opacity: activeExport !== null && activeExport !== 'feedback-summary-json' ? 0.6 : 1,
+                      }}
+                      onClick={async () => {
+                        setActiveExport('feedback-summary-json');
+                        clearExportFeedback();
+                        try {
+                          const { blob, filename } = await exportAgentFeedbackSummaryJson(
+                            feedbackSummaryWindowDays,
+                          );
+                          if (!downloadBlobFile(blob, filename)) {
+                            setExportError('Could not download feedback activity JSON — try again.');
+                          }
+                        } catch (error) {
+                          setExportError(
+                            error instanceof ApiError
+                              ? error.message
+                              : 'Could not download feedback activity JSON — try again.',
+                          );
+                        } finally {
+                          setActiveExport(null);
+                        }
+                      }}
+                    >
+                      {activeExport === 'feedback-summary-json'
+                        ? '⏳ Downloading…'
+                        : '🧭 Feedback Activity JSON Export'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeExport !== null}
+                      style={{
+                        width: '100%',
+                        marginTop: 8,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: activeExport === 'feedback-summary-markdown' ? '#EDE4D8' : '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--vp-font-sans)',
+                        opacity: activeExport !== null && activeExport !== 'feedback-summary-markdown' ? 0.6 : 1,
+                      }}
+                      onClick={async () => {
+                        setActiveExport('feedback-summary-markdown');
+                        clearExportFeedback();
+                        try {
+                          const { blob, filename } = await exportAgentFeedbackSummaryMarkdown(
+                            feedbackSummaryWindowDays,
+                          );
+                          if (!downloadBlobFile(blob, filename)) {
+                            setExportError('Could not download feedback activity Markdown — try again.');
+                          }
+                        } catch (error) {
+                          setExportError(
+                            error instanceof ApiError
+                              ? error.message
+                              : 'Could not download feedback activity Markdown — try again.',
+                          );
+                        } finally {
+                          setActiveExport(null);
+                        }
+                      }}
+                    >
+                      {activeExport === 'feedback-summary-markdown'
+                        ? '⏳ Downloading…'
+                        : '🧭 Feedback Activity Markdown Export'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeExport !== null}
+                      style={{
+                        width: '100%',
+                        marginTop: 8,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: activeExport === 'feedback-summary-copy' ? '#EDE4D8' : '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--vp-font-sans)',
+                        opacity: activeExport !== null && activeExport !== 'feedback-summary-copy' ? 0.6 : 1,
+                      }}
+                      onClick={async () => {
+                        setActiveExport('feedback-summary-copy');
+                        clearExportFeedback();
+                        try {
+                          const { blob } = await exportAgentFeedbackSummaryMarkdown(
+                            feedbackSummaryWindowDays,
+                          );
+                          const copied = await copyToClipboard(await blob.text());
+                          if (copied) {
+                            setExportNotice('Copied feedback activity Markdown to the clipboard.');
+                          } else {
+                            setExportError('Could not copy feedback activity Markdown — try again.');
+                          }
+                        } catch (error) {
+                          setExportError(
+                            error instanceof ApiError
+                              ? error.message
+                              : 'Could not copy feedback activity Markdown — try again.',
+                          );
+                        } finally {
+                          setActiveExport(null);
+                        }
+                      }}
+                    >
+                      {activeExport === 'feedback-summary-copy'
+                        ? '⏳ Copying…'
+                        : '🧭 Copy Feedback Activity Markdown'}
+                    </button>
+                  </div>
+                ) : null}
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    color: '#A0A39A',
+                    letterSpacing: '0.10em',
+                    margin: '22px 0 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                  }}
+                >
+                  <span>Recent ratings</span>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      letterSpacing: 'normal',
+                      textTransform: 'none',
+                      fontFamily: 'var(--vp-font-sans)',
+                      fontWeight: 400,
+                    }}
+                  >
+                    <span>Show</span>
+                    <select
+                      aria-label="Recent ratings filter"
+                      value={recentFbVerdict}
+                      onChange={(event) =>
+                        setRecentFbVerdict(event.target.value as AgentFeedbackVerdict | '')
+                      }
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#4A3728',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                        textTransform: 'none',
+                      }}
+                    >
+                      <option value="">All</option>
+                      <option value="correct">Correct</option>
+                      <option value="partial">Partial</option>
+                      <option value="wrong">Wrong</option>
+                    </select>
+                  </label>
                 </div>
                 {recentFbLoading ? (
                   <div style={{ padding: 12, display: 'flex', justifyContent: 'center' }}>
@@ -1488,7 +5574,9 @@ export function ProfileModal() {
                   <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>{recentFbErr}</p>
                 ) : recentFb.length === 0 ? (
                   <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>
-                    Your latest ratings will show here as you rate Agent answers.
+                    {recentFbVerdict
+                      ? `No ${recentFbVerdict} ratings in the latest ten.`
+                      : 'Your latest ratings will show here as you rate Agent answers.'}
                   </p>
                 ) : (
                   <ul
@@ -1599,6 +5687,270 @@ export function ProfileModal() {
                     })}
                   </ul>
                 )}
+                {fbAcc && fbAcc.total > 0 ? (
+                  <>
+                    <label
+                      htmlFor="profile-feedback-export-filter"
+                      style={{
+                        display: 'block',
+                        fontSize: 10,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        color: '#A0A39A',
+                        marginTop: 12,
+                        marginBottom: 6,
+                      }}
+                    >
+                      Export ratings
+                    </label>
+                    <select
+                      id="profile-feedback-export-filter"
+                      aria-label="Answer feedback export filter"
+                      value={feedbackExportVerdict}
+                      disabled={activeExport !== null}
+                      onChange={(event) =>
+                        setFeedbackExportVerdict(event.target.value as AgentFeedbackVerdict | '')
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        opacity: activeExport !== null ? 0.7 : 1,
+                      }}
+                    >
+                      <option value="">All ratings</option>
+                      <option value="correct">Correct only</option>
+                      <option value="partial">Partial only</option>
+                      <option value="wrong">Wrong only</option>
+                    </select>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: 8,
+                        marginTop: 8,
+                      }}
+                    >
+                      <label
+                        htmlFor="profile-feedback-export-from-date"
+                        style={{
+                          display: 'block',
+                          fontSize: 10,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          color: '#A0A39A',
+                        }}
+                      >
+                        From (UTC)
+                        <input
+                          id="profile-feedback-export-from-date"
+                          aria-label="Answer feedback export start date"
+                          type="date"
+                          value={feedbackExportFromDate}
+                          max={feedbackExportToDate || undefined}
+                          disabled={activeExport !== null}
+                          onChange={(event) => setFeedbackExportFromDate(event.target.value)}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            marginTop: 4,
+                            padding: '7px 8px',
+                            borderRadius: 6,
+                            border: '0.5px solid #E0D5C5',
+                            background: '#F0E8DC',
+                            color: '#4A3728',
+                            fontSize: 12,
+                            fontFamily: 'var(--vp-font-sans)',
+                            opacity: activeExport !== null ? 0.7 : 1,
+                          }}
+                        />
+                      </label>
+                      <label
+                        htmlFor="profile-feedback-export-to-date"
+                        style={{
+                          display: 'block',
+                          fontSize: 10,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          color: '#A0A39A',
+                        }}
+                      >
+                        To (UTC)
+                        <input
+                          id="profile-feedback-export-to-date"
+                          aria-label="Answer feedback export end date"
+                          type="date"
+                          value={feedbackExportToDate}
+                          min={feedbackExportFromDate || undefined}
+                          disabled={activeExport !== null}
+                          onChange={(event) => setFeedbackExportToDate(event.target.value)}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            marginTop: 4,
+                            padding: '7px 8px',
+                            borderRadius: 6,
+                            border: '0.5px solid #E0D5C5',
+                            background: '#F0E8DC',
+                            color: '#4A3728',
+                            fontSize: 12,
+                            fontFamily: 'var(--vp-font-sans)',
+                            opacity: activeExport !== null ? 0.7 : 1,
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {feedbackExportDateRangeInvalid ? (
+                      <p
+                        role="alert"
+                        style={{ fontSize: 11, color: '#9C2F2A', margin: '6px 0 0' }}
+                      >
+                        From date must be on or before the To date.
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={activeExport !== null || feedbackExportDateRangeInvalid}
+                      style={{
+                        width: '100%',
+                        marginTop: 12,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: activeExport === 'feedback-csv' ? '#EDE4D8' : '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--vp-font-sans)',
+                        opacity: activeExport !== null && activeExport !== 'feedback-csv' ? 0.6 : 1,
+                      }}
+                      onClick={async () => {
+                        setActiveExport('feedback-csv');
+                        clearExportFeedback();
+                        try {
+                          const { blob, filename } = feedbackExportDateRange
+                            ? await exportAgentFeedbackCsv(
+                                feedbackExportVerdict || undefined,
+                                feedbackExportDateRange,
+                              )
+                            : await exportAgentFeedbackCsv(feedbackExportVerdict || undefined);
+                          if (!downloadBlobFile(blob, filename)) {
+                            setExportError('Could not download answer feedback CSV — try again.');
+                          }
+                        } catch (error) {
+                          setExportError(
+                            error instanceof ApiError
+                              ? error.message
+                              : 'Could not download answer feedback CSV — try again.',
+                          );
+                        } finally {
+                          setActiveExport(null);
+                        }
+                      }}
+                    >
+                      {activeExport === 'feedback-csv'
+                        ? '⏳ Downloading…'
+                        : '🧭 Answer Feedback CSV Export'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeExport !== null || feedbackExportDateRangeInvalid}
+                      style={{
+                        width: '100%',
+                        marginTop: 8,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: activeExport === 'feedback-json' ? '#EDE4D8' : '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--vp-font-sans)',
+                        opacity: activeExport !== null && activeExport !== 'feedback-json' ? 0.6 : 1,
+                      }}
+                      onClick={async () => {
+                        setActiveExport('feedback-json');
+                        clearExportFeedback();
+                        try {
+                          const { blob, filename } = feedbackExportDateRange
+                            ? await exportAgentFeedbackJson(
+                                feedbackExportVerdict || undefined,
+                                feedbackExportDateRange,
+                              )
+                            : await exportAgentFeedbackJson(feedbackExportVerdict || undefined);
+                          if (!downloadBlobFile(blob, filename)) {
+                            setExportError('Could not download answer feedback JSON — try again.');
+                          }
+                        } catch (error) {
+                          setExportError(
+                            error instanceof ApiError
+                              ? error.message
+                              : 'Could not download answer feedback JSON — try again.',
+                          );
+                        } finally {
+                          setActiveExport(null);
+                        }
+                      }}
+                    >
+                      {activeExport === 'feedback-json'
+                        ? '⏳ Downloading…'
+                        : '🧭 Answer Feedback JSON Export'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeExport !== null || feedbackExportDateRangeInvalid}
+                      style={{
+                        width: '100%',
+                        marginTop: 8,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: activeExport === 'feedback-markdown' ? '#EDE4D8' : '#F0E8DC',
+                        color: '#4A3728',
+                        fontSize: 12,
+                        cursor: activeExport !== null ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--vp-font-sans)',
+                        opacity: activeExport !== null && activeExport !== 'feedback-markdown' ? 0.6 : 1,
+                      }}
+                      onClick={async () => {
+                        setActiveExport('feedback-markdown');
+                        clearExportFeedback();
+                        try {
+                          const { blob, filename } = feedbackExportDateRange
+                            ? await exportAgentFeedbackMarkdown(
+                                feedbackExportVerdict || undefined,
+                                feedbackExportDateRange,
+                              )
+                            : await exportAgentFeedbackMarkdown(feedbackExportVerdict || undefined);
+                          if (!downloadBlobFile(blob, filename)) {
+                            setExportError('Could not download answer feedback Markdown — try again.');
+                          }
+                        } catch (error) {
+                          setExportError(
+                            error instanceof ApiError
+                              ? error.message
+                              : 'Could not download answer feedback Markdown — try again.',
+                          );
+                        } finally {
+                          setActiveExport(null);
+                        }
+                      }}
+                    >
+                      {activeExport === 'feedback-markdown'
+                        ? '⏳ Downloading…'
+                        : '🧭 Answer Feedback Markdown Export'}
+                    </button>
+                  </>
+                ) : null}
               </>
             )}
           </div>

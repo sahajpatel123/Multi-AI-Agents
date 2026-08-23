@@ -90,7 +90,9 @@ npm run build  # Production build
 1. **Before submitting a PR**:
    - Run all tests locally
    - Ensure CI passes (pip-audit, pip check, npm audit, gitleaks, dependency
-     review, CodeQL, source-integrity, and workflow YAML validation)
+     review, CodeQL, source-integrity, workflow YAML validation, and
+     pre-commit hooks)
+   - Run `pre-commit run --all-files` locally (CI enforces this too)
    - Run `git diff --check` to catch whitespace errors
    - Follow the existing code style
    - Add tests for new functionality

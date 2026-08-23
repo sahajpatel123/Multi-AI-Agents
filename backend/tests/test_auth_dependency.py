@@ -314,4 +314,3 @@ async def test_userresponse_aliases_use_orm_user_to_response(monkeypatch):
     )
     assert optional is sentinel_response
     assert required is sentinel_response
-

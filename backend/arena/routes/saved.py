@@ -266,7 +266,7 @@ async def get_saved(
 
     if min_score is not None:
         q = q.filter(SavedResponse.score >= min_score)
-    
+
     if max_score is not None:
         q = q.filter(SavedResponse.score <= max_score)
 
@@ -605,20 +605,30 @@ async def delete_saved_bulk(
     requested = len(unique_ids)
 
     # Scope by owner so we never delete another user's rows even if a UI
-    # bug hands us foreign ids.
-    deleted = (
-        db.query(SavedResponse)
+    # bug hands us foreign ids. Return the exact owned ids so the client can
+    # reconcile its local library when a mixed/partial request succeeds.
+    owned_ids = [
+        row_id
+        for (row_id,) in db.query(SavedResponse.id)
         .filter(
             SavedResponse.id.in_(unique_ids),
             SavedResponse.user_id == user.id,
         )
-        .delete(synchronize_session=False)
-    )
-    db.commit()
+        .all()
+    ]
+    deleted = 0
+    if owned_ids:
+        deleted = (
+            db.query(SavedResponse)
+            .filter(SavedResponse.id.in_(owned_ids))
+            .delete(synchronize_session=False)
+        )
+        db.commit()
     return {
         "status": "deleted",
         "requested": requested,
         "deleted": int(deleted or 0),
+        "ids": owned_ids,
     }
 
 
@@ -690,13 +700,13 @@ async def export_saved(
         window_seconds=60,
         message="Too many exports. Please wait.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
             detail={"error": "feature_not_allowed", "message": "Saved responses require Plus or Pro."},
         )
-    
+
     # Normalize once so disclosed filters always match the query actually run
     # (same parity contract as the preset preview endpoint).
     safe_search = normalize_export_search(search)
@@ -714,7 +724,7 @@ async def export_saved(
     )
 
     saved_items = q.all()
-    
+
     def _csv_safe(value) -> str:
         """Escape value for CSV to prevent formula injection."""
         if value is None:
@@ -723,13 +733,13 @@ async def export_saved(
         if s.startswith(("=", "+", "-", "@")):
             return "'" + s
         return s
-    
+
     from arena.core.datetime_utils import utcnow_naive
     from fastapi.responses import Response
     from arena.core.http_headers import content_disposition_attachment
-    
+
     export_timestamp = utcnow_naive()
-    
+
     if format == "json":
         # JSON export format
         items = []
@@ -748,7 +758,7 @@ async def export_saved(
                 "confidence": item.confidence,
                 "saved_at": item.saved_at.isoformat() if item.saved_at else None,
             })
-        
+
         export_data = {
             "metadata": {
                 "export_format": "json",
@@ -765,7 +775,7 @@ async def export_saved(
             },
             "data": items,
         }
-        
+
         filename = f"arena-saved-{user.id}-{export_timestamp.strftime('%Y%m%d-%H%M%S')}.json"
         headers = {
             "Content-Disposition": content_disposition_attachment(filename),
@@ -777,7 +787,7 @@ async def export_saved(
             media_type="application/json; charset=utf-8",
             headers=headers,
         )
-    
+
     elif format == "xlsx":
         # XLSX export format
         if not OPENPYXL_AVAILABLE:
@@ -788,13 +798,13 @@ async def export_saved(
                     "message": "XLSX export requires openpyxl package. Please install it.",
                 },
             )
-        
+
         wb = Workbook()
-        
+
         # Add Summary sheet first
         summary_ws = wb.active
         summary_ws.title = "Summary"
-        
+
         # Summary information
         summary_ws.append(["Arena Saved Responses Export"])
         summary_ws.append([""])
@@ -812,19 +822,19 @@ async def export_saved(
         summary_ws.append(["Sort:", sort])
         summary_ws.append([""])
         summary_ws.append(["User ID:", user.id])
-        
+
         # Style summary sheet
         from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
         from openpyxl.styles.colors import Color
-        
+
         bold_font = Font(bold=True)
         gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
         thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-        
+
         # Style summary header
         summary_ws["A1"].font = Font(bold=True, size=14, color=Color("0066CC"))
         summary_ws["A1"].alignment = Alignment(horizontal='center')
-        
+
         # Style key-value pairs
         for row in summary_ws.iter_rows(min_row=3, max_row=14, min_col=1, max_col=2):
             for cell in row:
@@ -832,32 +842,32 @@ async def export_saved(
                 if cell.column == 1:  # Key column
                     cell.font = bold_font
                     cell.fill = gray_fill
-        
+
         # Set column widths for summary
         summary_ws.column_dimensions["A"].width = 20
         summary_ws.column_dimensions["B"].width = 30
-        
+
         # Add Data sheet
         data_ws = wb.create_sheet(title="Data")
-        
+
         # Write header
         headers_row = [
             "ID", "Session ID", "Agent ID", "Persona ID", "Persona Name", "Persona Color",
             "Prompt", "One Liner", "Verdict", "Score", "Confidence", "Saved At"
         ]
         data_ws.append(headers_row)
-        
+
         # Style header row
         header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
         header_font = Font(bold=True, color=Color("FFFFFF"))
         header_alignment = Alignment(horizontal='center')
-        
+
         for cell in data_ws[1]:
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = header_alignment
             cell.border = thin_border
-        
+
         # Write data rows
         for item in saved_items:
             row = [
@@ -875,7 +885,7 @@ async def export_saved(
                 item.saved_at.isoformat() if item.saved_at else "",
             ]
             data_ws.append(row)
-        
+
         # Style data cells
         for row in data_ws.iter_rows(min_row=2):  # Skip header
             for cell in row:
@@ -886,7 +896,7 @@ async def export_saved(
                 # Left align text
                 else:
                     cell.alignment = Alignment(horizontal='left', wrap_text=True)
-        
+
         # Auto-adjust column widths for data sheet
         for col in data_ws.columns:
             max_length = 0
@@ -900,18 +910,18 @@ async def export_saved(
                     logger.debug("Cell length measurement failed", exc_info=True)
             adjusted_width = (max_length + 2) * 1.2
             data_ws.column_dimensions[column].width = max(10, min(adjusted_width, 80))  # Cap at 80
-        
+
         # Freeze header row
         data_ws.freeze_panes = "A2"
-        
+
         # Set data sheet as active (more intuitive for users)
         wb.active = data_ws
-        
+
         # Save workbook to bytes
         xlsx_buffer = io.BytesIO()
         wb.save(xlsx_buffer)
         xlsx_buffer.seek(0)
-        
+
         filename = f"arena-saved-{user.id}-{export_timestamp.strftime('%Y%m%d-%H%M%S')}.xlsx"
         headers = {
             "Content-Disposition": content_disposition_attachment(filename),
@@ -923,11 +933,11 @@ async def export_saved(
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers=headers,
         )
-    
+
     # CSV export format (default)
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
     # Write header
     writer.writerow([
         "id",
@@ -943,7 +953,7 @@ async def export_saved(
         "confidence",
         "saved_at",
     ])
-    
+
     # Write rows
     for item in saved_items:
         writer.writerow([
@@ -960,7 +970,7 @@ async def export_saved(
             _csv_safe(item.confidence),
             _csv_safe(item.saved_at.isoformat() if item.saved_at else ""),
         ])
-    
+
     filename = f"arena-saved-{user.id}-{export_timestamp.strftime('%Y%m%d-%H%M%S')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -997,7 +1007,7 @@ async def export_saved_csv_legacy(
         window_seconds=60,
         message="Too many exports. Please wait.",
     )
-    
+
     # Build query parameters for redirect
     params = []
     if search:
@@ -1011,6 +1021,6 @@ async def export_saved_csv_legacy(
     if sort != "newest":
         params.append(f"sort={sort}")
     params.append("format=csv")
-    
+
     query_string = "&".join(params) if params else "format=csv"
     return RedirectResponse(url=f"/api/saved/export?{query_string}", status_code=307)

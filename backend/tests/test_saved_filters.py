@@ -356,6 +356,7 @@ async def test_bulk_delete_removes_owned_rows(
     assert body["status"] == "deleted"
     assert body["requested"] == 3
     assert body["deleted"] == 3
+    assert set(body["ids"]) == {r1.id, r2.id, r3.id}
 
     # Verify they're gone.
     listing = await app_client.get("/api/saved", headers=_pro_headers(user))
@@ -386,6 +387,7 @@ async def test_bulk_delete_drops_foreign_ids(
     body = res.json()
     assert body["requested"] == 2
     assert body["deleted"] == 1  # only her own row
+    assert body["ids"] == [alice_row.id]
 
     # Bob's row is still there.
     listing = await app_client.get("/api/saved", headers=_pro_headers(bob))
@@ -453,6 +455,7 @@ async def test_bulk_delete_dedupes_repeated_ids(
     body = res.json()
     assert body["requested"] == 1  # deduped
     assert body["deleted"] == 1
+    assert body["ids"] == [r1.id]
 
 
 @pytest.mark.asyncio

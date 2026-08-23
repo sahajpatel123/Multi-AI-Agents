@@ -32,7 +32,7 @@ async def test_calibration_csv_export(app_client, make_user, db_session):
     """Test CSV export of calibration history."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_calibration_rating(db_session, user.id, "task-1", user_rating=80, system_score=85)
     _seed_calibration_rating(db_session, user.id, "task-2", user_rating=75, system_score=90)
     _seed_calibration_rating(db_session, user.id, "task-3", user_rating=90, system_score=85)
@@ -77,7 +77,7 @@ async def test_calibration_csv_formula_injection_defense(app_client, make_user, 
     """Test CSV export defends against formula injection."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_calibration_rating(db_session, user.id, "=cmd|'/c calc'!A1", user_rating=80, system_score=85)
     db_session.commit()
 
@@ -96,7 +96,7 @@ async def test_calibration_json_export(app_client, make_user, db_session):
     """Test JSON export of calibration history."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_calibration_rating(db_session, user.id, "task-1", user_rating=80, system_score=85)
     _seed_calibration_rating(db_session, user.id, "task-2", user_rating=75, system_score=90)
     db_session.commit()
@@ -134,3 +134,47 @@ async def test_calibration_json_export_empty(app_client, make_user, db_session):
     import json
     items = json.loads(res.text)
     assert items == []
+
+
+@pytest.mark.asyncio
+async def test_calibration_markdown_export_escapes_table_cells(app_client, make_user, db_session):
+    """Markdown export keeps user-controlled task ids inside one table cell."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_calibration_rating(
+        db_session,
+        user.id,
+        "task|one\nline",
+        user_rating=80,
+        system_score=999,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/calibration/history/export.md",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "text/markdown" in res.headers["content-type"]
+    assert res.headers["content-disposition"].endswith(".md\"")
+    text = res.text
+    assert "# Arena — confidence calibration" in text
+    assert "Total ratings: 1" in text
+    assert "task\\|one line" in text
+    assert "| 100 | 100 | You underestimated this answer |" in text
+
+
+@pytest.mark.asyncio
+async def test_calibration_markdown_export_empty(app_client, make_user, db_session):
+    """Markdown export remains useful and well-formed with no ratings."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/calibration/history/export.md",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "Total ratings: 0" in res.text
+    assert "| — | No ratings yet | — | — | — | — |" in res.text

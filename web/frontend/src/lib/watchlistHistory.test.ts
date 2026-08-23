@@ -2,8 +2,60 @@ import { describe, expect, it } from 'vitest';
 import {
   formatWatchlistHistoryExport,
   formatWatchlistHistoryStats,
+  readableAgentAnswerText,
   watchlistScoreTrend,
 } from './watchlistHistory';
+
+describe('readableAgentAnswerText', () => {
+  it('returns empty for missing or blank answers', () => {
+    expect(readableAgentAnswerText(null)).toBe('');
+    expect(readableAgentAnswerText(undefined)).toBe('');
+    expect(readableAgentAnswerText('   ')).toBe('');
+  });
+
+  it('passes free text through', () => {
+    expect(readableAgentAnswerText('  The IPO pipeline remains strong.  ')).toBe(
+      'The IPO pipeline remains strong.',
+    );
+  });
+
+  it('flattens structured sentences into readable paragraphs', () => {
+    const raw = JSON.stringify({
+      sentences: [
+        { text: 'First paragraph.', confidence: 'supported', type: 'fact' },
+        { text: '## Bottom line\nSecond paragraph.', confidence: 'verified' },
+      ],
+      overall_confidence: 78,
+    });
+    expect(readableAgentAnswerText(raw)).toBe(
+      'First paragraph.\n\n## Bottom line\nSecond paragraph.',
+    );
+  });
+
+  it('falls back to one_liner, final_answer, or text fields', () => {
+    expect(
+      readableAgentAnswerText(
+        JSON.stringify({ sentences: [], one_liner: 'Short takeaway.' }),
+      ),
+    ).toBe('Short takeaway.');
+    expect(
+      readableAgentAnswerText(JSON.stringify({ final_answer: 'Full report text.' })),
+    ).toBe('Full report text.');
+    expect(readableAgentAnswerText(JSON.stringify({ text: 'Plain text field.' }))).toBe(
+      'Plain text field.',
+    );
+  });
+
+  it('treats unusable JSON payloads as no answer', () => {
+    expect(readableAgentAnswerText('{}')).toBe('');
+    expect(readableAgentAnswerText('[]')).toBe('');
+    expect(readableAgentAnswerText('{"unknown": 1}')).toBe('');
+  });
+
+  it('keeps raw text when JSON-looking content does not parse', () => {
+    expect(readableAgentAnswerText('{ not valid json')).toBe('{ not valid json');
+  });
+});
 
 describe('formatWatchlistHistoryStats', () => {
   it('handles empty', () => {

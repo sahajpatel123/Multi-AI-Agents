@@ -117,8 +117,8 @@ _TOLERATED: dict[tuple[str, int], str] = {
     ("arena/routes/rooms.py", 1030): "telemetry noop — room hook failure must not break request",
     ("arena/routes/rooms.py", 1046): "telemetry noop — room hook failure must not break request",
     # arena/routes/auth.py
-    ("arena/routes/auth.py", 43): "default fallback — token decode returns null on malformed input",
-    ("arena/routes/auth.py", 75): "default fallback — token decode returns null on malformed input",
+    ("arena/routes/auth.py", 44): "default fallback — token decode returns null on malformed input",
+    ("arena/routes/auth.py", 76): "default fallback — token decode returns null on malformed input",
     ("arena/routes/auth.py", 347): "telemetry noop — auth hook failure must not break auth path",
     ("arena/routes/auth.py", 401): "telemetry noop — auth hook failure must not break auth path",
     # arena/routes/debate.py

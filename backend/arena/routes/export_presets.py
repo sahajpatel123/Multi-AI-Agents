@@ -227,7 +227,7 @@ async def list_export_presets(
     max_score: Optional[int] = Query(None, ge=0, le=100, description="Filter by maximum score"),
 ):
     """List all export presets for the current user.
-    
+
     Supports optional query parameters:
     - search: Filter by name or description (case-insensitive, partial match)
     - preset_type: Filter by preset type
@@ -242,12 +242,12 @@ async def list_export_presets(
         window_seconds=60,
         message="Too many export preset list requests. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         return {"presets": [], "total": 0}
-    
+
     query = db.query(ExportPreset).filter(ExportPreset.user_id == user.id)
-    
+
     # Apply search filter if provided
     if search:
         from sqlalchemy import or_
@@ -261,25 +261,25 @@ async def list_export_presets(
                     ExportPreset.description.ilike(search_pattern),
                 )
             )
-    
+
     # Apply preset_type filter if provided
     if preset_type:
         query = query.filter(ExportPreset.preset_type == preset_type)
-    
+
     # Apply format filter if provided
     if format:
         query = query.filter(ExportPreset.format == format)
-    
+
     # Apply min_score filter if provided
     if min_score is not None:
         query = query.filter(ExportPreset.min_score == min_score)
-    
+
     # Apply max_score filter if provided
     if max_score is not None:
         query = query.filter(ExportPreset.max_score == max_score)
-    
+
     presets = query.order_by(ExportPreset.position.asc(), ExportPreset.updated_at.desc()).all()
-    
+
     return {
         "presets": [
             {
@@ -319,7 +319,7 @@ async def create_export_preset(
         window_seconds=60,
         message="Too many export preset creations. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -329,14 +329,14 @@ async def create_export_preset(
                 "upgrade_required": "plus",
             },
         )
-    
+
     # Check existing count
     existing_count = (
         db.query(ExportPreset)
         .filter(ExportPreset.user_id == user.id)
         .count()
     )
-    
+
     if existing_count >= EXPORT_PRESETS_MAX_PER_USER:
         raise HTTPException(
             status_code=400,
@@ -346,7 +346,7 @@ async def create_export_preset(
                 "active_cap": EXPORT_PRESETS_MAX_PER_USER,
             },
         )
-    
+
     # Sanitize inputs
     name = sanitize_model_text(body.name, max_length=100, field_name="name")
     description = sanitize_model_text(body.description, max_length=500, field_name="description") if body.description else None
@@ -355,14 +355,14 @@ async def create_export_preset(
         if body.search
         else None
     )
-    
+
     # If this is set as default, un-set any existing default preset for this user
     if body.is_default:
         db.query(ExportPreset).filter(
             ExportPreset.user_id == user.id,
             ExportPreset.is_default == True,
         ).update({"is_default": False})
-    
+
     # If no position specified, set it to the next available position
     position = body.position
     if position is None:
@@ -373,7 +373,7 @@ async def create_export_preset(
             .first()
         )
         position = (max_position.position + 1) if max_position else 0
-    
+
     preset = ExportPreset(
         user_id=user.id,
         name=name,
@@ -388,11 +388,11 @@ async def create_export_preset(
         position=position,
         is_default=body.is_default,
     )
-    
+
     db.add(preset)
     db.commit()
     db.refresh(preset)
-    
+
     return {
         "status": "created",
         "id": preset.id,
@@ -426,10 +426,10 @@ async def get_default_export_preset(
         window_seconds=60,
         message="Too many default preset requests. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         return None
-    
+
     preset = (
         db.query(ExportPreset)
         .filter(
@@ -438,10 +438,10 @@ async def get_default_export_preset(
         )
         .first()
     )
-    
+
     if preset is None:
         return None
-    
+
     return {
         "id": preset.id,
         "name": preset.name,
@@ -474,7 +474,7 @@ async def export_export_presets(
         window_seconds=60,
         message="Too many export requests. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -484,14 +484,14 @@ async def export_export_presets(
                 "upgrade_required": "plus",
             },
         )
-    
+
     presets = (
         db.query(ExportPreset)
         .filter(ExportPreset.user_id == user.id)
         .order_by(ExportPreset.position.asc())
         .all()
     )
-    
+
     from arena.core.datetime_utils import utcnow_naive
     return {
         "status": "exported",
@@ -529,10 +529,10 @@ async def list_export_preset_templates(
         window_seconds=60,
         message="Too many template list requests. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         return {"templates": [], "total": 0}
-    
+
     return {
         "templates": EXPORT_PRESET_TEMPLATES,
         "total": len(EXPORT_PRESET_TEMPLATES),
@@ -551,7 +551,7 @@ async def create_preset_from_template(
     db: Session = Depends(get_db),
 ):
     """Create an export preset from a template.
-    
+
     Supports optional name override via query parameter.
     """
     enforce_user_rate_limit(
@@ -561,7 +561,7 @@ async def create_preset_from_template(
         window_seconds=60,
         message="Too many template creation requests. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -571,30 +571,30 @@ async def create_preset_from_template(
                 "upgrade_required": "plus",
             },
         )
-    
+
     template_id = query.template_id
     custom_name = query.name
-    
+
     # Find the template
     template = None
     for t in EXPORT_PRESET_TEMPLATES:
         if t["id"] == template_id:
             template = t
             break
-    
+
     if template is None:
         raise HTTPException(
             status_code=404,
             detail={"error": "template_not_found", "message": f"Template '{template_id}' not found."},
         )
-    
+
     # Check existing count
     existing_count = (
         db.query(ExportPreset)
         .filter(ExportPreset.user_id == user.id)
         .count()
     )
-    
+
     if existing_count >= EXPORT_PRESETS_MAX_PER_USER:
         raise HTTPException(
             status_code=400,
@@ -604,7 +604,7 @@ async def create_preset_from_template(
                 "active_cap": EXPORT_PRESETS_MAX_PER_USER,
             },
         )
-    
+
     # Find the next available position
     max_position = (
         db.query(ExportPreset)
@@ -613,19 +613,19 @@ async def create_preset_from_template(
         .first()
     )
     position = (max_position.position + 1) if max_position else 0
-    
+
     # Create the preset from the template
     from arena.core.datetime_utils import utcnow_naive
-    
+
     # Use custom name if provided, otherwise generate timestamp-suffixed name
     if custom_name:
         name = sanitize_model_text(custom_name, max_length=100, field_name="name")
     else:
         timestamp = utcnow_naive().strftime('%Y%m%d-%H%M%S')
         name = f"{template['name']} ({timestamp})"
-    
+
     description = sanitize_model_text(template["description"], max_length=500, field_name="description") if template["description"] else None
-    
+
     preset = ExportPreset(
         user_id=user.id,
         name=name,
@@ -644,11 +644,11 @@ async def create_preset_from_template(
         position=position,
         is_default=False,
     )
-    
+
     db.add(preset)
     db.commit()
     db.refresh(preset)
-    
+
     return {
         "status": "created_from_template",
         "id": preset.id,
@@ -684,7 +684,7 @@ async def get_export_preset(
         window_seconds=60,
         message="Too many export preset get requests. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -694,7 +694,7 @@ async def get_export_preset(
                 "upgrade_required": "plus",
             },
         )
-    
+
     preset = (
         db.query(ExportPreset)
         .filter(
@@ -703,13 +703,13 @@ async def get_export_preset(
         )
         .first()
     )
-    
+
     if preset is None:
         raise HTTPException(
             status_code=404,
             detail={"error": "not_found", "message": "Export preset not found"},
         )
-    
+
     return {
         "id": preset.id,
         "name": preset.name,
@@ -744,7 +744,7 @@ async def update_export_preset(
         window_seconds=60,
         message="Too many export preset updates. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -754,7 +754,7 @@ async def update_export_preset(
                 "upgrade_required": "plus",
             },
         )
-    
+
     preset = (
         db.query(ExportPreset)
         .filter(
@@ -763,14 +763,18 @@ async def update_export_preset(
         )
         .first()
     )
-    
+
     if preset is None:
         raise HTTPException(
             status_code=404,
             detail={"error": "not_found", "message": "Export preset not found"},
         )
-    
-    # Update fields
+
+    # Update fields. Optional filter fields (search, score bounds) are
+    # clearable: an explicitly provided blank search clears the term, and
+    # an explicitly provided null score bound removes it — without this,
+    # a preset could never shed a filter once saved.
+    provided_fields = body.model_fields_set
     if body.name is not None:
         preset.name = sanitize_model_text(body.name, max_length=100, field_name="name")
     if body.description is not None:
@@ -778,18 +782,22 @@ async def update_export_preset(
     if body.format is not None:
         preset.format = body.format
     if body.search is not None:
-        preset.search = sanitize_model_text(body.search, max_length=100, field_name="search")
+        preset.search = (
+            sanitize_model_text(body.search, max_length=100, field_name="search")
+            if body.search.strip()
+            else None
+        )
     if body.persona_id is not None:
         preset.persona_id = body.persona_id
-    if body.min_score is not None:
+    if "min_score" in provided_fields:
         preset.min_score = body.min_score
-    if body.max_score is not None:
+    if "max_score" in provided_fields:
         preset.max_score = body.max_score
     if body.sort is not None:
         preset.sort = body.sort
     if body.position is not None:
         preset.position = body.position
-    
+
     # Handle default preset - only one can be default per user
     if body.is_default is not None and body.is_default:
         # Un-set any existing default preset for this user
@@ -801,10 +809,10 @@ async def update_export_preset(
         preset.is_default = True
     elif body.is_default is not None and not body.is_default:
         preset.is_default = False
-    
+
     db.commit()
     db.refresh(preset)
-    
+
     return {
         "status": "updated",
         "id": preset.id,
@@ -839,7 +847,7 @@ async def delete_export_preset(
         window_seconds=60,
         message="Too many export preset deletions. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -849,7 +857,7 @@ async def delete_export_preset(
                 "upgrade_required": "plus",
             },
         )
-    
+
     preset = (
         db.query(ExportPreset)
         .filter(
@@ -858,16 +866,16 @@ async def delete_export_preset(
         )
         .first()
     )
-    
+
     if preset is None:
         raise HTTPException(
             status_code=404,
             detail={"error": "not_found", "message": "Export preset not found"},
         )
-    
+
     db.delete(preset)
     db.commit()
-    
+
     return {"status": "deleted", "id": preset_id}
 
 
@@ -885,7 +893,7 @@ async def use_export_preset(
         window_seconds=60,
         message="Too many export preset uses. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -895,7 +903,7 @@ async def use_export_preset(
                 "upgrade_required": "plus",
             },
         )
-    
+
     preset = (
         db.query(ExportPreset)
         .filter(
@@ -904,26 +912,26 @@ async def use_export_preset(
         )
         .first()
     )
-    
+
     if preset is None:
         raise HTTPException(
             status_code=404,
             detail={"error": "not_found", "message": "Export preset not found"},
         )
-    
+
     # Update last_used_at timestamp
     from arena.core.datetime_utils import utcnow_naive
     preset.last_used_at = utcnow_naive()
     db.commit()
     db.refresh(preset)
-    
+
     # Construct the URL for the export with preset parameters
     from urllib.parse import urlencode
-    
+
     params = {
         "format": preset.format,
     }
-    
+
     if preset.search:
         params["search"] = preset.search
     if preset.persona_id:
@@ -934,11 +942,11 @@ async def use_export_preset(
         params["max_score"] = preset.max_score
     if preset.sort:
         params["sort"] = preset.sort
-    
+
     # For now, redirect to the export endpoint with preset parameters
     # This allows the existing export logic to handle the request
     query_string = urlencode(params)
-    
+
     from fastapi.responses import RedirectResponse
     return RedirectResponse(
         url=f"/api/saved/export?{query_string}",
@@ -1055,7 +1063,7 @@ async def duplicate_export_preset(
         window_seconds=60,
         message="Too many export preset duplications. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -1065,7 +1073,7 @@ async def duplicate_export_preset(
                 "upgrade_required": "plus",
             },
         )
-    
+
     # Get the original preset
     original = (
         db.query(ExportPreset)
@@ -1075,20 +1083,20 @@ async def duplicate_export_preset(
         )
         .first()
     )
-    
+
     if original is None:
         raise HTTPException(
             status_code=404,
             detail={"error": "not_found", "message": "Export preset not found"},
         )
-    
+
     # Check existing count
     existing_count = (
         db.query(ExportPreset)
         .filter(ExportPreset.user_id == user.id)
         .count()
     )
-    
+
     if existing_count >= EXPORT_PRESETS_MAX_PER_USER:
         raise HTTPException(
             status_code=400,
@@ -1098,11 +1106,11 @@ async def duplicate_export_preset(
                 "active_cap": EXPORT_PRESETS_MAX_PER_USER,
             },
         )
-    
+
     # Create a copy with a modified name
     from arena.core.datetime_utils import utcnow_naive
     timestamp = utcnow_naive().strftime('%Y%m%d-%H%M%S')
-    
+
     duplicated = ExportPreset(
         user_id=user.id,
         name=f"{original.name} (Copy {timestamp})",
@@ -1117,11 +1125,11 @@ async def duplicate_export_preset(
         position=original.position + 1,  # Place after original
         is_default=False,  # Duplicates are never default
     )
-    
+
     db.add(duplicated)
     db.commit()
     db.refresh(duplicated)
-    
+
     return {
         "status": "duplicated",
         "original_id": preset_id,
@@ -1147,7 +1155,7 @@ async def reorder_export_presets(
         window_seconds=60,
         message="Too many export preset reorders. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -1157,7 +1165,7 @@ async def reorder_export_presets(
                 "upgrade_required": "plus",
             },
         )
-    
+
     # Validate that each preset belongs to the user and update positions.
     # Items that don't belong to the caller are skipped (no existence oracle).
     updated_count = 0
@@ -1171,13 +1179,13 @@ async def reorder_export_presets(
             )
             .first()
         )
-        
+
         if preset:
             preset.position = i
             updated_count += 1
-    
+
     db.commit()
-    
+
     return {
         "status": "reordered",
         "updated_count": updated_count,
@@ -1198,7 +1206,7 @@ async def bulk_delete_export_presets(
         window_seconds=60,
         message="Too many bulk delete requests. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -1208,11 +1216,11 @@ async def bulk_delete_export_presets(
                 "upgrade_required": "plus",
             },
         )
-    
+
     # Get the list of preset IDs to delete (Pydantic validates min_items=1, max_items=50)
     preset_ids = body.ids
     force = body.force
-    
+
     # Find all presets that belong to the user and are in the provided list
     presets_to_delete = (
         db.query(ExportPreset)
@@ -1222,7 +1230,7 @@ async def bulk_delete_export_presets(
         )
         .all()
     )
-    
+
     # Check if any of the presets being deleted is the user's default preset
     default_preset_ids = [p.id for p in presets_to_delete if p.is_default]
     if default_preset_ids and not force:
@@ -1234,12 +1242,12 @@ async def bulk_delete_export_presets(
                 "protected_ids": default_preset_ids,
             },
         )
-    
+
     deleted_ids = []
     not_found_ids = []
     foreign_ids = []
     blocked_ids = []  # IDs that were blocked (default presets without force)
-    
+
     for preset_id in preset_ids:
         preset_exists = any(p.id == preset_id for p in presets_to_delete)
         if preset_exists:
@@ -1251,13 +1259,13 @@ async def bulk_delete_export_presets(
                 foreign_ids.append(preset_id)
             else:
                 not_found_ids.append(preset_id)
-    
+
     # Delete the valid presets
     for preset in presets_to_delete:
         db.delete(preset)
-    
+
     db.commit()
-    
+
     return {
         "status": "bulk_deleted",
         "deleted_count": len(deleted_ids),
@@ -1291,7 +1299,7 @@ async def import_export_presets(
         window_seconds=60,
         message="Too many import requests. Please slow down.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -1301,14 +1309,14 @@ async def import_export_presets(
                 "upgrade_required": "plus",
             },
         )
-    
+
     # Check existing count + new presets won't exceed limit
     existing_count = (
         db.query(ExportPreset)
         .filter(ExportPreset.user_id == user.id)
         .count()
     )
-    
+
     if existing_count + len(body.presets) > EXPORT_PRESETS_MAX_PER_USER:
         raise HTTPException(
             status_code=400,
@@ -1318,14 +1326,14 @@ async def import_export_presets(
                 "active_cap": EXPORT_PRESETS_MAX_PER_USER,
             },
         )
-    
+
     from arena.core.datetime_utils import utcnow_naive
-    
+
     imported_count = 0
     skipped_count = 0
     errors = []
     imported_ids = []
-    
+
     # Find the next available position
     max_position = (
         db.query(ExportPreset)
@@ -1334,7 +1342,7 @@ async def import_export_presets(
         .first()
     )
     next_position = (max_position.position + 1) if max_position else 0
-    
+
     # Build a set of existing preset names for duplicate detection
     existing_names = {
         p.name for p in (
@@ -1343,14 +1351,14 @@ async def import_export_presets(
             .all()
         )
     }
-    
+
     duplicated_names = []
-    
+
     for preset_data in body.presets:
         try:
             # Validate and sanitize inputs
             name = sanitize_model_text(preset_data.get("name", "Unnamed Preset"), max_length=100, field_name="name")
-            
+
             # Handle duplicate names by appending a suffix
             original_name = name
             if name in existing_names or name in duplicated_names:
@@ -1358,9 +1366,9 @@ async def import_export_presets(
                 timestamp = utcnow_naive().strftime('%Y%m%d')
                 name = f"{name} (Imported {timestamp})"
                 duplicated_names.append(original_name)
-            
+
             description = sanitize_model_text(preset_data.get("description"), max_length=500, field_name="description") if preset_data.get("description") else None
-            
+
             preset = ExportPreset(
                 user_id=user.id,
                 name=name,
@@ -1375,13 +1383,13 @@ async def import_export_presets(
                 position=next_position,
                 is_default=False,  # Imported presets are never default
             )
-            
+
             db.add(preset)
             db.flush()  # Get the ID
             imported_ids.append(preset.id)
             imported_count += 1
             next_position += 1
-            
+
         except Exception as e:
             logger.debug("Preset row import failed", exc_info=True)
             errors.append({
@@ -1389,9 +1397,9 @@ async def import_export_presets(
                 "error": str(e),
             })
             skipped_count += 1
-    
+
     db.commit()
-    
+
     return {
         "status": "imported",
         "imported_count": imported_count,

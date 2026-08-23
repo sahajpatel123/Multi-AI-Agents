@@ -101,6 +101,14 @@ def main():
             "live_updates JSONB",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
             "live_reschedule_hours INTEGER DEFAULT 24",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
+            "share_token VARCHAR(64)",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
+            "share_created_at TIMESTAMP",
+            # share_token is unique + indexed per db_models.AgentTask; the
+            # UNIQUE constraint itself can't ride on ADD COLUMN.
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_agent_tasks_share_token "
+            "ON agent_tasks (share_token)",
         ]
         sqlite_json_fallback = [
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS insight_report TEXT",
@@ -117,6 +125,8 @@ def main():
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS live_updates TEXT",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
             "live_reschedule_hours INTEGER DEFAULT 24",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS share_token VARCHAR(64)",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS share_created_at TIMESTAMP",
         ]
 
         pg_confidence_table = """

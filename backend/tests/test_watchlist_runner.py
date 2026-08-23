@@ -11,6 +11,7 @@ gate used by the Agent HTTP entry points. We pin:
 """
 from __future__ import annotations
 
+import pytest
 from unittest.mock import patch
 
 from arena.core import watchlist_runner
@@ -148,3 +149,80 @@ def test_gate_result_keys_are_stable() -> None:
         "capability_id",
         "error_body",
     }
+
+
+@pytest.mark.asyncio
+async def test_run_due_watchlist_skips_item_with_active_run(
+    isolated_db, monkeypatch
+):
+    """A manual run-now already in flight must not be duplicated by the sweep."""
+    from datetime import timedelta
+
+    from arena.core.blackboard import AgentStatus, create_blackboard, remove_blackboard
+    from arena.core.datetime_utils import utcnow_naive
+    from arena.db_models import User, UserTier, WatchlistItem
+
+    SessionLocal = isolated_db
+    db = SessionLocal()
+    try:
+        user = User(
+            email="wl-busy-sweep@test.com",
+            password_hash="x",
+            tier=UserTier.PRO,
+            name="WL",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        now = utcnow_naive()
+        item = WatchlistItem(
+            user_id=user.id,
+            question="Is the rupee stabilizing?",
+            interval_hours=24,
+            next_run_at=now - timedelta(minutes=1),
+            is_active=True,
+            expertise_level="curious",
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+        item_id = item.id
+        old_next = item.next_run_at
+    finally:
+        db.close()
+
+    bb = create_blackboard(user_id=user.id, task="Is the rupee stabilizing?")
+    bb.status = AgentStatus.RUNNING
+    db = SessionLocal()
+    try:
+        row = db.query(WatchlistItem).filter(WatchlistItem.id == item_id).first()
+        row.latest_task_id = bb.task_id
+        db.commit()
+    finally:
+        db.close()
+
+    started: list = []
+
+    async def _fake_pipeline(*args, **kwargs):
+        started.append(args)
+
+    monkeypatch.setattr(
+        "arena.routes.agent.run_agent_pipeline_background",
+        _fake_pipeline,
+    )
+
+    try:
+        await watchlist_runner.run_due_watchlist()
+
+        assert started == []
+        db = SessionLocal()
+        try:
+            row = db.query(WatchlistItem).filter(WatchlistItem.id == item_id).first()
+            assert row is not None
+            assert row.latest_task_id == bb.task_id
+            assert row.next_run_at == old_next
+            assert row.run_count == 0
+        finally:
+            db.close()
+    finally:
+        remove_blackboard(bb.task_id)

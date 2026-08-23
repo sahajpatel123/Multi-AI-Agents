@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Copy, Ellipsis, Lock, Pencil, RotateCcw, Trash2, X } from 'lucide-react';
+import { Copy, Ellipsis, Link2, Lock, Pencil, Pin, RotateCcw, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { Button } from '../components/Button';
@@ -19,10 +19,18 @@ import {
   cancelAgentTask,
   challengeAgentAnswer,
   createRoom,
+  createAgentTaskShare,
   crossPollinateAgentAnswer,
   deleteAgentTask,
+  exportAgentTaskCsv,
   exportAgentTaskPdf,
+  exportAgentTaskMarkdown,
+  exportAgentTaskJson,
   exportOrchestrationPdf,
+  fetchAgentTaskCsvText,
+  fetchAgentTaskJsonText,
+  fetchAgentTaskMarkdownText,
+  getDiscoverRooms,
   getAgentHistory,
   getMyRooms,
   getAgentWatchlist,
@@ -43,6 +51,7 @@ import {
   postCalibrationRate,
   refineAgentAnswer,
   renameAgentTask,
+  revokeAgentTaskShare,
   runAgentTask,
   recordConduraHandoff,
   saveConduraHandoffDraft,
@@ -55,6 +64,7 @@ import {
 import { ConduraInstallCTA } from '../components/ConduraInstallCTA';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { EmptyState } from '../components/EmptyState';
+import { RoomsDiscoverPanel } from '../components/RoomsDiscoverPanel';
 import { TemporalEvolutionPanel } from '../components/TemporalEvolutionPanel';
 import { buildHandoffPayload } from '../lib/conduraHandoff';
 import { dispatchHandoff, pairDevice, ConduraClientError } from '../lib/conduraClient';
@@ -75,7 +85,22 @@ import {
   historyItemRerunText,
   historyRowTimeTitle,
 } from '../lib/agentHistoryRow';
-import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import {
+  isAgentCopyAnswerKey,
+  isAgentCopyReportCsvKey,
+  isAgentCopyReportKey,
+  isAgentCopyReportJsonKey,
+  isAgentDownloadAnswerKey,
+  isAgentDownloadJsonKey,
+  isAgentDownloadReportCsvKey,
+  isAgentDownloadReportMarkdownKey,
+  isAgentNewTaskKey,
+} from '../lib/keyboardShortcuts';
+import {
+  isAriaModalOpen,
+  isBareSlashKey,
+  shouldCaptureSlashFocus,
+} from '../lib/slashFocus';
 import { User } from '../types';
 // setRedirectIntent is unused but kept for future use
 import {
@@ -85,6 +110,11 @@ import {
   pickRecentAgentChips,
 } from '../lib/agentRecentChips';
 import {
+  loadAgentHistoryPins,
+  removeAgentHistoryPins,
+  toggleAgentHistoryPin,
+} from '../lib/agentHistoryPins';
+import {
   AGENT_REFINE_MAX_CHARS,
   AGENT_TASK_MAX_CHARS,
   agentMinLengthHint,
@@ -92,12 +122,19 @@ import {
   charBudgetTone,
   clampToMax,
 } from '../lib/charBudget';
-import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { copyCsvToClipboard, copyToClipboard } from '../lib/clipboard';
+import {
+  downloadBlobFile,
+  downloadMarkdownFile,
+  downloadTextFile,
+  withDownloadDate,
+} from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import {
+  formatAgentHistoryCsv,
   formatAgentHistoryExport,
   formatAgentHistoryItemCopy,
+  formatAgentHistoryJson,
 } from '../lib/agentHistoryExport';
 import {
   AGENT_HISTORY_SORT_OPTIONS,
@@ -346,6 +383,8 @@ type AgentResult = {
   live_last_checked?: string | null;
   live_next_check?: string | null;
   live_updates?: any[] | null;
+  is_shared?: boolean;
+  share_url?: string | null;
 };
 
 type ContradictionItem = {
@@ -791,6 +830,7 @@ export function AgentPage() {
   const [steelmanInnerExpanded, setSteelmanInnerExpanded] = useState(false);
   const [showAllSourcePills, setShowAllSourcePills] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
+  const [pinnedTaskIds, setPinnedTaskIds] = useState<string[]>(() => loadAgentHistoryPins());
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [historySort, setHistorySort] = useState<AgentHistorySort>('newest');
   const [historyStatusFilter, setHistoryStatusFilter] =
@@ -807,8 +847,14 @@ export function AgentPage() {
     useState<AgentHistoryTopicFilter>(AGENT_HISTORY_TOPIC_ALL);
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyCsvDownloadStatus, setHistoryCsvDownloadStatus] =
+    useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyJsonDownloadStatus, setHistoryJsonDownloadStatus] =
+    useState<'idle' | 'done' | 'failed'>('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
+  const historyCsvDownloadTimerRef = useRef<number | null>(null);
+  const historyJsonDownloadTimerRef = useRef<number | null>(null);
   const [roomsCopyStatus, setRoomsCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [roomsDownloadStatus, setRoomsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [roomLinkCopyStatus, setRoomLinkCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -866,6 +912,15 @@ export function AgentPage() {
   const [pendingVerdict, setPendingVerdict] = useState<'correct' | 'partial' | 'wrong' | null>(null);
   const [pendingNote, setPendingNote] = useState('');
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingMd, setExportingMd] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingJson, setExportingJson] = useState(false);
+  /** Guards Shift+L / toolbar clicks so a report download can never double-fire. */
+  const exportMdInFlightRef = useRef(false);
+  const exportReportRunIdRef = useRef(0);
+  /** Guards Shift+K / toolbar clicks so a report CSV download can never double-fire. */
+  const exportCsvInFlightRef = useRef(false);
+  const exportCsvRunIdRef = useRef(0);
   const [multiMode, setMultiMode] = useState(false);
   const [multiTasks, setMultiTasks] = useState(['', '', '', '']);
   const [activeTaskCount, setActiveTaskCount] = useState(2);
@@ -892,9 +947,20 @@ export function AgentPage() {
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [createdRoom, setCreatedRoom] = useState<any>(null);
   const roomNameInputRef = useRef<HTMLInputElement | null>(null);
+  /** Monotonic request id so a slow discover response can't overwrite a newer search. */
+  const discoverRequestIdRef = useRef(0);
   const [myRooms, setMyRooms] = useState<any[]>([]);
   const [myRoomsLoading, setMyRoomsLoading] = useState(false);
   const [myRoomsLoadFailed, setMyRoomsLoadFailed] = useState(false);
+  const [roomsTab, setRoomsTab] = useState<'mine' | 'discover'>('mine');
+  const [discoverRooms, setDiscoverRooms] = useState<any[]>([]);
+  const [discoverTotal, setDiscoverTotal] = useState(0);
+  const [discoverLoading, setDiscoverLoading] = useState(false);
+  const [discoverLoadFailed, setDiscoverLoadFailed] = useState(false);
+  const [discoverLoadingMore, setDiscoverLoadingMore] = useState(false);
+  const [discoverLoadMoreFailed, setDiscoverLoadMoreFailed] = useState(false);
+  const [discoverPage, setDiscoverPage] = useState(1);
+  const [discoverSearchQuery, setDiscoverSearchQuery] = useState('');
   const [roomsSearchQuery, setRoomsSearchQuery] = useState('');
   const [roomsSort, setRoomsSort] = useState<AgentRoomsSort>('recent');
   const [roomsActivityFilter, setRoomsActivityFilter] =
@@ -909,6 +975,27 @@ export function AgentPage() {
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [copyAnswerFeedback, setCopyAnswerFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadAnswerFeedback, setDownloadAnswerFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [copyingReport, setCopyingReport] = useState(false);
+  const [copyReportFeedback, setCopyReportFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copyReportInFlightRef = useRef(false);
+  const copyReportRunIdRef = useRef(0);
+  const copyReportFeedbackTimerRef = useRef<number | null>(null);
+  const [copyingReportJson, setCopyingReportJson] = useState(false);
+  const [copyReportJsonFeedback, setCopyReportJsonFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copyReportJsonInFlightRef = useRef(false);
+  const copyReportJsonRunIdRef = useRef(0);
+  const copyReportJsonFeedbackTimerRef = useRef<number | null>(null);
+  const [copyingReportCsv, setCopyingReportCsv] = useState(false);
+  const [copyReportCsvFeedback, setCopyReportCsvFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copyReportCsvInFlightRef = useRef(false);
+  const copyReportCsvRunIdRef = useRef(0);
+  const copyReportCsvFeedbackTimerRef = useRef<number | null>(null);
+  const [sharingTask, setSharingTask] = useState(false);
+  const [revokingTaskShare, setRevokingTaskShare] = useState(false);
+  const [taskShareFeedback, setTaskShareFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [taskShareActive, setTaskShareActive] = useState(false);
+  const taskShareInFlightRef = useRef(false);
+  const taskShareFeedbackTimerRef = useRef<number | null>(null);
   const pendingRoomHandledRef = useRef<string | null>(null);
 
   const closeTemplatesModal = useCallback(() => {
@@ -1124,6 +1211,58 @@ export function AgentPage() {
       setMyRoomsLoading(false);
     }
   }, [user]);
+
+  const loadDiscoverRooms = useCallback(
+    async (query: string = discoverSearchQuery, page = 1) => {
+      const requestId = ++discoverRequestIdRef.current;
+      if (!user) {
+        setDiscoverRooms([]);
+        setDiscoverTotal(0);
+        setDiscoverLoadFailed(false);
+        setDiscoverLoading(false);
+        setDiscoverLoadingMore(false);
+        setDiscoverLoadMoreFailed(false);
+        return;
+      }
+      setDiscoverLoading(page === 1);
+      setDiscoverLoadingMore(page > 1);
+      setDiscoverLoadMoreFailed(false);
+      try {
+        const r = await getDiscoverRooms(query, page, 20);
+        if (requestId !== discoverRequestIdRef.current) return;
+        setDiscoverRooms((prev) => {
+          if (page === 1) return r.rooms || [];
+          const seen = new Set(prev.map((room) => room?.id));
+          return [...prev, ...(r.rooms || []).filter((room) => !seen.has(room.id))];
+        });
+        setDiscoverTotal(r.total || 0);
+        setDiscoverPage(page);
+        setDiscoverLoadFailed(false);
+      } catch {
+        if (requestId !== discoverRequestIdRef.current) return;
+        if (page === 1) {
+          setDiscoverRooms([]);
+          setDiscoverTotal(0);
+          setDiscoverLoadFailed(true);
+        } else {
+          setDiscoverLoadMoreFailed(true);
+        }
+      } finally {
+        if (requestId === discoverRequestIdRef.current) {
+          setDiscoverLoading(false);
+          setDiscoverLoadingMore(false);
+        }
+      }
+    },
+    [discoverSearchQuery, user],
+  );
+
+  const handleRoomsTabChange = (tab: 'mine' | 'discover') => {
+    setRoomsTab(tab);
+    if (tab === 'discover' && discoverRooms.length === 0 && !discoverLoading) {
+      void loadDiscoverRooms();
+    }
+  };
 
   useEffect(() => {
     void loadMyRooms();
@@ -1580,7 +1719,7 @@ export function AgentPage() {
     if (t.length < 10 || isRunning) return;
     if (selectedTemplate && !allTemplateSlotsFilled) return;
     activeTaskIdRef.current = null;
-    runGenerationRef.current += 1;
+    const generation = ++runGenerationRef.current;
     setError(null);
     setBridgeMeta(null);
     if (isMobile) setSidebarOpen(false);
@@ -1630,6 +1769,13 @@ export function AgentPage() {
       if (!startData.task_id) {
         throw new Error('No task ID received');
       }
+      if (runGenerationRef.current !== generation) {
+        // The user started a fresh task (or pressed Stop) while the task was
+        // being created. Abandon the client poll and ask the backend to cancel
+        // the just-created pipeline so no orphaned run keeps spending tokens.
+        void cancelAgentTask(startData.task_id).catch(() => {});
+        return;
+      }
       // Pipeline accepted a real task — draft is safely delivered.
       clearPromptDraft(AGENT_TASK_DRAFT_KEY);
       await pollAgentTaskUntilDone(startData.task_id);
@@ -1637,6 +1783,7 @@ export function AgentPage() {
       setAttachments([]);
       setActiveMcpSources([]);
     } catch (e) {
+      if (runGenerationRef.current !== generation) return;
       if (e instanceof LocalExecutionRequiredError) {
         setConduraCtaTitle(e.detail.title || 'This needs your machine');
         setConduraCtaMessage(e.detail.message);
@@ -1673,7 +1820,7 @@ export function AgentPage() {
     const qs = multiTasks.slice(0, activeTaskCount).map((t) => t.trim());
     if (qs.length !== activeTaskCount || qs.some((q) => q.length < 10) || isRunning) return;
     activeTaskIdRef.current = null;
-    runGenerationRef.current += 1;
+    const generation = ++runGenerationRef.current;
     try {
       sessionStorage.removeItem('pending_room_slug');
       sessionStorage.removeItem('pending_room_name');
@@ -1695,8 +1842,16 @@ export function AgentPage() {
         expertise_level: expertiseLevelForRun,
         expertise_domain: expertiseDomainForRun,
       });
+      if (runGenerationRef.current !== generation) {
+        // A fresh task or Stop superseded this orchestration while it was
+        // being created. Cancel it best-effort so the backend doesn't keep
+        // running child pipelines for an abandoned UI.
+        void cancelAgentOrchestration(orchestration_id).catch(() => {});
+        return;
+      }
       setOrchActiveId(orchestration_id);
     } catch (e) {
+      if (runGenerationRef.current !== generation) return;
       setError(e instanceof ApiError ? e.message : 'Orchestration failed');
       setIsRunning(false);
       setOrchActiveId(null);
@@ -1809,6 +1964,73 @@ export function AgentPage() {
     }
   };
 
+  const handleExportTaskMarkdown = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || exportMdInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++exportReportRunIdRef.current;
+    exportMdInFlightRef.current = true;
+    setExportingMd(true);
+    try {
+      const blob = await exportAgentTaskMarkdown(taskId);
+      if (exportReportRunIdRef.current !== runId) return;
+      const ok = downloadBlobFile(
+        blob,
+        `arena-report-${taskId.slice(0, 8)}.md`,
+      );
+      if (!ok) setError('Export failed');
+    } catch (e) {
+      if (exportReportRunIdRef.current !== runId) return;
+      setError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      if (exportReportRunIdRef.current === runId) {
+        exportMdInFlightRef.current = false;
+        setExportingMd(false);
+      }
+    }
+  }, [result?.status, result?.task_id]);
+
+  const handleExportTaskCsv = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || exportCsvInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++exportCsvRunIdRef.current;
+    exportCsvInFlightRef.current = true;
+    setExportingCsv(true);
+    try {
+      const blob = await exportAgentTaskCsv(taskId);
+      if (exportCsvRunIdRef.current !== runId) return;
+      const ok = downloadBlobFile(
+        blob,
+        `arena-report-${taskId.slice(0, 8)}.csv`,
+      );
+      if (!ok) setError('Export failed');
+    } catch (e) {
+      if (exportCsvRunIdRef.current !== runId) return;
+      setError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      if (exportCsvRunIdRef.current === runId) {
+        exportCsvInFlightRef.current = false;
+        setExportingCsv(false);
+      }
+    }
+  }, [result?.status, result?.task_id]);
+
+  const handleExportTaskJson = useCallback(async () => {
+    if (!result?.task_id || exportingJson) return;
+    setExportingJson(true);
+    try {
+      const blob = await exportAgentTaskJson(result.task_id);
+      const ok = downloadBlobFile(
+        blob,
+        `arena-task-${result.task_id.slice(0, 8)}.json`,
+      );
+      if (!ok) setError('Export failed');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExportingJson(false);
+    }
+  }, [exportingJson, result?.task_id]);
+
   const handleExportOrchestrationPdf = async () => {
     const oid = orchResult?.orchestration?.id as string | undefined;
     if (!oid || exportingPdf) return;
@@ -1883,7 +2105,7 @@ export function AgentPage() {
       return;
     }
     activeTaskIdRef.current = null;
-    runGenerationRef.current += 1;
+    const generation = ++runGenerationRef.current;
     // Clear only after we know we'll send; restore on failure so the draft isn't lost.
     setFollowUp('');
     setIsRunning(true);
@@ -1891,21 +2113,31 @@ export function AgentPage() {
     setRefinementError(null);
     try {
       await refineAgentAnswer(result.task_id, msg);
+      if (runGenerationRef.current !== generation) {
+        // A fresh task (or Stop) superseded this refinement while the request
+        // was in flight. Cancel the newly-refined pipeline best-effort so the
+        // backend doesn't keep spending tokens on a task the user abandoned.
+        void cancelAgentTask(result.task_id).catch(() => {});
+        return;
+      }
       clearPromptDraft(agentFollowUpDraftKey(result.task_id));
       await pollAgentTaskUntilDone(result.task_id);
     } catch (err) {
+      if (runGenerationRef.current !== generation) return;
       setFollowUp(msg);
       setRefinementError(
         err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Refinement failed.',
       );
       followUpInputRef.current?.focus();
     } finally {
-      setIsRunning(false);
-      setIsRefining(false);
+      if (runGenerationRef.current === generation) {
+        setIsRunning(false);
+        setIsRefining(false);
+      }
     }
   };
 
-  const resetRun = () => {
+  const resetRun = useCallback(() => {
     try {
       sessionStorage.removeItem('pending_room_slug');
       sessionStorage.removeItem('pending_room_name');
@@ -1913,6 +2145,7 @@ export function AgentPage() {
       /* ignore */
     }
     pendingRoomHandledRef.current = null;
+    setCrossPollinateBusy(false);
     setOpenMenuTaskId(null);
     setConfirmDeleteTaskId(null);
     setEditingTaskId(null);
@@ -1942,6 +2175,7 @@ export function AgentPage() {
     setTemplatesClosing(false);
     setTaskAnswerFeedback(undefined);
     setFeedbackEditMode(false);
+    setAnswerFeedbackSubmitBusy(false);
     setPendingVerdict(null);
     setPendingNote('');
     setOrchActiveId(null);
@@ -1949,11 +2183,71 @@ export function AgentPage() {
     setOrchResult(null);
     setOrchExpandedIdx(null);
     setMultiMode(false);
+    setMultiTasks(['', '', '', '']);
+    setActiveTaskCount(2);
     setWatchlisted(false);
     setShowScheduler(false);
     setWatchlistPickHours(24);
+    setAttachments([]);
+    setActiveMcpSources([]);
+    setAttachMenuOpen(false);
+    setUploadErr(null);
+    setExportingPdf(false);
+    setExportingMd(false);
+    setExportingJson(false);
+    setExportingCsv(false);
+    exportReportRunIdRef.current += 1;
+    exportMdInFlightRef.current = false;
+    exportCsvRunIdRef.current += 1;
+    exportCsvInFlightRef.current = false;
+    setCopyAnswerFeedback('idle');
+    setDownloadAnswerFeedback('idle');
+    copyReportRunIdRef.current += 1;
+    copyReportInFlightRef.current = false;
+    if (copyReportFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportFeedbackTimerRef.current);
+      copyReportFeedbackTimerRef.current = null;
+    }
+    setCopyingReport(false);
+    setCopyReportFeedback('idle');
+    copyReportJsonRunIdRef.current += 1;
+    copyReportJsonInFlightRef.current = false;
+    if (copyReportJsonFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportJsonFeedbackTimerRef.current);
+      copyReportJsonFeedbackTimerRef.current = null;
+    }
+    setCopyingReportJson(false);
+    setCopyReportJsonFeedback('idle');
+    copyReportCsvRunIdRef.current += 1;
+    copyReportCsvInFlightRef.current = false;
+    if (copyReportCsvFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportCsvFeedbackTimerRef.current);
+      copyReportCsvFeedbackTimerRef.current = null;
+    }
+    setCopyingReportCsv(false);
+    setCopyReportCsvFeedback('idle');
+    setUserRating(null);
+    setRatingResult(null);
+    setRatingSubmitBusy(false);
+    setLiveToggleBusy(false);
+    setLiveUpdatesPanelOpen(false);
+    setSuggIdx(0);
     if (isMobile) setSidebarOpen(false);
-  };
+  }, [isMobile, setSearchParams]);
+
+  /**
+   * New task from the sidebar or Shift+N: stop any active Agent work first
+   * (client poll plus the backend pipeline), then clear the page to a fresh,
+   * empty compose box. Mirrors Arena's New task, which aborts in-flight SSE
+   * before resetting the UI.
+   */
+  const startFreshAgentTask = useCallback(() => {
+    if (isRunning || isRefining || isChallengingAnswer) {
+      handleStopAgentWork();
+    }
+    resetRun();
+    window.setTimeout(() => idleTaskInputRef.current?.focus(), 0);
+  }, [handleStopAgentWork, isChallengingAnswer, isRefining, isRunning, resetRun]);
 
   const runAgainWithSameQuestion = () => {
     const q = (result?.original_task || result?.task || '').trim();
@@ -2080,6 +2374,302 @@ export function AgentPage() {
     [result?.final_answer, parsedAnswer],
   );
 
+  const completedAnswerMarkdown = useMemo(
+    () =>
+      formatAgentAnswerExport({
+        question: result?.original_task || result?.task || task || '',
+        answer: plainAnswerText || result?.final_answer || '',
+        taskId: result?.task_id,
+      }),
+    [
+      plainAnswerText,
+      result?.final_answer,
+      result?.original_task,
+      result?.task,
+      result?.task_id,
+      task,
+    ],
+  );
+
+  const handleCopyAnswer = useCallback(() => {
+    if (!result?.task_id) return;
+    void copyToClipboard(completedAnswerMarkdown).then((ok) => {
+      setCopyAnswerFeedback(ok ? 'copied' : 'failed');
+      const hold = motionDuration(ok ? 2000 : 2800);
+      window.setTimeout(() => setCopyAnswerFeedback('idle'), hold > 0 ? hold : 0);
+    });
+  }, [completedAnswerMarkdown, result?.task_id]);
+
+  const handleDownloadAnswer = useCallback(() => {
+    if (!result?.task_id) return;
+    const question = result?.original_task || result?.task || task || '';
+    const stem = `agent-${(question || result.task_id).slice(0, 48)}`;
+    const ok = downloadMarkdownFile(completedAnswerMarkdown, stem);
+    setDownloadAnswerFeedback(ok ? 'done' : 'failed');
+    const hold = motionDuration(ok ? 2000 : 2800);
+    window.setTimeout(() => setDownloadAnswerFeedback('idle'), hold > 0 ? hold : 0);
+  }, [completedAnswerMarkdown, result?.original_task, result?.task, result?.task_id, task]);
+
+  const handleCopyTaskMarkdown = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || copyReportInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++copyReportRunIdRef.current;
+    copyReportInFlightRef.current = true;
+    setCopyingReport(true);
+    setCopyReportFeedback('idle');
+    if (copyReportFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportFeedbackTimerRef.current);
+      copyReportFeedbackTimerRef.current = null;
+    }
+    try {
+      const markdown = await fetchAgentTaskMarkdownText(taskId);
+      if (copyReportRunIdRef.current !== runId) return;
+      const ok = await copyToClipboard(markdown);
+      if (copyReportRunIdRef.current !== runId) return;
+      setCopyReportFeedback(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy the research report. Try the Report .md download instead.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyReportFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportFeedback('idle');
+        copyReportFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      if (copyReportRunIdRef.current !== runId) return;
+      setCopyReportFeedback('failed');
+      setError(e instanceof Error ? e.message : 'Could not copy the research report.');
+      const hold = motionDuration(2800);
+      copyReportFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportFeedback('idle');
+        copyReportFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (copyReportRunIdRef.current === runId) {
+        copyReportInFlightRef.current = false;
+        setCopyingReport(false);
+      }
+    }
+  }, [result?.status, result?.task_id]);
+
+  const handleCopyTaskJson = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || copyReportJsonInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++copyReportJsonRunIdRef.current;
+    copyReportJsonInFlightRef.current = true;
+    setCopyingReportJson(true);
+    setCopyReportJsonFeedback('idle');
+    if (copyReportJsonFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportJsonFeedbackTimerRef.current);
+      copyReportJsonFeedbackTimerRef.current = null;
+    }
+    try {
+      const json = await fetchAgentTaskJsonText(taskId);
+      if (copyReportJsonRunIdRef.current !== runId) return;
+      const ok = await copyToClipboard(json);
+      if (copyReportJsonRunIdRef.current !== runId) return;
+      setCopyReportJsonFeedback(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy the research report. Try the Report .json download instead.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyReportJsonFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportJsonFeedback('idle');
+        copyReportJsonFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      if (copyReportJsonRunIdRef.current !== runId) return;
+      setCopyReportJsonFeedback('failed');
+      setError(e instanceof Error ? e.message : 'Could not copy the research report.');
+      const hold = motionDuration(2800);
+      copyReportJsonFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportJsonFeedback('idle');
+        copyReportJsonFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (copyReportJsonRunIdRef.current === runId) {
+        copyReportJsonInFlightRef.current = false;
+        setCopyingReportJson(false);
+      }
+    }
+  }, [result?.status, result?.task_id]);
+
+  const handleCopyTaskCsv = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || copyReportCsvInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++copyReportCsvRunIdRef.current;
+    copyReportCsvInFlightRef.current = true;
+    setCopyingReportCsv(true);
+    setCopyReportCsvFeedback('idle');
+    if (copyReportCsvFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportCsvFeedbackTimerRef.current);
+      copyReportCsvFeedbackTimerRef.current = null;
+    }
+    try {
+      const csv = await fetchAgentTaskCsvText(taskId);
+      if (copyReportCsvRunIdRef.current !== runId) return;
+      const ok = await copyCsvToClipboard(csv);
+      if (copyReportCsvRunIdRef.current !== runId) return;
+      setCopyReportCsvFeedback(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy the research report. Try the Report .csv download instead.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyReportCsvFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportCsvFeedback('idle');
+        copyReportCsvFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      if (copyReportCsvRunIdRef.current !== runId) return;
+      setCopyReportCsvFeedback('failed');
+      setError(e instanceof Error ? e.message : 'Could not copy the research report.');
+      const hold = motionDuration(2800);
+      copyReportCsvFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyReportCsvFeedback('idle');
+        copyReportCsvFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (copyReportCsvRunIdRef.current === runId) {
+        copyReportCsvInFlightRef.current = false;
+        setCopyingReportCsv(false);
+      }
+    }
+  }, [result?.status, result?.task_id]);
+
+  /**
+   * Publish a completed report as a public link and copy it to the
+   * clipboard. The backend is idempotent, so repeat clicks return the same
+   * link; the in-flight ref prevents a double-fire from racing two copies.
+   */
+  const handleShareTask = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || taskShareInFlightRef.current) return;
+    taskShareInFlightRef.current = true;
+    setSharingTask(true);
+    setTaskShareFeedback('idle');
+    if (taskShareFeedbackTimerRef.current != null) {
+      window.clearTimeout(taskShareFeedbackTimerRef.current);
+      taskShareFeedbackTimerRef.current = null;
+    }
+    try {
+      const share = await createAgentTaskShare(result.task_id);
+      const absoluteUrl = `${window.location.origin}${share.shareUrl}`;
+      const ok = await copyToClipboard(absoluteUrl);
+      setTaskShareFeedback(ok ? 'copied' : 'failed');
+      setTaskShareActive(true);
+      if (!ok) {
+        setError('Could not copy the share link — try again.');
+      }
+      const hold = motionDuration(ok ? 2200 : 3200);
+      taskShareFeedbackTimerRef.current = window.setTimeout(() => {
+        setTaskShareFeedback('idle');
+        taskShareFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      setTaskShareFeedback('failed');
+      setError(e instanceof Error ? e.message : 'Could not share this report.');
+      const hold = motionDuration(3200);
+      taskShareFeedbackTimerRef.current = window.setTimeout(() => {
+        setTaskShareFeedback('idle');
+        taskShareFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      taskShareInFlightRef.current = false;
+      setSharingTask(false);
+    }
+  }, [result?.status, result?.task_id]);
+
+  const handleRevokeTaskShare = useCallback(async () => {
+    if (!result?.task_id || revokingTaskShare) return;
+    setRevokingTaskShare(true);
+    try {
+      await revokeAgentTaskShare(result.task_id);
+      setTaskShareActive(false);
+      setTaskShareFeedback('idle');
+      setToastMessage('Public link revoked.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not revoke the share link.');
+    } finally {
+      setRevokingTaskShare(false);
+    }
+  }, [result?.task_id, revokingTaskShare]);
+
+  // A task that was shared in a previous session keeps its public link.
+  // Restore the share affordance from the persisted payload so a reload or
+  // a later visit still shows "Copy link" and "Stop sharing".
+  useEffect(() => {
+    setTaskShareActive(Boolean(result?.share_url));
+    setTaskShareFeedback('idle');
+  }, [result?.task_id, result?.share_url]);
+
+  // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
+  // Shift+I / Shift+J / Shift+K / Shift+L / Shift+O / Shift+P mirror the result
+  // toolbar buttons.
+  // Form controls are skipped so normal Shift+letter typing is never swallowed.
+  useEffect(() => {
+    if (result?.status !== 'complete' || !result?.task_id || isRunning) return;
+    const onKey = (e: KeyboardEvent) => {
+      // Never export through an open dialog (templates, room create, shortcut
+      // help, etc.) — the modal owns the keystroke.
+      if (isAriaModalOpen()) return;
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      if (isAgentCopyAnswerKey(e)) {
+        e.preventDefault();
+        handleCopyAnswer();
+      } else if (isAgentDownloadAnswerKey(e)) {
+        e.preventDefault();
+        handleDownloadAnswer();
+      } else if (isAgentDownloadJsonKey(e)) {
+        e.preventDefault();
+        void handleExportTaskJson();
+      } else if (isAgentDownloadReportMarkdownKey(e)) {
+        e.preventDefault();
+        void handleExportTaskMarkdown();
+      } else if (isAgentDownloadReportCsvKey(e)) {
+        e.preventDefault();
+        void handleExportTaskCsv();
+      } else if (isAgentCopyReportKey(e)) {
+        e.preventDefault();
+        void handleCopyTaskMarkdown();
+      } else if (isAgentCopyReportJsonKey(e)) {
+        e.preventDefault();
+        void handleCopyTaskJson();
+      } else if (isAgentCopyReportCsvKey(e)) {
+        e.preventDefault();
+        void handleCopyTaskCsv();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    handleCopyAnswer,
+    handleDownloadAnswer,
+    handleCopyTaskMarkdown,
+    handleCopyTaskJson,
+    handleCopyTaskCsv,
+    handleExportTaskJson,
+    handleExportTaskMarkdown,
+    handleExportTaskCsv,
+    isRunning,
+    result?.status,
+    result?.task_id,
+  ]);
+
+  // Shift+N starts a fresh Agent task from anywhere on the page, mirroring the
+  // sidebar's New task button without needing the sidebar open. Form controls
+  // are skipped so Shift+letter typing is never swallowed, and open dialogs
+  // keep ownership of their keystrokes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isAriaModalOpen()) return;
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      if (!isAgentNewTaskKey(e)) return;
+      e.preventDefault();
+      startFreshAgentTask();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [startFreshAgentTask]);
+
   const answerSentences = useMemo((): AnswerSentenceView[] => {
     if (parsedAnswer?.sentences?.length) {
       return parsedAnswer.sentences.map((s) => ({
@@ -2176,9 +2766,11 @@ export function AgentPage() {
         isLive: item.is_live,
       })),
       historySort,
+      pinnedTaskIds,
     );
   }, [
     taskHistory,
+    pinnedTaskIds,
     historySearchQuery,
     historySort,
     historyStatusFilter,
@@ -2292,12 +2884,41 @@ export function AgentPage() {
       if (historyDownloadTimerRef.current != null) {
         window.clearTimeout(historyDownloadTimerRef.current);
       }
+      if (historyCsvDownloadTimerRef.current != null) {
+        window.clearTimeout(historyCsvDownloadTimerRef.current);
+      }
+      if (historyJsonDownloadTimerRef.current != null) {
+        window.clearTimeout(historyJsonDownloadTimerRef.current);
+      }
       if (roomsCopyTimerRef.current != null) {
         window.clearTimeout(roomsCopyTimerRef.current);
       }
       if (roomsDownloadTimerRef.current != null) {
         window.clearTimeout(roomsDownloadTimerRef.current);
       }
+      copyReportRunIdRef.current += 1;
+      copyReportInFlightRef.current = false;
+      if (copyReportFeedbackTimerRef.current != null) {
+        window.clearTimeout(copyReportFeedbackTimerRef.current);
+      }
+      copyReportJsonRunIdRef.current += 1;
+      copyReportJsonInFlightRef.current = false;
+      if (copyReportJsonFeedbackTimerRef.current != null) {
+        window.clearTimeout(copyReportJsonFeedbackTimerRef.current);
+      }
+      copyReportCsvRunIdRef.current += 1;
+      copyReportCsvInFlightRef.current = false;
+      if (copyReportCsvFeedbackTimerRef.current != null) {
+        window.clearTimeout(copyReportCsvFeedbackTimerRef.current);
+      }
+      taskShareInFlightRef.current = false;
+      if (taskShareFeedbackTimerRef.current != null) {
+        window.clearTimeout(taskShareFeedbackTimerRef.current);
+      }
+      exportReportRunIdRef.current += 1;
+      exportMdInFlightRef.current = false;
+      exportCsvRunIdRef.current += 1;
+      exportCsvInFlightRef.current = false;
     };
   }, []);
 
@@ -2396,7 +3017,21 @@ export function AgentPage() {
     }, hold > 0 ? hold : 0);
   };
 
-  const buildFilteredHistoryMarkdown = () => {
+  const toHistoryExportItem = (item: HistoryTask) => ({
+    title: item.title,
+    question: item.task_text,
+    score: item.final_score,
+    confidence: item.final_confidence,
+    createdAt: item.created_at,
+    topics: item.topics,
+    isLive: item.is_live,
+    taskId: item.task_id,
+    userFeedback: item.user_feedback,
+    orchestrationId: item.orchestration_id,
+    watchlistItemId: item.watchlist_item_id,
+  });
+
+  const buildHistoryFilterNote = () => {
     const q = historySearchQuery.trim();
     const filterBits: string[] = [];
     if (historyStatusFilter !== 'all') {
@@ -2421,19 +3056,14 @@ export function AgentPage() {
     }
     if (q) filterBits.push(`search: “${q}”`);
     if (historySort !== 'newest') filterBits.push(`sort: ${agentHistorySortLabel(historySort)}`);
+    return filterBits.length ? filterBits.join(' · ') : undefined;
+  };
+
+  const buildFilteredHistoryMarkdown = () => {
     return formatAgentHistoryExport({
-      items: filteredTaskHistory.map((item) => ({
-        title: item.title,
-        question: item.task_text,
-        score: item.final_score,
-        confidence: item.final_confidence,
-        createdAt: item.created_at,
-        topics: item.topics,
-        isLive: item.is_live,
-        taskId: item.task_id,
-      })),
+      items: filteredTaskHistory.map(toHistoryExportItem),
       totalCount: taskHistory.length,
-      filterNote: filterBits.length ? filterBits.join(' · ') : undefined,
+      filterNote: buildHistoryFilterNote(),
     });
   };
 
@@ -2468,6 +3098,52 @@ export function AgentPage() {
     historyDownloadTimerRef.current = window.setTimeout(() => {
       setHistoryDownloadStatus('idle');
       historyDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadFilteredHistoryCsv = () => {
+    const csv = formatAgentHistoryCsv({
+      items: filteredTaskHistory.map(toHistoryExportItem),
+    });
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('agent-research-history')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    if (historyCsvDownloadTimerRef.current != null) {
+      window.clearTimeout(historyCsvDownloadTimerRef.current);
+    }
+    setHistoryCsvDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download history CSV — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historyCsvDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryCsvDownloadStatus('idle');
+      historyCsvDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadFilteredHistoryJson = () => {
+    const json = formatAgentHistoryJson({
+      items: filteredTaskHistory.map(toHistoryExportItem),
+      totalCount: taskHistory.length,
+      filterNote: buildHistoryFilterNote(),
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('agent-research-history')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    if (historyJsonDownloadTimerRef.current != null) {
+      window.clearTimeout(historyJsonDownloadTimerRef.current);
+    }
+    setHistoryJsonDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download history JSON — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historyJsonDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryJsonDownloadStatus('idle');
+      historyJsonDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -2652,16 +3328,23 @@ export function AgentPage() {
     }
   };
 
+  const toggleHistoryPin = (taskId: string) => {
+    setPinnedTaskIds(toggleAgentHistoryPin(taskId));
+  };
+
   const deleteHistoryItem = (taskId: string) => {
     const removed = taskHistory.find((t) => t.task_id === taskId) ?? null;
+    const wasPinned = pinnedTaskIds.includes(taskId);
     const wasActive = result?.task_id === taskId;
     if (wasActive) {
       resetRun();
     }
+    setPinnedTaskIds(removeAgentHistoryPins([taskId]));
     setOpenMenuTaskId(null);
     setConfirmDeleteTaskId(null);
     setTaskHistory((prev) => prev.filter((t) => t.task_id !== taskId));
     void deleteAgentTask(taskId).catch(() => {
+      if (wasPinned) setPinnedTaskIds(toggleAgentHistoryPin(taskId));
       if (removed) {
         setTaskHistory((prev) => {
           if (prev.some((t) => t.task_id === taskId)) return prev;
@@ -2867,6 +3550,7 @@ export function AgentPage() {
     const isMenuOpen = openMenuTaskId === item.task_id;
     const isConfirmingDelete = confirmDeleteTaskId === item.task_id;
     const isEditing = editingTaskId === item.task_id;
+    const pinned = pinnedTaskIds.includes(item.task_id);
     const displayTitle = agentHistoryDisplayTitle(item);
     const scoreBg =
       score >= 80
@@ -2970,6 +3654,15 @@ export function AgentPage() {
                     lineHeight: '1.35',
                   }}
                 >
+                  {pinned ? (
+                    <span
+                      title="Pinned to top"
+                      aria-label="Pinned to top"
+                      style={{ display: 'inline-flex', flexShrink: 0, color: '#B07840' }}
+                    >
+                      <Pin width={12} height={12} fill="currentColor" strokeWidth={1.8} aria-hidden />
+                    </span>
+                  ) : null}
                   {item.watchlist_item_id ? (
                     <svg
                       width={12}
@@ -3134,6 +3827,16 @@ export function AgentPage() {
                   color="#1A1714"
                   hoverBackground="#F0EBE3"
                   onClick={() => rerunFromHistory(item)}
+                />
+                <AgentSidebarMenuItem
+                  icon={<Pin className="w-[14px] h-[14px]" fill={pinned ? 'currentColor' : 'none'} />}
+                  label={pinned ? 'Unpin' : 'Pin to top'}
+                  color="#B07840"
+                  hoverBackground="#FBF3E3"
+                  onClick={() => {
+                    setOpenMenuTaskId(null);
+                    toggleHistoryPin(item.task_id);
+                  }}
                 />
                 <AgentSidebarMenuItem
                   icon={<Copy className="w-[14px] h-[14px]" />}
@@ -3444,7 +4147,9 @@ export function AgentPage() {
           </div>
           <button
             type="button"
-            onClick={resetRun}
+            onClick={startFreshAgentTask}
+            title="Start a fresh task (Shift+N)"
+            aria-keyshortcuts="Shift+N"
             style={{
               margin: '12px 16px',
               width: 'calc(100% - 32px)',
@@ -3535,7 +4240,37 @@ export function AgentPage() {
                 <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2' }}>
                   Rooms
                 </div>
-                {roomsBodyMode === 'list' ? (
+                <div
+                  role="tablist"
+                  aria-label="Rooms views"
+                  style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+                >
+                  {['mine' as const, 'discover' as const].map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      aria-selected={roomsTab === tab}
+                      onClick={() => handleRoomsTabChange(tab)}
+                      style={{
+                        background: roomsTab === tab ? '#2C3B33' : 'transparent',
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 6,
+                        padding: '2px 7px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        color: roomsTab === tab ? '#F3F0E7' : '#A0A39A',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--vp-font-sans)',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {tab === 'mine' ? 'Mine' : 'Discover'}
+                    </button>
+                  ))}
+                </div>
+                {roomsTab === 'mine' && roomsBodyMode === 'list' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10, color: '#A0A39A' }}>
                       {filteredMyRooms.length}
@@ -3621,6 +4356,8 @@ export function AgentPage() {
                   </div>
                 ) : null}
               </div>
+              {roomsTab === 'mine' ? (
+                <>
               {roomsBodyMode === 'loading' ? (
                 <div style={{ fontSize: 11, color: '#C4B8AE', padding: '4px 0' }}>Loading…</div>
               ) : roomsBodyMode === 'load_error' ? (
@@ -4029,6 +4766,32 @@ export function AgentPage() {
                   )}
                 </>
               )}
+                </>
+              ) : (
+                <RoomsDiscoverPanel
+                  rooms={discoverRooms}
+                  total={discoverTotal}
+                  loading={discoverLoading}
+                  loadingMore={discoverLoadingMore}
+                  loadMoreFailed={discoverLoadMoreFailed}
+                  failed={discoverLoadFailed}
+                  searchQuery={discoverSearchQuery}
+                  onSearchChange={setDiscoverSearchQuery}
+                  onSubmitSearch={() => void loadDiscoverRooms()}
+                  onClearSearch={() => {
+                    setDiscoverSearchQuery('');
+                    void loadDiscoverRooms('');
+                  }}
+                  onRetry={() => void loadDiscoverRooms()}
+                  onLoadMore={() =>
+                    void loadDiscoverRooms(discoverSearchQuery, discoverPage + 1)
+                  }
+                  onOpen={(slug) => {
+                    navigate(`/room/${encodeURIComponent(slug)}`);
+                    if (isMobile) setSidebarOpen(false);
+                  }}
+                />
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -4169,6 +4932,78 @@ export function AgentPage() {
                       : historyDownloadStatus === 'failed'
                         ? 'Failed'
                         : 'Download'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadFilteredHistoryCsv()}
+                    title="Download current history view as CSV"
+                    aria-label={
+                      historyCsvDownloadStatus === 'done'
+                        ? 'History CSV downloaded'
+                        : historyCsvDownloadStatus === 'failed'
+                          ? 'History CSV download failed'
+                          : 'Download research history as CSV'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyCsvDownloadStatus === 'failed'
+                          ? '#D85A30'
+                          : historyCsvDownloadStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {historyCsvDownloadStatus === 'done'
+                      ? 'Downloaded'
+                      : historyCsvDownloadStatus === 'failed'
+                        ? 'Failed'
+                        : 'CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadFilteredHistoryJson()}
+                    title="Download current history view as JSON"
+                    aria-label={
+                      historyJsonDownloadStatus === 'done'
+                        ? 'History JSON downloaded'
+                        : historyJsonDownloadStatus === 'failed'
+                          ? 'History JSON download failed'
+                          : 'Download research history as JSON'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyJsonDownloadStatus === 'failed'
+                          ? '#D85A30'
+                          : historyJsonDownloadStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {historyJsonDownloadStatus === 'done'
+                      ? 'Downloaded'
+                      : historyJsonDownloadStatus === 'failed'
+                        ? 'Failed'
+                        : 'JSON'}
                   </button>
                 </div>
               ) : null}
@@ -8600,25 +9435,7 @@ export function AgentPage() {
                       size="sm"
                       icon={Icons.copy(14)}
                       title="Copy answer as markdown (question + answer)"
-                      onClick={() => {
-                        const md = formatAgentAnswerExport({
-                          question:
-                            result.original_task ||
-                            result.task ||
-                            task ||
-                            '',
-                          answer: plainAnswerText || result.final_answer || '',
-                          taskId: result.task_id,
-                        });
-                        void copyToClipboard(md).then((ok) => {
-                          setCopyAnswerFeedback(ok ? 'copied' : 'failed');
-                          const hold = motionDuration(ok ? 2000 : 2800);
-                          window.setTimeout(
-                            () => setCopyAnswerFeedback('idle'),
-                            hold > 0 ? hold : 0,
-                          );
-                        });
-                      }}
+                      onClick={() => handleCopyAnswer()}
                     >
                       {copyAnswerFeedback === 'copied'
                         ? 'Copied!'
@@ -8632,23 +9449,7 @@ export function AgentPage() {
                       size="sm"
                       icon={Icons.download(14)}
                       title="Download answer as a markdown file"
-                      onClick={() => {
-                        const question =
-                          result.original_task || result.task || task || '';
-                        const md = formatAgentAnswerExport({
-                          question,
-                          answer: plainAnswerText || result.final_answer || '',
-                          taskId: result.task_id,
-                        });
-                        const stem = `agent-${(question || result.task_id || 'answer').slice(0, 48)}`;
-                        const ok = downloadMarkdownFile(md, stem);
-                        setDownloadAnswerFeedback(ok ? 'done' : 'failed');
-                        const hold = motionDuration(ok ? 2000 : 2800);
-                        window.setTimeout(
-                          () => setDownloadAnswerFeedback('idle'),
-                          hold > 0 ? hold : 0,
-                        );
-                      }}
+                      onClick={() => handleDownloadAnswer()}
                     >
                       {downloadAnswerFeedback === 'done'
                         ? 'Downloaded'
@@ -8664,12 +9465,155 @@ export function AgentPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        icon={sharingTask ? undefined : <Link2 size={14} aria-hidden />}
+                        loading={sharingTask}
+                        disabled={sharingTask || revokingTaskShare}
+                        title="Publish this report as a public link and copy it"
+                        onClick={() => void handleShareTask()}
+                      >
+                        {sharingTask
+                          ? 'Sharing…'
+                          : taskShareFeedback === 'copied'
+                            ? 'Link copied'
+                            : taskShareFeedback === 'failed'
+                              ? 'Share failed'
+                              : taskShareActive
+                                ? 'Copy link'
+                                : 'Share report'}
+                      </Button>
+                    ) : null}
+                    {result.task_id && taskShareActive ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={revokingTaskShare ? undefined : <X size={14} aria-hidden />}
+                        loading={revokingTaskShare}
+                        disabled={revokingTaskShare || sharingTask}
+                        title="Stop sharing this public link"
+                        onClick={() => void handleRevokeTaskShare()}
+                      >
+                        {revokingTaskShare ? 'Revoking…' : 'Stop sharing'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
                         icon={exportingPdf ? undefined : Icons.download(14)}
                         loading={exportingPdf}
                         disabled={exportingPdf}
                         onClick={() => void handleExportTaskPdf()}
                       >
                         {exportingPdf ? 'Exporting…' : 'Export PDF'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={exportingCsv ? undefined : Icons.download(14)}
+                        loading={exportingCsv}
+                        disabled={exportingCsv}
+                        title="Download the full research report as CSV (Shift+K)"
+                        aria-keyshortcuts="Shift+K"
+                        onClick={() => void handleExportTaskCsv()}
+                      >
+                        {exportingCsv ? 'Exporting…' : 'Report .csv'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={exportingMd ? undefined : Icons.download(14)}
+                        loading={exportingMd}
+                        disabled={exportingMd}
+                        title="Download the full research report as Markdown (Shift+L)"
+                        aria-keyshortcuts="Shift+L"
+                        onClick={() => void handleExportTaskMarkdown()}
+                      >
+                        {exportingMd ? 'Exporting…' : 'Report .md'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={copyingReport ? undefined : Icons.copy(14)}
+                        loading={copyingReport}
+                        disabled={copyingReport}
+                        title="Copy the full research report as markdown (Shift+P)"
+                        aria-keyshortcuts="Shift+P"
+                        onClick={() => void handleCopyTaskMarkdown()}
+                      >
+                        {copyingReport
+                          ? 'Copying…'
+                          : copyReportFeedback === 'copied'
+                            ? 'Copied!'
+                            : copyReportFeedback === 'failed'
+                              ? 'Copy failed'
+                              : 'Copy report'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={copyingReportJson ? undefined : Icons.copy(14)}
+                        loading={copyingReportJson}
+                        disabled={copyingReportJson}
+                        title="Copy the full research report as machine-readable JSON (Shift+O)"
+                        aria-keyshortcuts="Shift+O"
+                        onClick={() => void handleCopyTaskJson()}
+                      >
+                        {copyingReportJson
+                          ? 'Copying…'
+                          : copyReportJsonFeedback === 'copied'
+                            ? 'Copied!'
+                            : copyReportJsonFeedback === 'failed'
+                              ? 'Copy failed'
+                              : 'Copy .json'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={copyingReportCsv ? undefined : Icons.copy(14)}
+                        loading={copyingReportCsv}
+                        disabled={copyingReportCsv}
+                        title="Copy the full research report as CSV (Shift+I)"
+                        aria-keyshortcuts="Shift+I"
+                        onClick={() => void handleCopyTaskCsv()}
+                      >
+                        {copyingReportCsv
+                          ? 'Copying…'
+                          : copyReportCsvFeedback === 'copied'
+                            ? 'Copied!'
+                            : copyReportCsvFeedback === 'failed'
+                              ? 'Copy failed'
+                              : 'Copy .csv'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={exportingJson ? undefined : Icons.download(14)}
+                        loading={exportingJson}
+                        disabled={exportingJson}
+                        title="Download the full research report as machine-readable JSON"
+                        onClick={() => void handleExportTaskJson()}
+                      >
+                        {exportingJson ? 'Exporting…' : 'Report .json'}
                       </Button>
                     ) : null}
                     {result.status === 'complete' && !isRunning && user?.email ? (

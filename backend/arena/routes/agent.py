@@ -2,9 +2,10 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, time as datetime_time, timedelta
 from typing import Optional
 from arena.core.datetime_utils import utcnow_naive
 
@@ -14,6 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.core.agent_pipeline import (
@@ -72,7 +74,9 @@ from arena.core.agent_metrics import (
 )
 from arena.core.report_generator import (
     generate_orchestration_report_html,
+    generate_report_csv,
     generate_report_html,
+    generate_report_markdown,
     write_pdf_or_html,
 )
 from arena.core.templates import get_templates_grouped_by_category
@@ -290,6 +294,10 @@ def _persisted_agent_task_result_dict(
         "current_stage": "done",
         "iterations": 0,
         "stages": {sid: _stage_complete() for sid in stage_ids},
+        "is_shared": bool(row.share_token),
+        "share_url": (
+            f"/share/agent/{row.share_token}" if row.share_token else None
+        ),
         "final_answer": row.final_answer or "",
         "final_confidence": float(row.final_confidence or 0.0),
         "final_score": int(row.final_score or 0),
@@ -577,6 +585,57 @@ class WatchlistPatchBody(BaseModel):
     # PATCH path too.
     interval_hours: Optional[int] = Field(default=None, ge=1, le=168)
     is_active: Optional[bool] = None
+    # Editing the question/expertise lets users refine a watch
+    # without deleting it (which would discard run history).
+    question: Optional[str] = None
+    expertise_level: Optional[
+        Literal["none", "curious", "practitioner", "expert", "researcher"]
+    ] = None
+    expertise_domain: Optional[str] = None
+
+    @field_validator("question")
+    @classmethod
+    def validate_patch_question(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return sanitize_model_text(v, max_length=2000, field_name="question")
+
+    @field_validator("expertise_domain")
+    @classmethod
+    def validate_patch_domain(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return sanitize_model_optional_text(v, max_length=100, field_name="expertise_domain") or ""
+
+
+class WatchlistBulkBody(BaseModel):
+    """Body schema for bulk watchlist status changes.
+
+    Only whole-list actions are supported so the endpoint stays predictable:
+    pause every active watch, or resume paused watches up to the active cap.
+    """
+
+    action: Literal["pause_all", "resume_all"]
+
+
+class WatchlistBulkDeleteBody(BaseModel):
+    """Body schema for bulk watchlist removal.
+
+    Mirrors the saved-library bulk delete contract: the client sends the
+    ids to remove, the server scopes them to the requesting user, and the
+    response reports requested/deleted/skipped so the UI can show an honest
+    partial-success message instead of pretending a stale id was removed.
+    """
+
+    ids: list[str] = Field(..., min_length=1, max_length=50)
+
+    @field_validator("ids")
+    @classmethod
+    def validate_watchlist_delete_ids(cls, values: list[str]) -> list[str]:
+        cleaned = [v.strip() for v in values if v and v.strip()]
+        if not cleaned:
+            raise ValueError("ids must contain at least one non-empty id")
+        return list(dict.fromkeys(cleaned))
 
 
 ANALYST_CHALLENGE_PROMPT = """
@@ -800,7 +859,13 @@ def _watchlist_latest_summary(db: Session, user_id: int, latest_task_id: Optiona
         "task_id": row.task_id,
         "title": title,
         "created_at": row.created_at.isoformat() if row.created_at else "",
+        "final_answer": row.final_answer,
         "final_score": row.final_score,
+        "is_complete": bool((row.final_answer or "").strip()),
+        "is_shared": bool(row.share_token),
+        "share_url": (
+            f"/share/agent/{row.share_token}" if row.share_token else None
+        ),
     }
 
 
@@ -820,7 +885,13 @@ def _batch_watchlist_latest_summaries(db: Session, user_id: int, task_ids: list[
             "task_id": row.task_id,
             "title": title,
             "created_at": row.created_at.isoformat() if row.created_at else "",
+            "final_answer": row.final_answer,
             "final_score": row.final_score,
+            "is_complete": bool((row.final_answer or "").strip()),
+            "is_shared": bool(row.share_token),
+            "share_url": (
+                f"/share/agent/{row.share_token}" if row.share_token else None
+            ),
         }
     return result
 
@@ -1518,7 +1589,10 @@ async def get_capability_doc_endpoint(
             status_code=404,
             detail={"error": "capability_not_found", "id": capability_id},
         )
-    return doc
+    return {
+        "request_id": correlation_request_id(request),
+        **doc,
+    }
 
 
 @router.get("/capabilities/examples")
@@ -1664,6 +1738,138 @@ async def get_agent_task_detail(
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
         )
     return JSONResponse(content=payload)
+
+
+@router.post("/tasks/{task_id}/share")
+async def share_agent_task(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Publish a completed Agent report as a public share link.
+
+    Returns the same token/link on repeat calls (idempotent), so a user can
+    copy the link again without creating duplicates. Only the task owner can
+    share, and only reports with a finished answer are shareable — an
+    in-progress or failed run has nothing honest to publish.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_share",
+        limit=30,
+        window_seconds=3600,
+        message="Too many report share actions. Limit is 30 per hour.",
+    )
+    tid = task_id.strip()
+    if not tid:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    # Lock the row so concurrent share requests from the same user serialize
+    # on Postgres instead of both generating a token and one failing on the
+    # unique index. SQLite ignores the lock; the IntegrityError retry below
+    # covers that dev path and rare cross-row token collisions.
+    owned = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .with_for_update()
+        .first()
+    )
+    if not owned:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    if not (owned.final_answer or "").strip():
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "task_not_complete",
+                "message": "Only completed reports can be shared.",
+            },
+        )
+    if not owned.share_token:
+        for _attempt in range(3):
+            owned.share_token = secrets.token_urlsafe(24)
+            owned.share_created_at = utcnow_naive()
+            try:
+                db.commit()
+                break
+            except IntegrityError:
+                # A concurrent share (or a lucky token collision) won the
+                # unique index. Roll back, re-read, and either reuse the
+                # token that won or retry with a fresh one.
+                db.rollback()
+                owned = (
+                    db.query(AgentTaskRow)
+                    .filter(
+                        AgentTaskRow.task_id == tid,
+                        AgentTaskRow.user_id == user.id,
+                    )
+                    .first()
+                )
+                if owned is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": ErrorCodes.NOT_FOUND,
+                            "message": "Task not found",
+                        },
+                    )
+                if owned.share_token:
+                    break
+        if not owned.share_token:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "share_token_unavailable",
+                    "message": "Could not create a unique share link. Please try again.",
+                },
+            )
+    db.refresh(owned)
+    return {
+        "share_token": owned.share_token,
+        "share_url": f"/share/agent/{owned.share_token}",
+    }
+
+
+@router.delete("/tasks/{task_id}/share")
+async def revoke_agent_task_share(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Revoke a public report link so the token stops resolving."""
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_share",
+        limit=30,
+        window_seconds=3600,
+        message="Too many report share actions. Limit is 30 per hour.",
+    )
+    tid = task_id.strip()
+    if not tid:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    owned = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not owned:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    owned.share_token = None
+    owned.share_created_at = None
+    db.commit()
+    return {"revoked": True}
 
 
 @router.post("/tasks/{task_id}/feedback")
@@ -2067,23 +2273,23 @@ async def list_orchestrations(
         window_seconds=60,
         message="Too many orchestration list requests. Please slow down.",
     )
-    
+
     offset = (page - 1) * per_page
-    
+
     # Base query
     query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
-    
+
     # Apply status filter
     if status:
         query = query.filter(Orchestration.status == status)
-    
+
     # Get total count
     total = query.count()
-    
+
     # Get paginated results
     orchestrations = query.order_by(Orchestration.created_at.desc())
     orchestrations = orchestrations.offset(offset).limit(per_page).all()
-    
+
     # Format results
     items = []
     for orch in orchestrations:
@@ -2096,7 +2302,7 @@ async def list_orchestrations(
             "task_ids": task_ids,
             "synthesis_preview": orch.synthesis[:200] if orch.synthesis else None,
         })
-    
+
     return JSONResponse(content={
         "request_id": correlation_request_id(http_request),
         "success": True,
@@ -2128,22 +2334,22 @@ async def export_orchestrations_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait.",
     )
-    
+
     from arena.routes.analytics import _csv_safe
     import csv
     import io
-    
+
     # Get all orchestrations (not paginated for CSV)
     query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
-    
+
     if status:
         query = query.filter(Orchestration.status == status)
-    
+
     orchestrations = query.order_by(Orchestration.created_at.desc()).all()
-    
+
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
     # Write header
     writer.writerow([
         "id",
@@ -2153,7 +2359,7 @@ async def export_orchestrations_csv(
         "task_ids",
         "synthesis_preview",
     ])
-    
+
     # Write rows
     for orch in orchestrations:
         task_ids = list(orch.task_ids or [])
@@ -2165,7 +2371,7 @@ async def export_orchestrations_csv(
             _csv_safe(";".join(task_ids)),
             _csv_safe((orch.synthesis or "")[:200]),
         ])
-    
+
     filename = f"arena-orchestrations-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -2221,6 +2427,125 @@ async def export_task_pdf(
         content=blob,
         media_type=mime,
         headers={"Content-Disposition": content_disposition_attachment(filename)},
+    )
+
+
+@router.get("/tasks/{task_id}/export.md")
+async def export_task_markdown(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download a single completed task as a portable Markdown report.
+
+    Sits between the PDF report (styled, print-ready) and the JSON dump
+    (raw, machine-readable): a clean .md document with the question,
+    final answer, intelligence score, sources, steelman, caveats,
+    assumptions, temporal profile, source integrity, and dissent report.
+    The output reuses the same persisted-row + blackboard overlay the
+    PDF path uses, so a warm in-memory pipeline and a cold reload produce
+    the same report content.
+
+    Filename includes the task_id prefix so multiple downloads don't
+    overwrite each other in the browser downloads folder.
+    """
+    _ensure_agent_access(user, db)
+    # Same abuse posture as the other task exports — bound per-user so a
+    # client cannot hammer the DB/overlay builder with concurrent requests.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_export_md",
+        limit=120,
+        window_seconds=3600,
+        message="Too many task markdown exports. Limit is 120 per hour.",
+    )
+    tid = task_id.strip()
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    if not (row.final_answer or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Nothing to export yet for this task"},
+        )
+
+    bb = get_blackboard(tid)
+    overlay = _export_overlay_from_bb(bb, row)
+    body = generate_report_markdown(row, overlay)
+    filename = f"arena-report-{tid[:8]}.md"
+    return Response(
+        content=body,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/tasks/{task_id}/export.csv")
+async def export_task_csv(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download a single completed task as a normalized CSV report.
+
+    Complements the markdown (human-readable) and JSON (machine-readable)
+    exports with a spreadsheet-friendly sheet: one row per report field,
+    with ``task_id`` / ``section`` / ``key`` / ``value`` columns so users can
+    filter by section or pivot on key. Formula-injection defense matches the
+    other CSV exports, and the file starts with a UTF-8 BOM so Excel detects
+    the Unicode question text.
+
+    Filename includes the task_id prefix so multiple downloads don't
+    overwrite each other in the browser downloads folder.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_export_csv",
+        limit=120,
+        window_seconds=3600,
+        message="Too many task CSV exports. Limit is 120 per hour.",
+    )
+    tid = task_id.strip()
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    if not (row.final_answer or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Nothing to export yet for this task"},
+        )
+
+    bb = get_blackboard(tid)
+    overlay = _export_overlay_from_bb(bb, row)
+    body = generate_report_csv(row, overlay)
+    filename = f"arena-report-{tid[:8]}.csv"
+    return Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -2309,10 +2634,10 @@ async def export_task_json(
 
     # Pretty-print so the file is diff-friendly when a user checks it
     # into a repo or pastes a snippet into a bug report. The /result
-    # endpoint returns compact JSON; the export is for humans.
-    import json
-
-    body = json.dumps(out, indent=2, default=str, sort_keys=True)
+    # endpoint returns compact JSON; the export is for humans. The
+    # trailing newline follows the POSIX text-file convention so
+    # shell pipelines and `tail` behave predictably.
+    body = json.dumps(out, indent=2, default=str, sort_keys=True) + "\n"
     filename = f"arena-task-{tid[:8]}.json"
     return Response(
         content=body,
@@ -2570,6 +2895,7 @@ async def cancel_agent_task(
 
 @router.get("/result/{task_id}")
 async def get_agent_result(
+    http_request: Request,
     task_id: str,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -2595,7 +2921,7 @@ async def get_agent_result(
         )
         if row:
             _merge_db_task_into_result_payload(out, row)
-        return JSONResponse(content=out)
+        return JSONResponse(content={"request_id": correlation_request_id(http_request), **out})
 
     row = (
         db.query(AgentTaskRow)
@@ -2609,7 +2935,12 @@ async def get_agent_result(
         )
 
     contra = _load_task_contradictions(db, task_id, user.id)
-    return JSONResponse(content=_persisted_agent_task_result_dict(row, contra))
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            **_persisted_agent_task_result_dict(row, contra),
+        }
+    )
 
 
 @router.post("/challenge")
@@ -2845,6 +3176,87 @@ async def list_watchlist_items(
     )
 
 
+@router.patch("/watchlist/bulk")
+async def set_watchlist_bulk(
+    body: WatchlistBulkBody,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Pause all active watches or resume paused watches in one call.
+
+    - ``pause_all`` flips every active watch to paused.
+    - ``resume_all`` reactivates paused watches in next-run order, stopping
+      at the active cap. Any remaining paused watches are reported in
+      ``skipped`` so the UI can be honest instead of silently dropping them.
+
+    Both actions are scoped to the requesting user and rate-limited like the
+    per-row mutation so a misbehaving client cannot thrash the scheduler.
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_bulk",
+        limit=30,
+        window_seconds=3600,
+        message="Too many watchlist bulk changes. Limit is 30 per hour.",
+    )
+
+    now = utcnow_naive()
+    if body.action == "pause_all":
+        rows = (
+            db.query(WatchlistItem)
+            .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
+            .all()
+        )
+        applied = len(rows)
+        for item in rows:
+            item.is_active = False
+    else:
+        active_count = (
+            db.query(WatchlistItem)
+            .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
+            .count()
+        )
+        capacity = max(0, WATCHLIST_MAX_ACTIVE - active_count)
+        rows = (
+            db.query(WatchlistItem)
+            .filter(
+                WatchlistItem.user_id == user.id,
+                WatchlistItem.is_active.is_(False),
+            )
+            .order_by(WatchlistItem.next_run_at.asc(), WatchlistItem.id.asc())
+            .limit(capacity)
+            .all()
+        )
+        applied = len(rows)
+        for item in rows:
+            item.is_active = True
+            item.next_run_at = now + timedelta(hours=int(item.interval_hours))
+
+    db.commit()
+    active_count = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
+        .count()
+    )
+    paused_count = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(False))
+        .count()
+    )
+    return JSONResponse(
+        content={
+            "success": True,
+            "action": body.action,
+            "applied": applied,
+            "skipped": paused_count,
+            "active_count": active_count,
+            "paused_count": paused_count,
+            "active_cap": WATCHLIST_MAX_ACTIVE,
+        }
+    )
+
+
 @router.patch("/watchlist/{item_id}")
 async def patch_watchlist_item(
     item_id: str,
@@ -2891,9 +3303,275 @@ async def patch_watchlist_item(
         else:
             item.is_active = False
 
+    if body.question is not None:
+        q = sanitize_text(body.question, max_length=2000, field_name="question")
+        if not q:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "question cannot be empty"},
+            )
+        # Same capability gate as create: a watch that gains a
+        # local-intent question must be rejected before the scheduler
+        # sees it. Only re-classify when the question actually changes —
+        # the dialog sends the full question with every save, so an
+        # expertise-only edit of an existing local-intent watch must not
+        # be rejected for a question the user isn't changing.
+        if q != item.question:
+            _enforce_capability_gate(capability_id="watchlist.create", task_text=q)
+        item.question = q
+
+    if body.expertise_level is not None:
+        item.expertise_level = body.expertise_level.strip().lower()
+
+    if body.expertise_domain is not None:
+        item.expertise_domain = body.expertise_domain.strip()[:100]
+
     db.commit()
     db.refresh(item)
     return JSONResponse(content=_watchlist_item_api_dict(db, item))
+
+
+@router.post("/watchlist/{item_id}/run")
+async def run_watchlist_item_now(
+    item_id: str,
+    background_tasks: BackgroundTasks,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Start an immediate re-check for one watchlist item.
+
+    Manual re-runs are the same cost as an Agent Mode run, so they share the
+    daily token budget and get their own per-user rate limit (a burst of
+    one-click runs would otherwise bypass the scheduler's natural cadence).
+    The item keeps its active/paused state; only the schedule counters and
+    next-run time advance.
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_run",
+        limit=12,
+        window_seconds=3600,
+        message="Too many manual watchlist runs. Limit is 12 per hour.",
+    )
+
+    tier = normalize_tier(get_tier_str(user))
+    today_usage = get_today_token_usage(db, user.id)
+    daily_limit = get_credit_budget(tier)
+    if today_usage >= daily_limit:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "daily_limit_reached",
+                "message": "Daily usage limit reached.",
+                "used": today_usage,
+                "limit": daily_limit,
+                "resets_at": "midnight UTC",
+            },
+        )
+
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
+
+    if item.latest_task_id:
+        active_run = get_blackboard(item.latest_task_id)
+        if (
+            active_run is not None
+            and active_run.user_id == user.id
+            and active_run.status
+            in (AgentStatus.PENDING, AgentStatus.RUNNING, AgentStatus.NEEDS_REVISION)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "watchlist_run_in_progress",
+                    "message": "This watch is already re-checking; wait for the current run to finish.",
+                    "task_id": item.latest_task_id,
+                },
+            )
+
+    q = (item.question or "").strip()
+    if not q or len(q) > 2000:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": ErrorCodes.VALIDATION_ERROR,
+                "message": "This watch has no usable question to run.",
+            },
+        )
+    _enforce_capability_gate(capability_id="watchlist.create", task_text=q)
+
+    now = utcnow_naive()
+    bb = create_blackboard(user_id=user.id, task=q)
+    bb.status = AgentStatus.RUNNING
+    bb.expertise_level = (item.expertise_level or "curious").strip().lower() or "curious"
+    bb.expertise_domain = (item.expertise_domain or "").strip()[:512]
+
+    item.latest_task_id = bb.task_id
+    item.last_run_at = now
+    item.next_run_at = now + timedelta(hours=int(item.interval_hours))
+    item.run_count = int(item.run_count or 0) + 1
+    db.commit()
+
+    background_tasks.add_task(
+        run_agent_pipeline_background,
+        bb.task_id,
+        user.id,
+        q,
+        bb.expertise_level,
+        bb.expertise_domain,
+        None,
+        item.id,
+    )
+
+    return JSONResponse(
+        content={
+            "success": True,
+            "task_id": bb.task_id,
+            "message": "Watch re-check started",
+            "item": _watchlist_item_api_dict(db, item),
+        }
+    )
+
+
+@router.post("/watchlist/{item_id}/duplicate")
+async def duplicate_watchlist_item(
+    item_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Create a paused copy of a watchlist item.
+
+    Duplication is the quick way to branch a watch into a new variant (e.g.
+    a different cadence or expertise level) without losing the original.
+    The copy starts paused so it never trips the active-watch cap; users
+    refine it in the edit dialog and resume it when they are ready.
+    """
+    _ensure_agent_watchlist_access(user)
+    # Same mutation family as create: bound per-user so a runaway client
+    # cannot multiply scheduler rows faster than the create rate limit.
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_duplicate",
+        limit=30,
+        window_seconds=3600,
+        message="Too many watchlist duplicates. Limit is 30 per hour.",
+    )
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
+
+    q = (item.question or "").strip()
+    if not q or len(q) > 2000:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": ErrorCodes.VALIDATION_ERROR,
+                "message": "This watch has no usable question to duplicate.",
+            },
+        )
+
+    now = utcnow_naive()
+    copy = WatchlistItem(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        question=q,
+        interval_hours=int(item.interval_hours),
+        expertise_level=(item.expertise_level or "curious").strip().lower() or "curious",
+        expertise_domain=(item.expertise_domain or "").strip()[:100],
+        next_run_at=now + timedelta(hours=int(item.interval_hours)),
+        run_count=0,
+        is_active=False,
+    )
+    db.add(copy)
+    db.commit()
+    db.refresh(copy)
+    return JSONResponse(content=_watchlist_item_api_dict(db, copy))
+
+
+@router.delete("/watchlist/bulk")
+async def delete_watchlist_bulk(
+    body: WatchlistBulkDeleteBody,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Bulk delete — for the 'clear several stale watches at once' cleanup.
+
+    Ids not owned by the caller are silently dropped from the delete set
+    (same ownership-scoping as the saved-library bulk delete). The response
+    reports requested / deleted counts plus the exact deleted and skipped
+    ids so the client can reconcile a mixed or partial request honestly.
+    It also carries the caller's fresh ``active_count`` / ``total`` so the
+    client can re-sync its counters without a second list round-trip (and
+    without a post-delete refetch failure being misreported as a failed
+    deletion).
+
+    ORM deletion is used per row (rather than a bulk ``Query.delete``) so
+    SQLAlchemy still nullifies each item's spawned ``AgentTask`` references
+    before the parent row goes away — matching the single-delete path and
+    keeping run history intact when a watch is removed.
+    """
+    _ensure_agent_watchlist_access(user)
+    # Destructive bulk mutation: bound the burst so a runaway client cannot
+    # mass-wipe a user's watchlist (and the scheduler entries that feed it).
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_bulk_delete",
+        limit=15,
+        window_seconds=3600,
+        message="Too many watchlist bulk deletions. Limit is 15 per hour.",
+    )
+
+    unique_ids = list(dict.fromkeys(body.ids))
+    requested = len(unique_ids)
+    owned = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id.in_(unique_ids), WatchlistItem.user_id == user.id)
+        .all()
+    )
+    deleted_ids = [item.id for item in owned]
+    for item in owned:
+        db.delete(item)
+    db.commit()
+
+    # Counters are computed after the commit so they reflect exactly what a
+    # subsequent list call would return — no stale snapshot of the pre-delete
+    # session state, and no client-side guessing at skipped-row side effects.
+    total = (
+        db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).count()
+    )
+    active_count = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
+        .count()
+    )
+    skipped_ids = [item_id for item_id in unique_ids if item_id not in deleted_ids]
+    return JSONResponse(
+        content={
+            "success": True,
+            "requested": requested,
+            "deleted": len(deleted_ids),
+            "deleted_ids": deleted_ids,
+            "skipped_ids": skipped_ids,
+            "active_count": active_count,
+            "total": total,
+        }
+    )
 
 
 @router.delete("/watchlist/{item_id}")
@@ -2932,6 +3610,15 @@ async def get_watchlist_item_history(
     http_request: Request,
     item_id: str,
     limit: int = Query(50, ge=1, le=200, description="Max number of history rows to return."),
+    offset: int = Query(0, ge=0, description="Number of newest rows to skip for paging."),
+    before_task_id: Optional[str] = Query(
+        None,
+        description=(
+            "Cursor: task_id of the last loaded run; returns strictly older runs "
+            "so concurrent new runs cannot duplicate or skip rows. Falls back to "
+            "offset paging if the cursor row no longer exists."
+        ),
+    ),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -2960,7 +3647,14 @@ async def get_watchlist_item_history(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
         )
-    payload = get_watchlist_history(db, user.id, item.id, limit=limit)
+    payload = get_watchlist_history(
+        db,
+        user.id,
+        item.id,
+        limit=limit,
+        offset=offset,
+        before_task_id=before_task_id,
+    )
     return JSONResponse(
         content={
             "request_id": correlation_request_id(http_request),
@@ -2980,7 +3674,7 @@ async def get_watchlist_item_history_csv(
     """CSV export of run history for a single watchlist item.
 
     Streams rows in CSV format with formula-injection defense (_csv_safe).
-    Includes task_id, status, created_at, intelligence_score, and final_answer snippet.
+    Includes task_id, status, created_at, final_score, and final_answer snippet.
     """
     _ensure_agent_watchlist_access(user)
     enforce_user_rate_limit(
@@ -3000,7 +3694,7 @@ async def get_watchlist_item_history_csv(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
         )
-    payload = get_watchlist_history(db, user.id, item.id, limit=limit)
+    payload = get_watchlist_history(db, user.id, item.id, limit=limit, max_limit=500)
     items = payload.get("items", [])
 
     import csv
@@ -3015,7 +3709,7 @@ async def get_watchlist_item_history_csv(
         "question",
         "status",
         "created_at",
-        "intelligence_score",
+        "final_score",
         "final_answer_snippet",
     ])
 
@@ -3027,7 +3721,7 @@ async def get_watchlist_item_history_csv(
             _csv_safe(item.question),
             _csv_safe(row.get("status")),
             _csv_safe(row.get("created_at")),
-            _csv_safe(row.get("intelligence_score") if row.get("intelligence_score") is not None else ""),
+            _csv_safe(row.get("final_score") if row.get("final_score") is not None else ""),
             _csv_safe(snippet),
         ])
 
@@ -3042,6 +3736,70 @@ async def get_watchlist_item_history_csv(
     return Response(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get("/watchlist/{item_id}/history/export.json")
+async def get_watchlist_item_history_json(
+    http_request: Request,
+    item_id: str,
+    limit: int = Query(100, ge=1, le=500, description="Max history rows to export."),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """JSON export of run history for a single watchlist item.
+
+    Emits the same items/stats payload as the history endpoint, plus item
+    metadata and an exported_at timestamp, so a downloaded file is
+    self-describing when piped into scripts or dashboards. The payload keeps
+    the full final_answer field (unlike the CSV export's truncated snippet).
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_history_json",
+        limit=30,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait a moment.",
+    )
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
+    payload = get_watchlist_history(db, user.id, item.id, limit=limit, max_limit=500)
+
+    clean_question = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in item.question[:30]).strip("_") or "watchlist-item"
+    filename = f"arena-watch-history-{clean_question}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    body = json.dumps(
+        {
+            "request_id": correlation_request_id(http_request),
+            "success": True,
+            "exported_at": utcnow_naive().isoformat(),
+            "item_id": item.id,
+            "question": item.question,
+            "limit": limit,
+            **payload,
+        },
+        indent=2,
+        default=str,
+        sort_keys=True,
+    ) + "\n"
+
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=body,
+        media_type="application/json; charset=utf-8",
         headers=headers,
     )
 
@@ -3068,9 +3826,9 @@ async def get_watchlist_statistics(
         window_seconds=60,
         message="Too many statistics requests. Please wait a moment.",
     )
-    
+
     from arena.core.agent_memory import get_watchlist_statistics
-    
+
     stats = get_watchlist_statistics(db, user.id)
     return JSONResponse(content={"success": True, **stats})
 
@@ -3082,7 +3840,7 @@ async def get_watchlist_statistics_csv(
 ):
     """CSV export of watchlist statistics.
 
-    Streams a CSV with formula-injection defense (_csv_safe).
+    Streams a UTF-8-BOM CSV with CRLF rows and formula-injection defense.
     Includes summary statistics and per-item breakdown.
     """
     _ensure_agent_watchlist_access(user)
@@ -3093,17 +3851,28 @@ async def get_watchlist_statistics_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait a moment.",
     )
-    
+
     from arena.core.agent_memory import get_watchlist_statistics
-    from arena.routes.analytics import _csv_safe
     import csv
     import io
-    
-    stats = get_watchlist_statistics(db, user.id)
-    
+
+    # Defense-in-depth against CWE-1236: a question like " =1+1" is still a
+    # formula risk because spreadsheets commonly ignore leading whitespace
+    # before deciding whether a cell is a formula. Neutralize the first
+    # significant character, not just the raw first byte.
+    def _stats_csv_safe(value) -> str:
+        s = "" if value is None else str(value)
+        if s and s.lstrip()[0] in ("=", "+", "-", "@", "\t", "\r"):
+            return "'" + s
+        return s
+
     buf = io.StringIO()
+    # UTF-8 BOM so Excel and friends detect the Unicode question text.
+    buf.write("\ufeff")
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
+    stats = get_watchlist_statistics(db, user.id)
+
     # Write summary row
     writer.writerow(["Watchlist Statistics Summary"])
     writer.writerow(["Metric", "Value"])
@@ -3116,7 +3885,7 @@ async def get_watchlist_statistics_csv(
     writer.writerow(["Maximum Score", stats["max_score"] if stats["max_score"] is not None else ""])
     writer.writerow(["Success Rate (%)", stats["success_rate"]])
     writer.writerow([])
-    
+
     # Write per-item statistics
     writer.writerow(["Per-Item Statistics"])
     writer.writerow([
@@ -3129,19 +3898,19 @@ async def get_watchlist_statistics_csv(
         "Average Score",
         "Last Run At",
     ])
-    
+
     for item_id, item_stats in stats["per_item_stats"].items():
         writer.writerow([
-            _csv_safe(item_id),
-            _csv_safe(item_stats["question"]),
-            _csv_safe("Yes" if item_stats["is_active"] else "No"),
-            _csv_safe(item_stats["interval_hours"]),
-            _csv_safe(item_stats["run_count"]),
-            _csv_safe(item_stats["scored_run_count"]),
-            _csv_safe(item_stats["avg_score"] if item_stats["avg_score"] is not None else ""),
-            _csv_safe(item_stats["last_run_at"] if item_stats["last_run_at"] else ""),
+            _stats_csv_safe(item_id),
+            _stats_csv_safe(item_stats["question"]),
+            _stats_csv_safe("Yes" if item_stats["is_active"] else "No"),
+            _stats_csv_safe(item_stats["interval_hours"]),
+            _stats_csv_safe(item_stats["run_count"]),
+            _stats_csv_safe(item_stats["scored_run_count"]),
+            _stats_csv_safe(item_stats["avg_score"] if item_stats["avg_score"] is not None else ""),
+            _stats_csv_safe(item_stats["last_run_at"] if item_stats["last_run_at"] else ""),
         ])
-    
+
     filename = f"arena-watchlist-stats-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -3226,6 +3995,195 @@ async def get_feedback_summary(
         window_days=window_days,
     )
     return JSONResponse(content=payload)
+
+
+@router.get("/feedback/summary/export.csv")
+async def export_feedback_summary_csv(
+    window_days: int = Query(30, ge=1, le=90),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download the caller's UTC-bucketed feedback activity as CSV.
+
+    This is the spreadsheet-friendly companion to ``/feedback/summary``.
+    It exports exactly the selected window, including zero-activity days and
+    the per-day canonical verdict mix, so a stacked chart can be recreated
+    without guessing which dates or verdicts were omitted.
+    """
+    payload, filename_stem = _prepare_feedback_summary_export(
+        user=user,
+        db=db,
+        window_days=window_days,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\r\n")
+    writer.writerow(
+        ["date", "feedback_count", "correct_count", "partial_count", "wrong_count"]
+    )
+    for point in payload["daily_trend"]:
+        verdicts = point["verdicts"]
+        writer.writerow(
+            [
+                point["date"],
+                point["count"],
+                verdicts["correct"],
+                verdicts["partial"],
+                verdicts["wrong"],
+            ]
+        )
+
+    # The shared preparation step derives the date from the exported payload
+    # rather than taking a second wall-clock reading.
+    filename = f"{filename_stem}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=_feedback_summary_export_headers(filename),
+    )
+
+
+def _prepare_feedback_summary_export(
+    *,
+    user: UserResponse,
+    db: Session,
+    window_days: int,
+) -> tuple[dict, str]:
+    """Build the shared payload and filename stem for feedback exports.
+
+    CSV and JSON must use the same authorization, rate-limit bucket, UTC
+    aggregation, and window-end date. Keeping that setup in one helper avoids
+    a format-specific export drifting from the dashboard contract.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_summary_export",
+        limit=30,
+        window_seconds=60,
+        message="Too many feedback activity exports. Please wait.",
+    )
+    orm_user = db.query(User).filter(User.id == user.id).first()
+    if orm_user is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
+        )
+
+    payload = compute_user_feedback_summary(
+        db=db,
+        user=orm_user,
+        window_days=window_days,
+    )
+    # The query guarantees a positive window, and the aggregator pads every
+    # day. Derive the filename from that payload so a UTC-midnight rollover
+    # cannot label the download with a different day than its contents.
+    window_end = payload["daily_trend"][-1]["date"].replace("-", "")
+    filename_stem = f"arena-feedback-activity-{user.id}-{window_days}d-{window_end}"
+    return payload, filename_stem
+
+
+def _feedback_summary_export_headers(filename: str) -> dict[str, str]:
+    """Return the privacy and download headers shared by both formats."""
+    return {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+
+
+@router.get("/feedback/summary/export.json")
+async def export_feedback_summary_json(
+    window_days: int = Query(30, ge=1, le=90),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download the selected feedback-activity window as a JSON report.
+
+    The response intentionally mirrors ``/feedback/summary`` so structured
+    consumers can preserve the verdict totals and the zero-padded daily
+    trend without parsing the chart-oriented CSV export.
+    """
+    payload, filename_stem = _prepare_feedback_summary_export(
+        user=user,
+        db=db,
+        window_days=window_days,
+    )
+    filename = f"{filename_stem}.json"
+    return JSONResponse(
+        content=payload,
+        headers=_feedback_summary_export_headers(filename),
+    )
+
+
+def _feedback_summary_markdown(payload: dict) -> str:
+    """Render a feedback summary payload as a portable Markdown report.
+
+    The current payload only contains server-generated dates and counters,
+    but route-level report helpers are deliberately defensive: escaping the
+    values at the Markdown boundary keeps a future payload change from
+    breaking the table or introducing raw Markdown/HTML into a download.
+    """
+    verdicts = payload["verdicts"]
+    daily_trend = payload["daily_trend"]
+    window_end = daily_trend[-1]["date"]
+    accuracy = _feedback_markdown_inline(f"{payload['rate'] * 100:.1f}%")
+    lines = [
+        "# Arena — feedback activity",
+        "",
+        f"- Window: last {_feedback_markdown_inline(payload['window_days'])} days (UTC)",
+        f"- Window end: {_feedback_markdown_inline(window_end)}",
+        "",
+        "## Lifetime verdict breakdown",
+        "",
+        "| Verdict | Ratings |",
+        "| --- | ---: |",
+        f"| Correct | {_feedback_markdown_inline(verdicts['correct'])} |",
+        f"| Partial | {_feedback_markdown_inline(verdicts['partial'])} |",
+        f"| Wrong | {_feedback_markdown_inline(verdicts['wrong'])} |",
+        f"| Total | {_feedback_markdown_inline(payload['total'])} |",
+        "",
+        f"Accuracy: **{accuracy}** (correct / all ratings)",
+        "",
+        f"## Daily activity ({_feedback_markdown_inline(payload['window_days'])}-day window, UTC)",
+        "",
+        "| Date | Ratings | Correct | Partial | Wrong |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    lines.extend(
+        "| "
+        f"{_feedback_markdown_inline(point['date'])} | "
+        f"{_feedback_markdown_inline(point['count'])} | "
+        f"{_feedback_markdown_inline(point['verdicts']['correct'])} | "
+        f"{_feedback_markdown_inline(point['verdicts']['partial'])} | "
+        f"{_feedback_markdown_inline(point['verdicts']['wrong'])} |"
+        for point in daily_trend
+    )
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+    return "\n".join(lines).strip() + "\n"
+
+
+@router.get("/feedback/summary/export.md")
+async def export_feedback_summary_markdown(
+    window_days: int = Query(30, ge=1, le=90),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download the selected feedback-activity window as Markdown."""
+    payload, filename_stem = _prepare_feedback_summary_export(
+        user=user,
+        db=db,
+        window_days=window_days,
+    )
+    filename = f"{filename_stem}.md"
+    return Response(
+        content=_feedback_summary_markdown(payload),
+        media_type="text/markdown; charset=utf-8",
+        headers=_feedback_summary_export_headers(filename),
+    )
 
 
 @router.get("/feedback/recent")
@@ -3323,11 +4281,61 @@ async def get_feedback_calibration(
     )
 
 
+def _validate_feedback_export_date_range(
+    from_date: date | None,
+    to_date: date | None,
+) -> None:
+    """Reject reversed inclusive UTC date ranges before querying feedback."""
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_date_range",
+                "message": "From date must be on or before to date.",
+            },
+        )
+
+
+def _apply_feedback_export_filters(
+    query,
+    *,
+    verdict: str | None,
+    from_date: date | None,
+    to_date: date | None,
+):
+    """Keep verdict and inclusive UTC date filtering identical across exports."""
+    if verdict is not None:
+        if verdict in {"correct", "partial", "wrong"}:
+            query = query.filter(AnswerFeedback.verdict == verdict)
+        else:
+            query = query.filter(False)
+    if from_date:
+        query = query.filter(
+            AnswerFeedback.created_at >= datetime.combine(from_date, datetime_time.min)
+        )
+    if to_date:
+        if to_date == date.max:
+            return query.filter(AnswerFeedback.created_at <= datetime.max)
+        end_exclusive = datetime.combine(
+            to_date + timedelta(days=1), datetime_time.min
+        )
+        query = query.filter(AnswerFeedback.created_at < end_exclusive)
+    return query
+
+
 @router.get("/feedback/export.csv")
 async def export_feedback_csv(
     verdict: Optional[str] = Query(
         None,
         description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
+    ),
+    from_date: date | None = Query(
+        None,
+        description="Include ratings created on or after this inclusive UTC date.",
+    ),
+    to_date: date | None = Query(
+        None,
+        description="Include ratings created on or before this inclusive UTC date.",
     ),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -3335,9 +4343,10 @@ async def export_feedback_csv(
     """CSV export of all feedback for a user.
 
     Streams feedback data with formula-injection defense.
-    Supports filtering by verdict.
+    Supports filtering by verdict and inclusive UTC date range.
     """
     _ensure_agent_access(user, db)
+    _validate_feedback_export_date_range(from_date, to_date)
     enforce_user_rate_limit(
         user.id,
         scope="agent_feedback_csv",
@@ -3345,14 +4354,14 @@ async def export_feedback_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait.",
     )
-    
+
     from arena.db_models import AnswerFeedback, AgentTask
     from arena.core.http_headers import content_disposition_attachment
     from fastapi.responses import Response
     from arena.core.datetime_utils import utcnow_naive
     import csv
     import io
-    
+
     def _csv_safe(value) -> str:
         """Escape value for CSV to prevent formula injection."""
         if value is None:
@@ -3361,22 +4370,23 @@ async def export_feedback_csv(
         if s.startswith(("=", "+", "-", "@")):
             return "'" + s
         return s
-    
+
     # Get all feedback with task title
     q = (
         db.query(AnswerFeedback, AgentTask)
         .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
         .filter(AnswerFeedback.user_id == user.id)
     )
-    
-    if verdict is not None:
-        if verdict in {"correct", "partial", "wrong"}:
-            q = q.filter(AnswerFeedback.verdict == verdict)
-        else:
-            q = q.filter(False)  # Return empty result for unknown verdict
-    
-    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
-    
+
+    q = _apply_feedback_export_filters(
+        q,
+        verdict=verdict,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+    rows = q.order_by(AnswerFeedback.created_at.desc(), AnswerFeedback.id.desc()).all()
+
     # Format items
     items = []
     for feedback, task in rows:
@@ -3388,10 +4398,10 @@ async def export_feedback_csv(
             "note": feedback.note,
             "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
         })
-    
+
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
     # Write header
     writer.writerow([
         "id",
@@ -3401,7 +4411,7 @@ async def export_feedback_csv(
         "note",
         "created_at",
     ])
-    
+
     # Write rows
     for item in items:
         writer.writerow([
@@ -3412,7 +4422,7 @@ async def export_feedback_csv(
             _csv_safe(item.get("note")),
             _csv_safe(item.get("created_at")),
         ])
-    
+
     filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -3432,15 +4442,24 @@ async def export_feedback_json(
         None,
         description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
     ),
+    from_date: date | None = Query(
+        None,
+        description="Include ratings created on or after this inclusive UTC date.",
+    ),
+    to_date: date | None = Query(
+        None,
+        description="Include ratings created on or before this inclusive UTC date.",
+    ),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     """JSON export of all feedback for a user.
 
     Returns all feedback as a JSON array.
-    Supports filtering by verdict.
+    Supports filtering by verdict and inclusive UTC date range.
     """
     _ensure_agent_access(user, db)
+    _validate_feedback_export_date_range(from_date, to_date)
     enforce_user_rate_limit(
         user.id,
         scope="agent_feedback_json",
@@ -3448,28 +4467,29 @@ async def export_feedback_json(
         window_seconds=60,
         message="Too many JSON exports. Please wait.",
     )
-    
+
     from arena.db_models import AnswerFeedback, AgentTask
     from arena.core.datetime_utils import utcnow_naive
     from fastapi.responses import Response
     from arena.core.http_headers import content_disposition_attachment
     import json
-    
+
     # Get all feedback with task title
     q = (
         db.query(AnswerFeedback, AgentTask)
         .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
         .filter(AnswerFeedback.user_id == user.id)
     )
-    
-    if verdict is not None:
-        if verdict in {"correct", "partial", "wrong"}:
-            q = q.filter(AnswerFeedback.verdict == verdict)
-        else:
-            q = q.filter(False)  # Return empty result for unknown verdict
-    
-    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
-    
+
+    q = _apply_feedback_export_filters(
+        q,
+        verdict=verdict,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+    rows = q.order_by(AnswerFeedback.created_at.desc(), AnswerFeedback.id.desc()).all()
+
     # Format items
     items = []
     for feedback, task in rows:
@@ -3481,7 +4501,7 @@ async def export_feedback_json(
             "note": feedback.note,
             "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
         })
-    
+
     filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -3492,6 +4512,165 @@ async def export_feedback_json(
         content=json.dumps(items, indent=2, default=str),
         media_type="application/json; charset=utf-8",
         headers=headers,
+    )
+
+
+def _feedback_markdown_inline(value: object) -> str:
+    """Flatten and escape user-controlled feedback metadata for Markdown.
+
+    Feedback titles and notes are inserted into a fixed report structure. In
+    addition to the usual Markdown punctuation, escape angle brackets and
+    ampersands so a report viewer cannot interpret raw HTML or autolinks, and
+    tildes so GitHub-style strikethrough markers remain plain text.
+    """
+    if value is None:
+        return ""
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("&", "\\&")
+        .replace("<", "\\<")
+        .replace(">", "\\>")
+        .replace("`", "\\`")
+        .replace("*", "\\*")
+        .replace("~", "\\~")
+        .replace("_", "\\_")
+        .replace("#", "\\#")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("|", "\\|")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\n", " ")
+        .replace("\u2028", " ")
+        .replace("\u2029", " ")
+        .replace("\t", " ")
+        .strip()
+    )
+
+
+@router.get("/feedback/export.md")
+async def export_feedback_markdown(
+    verdict: Optional[str] = Query(
+        None,
+        description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
+    ),
+    from_date: date | None = Query(
+        None,
+        description="Include ratings created on or after this inclusive UTC date.",
+    ),
+    to_date: date | None = Query(
+        None,
+        description="Include ratings created on or before this inclusive UTC date.",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download a human-readable Markdown report of the caller's feedback.
+
+    This is the portable sibling of the CSV and JSON exports. It keeps the
+    same owner scope, verdict filtering, and date range while escaping metadata
+    so a title or note cannot change the structure of the downloaded report.
+    """
+    _ensure_agent_access(user, db)
+    _validate_feedback_export_date_range(from_date, to_date)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_markdown",
+        limit=30,
+        window_seconds=60,
+        message="Too many Markdown exports. Please wait.",
+    )
+
+    q = (
+        db.query(AnswerFeedback, AgentTaskRow)
+        .outerjoin(
+            AgentTaskRow,
+            (AnswerFeedback.task_id == AgentTaskRow.task_id)
+            & (AnswerFeedback.user_id == AgentTaskRow.user_id),
+        )
+        .filter(AnswerFeedback.user_id == user.id)
+    )
+    q = _apply_feedback_export_filters(
+        q,
+        verdict=verdict,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+    rows = q.order_by(AnswerFeedback.created_at.desc(), AnswerFeedback.id.desc()).all()
+    items = [
+        {
+            "task_id": feedback.task_id,
+            "title": task.title if task else None,
+            "verdict": feedback.verdict,
+            "note": feedback.note,
+            "created_at": feedback.created_at.isoformat()
+            if feedback.created_at
+            else None,
+        }
+        for feedback, task in rows
+    ]
+
+    counts = {name: 0 for name in ("correct", "partial", "wrong")}
+    for item in items:
+        if item["verdict"] in counts:
+            counts[item["verdict"]] += 1
+
+    lines = [
+        "# Arena — answer feedback",
+        "",
+        f"**Ratings:** {len(items)}",
+    ]
+    if verdict is not None:
+        lines.append(f"**Filter:** {_feedback_markdown_inline(verdict) or 'none'}")
+    if from_date or to_date:
+        lines.append(
+            "**Date range (UTC):** "
+            f"{from_date.isoformat() if from_date else 'beginning'} → "
+            f"{to_date.isoformat() if to_date else 'latest'}"
+        )
+    lines.extend(
+        [
+            "",
+            "## Summary",
+            "",
+            f"- **Correct:** {counts['correct']}",
+            f"- **Partial:** {counts['partial']}",
+            f"- **Wrong:** {counts['wrong']}",
+        ]
+    )
+
+    if items:
+        lines.extend(["", "## Ratings", ""])
+        for index, item in enumerate(items, start=1):
+            title = _feedback_markdown_inline(item["title"]) or "Untitled task"
+            feedback_verdict = _feedback_markdown_inline(item["verdict"]) or "unknown"
+            lines.extend(
+                [
+                    f"### {index}. {feedback_verdict} — {title}",
+                    "",
+                    f"- **Task ID:** {_feedback_markdown_inline(item['task_id'])}",
+                    f"- **Rated:** {_feedback_markdown_inline(item['created_at']) or 'unknown'}",
+                ]
+            )
+            note = _feedback_markdown_inline(item["note"])
+            if note:
+                lines.append(f"- **Note:** {note}")
+            lines.append("")
+    else:
+        lines.extend(["", "_No answer feedback recorded._", ""])
+
+    lines.extend(["---", "_Exported from Arena_", ""])
+    filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.md"
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
     )
 
 
@@ -3613,16 +4792,16 @@ async def export_agent_history_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait.",
     )
-    
+
     from arena.core.agent_memory import get_user_task_history
     from arena.routes.analytics import _csv_safe
     from arena.core.tier_config import normalize_tier, get_tier_str
     import csv
     import io
-    
+
     tier = normalize_tier(get_tier_str(user))
     retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
-    
+
     # Get all matching tasks (not paginated for CSV export)
     # Use a large per_page to get all results
     history = get_user_task_history(
@@ -3636,10 +4815,10 @@ async def export_agent_history_csv(
         orchestration_id=orchestration_id,
         sort=sort,
     )
-    
+
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
     # Write header
     writer.writerow([
         "task_id",
@@ -3652,7 +4831,7 @@ async def export_agent_history_csv(
         "orchestration_id",
         "watchlist_item_id",
     ])
-    
+
     # Write rows
     for item in history.get("tasks", []):
         writer.writerow([
@@ -3666,7 +4845,7 @@ async def export_agent_history_csv(
             _csv_safe(item.get("orchestration_id")),
             _csv_safe(item.get("watchlist_item_id")),
         ])
-    
+
     filename = f"arena-history-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -3704,14 +4883,14 @@ async def export_agent_history_json(
         window_seconds=60,
         message="Too many JSON exports. Please wait.",
     )
-    
+
     from arena.core.agent_memory import get_user_task_history
     from arena.core.tier_config import normalize_tier, get_tier_str
     import json
-    
+
     tier = normalize_tier(get_tier_str(user))
     retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
-    
+
     # Get all matching tasks
     history = get_user_task_history(
         db=db,
@@ -3724,10 +4903,10 @@ async def export_agent_history_json(
         orchestration_id=orchestration_id,
         sort=sort,
     )
-    
+
     # Return tasks as JSON array
     tasks = history.get("tasks", [])
-    
+
     filename = f"arena-history-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
@@ -4048,6 +5227,10 @@ async def get_saved_agent_task(
             "final_answer": row.final_answer,
             "final_score": row.final_score,
             "final_confidence": row.final_confidence,
+            "is_shared": bool(row.share_token),
+            "share_url": (
+                f"/share/agent/{row.share_token}" if row.share_token else None
+            ),
             "topics": json.loads(row.topics or "[]"),
             "user_feedback": row.user_feedback,
             "created_at": row.created_at.isoformat() if row.created_at else "",

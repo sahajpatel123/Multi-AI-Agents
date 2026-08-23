@@ -274,18 +274,12 @@ async def submit_prompt(
             )
 
         agent_timings: dict[str, int] = {}
-        t_agents = time.monotonic()
-        responses, tools_used = await orchestrator.run_all_agents(
-            pipeline_result.enriched_prompt,
-            agents=active_agents,
-            persona_ids=body.persona_ids,
-            user_id=user.id if memory_enabled else None,
-            db=db if memory_enabled else None,
-            session_id=session_id,
-            tracker=tracker,
-            cost=cost,
-        )
-        agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
+
+        # The model fan-out runs further down, gated by the response-cache
+        # check. An earlier revision also ran it eagerly here, so every
+        # prompt executed the four-model round twice (2x provider spend)
+        # and silently discarded the first result's answers. Keep exactly
+        # one call site.
 
         cache_status: str | None = None
         cache_key: str | None = None
@@ -331,6 +325,7 @@ async def submit_prompt(
                 db=db if memory_enabled else None,
                 session_id=session_id,
                 tracker=tracker,
+                cost=cost,
                 request_context=format_follow_up_context(body.context),
                 tool_results=precomputed_tool_results,
             )
@@ -364,7 +359,7 @@ async def submit_prompt(
         )
         tracker.mark("integrity_done")
 
-        scored_responses = await scorer.score_responses(
+        scoring_result = await scorer.score_responses(
             body.prompt,
             responses,
             integrity_report,
@@ -375,6 +370,7 @@ async def submit_prompt(
             db=db,
             scoring_duration_ms=None,
         )
+        scored_responses = scoring_result.scored_responses
         tracker.mark("scoring_done")
 
         winner = scorer.get_winner(scored_responses)
@@ -406,6 +402,7 @@ async def submit_prompt(
             integrity=integrity_report,
             tools_used=tools_used,
             request_id=request_id,
+            scoring_reasoning=scoring_result.reasoning,
         )
         tracker.mark("response_shaped")
 
@@ -699,7 +696,7 @@ async def stream_prompt(
                 db=db,
             )
             tracker.mark("integrity_done")
-            scored_responses = await scorer.score_responses(
+            scoring_result = await scorer.score_responses(
                 body.prompt,
                 responses,
                 integrity_report,
@@ -709,6 +706,7 @@ async def stream_prompt(
                 persona_ids=body.persona_ids,
                 db=db,
             )
+            scored_responses = scoring_result.scored_responses
             tracker.mark("scoring_done")
             winner = scorer.get_winner(scored_responses)
             if not winner:
@@ -728,6 +726,7 @@ async def stream_prompt(
                 integrity=integrity_report,
                 tools_used=tools_used,
                 request_id=request_id,
+                scoring_reasoning=scoring_result.reasoning,
             )
             tracker.mark("response_shaped")
 

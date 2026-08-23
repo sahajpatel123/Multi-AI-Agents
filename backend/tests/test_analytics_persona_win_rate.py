@@ -27,13 +27,26 @@ def _seed_audit(
     hours_ago: int = 1,
     fallback_used: bool = False,
     score: int = 80,
+    days_ago: int | None = None,
 ) -> ScoringAudit:
     """Seed one scored exchange.
 
     ``panel`` is passed through as-is so tests can cover the JSON-string
     and NULL shapes the column actually contains in production, not just
     the happy-path list.
+
+    ``days_ago`` (when given) anchors ``created_at`` to a deterministic
+    UTC day bucket instead of ``now − N hours``. The hour-based offset
+    crosses midnight whenever the suite runs between 00:00 and 01:00
+    UTC, dropping "today" rows out of today-only windows; bucket-anchored
+    seeds keep window-membership assertions true at any wall-clock time.
     """
+    if days_ago is not None:
+        now = utcnow_naive()
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        created_at = day_start - timedelta(days=days_ago) + timedelta(minutes=30)
+    else:
+        created_at = utcnow_naive() - timedelta(hours=hours_ago)
     rec = ScoringAudit(
         session_id=str(uuid.uuid4()),
         user_id=user_id,
@@ -44,7 +57,7 @@ def _seed_audit(
         scores={"agent-1": score},
         persona_ids_used=panel,
         fallback_used=fallback_used,
-        created_at=utcnow_naive() - timedelta(hours=hours_ago),
+        created_at=created_at,
     )
     db.add(rec)
     db.flush()
@@ -442,6 +455,45 @@ async def test_window_excludes_older_exchanges(app_client, make_user, db_session
 
 
 @pytest.mark.asyncio
+async def test_window_excludes_future_dated_exchanges(
+    app_client, make_user, db_session
+):
+    """A report ending now must not count corrupted future audit rows."""
+    user = make_user(email="pwr-future@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst"],
+        hours_ago=1,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=["philosopher"],
+        hours_ago=-24,
+    )
+    db_session.commit()
+
+    headers = _pro_headers(user)
+    dashboard = await app_client.get(
+        "/api/analytics/persona-win-rate?window_days=7", headers=headers
+    )
+    export = await app_client.get(
+        "/api/analytics/persona-win-rate/export.json?window_days=7",
+        headers=headers,
+    )
+
+    assert dashboard.status_code == 200
+    assert export.status_code == 200
+    assert dashboard.json()["scored_exchanges"] == 1
+    assert json.loads(export.text)["scored_exchanges"] == 1
+    assert _row(dashboard.json(), "philosopher") is None
+    assert _row(json.loads(export.text), "philosopher") is None
+
+
+@pytest.mark.asyncio
 async def test_window_bounds_rejected(app_client, make_user):
     user = make_user(email="pwr-bounds@test.com", tier=UserTier.PRO)
     # Both bounds are pinned: min_appearances has le=200 (4-slot panels
@@ -488,6 +540,85 @@ async def test_empty_for_new_user(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_json_export_matches_canonical_report(app_client, make_user, db_session):
+    """The downloadable JSON keeps the dashboard envelope intact."""
+    user = make_user(email="pwr-json-export@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst", "philosopher"],
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-win-rate/export.json?window_days=7",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("application/json")
+    assert res.headers["content-disposition"].endswith(".json\"")
+    body = json.loads(res.text)
+    assert body["window_days"] == 7
+    assert body["include_fallback"] is False
+    assert body["scored_exchanges"] == 1
+    assert _row(body, "analyst")["wins"] == 1
+    assert _row(body, "philosopher")["appearances"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "export_path",
+    [
+        "/api/analytics/persona-win-rate/export.csv",
+        "/api/analytics/persona-win-rate/export.json",
+        "/api/analytics/persona-win-rate/export.md",
+    ],
+)
+async def test_all_exports_honor_fallback_opt_in(
+    app_client, make_user, db_session, export_path
+):
+    """Downloads must match the fallback mode shown in the dashboard."""
+    user = make_user(
+        email=f"pwr-fallback-export-{export_path[-3:]}@test.com",
+        tier=UserTier.PRO,
+    )
+    panel = ["analyst", "philosopher"]
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=panel,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        fallback_used=True,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        f"{export_path}?include_fallback=true",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    if export_path.endswith(".json"):
+        body = json.loads(res.text)
+        assert body["include_fallback"] is True
+        assert body["scored_exchanges"] == 2
+        assert _row(body, "analyst")["appearances"] == 2
+    elif export_path.endswith(".csv"):
+        assert "analyst,The Analyst,2,1," in res.text
+    else:
+        assert "**Scored exchanges:** 2" in res.text
+        assert "| The Analyst | 2 | 1 |" in res.text
+
+
+@pytest.mark.asyncio
 async def test_scoped_to_caller(app_client, make_user, db_session):
     alice = make_user(email="pwr-alice@test.com", tier=UserTier.PRO)
     bob = make_user(email="pwr-bob@test.com", tier=UserTier.PRO)
@@ -512,3 +643,163 @@ async def test_scoped_to_caller(app_client, make_user, db_session):
 async def test_requires_auth(app_client):
     res = await app_client.get("/api/analytics/persona-win-rate")
     assert res.status_code == 401
+
+
+# ─── Weekly trend buckets ───────────────────────────────────────────────────
+
+
+def _iso_date(s: str) -> bool:
+    """Crude but sufficient ISO-date shape check for trend buckets."""
+    return len(s) == 10 and s[4] == "-" and s[7] == "-"
+
+
+@pytest.mark.asyncio
+async def test_trend_buckets_partition_window(app_client, make_user, db_session):
+    """Row totals are exactly the sum of the weekly trend buckets."""
+    user = make_user(email="pwr-trend@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # ~40 days ago → bucket 7 of 13; ~2 days ago → bucket 12 of 13.
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        hours_ago=24 * 40,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        hours_ago=24 * 2,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-win-rate", headers=_pro_headers(user)
+    )
+    body = res.json()
+
+    analyst = _row(body, "analyst")
+    assert analyst["appearances"] == 2
+    assert analyst["wins"] == 2
+    assert len(analyst["trend"]) == 13  # 90-day default window → 13 weekly buckets
+    assert sum(p["appearances"] for p in analyst["trend"]) == analyst["appearances"]
+    assert sum(p["wins"] for p in analyst["trend"]) == analyst["wins"]
+
+    filled = [p for p in analyst["trend"] if p["appearances"] > 0]
+    assert [p["appearances"] for p in filled] == [1, 1]
+    assert [p["win_rate"] for p in filled] == [1.0, 1.0]
+    for p in analyst["trend"]:
+        if p["appearances"] == 0:
+            assert p["wins"] == 0
+            assert p["win_rate"] is None
+
+    # Philosopher was seated both times and never won: same grid, zero rate.
+    philosopher = _row(body, "philosopher")
+    assert [p["bucket_start"] for p in philosopher["trend"]] == [
+        p["bucket_start"] for p in analyst["trend"]
+    ]
+    assert philosopher["trend"][12]["appearances"] == 1
+    assert philosopher["trend"][12]["win_rate"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_trend_bucket_count_ceils_to_weeks_and_caps(
+    app_client, make_user, db_session
+):
+    user = make_user(email="pwr-trend-len@test.com", tier=UserTier.PRO)
+    # days_ago=0 keeps the row inside even the days=1 window at any
+    # wall-clock time — a plain "now − 1h" seed falls into yesterday
+    # whenever the suite runs in the 00:00–01:00 UTC hour.
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst"],
+        days_ago=0,
+    )
+    db_session.commit()
+
+    for window_days, expected in ((1, 1), (7, 1), (8, 2), (30, 5), (365, 26)):
+        res = await app_client.get(
+            f"/api/analytics/persona-win-rate?window_days={window_days}",
+            headers=_pro_headers(user),
+        )
+        assert res.status_code == 200, window_days
+        assert len(_row(res.json(), "analyst")["trend"]) == expected, window_days
+
+
+@pytest.mark.asyncio
+async def test_trend_buckets_are_iso_and_monotonic(app_client, make_user, db_session):
+    user = make_user(email="pwr-trend-shape@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"]
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-win-rate?window_days=30", headers=_pro_headers(user)
+    )
+    trend = _row(res.json(), "analyst")["trend"]
+    for prev, point in zip(trend, trend[1:]):
+        assert _iso_date(point["bucket_start"])
+        assert _iso_date(point["bucket_end"])
+        assert point["bucket_start"] <= point["bucket_end"]
+        assert point["bucket_start"] > prev["bucket_end"]
+
+
+@pytest.mark.asyncio
+async def test_trend_omits_older_rows_instead_of_folding_into_last_bucket(
+    app_client, make_user, db_session
+):
+    """A 365-day window plots the last 26 weeks and counts the rest, exactly."""
+    user = make_user(email="pwr-trend-omit@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # ~300 days ago: older than the 26-week plotted span (182 days).
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        hours_ago=24 * 300,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=panel,
+        hours_ago=24 * 2,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-win-rate?window_days=365",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+
+    analyst = _row(body, "analyst")
+    assert analyst["appearances"] == 2
+    assert analyst["wins"] == 1
+    assert len(analyst["trend"]) == 26
+    assert analyst["trend_omitted_appearances"] == 1
+    assert analyst["trend_omitted_wins"] == 1
+    assert (
+        sum(p["appearances"] for p in analyst["trend"])
+        + analyst["trend_omitted_appearances"]
+        == analyst["appearances"]
+    )
+    assert (
+        sum(p["wins"] for p in analyst["trend"]) + analyst["trend_omitted_wins"]
+        == analyst["wins"]
+    )
+    # The old win must not be folded into the newest bucket.
+    assert analyst["trend"][-1]["appearances"] == 1
+    assert analyst["trend"][-1]["wins"] == 0
+
+    philosopher = _row(body, "philosopher")
+    assert philosopher["trend_omitted_appearances"] == 1
+    assert philosopher["trend_omitted_wins"] == 0
+    assert philosopher["trend"][-1]["appearances"] == 1
+    assert philosopher["trend"][-1]["wins"] == 1

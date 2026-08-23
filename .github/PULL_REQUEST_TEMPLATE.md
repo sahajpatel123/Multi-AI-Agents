@@ -35,6 +35,7 @@ If applicable, please ensure:
 - [ ] TypeScript compilation passes (`npx tsc --noEmit`)
 - [ ] Frontend build passes (`npm run build`)
 - [ ] Workflow YAML validation passes (CI, CodeQL, release configs)
+- [ ] Pre-commit hooks pass (`pre-commit run --all-files`)
 
 ## Checklist
 

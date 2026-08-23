@@ -208,7 +208,7 @@ async def test_persona_stats_overview_csv_csv_injection_sanitization(app_client,
     from arena.core import agents
 
     user = make_user(email="csv-overview-inj@test.com", tier=UserTier.PRO)
-    
+
     # Inject a temporary trigger-prefixed persona name in PERSONA_METADATA to test _csv_safe
     custom_meta = dict(agents.PERSONA_METADATA)
     custom_meta["analyst"] = {"name": "=cmd|' /c calc'!A1", "color": "#123456", "temperature": 0.2}
@@ -229,7 +229,7 @@ async def test_persona_stats_overview_csv_csv_injection_sanitization(app_client,
 async def test_persona_stats_overview_csv_invalid_window_days(app_client, make_user):
     """window_days parameters outside [1, 365] return 422 Unprocessable Entity."""
     user = make_user(email="csv-overview-inv@test.com", tier=UserTier.PRO)
-    
+
     res0 = await app_client.get(
         "/api/analytics/persona-stats/export.csv?window_days=0",
         headers=_pro_headers(user),
@@ -289,4 +289,3 @@ async def test_persona_stats_overview_csv_rate_limiting(app_client, make_user):
     res_blocked = await app_client.get("/api/analytics/persona-stats/export.csv", headers=headers)
     assert res_blocked.status_code == 429
     assert "Too many persona-stats CSV exports" in res_blocked.json()["detail"]["message"]
-

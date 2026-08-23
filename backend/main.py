@@ -44,6 +44,7 @@ from arena.routes.rooms import router as rooms_router
 from arena.routes.mcp import router as mcp_router
 from arena.routes.metrics import router as metrics_router
 from arena.routes.condura import router as condura_router
+from arena.routes.public_agent import router as public_agent_router
 from arena.core.live_scheduler import schedule_live_checks
 from arena.core.loyalty_scheduler import schedule_loyalty_checks
 from arena.core.watchlist_runner import schedule_watchlist_checks
@@ -280,10 +281,10 @@ def create_app() -> FastAPI:
             "Accept-Language",
             "X-Requested-With",
         ],
-        # Browser JS can only read response headers listed here. We want
-        # clients on allowed origins to correlate the X-Request-ID header
-        # that RequestIDMiddleware emits on every response.
-        expose_headers=["X-Request-ID"],
+        # Browser JS can only read response headers listed here. Clients on
+        # allowed origins need both request correlation and the server-chosen
+        # filename for streamed exports (including usage Markdown).
+        expose_headers=["X-Request-ID", "Content-Disposition"],
         max_age=3600,
     )
     app.add_middleware(GlobalRateLimitMiddleware)
@@ -310,6 +311,7 @@ def create_app() -> FastAPI:
     app.include_router(rooms_router, prefix="/api/rooms")
     app.include_router(mcp_router, prefix="/api/mcp")
     app.include_router(condura_router, prefix="/api/condura")
+    app.include_router(public_agent_router, prefix="/api/public")
     app.include_router(metrics_router)
 
     # ── Startup ───────────────────────────────────────────────

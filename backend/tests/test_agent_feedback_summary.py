@@ -3,14 +3,18 @@
 from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
+import csv
+import io
 import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from arena.core import agent_metrics
 from arena.core.agent_metrics import compute_user_feedback_summary
 from arena.core.auth import create_access_token
 from arena.db_models import AgentTask, AnswerFeedback, UserTier
+from arena.routes import agent as agent_routes
 
 
 def _make_feedback(*, user_id, suffix, verdict, days_ago=0):
@@ -141,6 +145,229 @@ async def test_feedback_summary_endpoint_window_is_clamped(app_client, make_user
     )
     assert res.status_code == 200
     assert len(res.json()["daily_trend"]) == 14
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_csv_export_preserves_the_selected_window(
+    app_client, make_user, db_session
+):
+    user = make_user(email="fb-sum-csv@test.com", tier=UserTier.PRO)
+    db_session.add(_make_feedback(user_id=user.id, suffix="today", verdict="correct"))
+    db_session.add(
+        _make_feedback(
+            user_id=user.id,
+            suffix="yesterday",
+            verdict="wrong",
+            days_ago=1,
+        )
+    )
+    db_session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.csv?window_days=7",
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert "text/csv" in res.headers["content-type"]
+    assert "arena-feedback-activity-" in res.headers["content-disposition"]
+    rows = list(csv.DictReader(io.StringIO(res.text)))
+    assert len(rows) == 7
+    assert rows[-1]["date"] == utcnow_naive().date().isoformat()
+    assert rows[-1]["feedback_count"] == "1"
+    assert rows[-1]["correct_count"] == "1"
+    assert rows[-1]["partial_count"] == "0"
+    assert rows[-1]["wrong_count"] == "0"
+    assert rows[-2]["feedback_count"] == "1"
+    assert rows[-2]["correct_count"] == "0"
+    assert rows[-2]["wrong_count"] == "1"
+    assert all(row["date"] for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_csv_filename_matches_window_end_at_utc_midnight(
+    app_client, make_user, monkeypatch
+):
+    user = make_user(email="fb-sum-csv-midnight@test.com", tier=UserTier.PRO)
+    aggregation_now = datetime(2026, 8, 18, 23, 59, 59)
+    next_day = datetime(2026, 8, 19, 0, 0, 1)
+    monkeypatch.setattr(agent_metrics, "utcnow_naive", lambda: aggregation_now)
+    monkeypatch.setattr(agent_routes, "utcnow_naive", lambda: next_day)
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.csv?window_days=7",
+        headers=headers,
+    )
+
+    assert res.status_code == 200
+    assert (
+        'filename="arena-feedback-activity-'
+        f'{user.id}-7d-20260818.csv"'
+    ) in res.headers["content-disposition"]
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_json_export_matches_summary_contract(
+    app_client, make_user, db_session
+):
+    user = make_user(email="fb-sum-json@test.com", tier=UserTier.PRO)
+    db_session.add(_make_feedback(user_id=user.id, suffix="today", verdict="correct"))
+    db_session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.json?window_days=7",
+        headers=headers,
+    )
+
+    assert res.status_code == 200
+    assert "application/json" in res.headers["content-type"]
+    assert 'filename="arena-feedback-activity-' in res.headers["content-disposition"]
+    body = res.json()
+    assert body["window_days"] == 7
+    assert body["verdicts"] == {"correct": 1, "partial": 0, "wrong": 0}
+    assert len(body["daily_trend"]) == 7
+    assert body["daily_trend"][-1]["count"] == 1
+    assert body["daily_trend"][-1]["verdicts"] == {
+        "correct": 1,
+        "partial": 0,
+        "wrong": 0,
+    }
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert res.headers["cache-control"] == "no-store, no-cache, must-revalidate, private"
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_json_filename_matches_window_end_at_utc_midnight(
+    app_client, make_user, monkeypatch
+):
+    user = make_user(email="fb-sum-json-midnight@test.com", tier=UserTier.PRO)
+    aggregation_now = datetime(2026, 8, 18, 23, 59, 59)
+    next_day = datetime(2026, 8, 19, 0, 0, 1)
+    monkeypatch.setattr(agent_metrics, "utcnow_naive", lambda: aggregation_now)
+    monkeypatch.setattr(agent_routes, "utcnow_naive", lambda: next_day)
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.json?window_days=7",
+        headers=headers,
+    )
+
+    assert res.status_code == 200
+    assert (
+        'filename="arena-feedback-activity-'
+        f"{user.id}-7d-20260818.json"
+    ) in res.headers["content-disposition"]
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_markdown_export_contains_summary_and_daily_trend(
+    app_client, make_user, db_session
+):
+    user = make_user(email="fb-sum-md@test.com", tier=UserTier.PRO)
+    db_session.add(_make_feedback(user_id=user.id, suffix="correct", verdict="correct"))
+    db_session.add(_make_feedback(user_id=user.id, suffix="wrong", verdict="wrong"))
+    db_session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.md?window_days=7",
+        headers=headers,
+    )
+
+    assert res.status_code == 200
+    assert "text/markdown" in res.headers["content-type"]
+    assert 'filename="arena-feedback-activity-' in res.headers["content-disposition"]
+    assert "# Arena — feedback activity" in res.text
+    assert "## Lifetime verdict breakdown" in res.text
+    assert "| Correct | 1 |" in res.text
+    assert "| Wrong | 1 |" in res.text
+    assert "Accuracy: **50.0%**" in res.text
+    assert "## Daily activity (7-day window, UTC)" in res.text
+    assert "| Date | Ratings | Correct | Partial | Wrong |" in res.text
+    assert "| 2026-" in res.text
+    assert "_Exported from Arena_" in res.text
+    assert res.headers["x-content-type-options"] == "nosniff"
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_markdown_export_handles_empty_window(
+    app_client, make_user
+):
+    user = make_user(email="fb-sum-md-empty@test.com", tier=UserTier.PRO)
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.md?window_days=1",
+        headers=headers,
+    )
+
+    assert res.status_code == 200
+    assert "| Total | 0 |" in res.text
+    assert "Accuracy: **0.0%**" in res.text
+    assert res.text.endswith("_Exported from Arena_\n")
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_markdown_filename_matches_window_end_at_utc_midnight(
+    app_client, make_user, monkeypatch
+):
+    user = make_user(email="fb-sum-md-midnight@test.com", tier=UserTier.PRO)
+    aggregation_now = datetime(2026, 8, 18, 23, 59, 59)
+    next_day = datetime(2026, 8, 19, 0, 0, 1)
+    monkeypatch.setattr(agent_metrics, "utcnow_naive", lambda: aggregation_now)
+    monkeypatch.setattr(agent_routes, "utcnow_naive", lambda: next_day)
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/agent/feedback/summary/export.md?window_days=7",
+        headers=headers,
+    )
+
+    assert res.status_code == 200
+    assert (
+        'filename="arena-feedback-activity-'
+        f"{user.id}-7d-20260818.md"
+    ) in res.headers["content-disposition"]
+
+
+def test_feedback_summary_markdown_escapes_table_values():
+    payload = {
+        "window_days": 1,
+        "verdicts": {"correct": 1, "partial": 0, "wrong": 0},
+        "total": 1,
+        "rate": 1.0,
+        "daily_trend": [{
+            "date": "2026-08-18|injected",
+            "count": "1\n| forged",
+            "verdicts": {"correct": 1, "partial": 0, "wrong": 0},
+        }],
+    }
+
+    report = agent_routes._feedback_summary_markdown(payload)
+
+    assert r"2026-08-18\|injected" in report
+    assert r"1 \| forged" in report
+    assert "\n| forged" not in report
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_json_export_requires_auth(app_client):
+    res = await app_client.get("/api/agent/feedback/summary/export.json")
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_csv_export_requires_auth(app_client):
+    res = await app_client.get("/api/agent/feedback/summary/export.csv")
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_markdown_export_requires_auth(app_client):
+    res = await app_client.get("/api/agent/feedback/summary/export.md")
+    assert res.status_code == 401
 
 
 # ─── Accuracy rate pinning (cycle-34 bug) ────────────────────────────────────

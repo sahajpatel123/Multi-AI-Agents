@@ -121,6 +121,7 @@ GET  /api/agent/status/:id|result/:id|history|templates
 GET  /api/agent/feedback/calibration   Display-only confidence adjustment based on caller's verdict history
 GET  /api/agent/tasks/:id/export.json   Download a single task result as a .json file (pretty-printed)
 POST /api/agent/watchlist   Recurring research questions
+POST /api/agent/watchlist/:id/duplicate   Paused copy of an existing watch
 POST /api/agent/upload      File attachment (max 10 MB)
 POST /api/agent/memory/context
 
@@ -132,15 +133,30 @@ GET  /api/calibration/stats | /api/calibration/rating/:task
 
 GET  /api/analytics/summary        Per-user analytics summary (prompts, debates, streaks, engagement)
 GET  /api/analytics/summary/export.csv  CSV export of the summary (mirrors the JSON shape)
+GET  /api/analytics/summary/export.md   Human-readable Markdown report of the summary (metrics + breakdown tables)
 GET  /api/analytics/category-stats   All-categories aggregate (which categories do I engage with most, per-category best persona)
 GET  /api/analytics/category-stats/export.csv   CSV export of the same (mirrors the JSON shape, footer rollup included)
+GET  /api/analytics/activity   GitHub-style activity timeline with daily buckets, totals, and streak metrics
+GET  /api/analytics/activity/export.csv   CSV export of the same activity timeline (footer rollup included)
+GET  /api/analytics/activity/export.json   Machine-readable JSON download of the same activity timeline
+GET  /api/analytics/activity/export.md   Human-readable Markdown report of the same activity timeline (summary + daily table)
 GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
+GET  /api/analytics/persona-win-rate/export.json   Download the canonical persona win-rate report as JSON
+GET  /api/analytics/persona-win-rate/export-trend.csv   Flatten weekly persona win-rate trends for spreadsheets and charting
+GET  /api/analytics/persona-win-rate/export-trend.json  Flatten weekly persona win-rate trends as a self-describing JSON export
+GET  /api/analytics/persona-win-rate/export-trend.md   Human-readable weekly persona win-rate trend report
 GET  /api/analytics/persona-stats/:persona_id   Deep-dive on one persona (avg winning score, last activity, best category)
 GET  /api/analytics/persona-stats   All-personas summary (full 16-persona grid in one call, sorted strongest-first)
+GET  /api/analytics/persona-stats/export.csv    Download the all-personas summary as text/csv with footer rollup
+GET  /api/analytics/persona-stats/export.json   Download the all-personas summary as structured JSON
+GET  /api/analytics/persona-stats/export.md   Download the all-personas summary as a human-readable Markdown report
 GET  /api/analytics/persona-stats/:persona_id/by-category   Full per-category breakdown for one persona (one row per category with appearances/wins/win_rate)
 GET  /api/analytics/persona-stats/:persona_id/by-category/export.csv   Same data as text/csv with footer rollup
+GET  /api/analytics/persona-stats/:persona_id/by-category/export.md   Same data as a human-readable Markdown report with summary and honesty note
 GET  /api/analytics/persona-stats/:persona_id/timeline   Per-persona daily timeline of wins and appearances (sparkline-ready, contiguous zero-fill)
 GET  /api/analytics/persona-stats/:persona_id/timeline/export.csv   Same data as text/csv with footer rollup
+GET  /api/analytics/persona-stats/:persona_id/timeline/export.json  Same data as structured JSON with window metadata
+GET  /api/analytics/persona-stats/:persona_id/timeline/export.md   Human-readable Markdown report of the persona timeline (summary + daily table)
 GET  /api/analytics/scoring-audit/:session_id   Pro per-round scoring audit (per-mind scores, criteria, confidence, fallback flag)
 GET  /api/analytics/scoring-audit/:session_id/export.csv   CSV export of the scoring audit (mirrors the JSON shape, footer rollup included)
 

@@ -141,10 +141,11 @@ async def assemble_payload(
     integrity: IntegrityReport | None,
     tools_used: list[str] | None = None,
     request_id: str | None = None,
+    scoring_reasoning: str | None = None,
 ) -> PromptResponse:
     """
     Assemble the final response payload.
-    
+
     - Ensures session_id exists
     - Formats the winner
     - Regenerates bad one-liners
@@ -210,6 +211,7 @@ async def assemble_payload(
         winner=final_winner,
         winner_agent_id=final_winner.agent_id,
         all_responses=final_scored,
+        scoring_reasoning=scoring_reasoning,
         integrity=integrity,
         tools_used=tools_used or [],
         timestamp=utcnow_naive(),

@@ -30,6 +30,7 @@ export function ReRunRoundButton({
       className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
       onClick={onReRun}
       disabled={disabled}
+      aria-keyshortcuts="Shift+R"
       title={prompt}
       aria-label="Re-run round"
       style={{

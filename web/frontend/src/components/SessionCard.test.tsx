@@ -18,6 +18,38 @@ describe('SessionCard', () => {
     expect(getByText(/Should we ship this feature/)).toBeInTheDocument();
   });
 
+  it('renders a prompt node in place of the plain prompt text', () => {
+    const { container, getByRole } = render(
+      <SessionCard
+        prompt="Roadmap review"
+        promptNode={<mark>Roadmap review</mark>}
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+      />,
+    );
+    expect(container.querySelector('.session-card__prompt mark')).toHaveTextContent(
+      'Roadmap review',
+    );
+    expect(getByRole('button', { name: /Open session: Roadmap review/ })).toBeInTheDocument();
+  });
+
+  it('renders a topic match label in the meta line', () => {
+    const { getByText } = render(
+      <SessionCard
+        prompt="Q3 plan"
+        matchTopic="marketing"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+        messageCount={3}
+      />,
+    );
+    expect(getByText(/topic: marketing/)).toBeInTheDocument();
+  });
+
   it('fires onClick when the card body is clicked', () => {
     const onClick = vi.fn();
     const { getByRole } = render(
@@ -78,6 +110,119 @@ describe('SessionCard', () => {
     expect(queryByRole('button', { name: /Delete session/ })).toBeNull();
   });
 
+  it('does not show rename button when onRename is not provided', () => {
+    const { queryByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+      />,
+    );
+    expect(queryByRole('button', { name: /Rename session/ })).toBeNull();
+  });
+
+  it('does not show pin button when onPin is not provided', () => {
+    const { queryByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+      />,
+    );
+    expect(queryByRole('button', { name: /Pin session/ })).toBeNull();
+  });
+
+  it('fires onRename without firing onClick', () => {
+    const onClick = vi.fn();
+    const onRename = vi.fn();
+    const { getByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={onClick}
+        onRename={onRename}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /Rename session/ }));
+    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('fires onPin without firing onClick', () => {
+    const onClick = vi.fn();
+    const onPin = vi.fn();
+    const { getByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={onClick}
+        onPin={onPin}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /Pin session/ }));
+    expect(onPin).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('reflects the pinned state in the pin button', () => {
+    const { getByRole, rerender } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+        onPin={() => {}}
+        pinned
+      />,
+    );
+    expect(getByRole('button', { name: /Unpin session/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    rerender(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+        onPin={() => {}}
+        pinned={false}
+      />,
+    );
+    expect(getByRole('button', { name: /Pin session/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('disables the pin button while a pin update is in flight', () => {
+    const { getByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+        onPin={() => {}}
+        busy
+      />,
+    );
+    const pinButton = getByRole('button', { name: /Pin session/ });
+    expect(pinButton).toBeDisabled();
+    expect(pinButton).toHaveAttribute('aria-busy', 'true');
+  });
+
   it('fires onDelete without firing onClick', () => {
     const onClick = vi.fn();
     const onDelete = vi.fn();
@@ -113,6 +258,24 @@ describe('SessionCard', () => {
     expect(getByRole('button', { name: /Delete session/ })).toHaveClass('session-card__delete');
   });
 
+  it('duplicates a session without activating it', () => {
+    const onDuplicate = vi.fn();
+    const onClick = vi.fn();
+    const { getByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={onClick}
+        onDuplicate={onDuplicate}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /Duplicate session/ }));
+    expect(onDuplicate).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
   it('renders message count when provided', () => {
     const { getByText } = render(
       <SessionCard
@@ -125,6 +288,20 @@ describe('SessionCard', () => {
       />,
     );
     expect(getByText(/5 msg/)).toBeInTheDocument();
+  });
+
+  it('renders an arena-chat label when no winner agent is provided', () => {
+    const { getByText } = render(
+      <SessionCard
+        prompt="Resumable chat"
+        timestamp={new Date().toISOString()}
+        isActive={false}
+        onClick={() => {}}
+        messageCount={2}
+      />,
+    );
+    expect(getByText('Arena chat')).toBeInTheDocument();
+    expect(getByText(/2 msg/)).toBeInTheDocument();
   });
 
   it('omits message count when zero', () => {

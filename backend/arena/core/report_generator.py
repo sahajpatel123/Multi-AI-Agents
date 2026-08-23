@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 import html
+import io
 import json
 import logging
 from typing import Any, Optional
@@ -488,6 +490,533 @@ def generate_report_html(task: AgentTask, overlay: Optional[dict[str, Any]] = No
     """Full HTML document for one task (PDF or print)."""
     ctx = build_report_context_from_row(task, overlay)
     return _document_shell(_task_body_inner(ctx))
+
+
+def _md_inline(value: Any) -> str:
+    """Escape a short text value for inline markdown use.
+
+    Titles, keywords, and other short strings come from LLM-produced
+    reports, so they may contain markdown metacharacters. Escaping keeps
+    a single misbehaving source from breaking the document structure or
+    rendering as clickable/link content in the exported file.
+    Newlines are flattened to spaces (these fields are inline, not block
+    content) and HTML metacharacters are entity-escaped so raw `<script>`
+    or similar payloads render as literal text instead of active HTML in
+    markdown previewers that allow raw HTML.
+    """
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("\r\n", " ")
+        .replace("\r", " ")
+        .replace("\n", " ")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("*", "\\*")
+        .replace("_", "\\_")
+        .replace("`", "\\`")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+    )
+
+
+def _score_text(value: Any) -> str:
+    """Render a numeric score without float noise; missing values become '—'."""
+    if value is None or isinstance(value, bool):
+        return "—"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: Any) -> str:
+    """Return ``value`` as a string safe to embed in a CSV cell.
+
+    Defense-in-depth against CSV injection (CWE-1236): a value whose first
+    character (after the leading whitespace spreadsheets ignore when deciding
+    whether to evaluate a formula) is a formula trigger gets a leading
+    apostrophe. The apostrophe is invisible in Excel and prevents the cell
+    from being parsed as a formula.
+    """
+    s = str(value) if value is not None else ""
+    first_significant = s.lstrip()[:1]
+    if first_significant and first_significant in _CSV_FORMULA_PREFIXES:
+        return "'" + s
+    return s
+
+
+def _csv_join_list(values: Any) -> str:
+    """Join list-shaped overlay fields into a single readable CSV cell."""
+    if not isinstance(values, list):
+        return ""
+    return "; ".join(
+        str(v) for v in values if str(v).strip()
+    )
+
+
+def _add_csv_row(
+    rows: list[tuple[str, str, str, str]],
+    task_id: str,
+    section: str,
+    key: str,
+    value: Any,
+) -> None:
+    """Append one normalized CSV report row (values are sanitized on write)."""
+    rows.append((task_id, section, key, str(value) if value is not None else ""))
+
+
+def generate_report_csv(
+    task: AgentTask, overlay: Optional[dict[str, Any]] = None
+) -> str:
+    """Portable CSV research report for a completed Agent task.
+
+    Emits a normalized ``task_id, section, key, value`` sheet so the report
+    stays spreadsheet-friendly (filter by section, pivot on key) instead of
+    cramming the entire answer into one giant cell. It carries the same
+    report context as the markdown export: question, answer, intelligence
+    score, sources, steelman, caveats, assumptions, source integrity, dissent,
+    and temporal profile.
+    """
+    ctx = build_report_context_from_row(task, overlay)
+    overlay = overlay or {}
+
+    task_id = str(task.task_id or "")
+    question = str(ctx.get("question") or "Research task").strip()
+    answer = str(ctx.get("final_answer_plain") or "").strip()
+    if not answer:
+        answer = str(task.final_answer or "").strip()
+    intel = ctx.get("intel") or {}
+    temporal = ctx.get("temporal") or {}
+    created = ctx.get("created_at")
+    created_s = created.strftime("%Y-%m-%dT%H:%M:%SZ") if created else ""
+
+    rows: list[tuple[str, str, str, str]] = []
+
+    _add_csv_row(rows, task_id, "metadata", "question", question)
+    _add_csv_row(rows, task_id, "metadata", "answer", answer)
+    _add_csv_row(
+        rows,
+        task_id,
+        "metadata",
+        "score",
+        _score_text(intel.get("total_score")),
+    )
+    _add_csv_row(
+        rows,
+        task_id,
+        "metadata",
+        "confidence",
+        task.final_confidence if task.final_confidence is not None else "",
+    )
+    _add_csv_row(rows, task_id, "metadata", "created_at", created_s)
+
+    _add_csv_row(
+        rows,
+        task_id,
+        "intelligence",
+        "one_line_verdict",
+        intel.get("one_line_verdict"),
+    )
+    for label, key in _DIMS:
+        block = intel.get(key)
+        score = "—"
+        if isinstance(block, dict) and block.get("score") is not None:
+            score = _score_text(block.get("score"))
+        _add_csv_row(rows, task_id, "intelligence", key, score)
+
+    sources = ctx.get("sources") or []
+    for i, s in enumerate(sources, 1):
+        if isinstance(s, dict):
+            title = s.get("title") or s.get("url") or s.get("name")
+        else:
+            title = str(s)
+        title = str(title).strip() or "Untitled source"
+        _add_csv_row(rows, task_id, "sources", f"source {i}", title)
+
+    steelman = ctx.get("steelman") or {}
+    if isinstance(steelman, dict):
+        _add_csv_row(
+            rows,
+            task_id,
+            "steelman",
+            "opposing_position",
+            steelman.get("opposing_position"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "steelman",
+            "key_arguments",
+            _csv_join_list(steelman.get("key_arguments")),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "steelman",
+            "strongest_evidence",
+            steelman.get("strongest_evidence"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "steelman",
+            "concession",
+            steelman.get("concession"),
+        )
+
+    caveats = ctx.get("caveats") or []
+    for c in caveats:
+        if not isinstance(c, dict):
+            continue
+        keyword = str(c.get("keyword") or c.get("category") or "Note")
+        desc = str(c.get("description") or c.get("text") or "")
+        _add_csv_row(rows, task_id, "caveats", keyword, desc)
+
+    assumptions = ctx.get("assumptions") or {}
+    if isinstance(assumptions, dict):
+        _add_csv_row(
+            rows,
+            task_id,
+            "assumptions",
+            "summary",
+            assumptions.get("summary"),
+        )
+        items = assumptions.get("assumptions")
+        if isinstance(items, list):
+            for i, item in enumerate(items, 1):
+                if not isinstance(item, dict):
+                    continue
+                text = str(item.get("assumption") or "").strip()
+                if not text:
+                    continue
+                criticality = str(item.get("criticality") or "").strip()
+                flag = item.get("flag")
+                suffix = ""
+                if criticality:
+                    suffix += f" (criticality: {criticality}"
+                    if flag is not None:
+                        suffix += f", flag: {flag}"
+                    suffix += ")"
+                _add_csv_row(
+                    rows,
+                    task_id,
+                    "assumptions",
+                    f"assumption {i}",
+                    text + suffix,
+                )
+
+    source_integrity = overlay.get("source_integrity") or {}
+    if isinstance(source_integrity, dict):
+        _add_csv_row(
+            rows,
+            task_id,
+            "source_integrity",
+            "summary",
+            source_integrity.get("summary"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "source_integrity",
+            "integrity_label",
+            source_integrity.get("integrity_label"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "source_integrity",
+            "source_count",
+            source_integrity.get("source_count"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "source_integrity",
+            "overall_source_integrity",
+            source_integrity.get("overall_source_integrity"),
+        )
+        claims = source_integrity.get("claims")
+        if isinstance(claims, list):
+            for i, claim in enumerate(claims, 1):
+                if not isinstance(claim, dict):
+                    continue
+                text = str(claim.get("claim") or "").strip()
+                if not text:
+                    continue
+                confidence = claim.get("agreement_confidence")
+                value = text
+                if confidence is not None:
+                    value += f" (confidence: {confidence})"
+                _add_csv_row(
+                    rows,
+                    task_id,
+                    "source_integrity",
+                    f"claim {i}",
+                    value,
+                )
+
+    dissent = overlay.get("dissent_report") or {}
+    if isinstance(dissent, dict):
+        positions = dissent.get("positions")
+        if isinstance(positions, list):
+            for pos in positions:
+                if not isinstance(pos, dict):
+                    continue
+                label = str(pos.get("label") or "").strip()
+                if not label:
+                    continue
+                _add_csv_row(
+                    rows,
+                    task_id,
+                    "dissent",
+                    f"position {label}",
+                    pos.get("count") if pos.get("count") is not None else "",
+                )
+        _add_csv_row(
+            rows,
+            task_id,
+            "dissent",
+            "minority_view_summary",
+            dissent.get("minority_view_summary"),
+        )
+
+    if isinstance(temporal, dict):
+        _add_csv_row(
+            rows,
+            task_id,
+            "temporal_profile",
+            "decay_class",
+            temporal.get("decay_class"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "temporal_profile",
+            "half_life",
+            temporal.get("half_life"),
+        )
+        _add_csv_row(
+            rows,
+            task_id,
+            "temporal_profile",
+            "recheck_by",
+            temporal.get("recheck_by"),
+        )
+        time_sensitive = temporal.get("time_sensitive_claims")
+        if isinstance(time_sensitive, list):
+            _add_csv_row(
+                rows,
+                task_id,
+                "temporal_profile",
+                "time_sensitive_claims",
+                _csv_join_list(time_sensitive),
+            )
+
+    buf = io.StringIO()
+    buf.write("\ufeff")
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(["task_id", "section", "key", "value"])
+    for row in rows:
+        writer.writerow([_csv_safe(v) for v in row])
+    return buf.getvalue()
+
+
+def generate_report_markdown(
+    task: AgentTask, overlay: Optional[dict[str, Any]] = None
+) -> str:
+    """Portable markdown research report for a completed Agent task.
+
+    Complements generate_report_html with the same report context
+    (question, answer, intelligence score, sources, steelman, caveats,
+    assumptions, temporal profile) plus the post-pipeline reports that
+    live in the export overlay (dissent report, source integrity).
+    The answer body is intentionally left as raw markdown so the file
+    reads naturally in any renderer; short metadata values are escaped
+    inline so a malformed report cannot hijack the document structure.
+    """
+    ctx = build_report_context_from_row(task, overlay)
+    overlay = overlay or {}
+
+    question = str(ctx.get("question") or "Research task").strip()
+    answer = str(ctx.get("final_answer_plain") or "").strip()
+    if not answer:
+        answer = str(task.final_answer or "").strip()
+    intel = ctx.get("intel") or {}
+    temporal = ctx.get("temporal") or {}
+    created = ctx.get("created_at")
+    created_s = created.strftime("%B %d, %Y") if created else ""
+
+    total = _score_text(intel.get("total_score"))
+    verdict = str(intel.get("one_line_verdict") or "").strip()
+
+    lines: list[str] = []
+    # The H1 is the document's structural anchor, so the question is
+    # flattened and inline-escaped there. The body section below keeps
+    # the user's original question verbatim.
+    lines.append(f"# {_md_inline(question)}")
+    lines.append("")
+    lines.append("> Arena Agent research report · generated by Arena")
+    lines.append("")
+
+    lines.append("## Question")
+    lines.append("")
+    lines.append(question)
+    lines.append("")
+
+    lines.append("## Answer")
+    lines.append("")
+    if answer:
+        lines.append(answer)
+    else:
+        lines.append("_No answer recorded for this task._")
+    lines.append("")
+
+    lines.append("## Intelligence Score")
+    lines.append("")
+    if verdict:
+        lines.append(f"**{total}/100** — {_md_inline(verdict)}")
+        lines.append("")
+    else:
+        lines.append(f"**{total}/100**")
+        lines.append("")
+    for label, key in _DIMS:
+        block = intel.get(key)
+        score = "—"
+        if isinstance(block, dict) and block.get("score") is not None:
+            score = _score_text(block.get("score"))
+        lines.append(f"- **{label}:** {score}/25")
+    lines.append("")
+
+    sources = ctx.get("sources") or []
+    if sources:
+        lines.append("## Sources")
+        lines.append("")
+        for i, s in enumerate(sources, 1):
+            if isinstance(s, dict):
+                title = s.get("title") or s.get("url") or s.get("name")
+            else:
+                title = str(s)
+            title = str(title).strip() or "Untitled source"
+            lines.append(f"{i}. {_md_inline(title)}")
+        lines.append("")
+
+    steelman = ctx.get("steelman") or {}
+    opposing = str(steelman.get("opposing_position") or "").strip()
+    if opposing:
+        lines.append("## Steelman")
+        lines.append("")
+        lines.append(_md_inline(opposing))
+        lines.append("")
+        arguments = steelman.get("key_arguments")
+        if isinstance(arguments, list):
+            for arg in arguments:
+                if str(arg).strip():
+                    lines.append(f"- {_md_inline(arg)}")
+            lines.append("")
+        evidence = str(steelman.get("strongest_evidence") or "").strip()
+        if evidence:
+            lines.append(f"**Strongest evidence:** {_md_inline(evidence)}")
+            lines.append("")
+        concession = str(steelman.get("concession") or "").strip()
+        if concession:
+            lines.append(f"**Concession:** {_md_inline(concession)}")
+            lines.append("")
+
+    caveats = ctx.get("caveats") or []
+    if caveats:
+        lines.append("## Analytical Caveats")
+        lines.append("")
+        for c in caveats:
+            if not isinstance(c, dict):
+                continue
+            keyword = str(c.get("keyword") or c.get("category") or "Note")
+            desc = str(c.get("description") or c.get("text") or "")
+            lines.append(f"- **{_md_inline(keyword)}** — {_md_inline(desc)}")
+        lines.append("")
+
+    assumptions = ctx.get("assumptions") or {}
+    assumption_summary = str(assumptions.get("summary") or "").strip()
+    assumption_items = assumptions.get("assumptions")
+    if assumption_summary or isinstance(assumption_items, list) and assumption_items:
+        lines.append("## Key Assumptions")
+        lines.append("")
+        if assumption_summary:
+            lines.append(f"_{_md_inline(assumption_summary)}_")
+            lines.append("")
+        if isinstance(assumption_items, list):
+            for item in assumption_items:
+                if not isinstance(item, dict):
+                    continue
+                text = str(item.get("assumption") or "").strip()
+                if not text:
+                    continue
+                criticality = str(item.get("criticality") or "").strip()
+                suffix = (
+                    f" _(criticality: {_md_inline(criticality)})_"
+                    if criticality
+                    else ""
+                )
+                lines.append(f"- {_md_inline(text)}{suffix}")
+            lines.append("")
+
+    source_integrity = overlay.get("source_integrity") or {}
+    integrity_summary = str(source_integrity.get("summary") or "").strip()
+    if integrity_summary:
+        lines.append("## Source Integrity")
+        lines.append("")
+        label = str(source_integrity.get("integrity_label") or "").strip()
+        if label:
+            lines.append(f"_{_md_inline(label.capitalize())} — {_md_inline(integrity_summary)}_")
+        else:
+            lines.append(f"_{_md_inline(integrity_summary)}_")
+        lines.append("")
+
+    dissent = overlay.get("dissent_report") or {}
+    minority_view = str(dissent.get("minority_view_summary") or "").strip()
+    positions = dissent.get("positions")
+    if minority_view or isinstance(positions, list) and positions:
+        lines.append("## Dissent")
+        lines.append("")
+        if isinstance(positions, list):
+            for pos in positions:
+                if not isinstance(pos, dict):
+                    continue
+                label = str(pos.get("label") or "").strip()
+                count = pos.get("count")
+                if label:
+                    if count is None:
+                        lines.append(f"- **{_md_inline(label)}**")
+                    else:
+                        lines.append(
+                            f"- **{_md_inline(label)}:** {_score_text(count)}"
+                        )
+            lines.append("")
+        if minority_view:
+            lines.append(_md_inline(minority_view))
+            lines.append("")
+
+    decay_class = str(temporal.get("decay_class") or "").strip()
+    if decay_class:
+        lines.append("## Temporal Profile")
+        lines.append("")
+        lines.append(f"- **Decay class:** {_md_inline(decay_class.replace('_', ' ').capitalize())}")
+        half_life = str(temporal.get("half_life") or "").strip()
+        if half_life:
+            lines.append(f"- **Half-life:** {_md_inline(half_life)}")
+        recheck_by = temporal.get("recheck_by")
+        if recheck_by:
+            lines.append(f"- **Recheck by:** {_md_inline(str(recheck_by))}")
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    lines.append(f"_Generated by Arena · {_md_inline(created_s)} UTC_")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def generate_synthesis_section_html(

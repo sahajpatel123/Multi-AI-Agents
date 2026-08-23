@@ -13,6 +13,16 @@ export function shouldCaptureSlashFocus(target: EventTarget | null): boolean {
 }
 
 /**
+ * Whether an aria-modal dialog is currently open. Global keyboard shortcuts
+ * should not fire behind a modal (e.g. Shift+C/D/J while the templates dialog
+ * is open), even when focus has not yet landed inside the dialog.
+ */
+export function isAriaModalOpen(): boolean {
+  if (typeof document === 'undefined') return false;
+  return Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
+}
+
+/**
  * True for `/` without meta/ctrl/alt (Shift is ok for some layouts; we only match key === '/').
  */
 export function isBareSlashKey(event: {

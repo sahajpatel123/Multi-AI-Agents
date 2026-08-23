@@ -6552,8 +6552,20 @@ canvas {
     box-shadow 150ms var(--ease-btn);
 }
 
-.session-card--deletable .session-card__main {
+.session-card--actions-1 .session-card__main {
   padding-right: 36px;
+}
+
+.session-card--actions-2 .session-card__main {
+  padding-right: 66px;
+}
+
+.session-card--actions-3 .session-card__main {
+  padding-right: 96px;
+}
+
+.session-card--actions-4 .session-card__main {
+  padding-right: 126px;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -6628,6 +6640,15 @@ canvas {
   flex-shrink: 0;
 }
 
+.session-card__topic-match {
+  color: #6b6460;
+  opacity: 0.75;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-card__time {
   color: #6b6460;
   opacity: 0.65;
@@ -6636,11 +6657,23 @@ canvas {
   font-variant-numeric: tabular-nums;
 }
 
-.session-card__delete {
+.session-card__actions {
   position: absolute;
   right: 6px;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-hover-ms) var(--ease-btn);
+}
+
+.session-card__delete,
+.session-card__rename,
+.session-card__pin,
+.session-card__duplicate {
   width: 28px;
   height: 28px;
   display: inline-flex;
@@ -6653,10 +6686,7 @@ canvas {
   cursor: pointer;
   padding: 0;
   font-family: inherit;
-  opacity: 0;
-  pointer-events: none;
   transition:
-    opacity var(--motion-hover-ms) var(--ease-btn),
     color var(--motion-hover-ms) var(--ease-btn),
     background var(--motion-hover-ms) var(--ease-btn),
     border-color var(--motion-hover-ms) var(--ease-btn),
@@ -6664,51 +6694,78 @@ canvas {
     box-shadow var(--motion-lift-ms) var(--ease-out-premium);
 }
 
+.session-card__pin[aria-pressed='true'] {
+  color: #b87a44;
+  border-color: rgba(184, 122, 68, 0.42);
+  background: #fbf1e4;
+}
+
+.session-card__pin:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.session-card__duplicate:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .session-card__delete:hover {
+  .session-card__delete:hover,
+  .session-card__rename:hover,
+  .session-card__pin:hover,
+  .session-card__duplicate:hover {
     color: #993c1d;
     border-color: rgba(153, 60, 29, 0.28);
     background: #fcf0ee;
     box-shadow: 0 2px 8px rgba(153, 60, 29, 0.12);
   }
 
-  .session-card__delete:active {
-    transform: translateY(-50%) scale(0.92);
+  .session-card__delete:active,
+  .session-card__rename:active,
+  .session-card__pin:active,
+  .session-card__duplicate:active {
+    transform: scale(0.92);
   }
 }
 
 /* Reveal delete on hover, keyboard focus, or touch (always on coarse pointers). */
 @media (hover: hover) and (pointer: fine) {
-  .session-card:hover .session-card__delete,
-  .session-card:focus-within .session-card__delete {
+  .session-card:hover .session-card__actions,
+  .session-card:focus-within .session-card__actions {
     opacity: 1;
     pointer-events: auto;
   }
 }
 
 @media (hover: none), (pointer: coarse) {
-  .session-card__delete {
+  .session-card__actions {
     opacity: 1;
     pointer-events: auto;
   }
 }
 
-.session-card:focus-within .session-card__delete {
+.session-card:focus-within .session-card__actions,
+.session-card__actions:focus-within {
   opacity: 1;
   pointer-events: auto;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .session-card__delete:hover {
+  .session-card__delete:hover,
+  .session-card__rename:hover,
+  .session-card__pin:hover,
+  .session-card__duplicate:hover {
     color: #993c1d;
     background: #fcf0ee;
     border-color: rgba(240, 153, 123, 0.55);
   }
 }
 
-.session-card__delete:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
+.session-card__delete:focus-visible,
+.session-card__rename:focus-visible,
+.session-card__pin:focus-visible,
+.session-card__duplicate:focus-visible {
   outline: 2px solid #c4956a;
   outline-offset: 1px;
   color: #993c1d;
@@ -6717,7 +6774,11 @@ canvas {
 @media (prefers-reduced-motion: reduce) {
   .session-card,
   .session-card__main,
-  .session-card__delete {
+  .session-card__actions,
+  .session-card__delete,
+  .session-card__rename,
+  .session-card__pin,
+  .session-card__duplicate {
     transition: none !important;
   }
 }
@@ -12492,5 +12553,243 @@ canvas {
 
   .app-panel-close-link:active {
     transform: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Winner reasoning — collapsible judge's rationale under the Arena grid
+   ------------------------------------------------------------------ */
+.winner-reasoning {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto 10px;
+  border: 0.5px solid var(--cream-border, #e0d8d0);
+  border-radius: 12px;
+  background: var(--cream-surface-raised, #fdfaf6);
+}
+
+.winner-reasoning-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--cream-body, #4a3728);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease);
+}
+
+.winner-reasoning-icon {
+  flex-shrink: 0;
+  color: var(--cream-gold, #c4956a);
+}
+
+.winner-reasoning-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.winner-reasoning-chevron {
+  flex-shrink: 0;
+  color: var(--cream-faint, #a89070);
+  transition: transform var(--motion-micro-ms, 170ms) var(--ease-out-premium, ease);
+}
+
+.winner-reasoning-chevron--open {
+  transform: rotate(180deg);
+}
+
+.winner-reasoning--static .winner-reasoning-chevron {
+  transition: none !important;
+}
+
+.winner-reasoning-body {
+  margin: 0;
+  padding: 0 12px 12px 35px;
+  color: var(--cream-muted, #6b6460);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .winner-reasoning-toggle:hover {
+    background: var(--cream-surface-tint, #faf3ea);
+    color: var(--cream-ink, #1a1714);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .winner-reasoning-toggle,
+  .winner-reasoning-chevron {
+    transition: none !important;
+  }
+}
+
+.verdict-scoreboard {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto 10px;
+  border: 0.5px solid var(--cream-border, #e0d8d0);
+  border-radius: 12px;
+  background: var(--cream-surface-raised, #fdfaf6);
+}
+
+.verdict-scoreboard-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--cream-body, #4a3728);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease);
+}
+
+.verdict-scoreboard-icon {
+  flex-shrink: 0;
+  color: var(--cream-gold, #c4956a);
+}
+
+.verdict-scoreboard-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.verdict-scoreboard-chevron {
+  flex-shrink: 0;
+  color: var(--cream-faint, #a89070);
+  transition: transform var(--motion-micro-ms, 170ms) var(--ease-out-premium, ease);
+}
+
+.verdict-scoreboard-chevron--open {
+  transform: rotate(180deg);
+}
+
+.verdict-scoreboard--static .verdict-scoreboard-chevron {
+  transition: none !important;
+}
+
+.verdict-scoreboard-body {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0 12px 12px;
+}
+
+.verdict-scoreboard-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 24px;
+}
+
+.verdict-scoreboard-rank {
+  flex-shrink: 0;
+  width: 22px;
+  color: var(--cream-faint, #a89070);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  text-align: right;
+}
+
+.verdict-scoreboard-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--cream-body, #4a3728);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.verdict-scoreboard-row--winner .verdict-scoreboard-name {
+  color: var(--cream-ink, #1a1714);
+  font-weight: 650;
+}
+
+.verdict-scoreboard-crown {
+  flex-shrink: 0;
+  color: var(--cream-gold, #c4956a);
+}
+
+.verdict-scoreboard-score {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--cream-muted, #6b6460);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-scoreboard-row--winner .verdict-scoreboard-score {
+  color: var(--cream-gold, #c4956a);
+}
+
+.verdict-scoreboard-track {
+  flex: 0 0 clamp(72px, 22%, 160px);
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(164, 138, 104, 0.16);
+}
+
+.verdict-scoreboard-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 999px;
+  transition: width var(--motion-hover-ms, 240ms) var(--ease-out-premium, ease);
+}
+
+.verdict-scoreboard-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .verdict-scoreboard-toggle:hover {
+    background: var(--cream-surface-tint, #faf3ea);
+    color: var(--cream-ink, #1a1714);
+  }
+
+  .verdict-scoreboard-row:hover .verdict-scoreboard-name {
+    color: var(--cream-ink, #1a1714);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verdict-scoreboard-toggle,
+  .verdict-scoreboard-chevron,
+  .verdict-scoreboard-fill {
+    transition: none !important;
   }
 }

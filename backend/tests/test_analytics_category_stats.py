@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import uuid
 from datetime import timedelta
 
@@ -202,6 +203,34 @@ async def test_category_stats_most_active(app_client, make_user, db_session):
         "/api/analytics/category-stats", headers=_pro_headers(user)
     )
     assert res.json()["most_active_category"] == "question"
+
+
+@pytest.mark.asyncio
+async def test_category_stats_most_active_tie_breaks_alphabetically(
+    app_client, make_user, db_session
+):
+    """Equal activity and wins must not depend on database row order."""
+    user = make_user(email="cat-active-tie@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # The enum order is statement → debate, while alphabetical order is
+    # debate → statement. This catches a tie-breaker that follows the
+    # presentation order instead of the documented alphabetical rule.
+    for category in ["statement", "debate"]:
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=panel,
+            category=category,
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+
+    assert res.status_code == 200
+    assert res.json()["most_active_category"] == "debate"
 
 
 # ─── Honesty rules ─────────────────────────────────────────────────────────
@@ -668,3 +697,150 @@ async def test_csv_security_headers(app_client, make_user, db_session):
     assert res.headers.get("x-content-type-options") == "nosniff"
     assert res.headers.get("cache-control") == "no-store"
     assert "attachment" in res.headers.get("content-disposition", "")
+
+
+@pytest.mark.asyncio
+async def test_json_export_matches_dashboard_payload_and_headers(
+    app_client, make_user, db_session
+):
+    """The JSON download is an archival copy of the dashboard contract."""
+    user = make_user(email="cat-json@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        category="question",
+        score=91,
+    )
+    db_session.commit()
+
+    dashboard = await app_client.get(
+        "/api/analytics/category-stats?window_days=7", headers=_pro_headers(user)
+    )
+    exported = await app_client.get(
+        "/api/analytics/category-stats/export.json?window_days=7",
+        headers=_pro_headers(user),
+    )
+
+    assert dashboard.status_code == 200
+    assert exported.status_code == 200
+    assert json.loads(exported.text) == dashboard.json()
+    assert exported.headers["content-type"].startswith("application/json")
+    assert exported.headers.get("x-content-type-options") == "nosniff"
+    assert exported.headers.get("cache-control") == "no-store"
+    assert exported.headers["content-disposition"].startswith(
+        'attachment; filename="arena-category-stats-'
+    )
+    assert exported.headers["content-disposition"].endswith('.json"')
+
+
+@pytest.mark.asyncio
+async def test_markdown_export_matches_dashboard_rollups_and_rows(
+    app_client, make_user, db_session
+):
+    """The Markdown report should be a readable projection of the same payload."""
+    user = make_user(email="cat-md@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        category="question",
+        score=91,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=panel,
+        category="task",
+        score=84,
+    )
+    db_session.commit()
+
+    dashboard = await app_client.get(
+        "/api/analytics/category-stats?window_days=7", headers=_pro_headers(user)
+    )
+    exported = await app_client.get(
+        "/api/analytics/category-stats/export.md?window_days=7",
+        headers=_pro_headers(user),
+    )
+
+    assert dashboard.status_code == 200
+    assert exported.status_code == 200
+    body = dashboard.json()
+    text = exported.text
+    assert "# Arena — category stats" in text
+    assert f"- **Total appearances:** {body['total_appearances']}" in text
+    assert f"- **Total wins:** {body['total_wins']}" in text
+    assert f"- **Most active category:** {body['most_active_category']}" in text
+    for row in body["categories"]:
+        assert (
+            f"| {row['category']} | {row['appearances']} | {row['wins']} | "
+            f"{row['win_rate'] * 100:.1f}% |"
+        ) in text
+
+
+@pytest.mark.asyncio
+async def test_markdown_export_empty_report_has_stable_headers(app_client, make_user):
+    user = make_user(email="cat-md-empty@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/category-stats/export.md?window_days=7",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/markdown")
+    assert res.headers["cache-control"] == "no-store"
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert "**Window:**" in res.text
+    assert "- **Most active category:** none" in res.text
+    assert "_No categories recorded in this window._" in res.text
+    assert res.text.rstrip().endswith("_Exported from Arena_")
+    assert res.headers["content-disposition"].startswith(
+        'attachment; filename="arena-category-stats-'
+    )
+    assert res.headers["content-disposition"].endswith('.md"')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "scope"),
+    [
+        ("/api/analytics/category-stats/export.csv", "analytics_category_stats_csv"),
+        ("/api/analytics/category-stats/export.json", "analytics_category_stats_json"),
+        (
+            "/api/analytics/category-stats/export.md",
+            "analytics_category_stats_markdown",
+        ),
+    ],
+)
+async def test_category_stats_exports_use_only_their_own_rate_limit_scope(
+    app_client, make_user, monkeypatch, path, scope
+):
+    """A download must not consume the dashboard refresh budget."""
+    from arena.core import rate_limits
+
+    keys: list[str] = []
+    real_hit = rate_limits.rate_limiter.hit
+
+    def recording_hit(key, *, limit, window_seconds, message):
+        keys.append(key)
+        return real_hit(
+            key,
+            limit=limit,
+            window_seconds=window_seconds,
+            message=message,
+        )
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", recording_hit)
+
+    user = make_user(email=f"{scope}-budget@test.com", tier=UserTier.PRO)
+    res = await app_client.get(path, headers=_pro_headers(user))
+
+    assert res.status_code == 200, res.text
+    user_keys = [key for key in keys if key.startswith("user:")]
+    assert user_keys == [f"user:{scope}:{user.id}"]

@@ -7,6 +7,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,6 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Set up Python
@@ -37,6 +39,19 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r backend/requirements.txt
+
+      - name: Run workflow security gate
+        # Releases must pass the same workflow-hardening invariants as CI:
+        # least-privilege permissions, no dangerous triggers, job timeouts,
+        # no secrets: inherit, stable action pins, and persist-credentials:
+        # false on every checkout. See scripts/check_workflow_security.py.
+        run: |
+          python -m pip install pyyaml
+          python scripts/check_workflow_security.py
+
+      - name: Dependency consistency check (pip check)
+        working-directory: backend
+        run: python -m pip check
 
       - name: Set up Node
         uses: actions/setup-node@v7

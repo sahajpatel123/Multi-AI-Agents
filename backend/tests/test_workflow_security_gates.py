@@ -115,6 +115,20 @@ def test_codeql_uses_focused_config() -> None:
     assert "web/frontend/dist/**" in ignores, "CodeQL should ignore build output"
 
 
+def test_codeql_skips_docs_only_changes() -> None:
+    codeql = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "codeql.yml").read_text(encoding="utf-8")
+    )
+    on_key = "on" if "on" in codeql else True  # PyYAML maps `on:` to True
+    for event in ("push", "pull_request"):
+        paths_ignore = codeql[on_key][event].get("paths-ignore", [])
+        assert "*.md" in paths_ignore, f"CodeQL should skip markdown-only {event}s"
+        assert "design/**" in paths_ignore, f"CodeQL should skip design-only {event}s"
+        assert "arena-video/**" in paths_ignore, f"CodeQL should skip arena-video {event}s"
+        assert "app/**" in paths_ignore, f"CodeQL should skip app-only {event}s"
+    assert "schedule" in codeql[on_key], "CodeQL should keep its weekly scheduled scan"
+
+
 def test_ci_has_whitespace_diff_check() -> None:
     ci = yaml.safe_load(
         (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
@@ -165,13 +179,129 @@ def test_ci_runs_pip_check() -> None:
     )
 
 
+def test_ci_skips_docs_only_changes() -> None:
+    ci = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    on_key = "on" if "on" in ci else True
+    for event in ("push", "pull_request"):
+        paths_ignore = ci[on_key][event].get("paths-ignore", [])
+        assert "*.md" in paths_ignore, f"CI should skip markdown-only {event}s"
+        assert "design/**" in paths_ignore, f"CI should skip design-only {event}s"
+        assert "app/**" in paths_ignore, f"CI should skip app-only {event}s"
+
+
+def _events(data: dict) -> dict:
+    """Return the workflow `on` mapping, tolerating PyYAML's bool key."""
+    if "on" in data:
+        return data["on"]
+    return data.get(True, {})
+
+
+def test_workflows_set_top_level_permissions() -> None:
+    workflow_dir = REPO_ROOT / ".github" / "workflows"
+    for path in workflow_dir.glob("*.yml"):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        assert isinstance(data, dict), f"{path} is not a workflow mapping"
+        assert isinstance(data.get("permissions"), dict), (
+            f"{path} must declare an explicit top-level permissions mapping"
+        )
+
+
+def test_dependency_security_workflow_exists() -> None:
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "dependency-security.yml"
+    assert workflow_path.exists(), "Dependency security workflow is missing"
+    data = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    events = _events(data)
+    assert "schedule" in events, (
+        "Dependency security workflow should run on a weekly schedule"
+    )
+    assert "workflow_dispatch" in events, (
+        "Dependency security workflow should support manual dispatch"
+    )
+    steps = data["jobs"]["scan"]["steps"]
+    run_text = "\n".join(
+        step.get("run", "")
+        for step in steps
+        if isinstance(step, dict) and isinstance(step.get("run"), str)
+    )
+    assert "pip-audit" in run_text, (
+        "Dependency security workflow should scan Python dependencies with pip-audit"
+    )
+    assert "pip check" in run_text, (
+        "Dependency security workflow should run pip check for consistency"
+    )
+    assert "npm audit" in run_text, (
+        "Dependency security workflow should scan frontend dependencies with npm audit"
+    )
+
+
+def test_workflows_avoid_dangerous_triggers_and_secret_inheritance() -> None:
+    workflow_dir = REPO_ROOT / ".github" / "workflows"
+    for path in workflow_dir.glob("*.yml"):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        events = _events(data)
+        for trigger in ("pull_request_target", "workflow_run"):
+            assert trigger not in events, f"{path} uses dangerous trigger {trigger}"
+        for job_name, job in data.get("jobs", {}).items():
+            assert isinstance(job, dict), f"{path}: job {job_name} is malformed"
+            assert job.get("secrets") != "inherit", (
+                f"{path}: job {job_name} must not use secrets: inherit"
+            )
+
+
+def test_every_workflow_job_has_a_timeout() -> None:
+    workflow_dir = REPO_ROOT / ".github" / "workflows"
+    for path in workflow_dir.glob("*.yml"):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_name, job in data.get("jobs", {}).items():
+            assert "timeout-minutes" in job, (
+                f"{path}: job {job_name} is missing timeout-minutes"
+            )
+
+
+def test_all_checkouts_do_not_persist_credentials() -> None:
+    workflow_dir = REPO_ROOT / ".github" / "workflows"
+    for path in workflow_dir.glob("*.yml"):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_name, job in data.get("jobs", {}).items():
+            for step in job.get("steps", []):
+                if not isinstance(step, dict):
+                    continue
+                uses = step.get("uses")
+                if isinstance(uses, str) and uses.startswith("actions/checkout@"):
+                    assert step.get("with", {}).get("persist-credentials") is False, (
+                        f"{path}: checkout in job {job_name} must set "
+                        "persist-credentials: false"
+                    )
+
+
+def test_ci_has_workflow_security_job() -> None:
+    ci = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    job = ci["jobs"].get("workflow-security")
+    assert job is not None, "CI is missing the workflow-security job"
+    run_steps = [
+        step for step in job["steps"]
+        if isinstance(step, dict) and step.get("name") == "Run workflow security gate"
+    ]
+    assert run_steps, "workflow-security job is missing the gate step"
+    assert "scripts/check_workflow_security.py" in run_steps[0]["run"], (
+        "workflow-security job should run scripts/check_workflow_security.py"
+    )
+
+
 def test_codeowners_cover_ci_security_files() -> None:
     """Changes to CI/security config and guards need owner review."""
     codeowners = (REPO_ROOT / ".github" / "CODEOWNERS").read_text(encoding="utf-8")
     required_entries = (
         "/.github/codeql-config.yml",
+        "/.github/dependabot.yml",
         "/.github/PULL_REQUEST_TEMPLATE.md",
         "/CONTRIBUTING.md",
+        "/scripts/check_workflow_security.py",
+        "/backend/tests/test_check_workflow_security.py",
         "/backend/tests/test_workflow_security_gates.py",
         "/backend/tests/test_no_stray_main_tokens.py",
     )
@@ -187,6 +317,8 @@ def test_security_doc_lists_new_gates() -> None:
         "Source integrity",
         "git diff --check",
         "CODEOWNERS",
+        "write-all",
+        "persist-credentials",
     )
     for term in required_terms:
         assert term in security_md, f"SECURITY.md is missing mention of {term!r}"
@@ -208,3 +340,75 @@ def test_dependabot_config_is_valid() -> None:
     assert all(u.get("open-pull-requests-limit") for u in dependabot.get("updates", [])), (
         "Each Dependabot update should set an open-pull-requests limit"
     )
+
+
+def test_release_runs_pip_check() -> None:
+    release = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    )
+    steps = release["jobs"]["build"]["steps"]
+    pip_check_steps = [
+        step for step in steps
+        if isinstance(step, dict)
+        and step.get("name") == "Dependency consistency check (pip check)"
+    ]
+    assert pip_check_steps, "Release workflow is missing the pip check step"
+    assert "pip check" in pip_check_steps[0]["run"], (
+        "Release pip check step should invoke pip check"
+    )
+    assert pip_check_steps[0].get("working-directory") == "backend", (
+        "Release pip check step must run from the backend directory"
+    )
+
+
+def test_release_has_manual_dispatch() -> None:
+    release = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    )
+    on_key = "on" if "on" in release else True
+    assert "workflow_dispatch" in release[on_key], (
+        "Release workflow should support manual workflow_dispatch runs"
+    )
+    assert "push" in release[on_key], "Release workflow should still run on tag pushes"
+    tags = release[on_key]["push"]["tags"]
+    assert "v*" in tags, "Release workflow should still run on v* tag pushes"
+
+
+def test_release_runs_workflow_security_gate() -> None:
+    release = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    )
+    steps = release["jobs"]["build"]["steps"]
+    gate_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict) and step.get("name") == "Run workflow security gate"
+    ]
+    assert gate_steps, "Release workflow is missing the workflow security gate step"
+    run_script = gate_steps[0]["run"]
+    assert "scripts/check_workflow_security.py" in run_script, (
+        "Release workflow security gate should invoke scripts/check_workflow_security.py"
+    )
+
+
+def test_pre_commit_config_and_ci_job() -> None:
+    pre_commit = yaml.safe_load(
+        (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    local_hooks = [
+        hook
+        for repo in pre_commit.get("repos", [])
+        for hook in repo.get("hooks", [])
+    ]
+    debug_hooks = [h for h in local_hooks if h.get("id") == "check-debug-statements"]
+    assert debug_hooks, "pre-commit config is missing the debug-statement hook"
+    entry = debug_hooks[0]["entry"]
+    assert "rg" in entry, "debug-statement hook should use rg"
+    assert "!**/.venv*/**" in entry, (
+        "debug-statement hook should exclude vendored .venv directories"
+    )
+
+    ci = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    assert "pre-commit" in ci["jobs"], "CI is missing the pre-commit job"

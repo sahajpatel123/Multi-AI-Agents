@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getSavedResponses, setSavedResponsePinned, setSavedResponsesPinned } from './api';
+import {
+  getSavedResponses,
+  setSavedResponsePinned,
+  setSavedResponsesPinned,
+  deleteSavedResponses,
+} from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -170,5 +175,59 @@ describe('saved take API helpers', () => {
     expect(result.applied).toBe(1);
     expect(result.pin_limit_reached).toBe(true);
     expect(result.ids).toEqual([9]);
+  });
+
+  it('bulk-deletes saved takes and normalizes the response', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: 'deleted',
+          requested: 2,
+          deleted: 2,
+          ids: [7, 8],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await deleteSavedResponses([7, 8]);
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/saved/bulk',
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({ ids: [7, 8] }),
+      }),
+    );
+    expect(result).toEqual({
+      status: 'deleted',
+      requested: 2,
+      deleted: 2,
+      ids: [7, 8],
+    });
+  });
+
+  it('reports a request failure for bulk delete', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'nope' }), { status: 400 }),
+    );
+
+    await expect(deleteSavedResponses([7])).rejects.toThrow('nope');
+  });
+
+  it('falls back to an empty id list when the backend omits ids', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: 'deleted',
+          requested: 1,
+          deleted: 1,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await deleteSavedResponses([7]);
+    expect(result.ids).toEqual([]);
+    expect(result.deleted).toBe(1);
   });
 });

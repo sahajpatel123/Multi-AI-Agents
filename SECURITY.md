@@ -48,13 +48,21 @@ When reporting a vulnerability, please include:
 
 This project implements the following security practices:
 
-- **Dependency scanning**: pip-audit for Python, npm audit for Node.js
+- **Dependency scanning**: pip-audit for Python, npm audit for Node.js, plus a
+  scheduled dependency-security workflow that catches newly disclosed
+  vulnerabilities even when the repository has no recent commits
 - **Dependency review**: GitHub Actions dependency-review gate fails PRs that
   introduce HIGH/CRITICAL dependency vulnerabilities
 - **Pin floors**: CI guards the minimum security-required versions for
-  critical Python and Node packages
-- **Dependency consistency**: `pip check` runs in backend CI to catch
-  dependency resolution inconsistencies
+  critical Python and Node packages via
+  `scripts/check_security_floors.py` (single source of truth invoked by both
+  the backend and frontend jobs; also enforces the python-jose/ecdsa ban and
+  a resolved-environment walk that catches transitive reintroducers.
+  Behavioral regression tests live in
+  `backend/tests/test_pin_floor_guard_yaml.py`)
+- **Dependency consistency**: `pip check` runs in backend CI and the
+  scheduled dependency-security workflow to catch dependency resolution
+  inconsistencies
 - **Dependency automation**: Dependabot covers pip, npm, and GitHub Actions
   on a weekly schedule with security labels
 - **Secret scanning**: gitleaks with CI integration
@@ -66,6 +74,15 @@ This project implements the following security practices:
 - **CI hardening**: every CI/CodeQL/release job has an explicit timeout and
   least-privilege GitHub token permissions where possible; in-flight runs are
   not cancelled by newer pushes so each commit gets a trustworthy result
+- **Workflow hardening**: CI and release runs execute a static workflow-security
+  gate that enforces explicit least-privilege permissions (no
+  `write-all`/`read-all` wildcards), job timeouts, no dangerous triggers or
+  `secrets: inherit`, stable version/SHA pins on every third-party action,
+  minimum version floors for security-critical actions, and
+  `persist-credentials: false` on every checkout so the runner never leaves the
+  GitHub token in the local Git configuration
+- **Pre-commit enforcement**: CI runs the repo's pre-commit hooks (lint,
+  formatting, secret scanning, and debug-statement checks)
 - **Source integrity**: CI scans for stray-token/paste corruption and runs
   `git diff --check` on PR/push diffs
 - **Review coverage**: CODEOWNERS requires owner review for CI/security config

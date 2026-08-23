@@ -3,7 +3,7 @@
 from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -98,6 +98,179 @@ async def test_create_requires_auth(app_client):
 
 
 @pytest.mark.asyncio
+async def test_duplicate_creates_paused_copy_with_same_settings(
+    app_client, make_user, db_session
+):
+    """Duplicating a watch must branch its config without run history."""
+    user = make_user(email="wl-dup@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Quantum computing trends this week?",
+        interval_hours=72,
+        expertise_level="expert",
+        expertise_domain="physics",
+        is_active=True,
+        next_run_at=utcnow_naive() + timedelta(hours=12),
+        run_count=6,
+        latest_task_id="task-original",
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.post(
+        f"/api/agent/watchlist/{item.id}/duplicate",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["id"] != item.id
+    assert body["question"] == item.question
+    assert body["interval_hours"] == 72
+    assert body["expertise_level"] == "expert"
+    assert body["expertise_domain"] == "physics"
+    assert body["is_active"] is False
+    assert body["run_count"] == 0
+    assert body["latest_task_id"] is None
+    assert db_session.query(WatchlistItem).filter(
+        WatchlistItem.id == body["id"], WatchlistItem.user_id == user.id
+    ).count() == 1
+
+
+@pytest.mark.asyncio
+async def test_duplicate_works_when_active_cap_is_full(
+    app_client, make_user, db_session
+):
+    """Paused duplicates must not be blocked by the active-watch cap."""
+    user = make_user(email="wl-dup-cap@test.com", tier=UserTier.PRO)
+    now = utcnow_naive()
+    for i in range(10):
+        db_session.add(
+            WatchlistItem(
+                user_id=user.id,
+                question=f"Active {i}",
+                interval_hours=24,
+                expertise_level="curious",
+                expertise_domain="",
+                is_active=True,
+                next_run_at=now,
+                run_count=0,
+            )
+        )
+    original = WatchlistItem(
+        user_id=user.id,
+        question="Branched watch",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=now,
+        run_count=2,
+    )
+    db_session.add(original)
+    db_session.commit()
+    db_session.refresh(original)
+
+    res = await app_client.post(
+        f"/api/agent/watchlist/{original.id}/duplicate",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["is_active"] is False
+    assert body["run_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_duplicate_404_for_other_users_watch(app_client, make_user, db_session):
+    alice = make_user(email="wl-dup-alice@test.com", tier=UserTier.PRO)
+    bob = make_user(email="wl-dup-bob@test.com", tier=UserTier.PRO)
+    bob_item = WatchlistItem(
+        user_id=bob.id,
+        question="Bob's watch",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(bob_item)
+    db_session.commit()
+    db_session.refresh(bob_item)
+
+    res = await app_client.post(
+        f"/api/agent/watchlist/{bob_item.id}/duplicate",
+        headers=_pro_headers(alice),
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_duplicate_rejects_unusable_question(app_client, make_user, db_session):
+    """A broken/empty watch must not spawn another broken paused copy."""
+    user = make_user(email="wl-dup-bad@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="   ",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.post(
+        f"/api/agent/watchlist/{item.id}/duplicate",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"]["error"] == "validation_error"
+    assert (
+        db_session.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id)
+        .count()
+        == 1
+    )
+
+
+@pytest.mark.asyncio
+async def test_duplicate_normalizes_question_whitespace(
+    app_client, make_user, db_session
+):
+    """Copies inherit a cleaned question, not legacy padding from the source."""
+    user = make_user(email="wl-dup-clean@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="  Branch this watch into a weekly variant.  ",
+        interval_hours=168,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.post(
+        f"/api/agent/watchlist/{item.id}/duplicate",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200, res.text
+    assert res.json()["question"] == "Branch this watch into a weekly variant."
+
+
+@pytest.mark.asyncio
 async def test_patch_updates_interval(app_client, make_user, db_session):
     user = make_user(email="wl-patch-int@test.com", tier=UserTier.PRO)
     item = WatchlistItem(
@@ -183,6 +356,175 @@ async def test_patch_rejects_invalid_interval(app_client, make_user, db_session)
         json={"interval_hours": 12},
     )
     assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_patch_updates_question_and_expertise_preserving_history(
+    app_client, make_user, db_session
+):
+    """Refining a watch's question/expertise must keep run history intact."""
+    user = make_user(email="wl-patch-edit@test.com", tier=UserTier.PRO)
+    now = utcnow_naive()
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Old question?",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=now + timedelta(hours=5),
+        run_count=7,
+        latest_task_id="task-old",
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+    next_run_before = item.next_run_at
+
+    res = await app_client.patch(
+        f"/api/agent/watchlist/{item.id}",
+        headers=_pro_headers(user),
+        json={
+            "question": "  Refined question?  ",
+            "expertise_level": "expert",
+            "expertise_domain": "finance",
+        },
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["question"] == "Refined question?"
+    assert body["expertise_level"] == "expert"
+    assert body["expertise_domain"] == "finance"
+    # History + scheduler state survive an edit.
+    assert body["run_count"] == 7
+    assert body["latest_task_id"] == "task-old"
+    assert body["next_run_at"] == next_run_before.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_patch_rejects_empty_question(app_client, make_user, db_session):
+    user = make_user(email="wl-patch-empty-q@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Keep me",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.patch(
+        f"/api/agent/watchlist/{item.id}",
+        headers=_pro_headers(user),
+        json={"question": "   "},
+    )
+    assert res.status_code == 422
+    db_session.refresh(item)
+    assert item.question == "Keep me"
+
+
+@pytest.mark.asyncio
+async def test_patch_rejects_invalid_expertise_level(app_client, make_user, db_session):
+    user = make_user(email="wl-patch-bad-level@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Keep me",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.patch(
+        f"/api/agent/watchlist/{item.id}",
+        headers=_pro_headers(user),
+        json={"expertise_level": "bogus"},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_question_honors_capability_gate(
+    app_client, make_user, db_session, monkeypatch
+):
+    """Editing a watch into a local-intent question must be rejected."""
+    monkeypatch.setenv("CONDURA_HONEST_REJECTION_ENABLED", "true")
+    user = make_user(email="wl-patch-gate@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Research quarterly AI regulation changes",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.patch(
+        f"/api/agent/watchlist/{item.id}",
+        headers=_pro_headers(user),
+        json={"question": "Open Linear and create a ticket from this research"},
+    )
+    assert res.status_code == 409
+    db_session.refresh(item)
+    assert item.question == "Research quarterly AI regulation changes"
+
+
+@pytest.mark.asyncio
+async def test_patch_expertise_only_skips_question_gate(
+    app_client, make_user, db_session, monkeypatch
+):
+    """Metadata-only edits must not re-classify an unchanged question.
+
+    The edit dialog sends the full watch on save, so an existing local-intent
+    watch would otherwise become impossible to refine once the honest-rejection
+    flag is enabled.
+    """
+    monkeypatch.setenv("CONDURA_HONEST_REJECTION_ENABLED", "true")
+    user = make_user(email="wl-patch-expertise-only@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Open Linear and create a ticket from this research",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.patch(
+        f"/api/agent/watchlist/{item.id}",
+        headers=_pro_headers(user),
+        json={
+            "question": "Open Linear and create a ticket from this research",
+            "expertise_level": "researcher",
+            "expertise_domain": "operations",
+        },
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["expertise_level"] == "researcher"
+    assert body["expertise_domain"] == "operations"
+    db_session.refresh(item)
+    assert item.question == "Open Linear and create a ticket from this research"
 
 
 @pytest.mark.asyncio

@@ -55,3 +55,16 @@ async def test_watchlist_delete_rate_limited(app_client, make_user):
     assert res.status_code == 429, res.text[:300]
     assert res.json().get("detail", {}).get("error") == "rate_limit_exceeded"
     _clear()
+
+
+@pytest.mark.asyncio
+async def test_watchlist_duplicate_rate_limited(app_client, make_user):
+    user = make_user(email="watchlist-dup-rl@test.com", tier=UserTier.PRO)
+    _fill("watchlist_duplicate", user.id, 30)
+    res = await app_client.post(
+        "/api/agent/watchlist/any-item/duplicate",
+        headers=_headers(user),
+    )
+    assert res.status_code == 429, res.text[:300]
+    assert res.json().get("detail", {}).get("error") == "rate_limit_exceeded"
+    _clear()
