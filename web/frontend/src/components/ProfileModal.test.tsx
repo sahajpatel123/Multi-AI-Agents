@@ -412,6 +412,13 @@ const hoistedMocks = vi.hoisted(() => {
     avg_gap: null,
   }),
   deleteCalibrationRating: vi.fn().mockResolvedValue({ status: 'deleted', taskId: 'task-x' }),
+  getCapabilityUsage: vi.fn().mockResolvedValue({
+    windowDays: 30,
+    windowStart: '2026-07-25',
+    windowEnd: '2026-08-23',
+    totals: { agent: 0, web: 0, all: 0 },
+    byCategory: [],
+  }),
   getRecentAgentFeedback: vi.fn().mockResolvedValue([]),
   getAgentFeedbackSummary: vi.fn().mockResolvedValue({
     total: 4,
@@ -524,6 +531,7 @@ vi.mock('../api', () => ({
   exportAnalyticsPersonaStatsTimelineMarkdown: hoistedMocks.exportAnalyticsPersonaStatsTimelineMarkdown,
   getCalibrationStats: hoistedMocks.getCalibrationStats,
   deleteCalibrationRating: hoistedMocks.deleteCalibrationRating,
+  getCapabilityUsage: hoistedMocks.getCapabilityUsage,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getAgentFeedbackSummary: hoistedMocks.getAgentFeedbackSummary,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
@@ -656,6 +664,7 @@ describe('ProfileModal', () => {
     // Counted per-test: the delete flow re-reads stats exactly once more.
     vi.mocked(hoistedMocks.getCalibrationStats).mockClear();
     vi.mocked(hoistedMocks.deleteCalibrationRating).mockClear();
+    vi.mocked(hoistedMocks.getCapabilityUsage).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).mockClear();
@@ -3731,6 +3740,75 @@ describe('ProfileModal', () => {
 
     expect(await screen.findByText('Analyst')).toBeInTheDocument();
     expect(hoistedMocks.getAnalyticsCategoryStats).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders capability usage bars from the live endpoint', async () => {
+    hoistedMocks.getCapabilityUsage.mockResolvedValueOnce({
+      windowDays: 30,
+      windowStart: '2026-07-25',
+      windowEnd: '2026-08-23',
+      totals: { agent: 12, web: 5, all: 17 },
+      byCategory: [
+        { category: 'coding', count: 12 },
+        { category: 'research', count: 5 },
+      ],
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const group = await screen.findByRole('group', { name: /capability usage/i });
+    expect(within(group).getByText(/17 calls in window/)).toHaveTextContent('agent');
+    expect(within(group).getByText('coding')).toBeInTheDocument();
+    expect(within(group).getByText('12 calls')).toBeInTheDocument();
+    expect(within(group).getByText('research')).toBeInTheDocument();
+    expect(within(group).getByText('5 calls')).toBeInTheDocument();
+    expect(hoistedMocks.getCapabilityUsage).toHaveBeenCalledWith(30);
+  });
+
+  it('refreshes capability usage with its window', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const windowSelect = await screen.findByRole('combobox', {
+      name: /capability usage window/i,
+    });
+    fireEvent.change(windowSelect, { target: { value: '7' } });
+
+    await waitFor(() => {
+      expect(hoistedMocks.getCapabilityUsage).toHaveBeenLastCalledWith(7);
+      expect(screen.getByText('Capability usage · 7 days')).toBeInTheDocument();
+    });
+  });
+
+  it('retries capability usage after a failed load', async () => {
+    hoistedMocks.getCapabilityUsage.mockRejectedValueOnce(
+      new Error('Too many capability-usage requests. Limit is 60 per hour.'),
+    );
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    expect(
+      await screen.findByText(
+        'Too many capability-usage requests. Limit is 60 per hour.',
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /retry loading capability usage/i }),
+    );
+
+    expect(
+      await screen.findByText('No Agent calls recorded in the last 30 days yet.'),
+    ).toBeInTheDocument();
+    expect(hoistedMocks.getCapabilityUsage).toHaveBeenCalledTimes(2);
   });
 
   it('exports category performance as JSON for the selected window', async () => {

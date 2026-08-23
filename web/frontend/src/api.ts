@@ -1810,6 +1810,61 @@ export async function exportAgentFeedbackSummaryCsv(
   };
 }
 
+export type CapabilityUsageSummary = {
+  windowDays: number;
+  windowStart: string;
+  windowEnd: string;
+  totals: { agent: number; web: number; all: number };
+  byCategory: { category: string; count: number }[];
+};
+
+// Per-capability call counts for the signed-in user over a window.
+// The server groups UsageRecord rows by mode + prompt_category, so
+// this is one cheap read — but it had no frontend caller until the
+// usage-tab widget below started needing it.
+export async function getCapabilityUsage(
+  windowDays: number = 30,
+): Promise<CapabilityUsageSummary> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/agent/capability-usage?days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load capability usage'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<{
+    window_days?: number;
+    window_start?: string;
+    window_end?: string;
+    totals?: { agent?: number; web?: number; all?: number };
+    by_category?: Record<string, unknown>;
+  }>(response);
+  const rawTotals = data?.totals ?? {};
+  // Heaviest categories first; ties break alphabetically so the bars
+  // never shuffle between reads.
+  const byCategory = Object.entries(data?.by_category ?? {})
+    .map(([category, count]) => ({ category, count: Number(count) || 0 }))
+    .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+  return {
+    windowDays: Number(data?.window_days ?? windowDays),
+    windowStart: String(data?.window_start ?? ''),
+    windowEnd: String(data?.window_end ?? ''),
+    totals: {
+      agent: Number(rawTotals.agent ?? 0),
+      web: Number(rawTotals.web ?? 0),
+      all: Number(rawTotals.all ?? 0),
+    },
+    byCategory,
+  };
+}
+
 export async function exportAgentFeedbackSummaryJson(
   windowDays: number = 30,
 ): Promise<AgentFeedbackActivityExport> {

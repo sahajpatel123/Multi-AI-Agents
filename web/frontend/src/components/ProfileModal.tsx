@@ -47,6 +47,7 @@ import {
   getAnalyticsPersonaWinRate,
   getAnalyticsPersonaStatsTimeline,
   getAgentFeedbackSummary,
+  getCapabilityUsage,
   deleteCalibrationRating,
   getCalibrationHistory,
   getCalibrationStats,
@@ -67,6 +68,7 @@ import {
   type AgentFeedbackExportDateRange,
   type AgentFeedbackVerdict,
   type AnswerFeedbackStats,
+  type CapabilityUsageSummary,
   type CalibrationHistoryRating,
   type CalibrationHistoryResponse,
   type CalibrationHistorySort,
@@ -1203,6 +1205,14 @@ export function ProfileModal() {
   const [feedbackExportFromDate, setFeedbackExportFromDate] = useState('');
   const [feedbackExportToDate, setFeedbackExportToDate] = useState('');
 
+  // Which Agent capabilities this account actually exercises. The
+  // server had the GROUP BY all along; nothing ever asked for it.
+  const [capabilityUsage, setCapabilityUsage] = useState<CapabilityUsageSummary | null>(null);
+  const [capabilityUsageLoading, setCapabilityUsageLoading] = useState(false);
+  const [capabilityUsageErr, setCapabilityUsageErr] = useState<string | null>(null);
+  const [capabilityWindowDays, setCapabilityWindowDays] = useState(30);
+  const [capabilityUsageReload, setCapabilityUsageReload] = useState(0);
+
   const feedbackExportDateRange: AgentFeedbackExportDateRange | undefined =
     feedbackExportFromDate || feedbackExportToDate
       ? {
@@ -1297,6 +1307,33 @@ export function ProfileModal() {
       cancelled = true;
     };
   }, [isOpen, activeTab, feedbackSummaryWindowDays, feedbackSummaryReload]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
+    setCapabilityUsageLoading(true);
+    setCapabilityUsageErr(null);
+    void getCapabilityUsage(capabilityWindowDays)
+      .then((summary) => {
+        if (!cancelled) setCapabilityUsage(summary);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCapabilityUsageErr(
+            error instanceof Error && error.message
+              ? error.message
+              : 'Could not load capability usage',
+          );
+          setCapabilityUsage(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCapabilityUsageLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, capabilityWindowDays, capabilityUsageReload]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage' || !calHistoryOpen) return;
@@ -2608,6 +2645,144 @@ export function ProfileModal() {
                           </table>
                         </div>
                       </>
+                    )}
+                  </div>
+                ) : null}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      color: '#A0A39A',
+                      letterSpacing: '0.10em',
+                    }}
+                  >
+                    Capability usage · {capabilityWindowDays} days
+                  </div>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#A0A39A',
+                      fontSize: 11,
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    <span>Window</span>
+                    <select
+                      aria-label="Capability usage window"
+                      value={capabilityWindowDays}
+                      onChange={(event) => {
+                        setCapabilityWindowDays(Number(event.target.value));
+                      }}
+                      style={{
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 5,
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        padding: '4px 6px',
+                        fontSize: 11,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {[7, 30, 90].map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {capabilityUsageLoading ? (
+                  <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }} role="status">
+                    <MicroLoader label="Loading capability usage" />
+                  </div>
+                ) : capabilityUsageErr ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <p style={{ fontSize: 13, color: '#8C7355', margin: 0 }} aria-live="polite">
+                      {capabilityUsageErr}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Retry loading capability usage"
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                      onClick={() => setCapabilityUsageReload((n) => n + 1)}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : capabilityUsage ? (
+                  <div role="group" aria-label="Capability usage">
+                    <p style={{ fontSize: 12, color: '#8C7355', margin: '0 0 10px' }}>
+                      {capabilityUsage.totals.all.toLocaleString()} calls in window ·{' '}
+                      <strong style={{ color: '#F0B84E' }}>
+                        {capabilityUsage.totals.agent.toLocaleString()}
+                      </strong>{' '}
+                      agent · {capabilityUsage.totals.web.toLocaleString()} web
+                    </p>
+                    {capabilityUsage.byCategory.length === 0 ? (
+                      <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                        No Agent calls recorded in the last {capabilityWindowDays} days yet.
+                      </p>
+                    ) : (
+                      (() => {
+                        const maxCount = Math.max(
+                          ...capabilityUsage.byCategory.map((row) => row.count),
+                        );
+                        return (
+                          <div style={{ display: 'grid', gap: 7 }}>
+                            {capabilityUsage.byCategory.map((row) => (
+                              <div key={row.category}>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    fontSize: 11,
+                                    marginBottom: 3,
+                                  }}
+                                >
+                                  <span style={{ color: '#F3F0E7' }}>{row.category}</span>
+                                  <span style={{ color: '#A0A39A' }}>
+                                    {row.count.toLocaleString()}
+                                    {row.count === 1 ? ' call' : ' calls'}
+                                  </span>
+                                </div>
+                                <div style={{ height: 5, background: '#EDE4D8', borderRadius: 3 }}>
+                                  <div
+                                    style={{
+                                      height: '100%',
+                                      width: `${
+                                        maxCount > 0 ? (row.count / maxCount) * 100 : 0
+                                      }%`,
+                                      background: '#F0B84E',
+                                      borderRadius: 3,
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()
                     )}
                   </div>
                 ) : null}

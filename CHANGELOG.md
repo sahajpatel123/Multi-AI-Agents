@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- The Usage tab now answers "which capabilities do I actually
+  exercise?": a Capability usage card reads the per-capability call
+  counts endpoint that had no frontend caller, with a 7/30/90-day
+  window switcher, agent-vs-web totals for the window, and a bar per
+  prompt category sorted heaviest first. A refused load surfaces its
+  reason verbatim with a Retry, and an empty window says so plainly
 - Calibration history rows can now be deleted: each rating carries a
   confirm-gated Delete control ("Delete forever?" → Confirm/Keep),
   and the row leaves the list only after the server accepts — the
