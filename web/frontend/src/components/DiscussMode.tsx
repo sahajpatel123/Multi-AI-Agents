@@ -1000,7 +1000,12 @@ export function DiscussMode({
             {saveError}
           </p>
         ) : null}
-        {historyOpen ? <DiscussHistoryDrawer refreshTick={historyTick} /> : null}
+        {historyOpen ? (
+          <DiscussHistoryDrawer
+            refreshTick={historyTick}
+            onClose={() => setHistoryOpen(false)}
+          />
+        ) : null}
 
         {/* Messages */}
         <div style={{ position: 'relative', marginBottom: '1rem' }}>

@@ -25,6 +25,8 @@ function formatTimeAgo(timestamp: string | null): string {
 interface DiscussHistoryDrawerProps {
   /** Bump to make the drawer refetch (e.g. right after a fresh save). */
   refreshTick?: number;
+  /** Called when the user presses Escape inside the drawer. */
+  onClose?: () => void;
 }
 
 /**
@@ -32,7 +34,7 @@ interface DiscussHistoryDrawerProps {
  * most recent threads, expands one into its full message body on demand,
  * and deletes rows — every server refusal surfaced verbatim.
  */
-export function DiscussHistoryDrawer({ refreshTick = 0 }: DiscussHistoryDrawerProps) {
+export function DiscussHistoryDrawer({ refreshTick = 0, onClose }: DiscussHistoryDrawerProps) {
   const [threads, setThreads] = useState<DiscussThreadSummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<number, DiscussThreadDetail>>({});
@@ -40,8 +42,16 @@ export function DiscussHistoryDrawer({ refreshTick = 0 }: DiscussHistoryDrawerPr
   const [detailError, setDetailError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
   // Bumping this forces a refetch even if the tick value is unchanged.
   const [reloadTick, setReloadTick] = useState(0);
+
+  const handleDrawerKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key === 'Escape') onClose?.();
+    },
+    [onClose],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -68,6 +78,8 @@ export function DiscussHistoryDrawer({ refreshTick = 0 }: DiscussHistoryDrawerPr
     async (thread: DiscussThreadSummary) => {
       setActionError(null);
       setDetailError(null);
+      // Opening another row cancels a pending delete on the old one.
+      setConfirmingDeleteId(null);
       if (openId === thread.id) {
         setOpenId(null);
         return;
@@ -93,9 +105,22 @@ export function DiscussHistoryDrawer({ refreshTick = 0 }: DiscussHistoryDrawerPr
     [details, openId],
   );
 
-  const handleDelete = useCallback(
+  // Deletion is permanent and the server has no undo, so the first click
+  // only arms an inline confirm — the row must say so before anything is
+  // sent.
+  const handleDeleteRequest = useCallback((thread: DiscussThreadSummary) => {
+    setActionError(null);
+    setConfirmingDeleteId(thread.id);
+  }, []);
+
+  const handleDeleteCancel = useCallback(() => {
+    setConfirmingDeleteId(null);
+  }, []);
+
+  const handleDeleteConfirm = useCallback(
     async (thread: DiscussThreadSummary) => {
       setActionError(null);
+      setConfirmingDeleteId(null);
       setBusyId(thread.id);
       try {
         await deleteDiscussThread(thread.id);
@@ -192,6 +217,9 @@ export function DiscussHistoryDrawer({ refreshTick = 0 }: DiscussHistoryDrawerPr
 
   return (
     <div
+      role="region"
+      aria-label="Saved discussions"
+      onKeyDown={handleDrawerKeyDown}
       style={{
         border: '0.5px solid #E0D8D0',
         borderRadius: 10,
@@ -253,25 +281,67 @@ export function DiscussHistoryDrawer({ refreshTick = 0 }: DiscussHistoryDrawerPr
                     {` · ${thread.messageCount} message${thread.messageCount === 1 ? '' : 's'}`}
                   </span>
                 </button>
-                <button
-                  type="button"
-                  disabled={busyId !== null}
-                  aria-busy={busy}
-                  aria-label={`Delete saved discussion ${thread.title || 'Untitled discussion'}`}
-                  onClick={() => void handleDelete(thread)}
-                  style={{
-                    background: 'none',
-                    border: '0.5px solid #E0D8D0',
-                    borderRadius: 6,
-                    color: busy ? '#A0A39A' : '#D85A30',
-                    cursor: busyId !== null ? 'wait' : 'pointer',
-                    padding: '2px 7px',
-                    fontSize: 10,
-                    fontFamily: 'var(--vp-font-sans)',
-                  }}
-                >
-                  {busy ? 'Deleting…' : 'Delete'}
-                </button>
+                {confirmingDeleteId === thread.id ? (
+                  <>
+                    <span style={{ fontSize: 10, color: '#993C1D' }}>Delete forever?</span>
+                    <button
+                      type="button"
+                      disabled={busyId !== null}
+                      aria-label={`Confirm deleting ${thread.title || 'Untitled discussion'}`}
+                      onClick={() => void handleDeleteConfirm(thread)}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #D85A30',
+                        borderRadius: 6,
+                        color: busy ? '#A0A39A' : '#993C1D',
+                        cursor: busyId !== null ? 'wait' : 'pointer',
+                        padding: '2px 7px',
+                        fontSize: 10,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {busy ? 'Deleting…' : 'Confirm'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyId !== null}
+                      aria-label={`Keep ${thread.title || 'Untitled discussion'}`}
+                      onClick={handleDeleteCancel}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        color: '#4A3728',
+                        cursor: busyId !== null ? 'wait' : 'pointer',
+                        padding: '2px 7px',
+                        fontSize: 10,
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      Keep
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busyId !== null}
+                    aria-busy={busy}
+                    aria-label={`Delete saved discussion ${thread.title || 'Untitled discussion'}`}
+                    onClick={() => handleDeleteRequest(thread)}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      color: busy ? '#A0A39A' : '#D85A30',
+                      cursor: busyId !== null ? 'wait' : 'pointer',
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
               {isOpen ? (
                 <div

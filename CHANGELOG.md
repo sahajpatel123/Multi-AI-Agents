@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- Deleting a saved discussion no longer happens on a single click:
+  since the server has no undo, the first click only arms an inline
+  "Delete forever? Confirm / Keep" step (opening another row or keeping
+  disarms it). The drawer also closes on Escape from within, and its
+  region is labeled for screen readers
+
 ### Added
 - 1-on-1 discussions can now outlive the chat: DiscussMode grows a Save
   thread button and a History drawer backed by the discuss-thread API

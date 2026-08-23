@@ -79,12 +79,43 @@ describe('DiscussHistoryDrawer', () => {
     expect(mockedApi.getDiscussThread).toHaveBeenCalledTimes(1);
   });
 
-  it('deletes a thread only after the server accepts, removing the row', async () => {
+  it('arms a confirm step before deleting and sends nothing on first click', async () => {
+    render(<DiscussHistoryDrawer />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /delete saved discussion why did the migration fail/i }),
+    );
+
+    // The row asks before destroying anything — deletion has no undo.
+    expect(screen.getByText('Delete forever?')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /confirm deleting why did the migration fail/i }),
+    ).toBeInTheDocument();
+    expect(mockedApi.deleteDiscussThread).not.toHaveBeenCalled();
+  });
+
+  it('keeps the thread when the confirm step is cancelled', async () => {
+    render(<DiscussHistoryDrawer />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /delete saved discussion why did the migration fail/i }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /keep why did the migration fail/i }));
+
+    expect(screen.queryByText('Delete forever?')).not.toBeInTheDocument();
+    expect(screen.getByText('Why did the migration fail?')).toBeInTheDocument();
+    expect(mockedApi.deleteDiscussThread).not.toHaveBeenCalled();
+  });
+
+  it('deletes a thread only after confirmation, removing the row', async () => {
     mockedApi.deleteDiscussThread.mockResolvedValue(undefined);
     render(<DiscussHistoryDrawer />);
 
     fireEvent.click(
       await screen.findByRole('button', { name: /delete saved discussion why did the migration fail/i }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: /confirm deleting why did the migration fail/i }),
     );
 
     await waitFor(() => {
@@ -103,6 +134,9 @@ describe('DiscussHistoryDrawer', () => {
 
     fireEvent.click(
       await screen.findByRole('button', { name: /delete saved discussion why did the migration fail/i }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: /confirm deleting why did the migration fail/i }),
     );
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -132,5 +166,16 @@ describe('DiscussHistoryDrawer', () => {
     await waitFor(() => {
       expect(mockedApi.listDiscussThreads).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('closes via Escape from inside the drawer', async () => {
+    const onClose = vi.fn();
+    render(<DiscussHistoryDrawer onClose={onClose} />);
+    await screen.findByText('Why did the migration fail?');
+
+    fireEvent.keyDown(screen.getByRole('region', { name: 'Saved discussions' }), {
+      key: 'Escape',
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
