@@ -82,9 +82,11 @@ Respond with ONLY valid JSON:
                 self.client.messages.create(
                     model=self.model,
                     max_tokens=200,
-                    temperature=0.0,
                     system="You are a logical consistency checker. Be strict but fair.",
                     messages=[{"role": "user", "content": prompt}],
+                    # extra_body for temperature — SDK v1 dropped the kwarg
+                    # from message methods (see llm_caller.call_llm).
+                    extra_body={"temperature": 0.0},
                 ),
                 timeout=10.0,
             )

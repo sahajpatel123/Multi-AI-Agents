@@ -4,17 +4,22 @@ fastapi==0.139.2
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 pydantic-settings==2.5.2
-email-validator==2.2.0
+email-validator==2.3.0
 
-# Anthropic
-anthropic==0.34.2
+# Anthropic — v1 (2026-07) raised the Python floor to 3.10 and removed
+# temperature/top_p/top_k from message-method signatures; our call sites
+# pass temperature via the documented extra_body escape hatch instead
+# (llm_caller.py, discuss.py). Wire payload is unchanged.
+anthropic==1.0.0
 
 # OpenAI (for Grok API)
 openai==1.54.3
 
-# Async
-httpx==0.27.2
-anyio==4.6.0
+# Async — httpx 0.28 removed the deprecated AsyncClient(proxies=/app=)
+# shortcuts; this codebase only uses transport=ASGITransport(app=...),
+# which is the documented replacement (mcp_runtime.py, tests/conftest.py).
+httpx==0.28.1
+anyio==4.14.2
 
 # Reliability — exponential-backoff retry for transient LLM API errors
 tenacity==8.2.3
@@ -40,7 +45,7 @@ bcrypt==4.2.0
 python-multipart==0.0.32
 
 # Rate limiting
-slowapi==0.1.9
+slowapi==0.1.10
 
 # Utils - updated for security
 python-dotenv==1.2.2

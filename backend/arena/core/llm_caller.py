@@ -158,12 +158,16 @@ async def call_llm(
             )
 
             async def _do():
+                # SDK v1 removed temperature/top_p/top_k from message-method
+                # signatures (TypeError); extra_body is its documented escape
+                # hatch and lands in the same JSON body position, so the wire
+                # payload is identical to the old kwarg.
                 return await client.messages.create(
                     model=model_id,
                     max_tokens=max_tokens,
-                    temperature=temperature,
                     system=_claude_system_with_cache(system_prompt),
                     messages=[{"role": "user", "content": user_content}],
+                    extra_body={"temperature": temperature},
                 )
 
             response = await _retry_call(_do, _retryable_anthropic_errors())
@@ -257,12 +261,13 @@ async def call_llm_streaming(
         # prefix (persona + scoring rubric + tool docs). Cache hits
         # return at ~10% of input-token cost and ~85% lower latency.
         async def _do():
+            # extra_body for temperature — see the create() call above.
             return client.messages.stream(
                 model=model_id,
                 max_tokens=max_tokens,
-                temperature=temperature,
                 system=_claude_system_with_cache(system_prompt),
                 messages=[{"role": "user", "content": user_prompt}],
+                extra_body={"temperature": temperature},
             )
 
         stream_cm = await _retry_call(_do, _retryable_anthropic_errors())

@@ -494,12 +494,14 @@ class SessionCompressor:
 
         try:
             route = get_route_for_prompt(prompt=exchanges_json, task="session_compression")
+            # extra_body for temperature — SDK v1 dropped the kwarg from
+            # message methods (see llm_caller.call_llm).
             result = await route["client"].messages.create(
                 model=route["model_id"],
                 max_tokens=600,
-                temperature=0.0,
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
+                extra_body={"temperature": 0.0},
             )
             payload = result.content[0].text.strip()
             if payload.startswith("```"):

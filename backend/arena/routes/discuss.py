@@ -351,12 +351,14 @@ async def stream_discuss(
                 })
             else:
                 # Claude supports streaming
+                # extra_body for temperature — SDK v1 dropped the kwarg from
+                # message methods (see llm_caller.call_llm).
                 async with route["client"].messages.stream(
                     model=route["model_id"],
                     max_tokens=route["max_tokens"],
-                    temperature=agent.temperature,
                     system=system_prompt,
                     messages=messages,
+                    extra_body={"temperature": agent.temperature},
                 ) as active_stream:
                     async for text in active_stream.text_stream:
                         full_text += text

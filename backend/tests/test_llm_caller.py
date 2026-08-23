@@ -147,3 +147,50 @@ def test_retryable_anthropic_and_openai_lists_have_same_shape() -> None:
     assert type(a) is type(o) is tuple
     # Same number of entries (typically 3: Connection + RateLimit + Status)
     assert len(a) == len(o)
+
+
+# ── temperature via extra_body (SDK v1 contract) ────────────────
+
+
+def test_call_llm_claude_passes_temperature_via_extra_body() -> None:
+    # anthropic SDK v1 removed temperature/top_p/top_k from message-method
+    # signatures — passing it top-level raises TypeError at call time (a
+    # failure mode mocked fakes silently accept, so only real-SDK installs
+    # surfaced it). The documented escape hatch is extra_body, which lands
+    # temperature in the same JSON body position. This pins that OUR call
+    # path uses the escape hatch and never re-adds the removed kwarg.
+    import asyncio
+
+    from arena.core.llm_caller import call_llm
+
+    captured: dict = {}
+
+    class _FakeMessages:
+        async def create(self, **kwargs):
+            captured.update(kwargs)
+            return type(
+                "R", (), {"content": [type("B", (), {"text": "ok"})()], "usage": None},
+            )()
+
+    class _FakeClient:
+        messages = _FakeMessages()
+
+    async def _run() -> None:
+        text, inp, out = await call_llm(
+            client=_FakeClient(),
+            provider="claude",
+            model_id="claude-sonnet-4-6",
+            system_prompt="sys",
+            user_prompt="hi",
+            temperature=0.7,
+            max_tokens=64,
+        )
+        assert text == "ok"
+        assert (inp, out) == (0, 0)
+
+    asyncio.run(_run())
+    assert captured.get("extra_body") == {"temperature": 0.7}
+    assert "temperature" not in captured, (
+        "temperature must ride in extra_body — SDK v1 rejects it as a "
+        "top-level kwarg on message methods"
+    )

@@ -54,12 +54,14 @@ async def generate_one_liner(
 ) -> str:
     """Generate a clean one-liner from a full verdict using LLM."""
     try:
+        # extra_body for temperature — SDK v1 dropped the kwarg from
+        # message methods (see llm_caller.call_llm).
         result = await client.messages.create(
             model=model,
             max_tokens=64,
-            temperature=0.0,
             system=ONE_LINER_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": verdict}],
+            extra_body={"temperature": 0.0},
         )
         return result.content[0].text.strip().rstrip(".")  + "."
     except Exception:

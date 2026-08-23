@@ -383,12 +383,14 @@ async def stream_debate_round(
                         })
                     else:
                         # Claude supports streaming
+                        # extra_body for temperature — SDK v1 dropped the
+                        # kwarg from message methods (see llm_caller.call_llm).
                         async with route["client"].messages.stream(
                             model=route["model_id"],
                             max_tokens=min(256, route["max_tokens"]),
-                            temperature=agent.temperature,
                             system=system_prompt,
                             messages=[{"role": "user", "content": user_message}],
+                            extra_body={"temperature": agent.temperature},
                         ) as stream:
                             async for text in stream.text_stream:
                                 full_text += text

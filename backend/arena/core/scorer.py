@@ -163,9 +163,12 @@ class Scorer:
                 route["client"].messages.create(
                     model=route["model_id"],
                     max_tokens=self.max_tokens,
-                    temperature=0.0,  # Deterministic scoring
                     system=SCORER_SYSTEM_PROMPT,
                     messages=[{"role": "user", "content": scoring_prompt}],
+                    # extra_body for temperature — SDK v1 dropped the kwarg
+                    # from message methods (see llm_caller.call_llm).
+                    # 0.0 = deterministic scoring.
+                    extra_body={"temperature": 0.0},
                 ),
                 timeout=self.timeout,
             )

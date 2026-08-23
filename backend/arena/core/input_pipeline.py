@@ -296,12 +296,14 @@ async def classify_prompt(
 ) -> PromptClassification:
     """Classify the prompt into one of four categories."""
     try:
+        # extra_body for temperature — SDK v1 dropped the kwarg from
+        # message methods (see llm_caller.call_llm).
         result = await client.messages.create(
             model=model,
             max_tokens=128,
-            temperature=0.0,
             system=CLASSIFIER_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
+            extra_body={"temperature": 0.0},
         )
         data = _parse_json_from_llm(result.content[0].text)
         return PromptClassification(
@@ -321,12 +323,13 @@ async def extract_intent(
 ) -> IntentExtraction:
     """Extract surface and deeper intent from the prompt."""
     try:
+        # extra_body for temperature — see classify_prompt above.
         result = await client.messages.create(
             model=model,
             max_tokens=256,
-            temperature=0.0,
             system=INTENT_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
+            extra_body={"temperature": 0.0},
         )
         data = _parse_json_from_llm(result.content[0].text)
         return IntentExtraction(
@@ -348,12 +351,13 @@ async def check_toxicity_llm(
 ) -> ToxicityResult:
     """LLM-based toxicity check for edge cases."""
     try:
+        # extra_body for temperature — see classify_prompt above.
         result = await client.messages.create(
             model=model,
             max_tokens=128,
-            temperature=0.0,
             system=TOXICITY_LLM_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
+            extra_body={"temperature": 0.0},
         )
         data = _parse_json_from_llm(result.content[0].text)
         return ToxicityResult(
