@@ -1496,6 +1496,17 @@ export function ProfileModal() {
               }
             : current,
         );
+        // Deleting shifts server-side pagination: the tail page can go
+        // empty outright. Fall back into range — the page change itself
+        // refetches — or re-read the current page so its rows and
+        // totals stay true rather than trusting a locally edited copy.
+        const remaining = Math.max(0, (calHistory?.total ?? 1) - 1);
+        const lastPage = Math.max(1, Math.ceil(remaining / 5));
+        if (calHistoryPage > lastPage) {
+          setCalHistoryPage(lastPage);
+        } else {
+          setCalHistoryReload((tick) => tick + 1);
+        }
         setCalStatsTick((tick) => tick + 1);
       } catch (error) {
         setCalDeleteError(
@@ -1507,7 +1518,7 @@ export function ProfileModal() {
         setCalDeleteBusyId(null);
       }
     },
-    [],
+    [calHistory, calHistoryPage],
   );
 
   useEffect(() => {

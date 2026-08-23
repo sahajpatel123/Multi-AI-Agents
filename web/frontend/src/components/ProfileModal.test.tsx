@@ -2557,6 +2557,45 @@ describe('ProfileModal', () => {
     expect(within(history).getByText('You underestimated this answer')).toBeInTheDocument();
   });
 
+  it('falls back a page when a delete empties the tail page', async () => {
+    const history = await openHistoryWithRatings();
+    // Page 2 holds this rating and nothing else: deleting it leaves no
+    // page 2 server-side, so the view must drop back to page 1.
+    hoistedMocks.getCalibrationHistory.mockResolvedValueOnce({
+      ratings: [historyRating],
+      total: 6,
+      page: 2,
+      per_page: 5,
+      total_pages: 2,
+      filters: { min_delta: null, max_delta: null, sort: 'newest' },
+    });
+    screen.getByRole('button', { name: /next calibration history page/i }).click();
+    await waitFor(() => {
+      expect(hoistedMocks.getCalibrationHistory).toHaveBeenLastCalledWith({
+        page: 2,
+        perPage: 5,
+        sort: 'newest',
+      });
+    });
+
+    within(history)
+      .getByRole('button', { name: /delete calibration rating for task task-history-1/i })
+      .click();
+    const confirm = await within(history).findByRole('button', {
+      name: /confirm deleting rating for task task-history-1/i,
+    });
+    confirm.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.deleteCalibrationRating).toHaveBeenCalledWith('task-history-1');
+      expect(hoistedMocks.getCalibrationHistory).toHaveBeenLastCalledWith({
+        page: 1,
+        perPage: 5,
+        sort: 'newest',
+      });
+    });
+  });
+
   it('downloads calibration history CSV with the server filename', async () => {
     hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
       total_ratings: 1,

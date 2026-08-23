@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Deleting a calibration rating now keeps pagination honest: removing
+  a row can empty the tail page outright (five ratings to a page), so
+  a delete that falls out of range drops back to the last page that
+  still exists, and any other delete quietly re-reads the current
+  page — rows and totals come back from the server instead of
+  trusting a locally edited copy that time would drift
 - Recent handoffs can now be refreshed in place: statuses move
   server-side (the reconciler retires stale streams), so the section
   header carries a Refresh button that re-reads the list and drops
