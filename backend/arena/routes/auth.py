@@ -30,6 +30,24 @@ from arena.core.auth import (
     orm_user_to_response,
     verify_password,
 )
+from arena.core.token_blacklist import token_blacklist
+from arena.core.dependencies import get_current_user_required_orm
+from arena.core.feedback_calibrator import get_answer_feedback_distribution
+from arena.core.input_validation import sanitize_html
+from arena.core.login_limiter import login_limiter, registration_limiter
+from arena.core.tier_config import (
+    TIER_FEATURES,
+    UserTier,
+    get_credit_budget,
+    get_daily_limit,
+    get_tier_personas,
+    get_tier_str,
+    normalize_tier,
+    upgrade_target,
+)
+from arena.database import dispose_engine, get_db, is_db_connectivity_error
+from arena.db_models import PasswordResetToken, UsageRecord, User
+from arena.models.schemas import LoginRequest, RegisterRequest, UserProfilePatch, UserResponse
 
 
 def _payload_exp_seconds(token: str) -> Optional[int]:
@@ -81,24 +99,7 @@ def _owned_refresh_token(token: str, user_id: int) -> Optional[dict]:
     if sub is None or sub != int(user_id):
         return None
     return payload
-from arena.core.token_blacklist import token_blacklist
-from arena.core.dependencies import get_current_user_required_orm
-from arena.core.feedback_calibrator import get_answer_feedback_distribution
-from arena.core.input_validation import sanitize_html
-from arena.core.login_limiter import login_limiter, registration_limiter
-from arena.core.tier_config import (
-    TIER_FEATURES,
-    UserTier,
-    get_credit_budget,
-    get_daily_limit,
-    get_tier_personas,
-    get_tier_str,
-    normalize_tier,
-    upgrade_target,
-)
-from arena.database import dispose_engine, get_db, is_db_connectivity_error
-from arena.db_models import PasswordResetToken, UsageRecord, User
-from arena.models.schemas import LoginRequest, RegisterRequest, UserProfilePatch, UserResponse
+
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 user_router = APIRouter(prefix="/api/user", tags=["auth"])

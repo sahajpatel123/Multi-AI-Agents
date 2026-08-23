@@ -31,12 +31,11 @@ from arena.models.schemas import (
     UserResponse,
 )
 from arena.core.agents import get_agent_config, get_persona_id_for_agent, get_raw_persona_prompt, call_persona, get_model_for_persona
-
-logger = logging.getLogger(__name__)
 from arena.core.memory import get_memory_manager
 from arena.core.model_router import get_route_for_persona
 from arena.core.observability import correlation_request_id
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["discuss"])
 
@@ -315,6 +314,10 @@ async def stream_discuss(
         original_verdict=request.original_verdict,
         previous_responses_context=prev_context,
     )
+
+    # Built once here; the streaming closure below captures it for the
+    # Claude branch of the API call.
+    messages = _build_messages(request)
 
     async def event_generator():
         # First event tells the client which request ID this stream maps to,

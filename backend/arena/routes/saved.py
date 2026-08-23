@@ -26,9 +26,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 try:
-    import openpyxl
+    from openpyxl import Workbook
+
     OPENPYXL_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover - optional xlsx dependency
     OPENPYXL_AVAILABLE = False
 
 from arena.core.dependencies import get_current_user_required

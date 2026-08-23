@@ -10,8 +10,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from arena.core.admin_gate import require_admin_email
-
-logger = logging.getLogger(__name__)
 from arena.core.dependencies import get_current_user_optional, get_current_user_required
 from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
 from arena.core.model_router import get_all_routes_summary
@@ -24,6 +22,8 @@ from arena.db_models import (
     PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UXEvent, UserTier,
 )
 from arena.models.schemas import UserResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["analytics"])
 
