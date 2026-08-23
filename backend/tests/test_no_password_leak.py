@@ -65,7 +65,6 @@ class TestAuthResponsesDoNotLeakHash:
     async def test_login_response_has_no_password_hash(
         self, app_client, make_user
     ):
-        from arena.core.auth import hash_password
         user = make_user(email="leak2@test.com")
         # make_user already hashed via auth fixture; just login with the
         # plain-text the fixture expects.
@@ -116,7 +115,6 @@ class TestAuthResponsesDoNotLeakHash:
         UserResponse and shipped it' — the test inspects every value,
         not just the top-level body, so a nested leak fails too.
         """
-        import json
         reg = await app_client.post(
             "/api/auth/register",
             json={

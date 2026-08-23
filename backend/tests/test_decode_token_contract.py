@@ -25,7 +25,6 @@ from __future__ import annotations
 import time
 
 import jwt as _pyjwt
-import pytest
 
 from arena.core.auth import (
     ALGORITHM,

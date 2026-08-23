@@ -25,7 +25,6 @@ import pytest
 
 from arena.core.blackboard import (
     AgentStatus,
-    Blackboard,
     create_blackboard,
     remove_blackboard,
 )

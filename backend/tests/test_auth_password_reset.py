@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from arena.core.auth import hash_password, verify_password
+from arena.core.auth import verify_password
 from arena.db_models import PasswordResetToken, User
 
 

@@ -4,12 +4,12 @@ from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import pytest
 
 from arena.db_models import (
-    PersonaDriftLog, ScoringAudit, SessionSummary, UsageRecord, UXEvent, UserTier,
+    ScoringAudit, SessionSummary, UsageRecord, UXEvent, UserTier,
 )
 
 

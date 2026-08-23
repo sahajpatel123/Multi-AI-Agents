@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import copy
 import json
 import logging
@@ -13,13 +12,11 @@ from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
 
-import anthropic
 from sqlalchemy.orm import Session
 
-from arena.config import get_settings
 from arena.core.model_router import get_route_for_prompt
 from arena.db_models import SessionSummary
-from arena.models.schemas import AgentResponse, MemoryContext, ScoredAgent, SessionData, SessionTurn
+from arena.models.schemas import MemoryContext, ScoredAgent, SessionData, SessionTurn
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +147,7 @@ def _parse_json_like(payload: str) -> dict[str, Any]:
     """Parse LLM response as JSON only. Never use ast.literal_eval() on untrusted input."""
     try:
         return json.loads(payload)
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         # LLM responses must be valid JSON. Do not fall back to ast.literal_eval()
         # which could execute arbitrary code.
         logger.warning("LLM returned invalid JSON (expected structured response): %s...", payload[:100])

@@ -14,7 +14,7 @@ from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 

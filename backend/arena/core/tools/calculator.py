@@ -12,7 +12,7 @@ import ast
 import logging
 import operator
 import re
-from typing import Any, Dict, Union
+from typing import Union
 
 from arena.core.tools.base import Tool, ToolResult
 

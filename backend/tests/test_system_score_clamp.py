@@ -26,7 +26,6 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-import pytest
 
 # Import order matters: arena.core.auth FIRST to resolve the
 # circular import.

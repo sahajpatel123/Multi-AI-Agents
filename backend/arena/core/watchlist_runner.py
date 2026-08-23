@@ -5,7 +5,7 @@ from arena.core.datetime_utils import utcnow_naive
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from arena.core.blackboard import AgentStatus, create_blackboard, get_blackboard
 from arena.core.capabilities import evaluate_capability_gate

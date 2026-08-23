@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from arena.db_models import Room, RoomMember, User, UserTier
+from arena.db_models import Room, RoomMember, UserTier
 
 
 

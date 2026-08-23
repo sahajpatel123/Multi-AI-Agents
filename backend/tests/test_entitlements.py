@@ -16,7 +16,6 @@ from typing import Any, Optional
 from arena.core.entitlements import compute_user_entitlements
 from arena.core.tier_config import (
     TIER_DAILY_LIMITS,
-    TIER_FEATURES,
     TIER_MESSAGE_LIMITS,
     UserTier,
 )

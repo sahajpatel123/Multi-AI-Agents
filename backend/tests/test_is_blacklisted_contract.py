@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
 
 from arena.core.auth import create_access_token
 from arena.core.token_blacklist import _hash_token, is_blacklisted

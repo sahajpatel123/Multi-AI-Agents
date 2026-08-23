@@ -5,15 +5,14 @@ from arena.core.datetime_utils import utcnow_naive
 
 import csv
 import io
-import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import pytest
 
 from arena.core import agent_metrics
 from arena.core.agent_metrics import compute_user_feedback_summary
 from arena.core.auth import create_access_token
-from arena.db_models import AgentTask, AnswerFeedback, UserTier
+from arena.db_models import AnswerFeedback, UserTier
 from arena.routes import agent as agent_routes
 
 

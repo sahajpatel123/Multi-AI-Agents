@@ -20,7 +20,6 @@ Pins:
 
 from __future__ import annotations
 
-import pytest
 
 from arena.core.tier_config import UserTier, has_feature
 

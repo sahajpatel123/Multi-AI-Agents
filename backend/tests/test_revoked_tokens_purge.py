@@ -12,7 +12,7 @@ past must be gone by the time the app is ready to serve requests.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 

@@ -19,7 +19,6 @@ Pins:
 
 from __future__ import annotations
 
-import pytest
 
 from arena.core.request_size import (
     DEFAULT_MAX_BODY_BYTES,

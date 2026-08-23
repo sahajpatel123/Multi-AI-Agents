@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import pytest
 
-from arena.core import mcp_runtime
 from arena.core.mcp_runtime import SERVICE_URL_ALLOWLIST, _assert_safe_service_url, _unified_item
 
 

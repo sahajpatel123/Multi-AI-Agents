@@ -22,7 +22,6 @@ Pins:
 
 from __future__ import annotations
 
-import pytest
 
 from arena.core.agent_memory import _escape_like
 

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from arena.config import get_settings
-from arena.core.model_router import GROK_PERSONAS, get_fallback_model, get_route_for_persona
+from arena.core.model_router import get_fallback_model, get_route_for_persona
 from arena.models.schemas import AgentConfig
 
 settings = get_settings()
@@ -312,7 +311,7 @@ async def call_persona(
             temperature=temperature,
             max_tokens=route["max_tokens"],
         )
-    except Exception as e:
+    except Exception:
         logger.warning(
             "[FALLBACK] %s failed for %s; using Claude fallback",
             provider,

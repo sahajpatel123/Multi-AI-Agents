@@ -90,7 +90,7 @@ def _build_debate_context(
     parts = [
         f"ORIGINAL QUESTION: {request.original_prompt}",
         "",
-        f"CHALLENGED AGENT'S POSITION:",
+        "CHALLENGED AGENT'S POSITION:",
         f"{request.challenged_verdict}",
     ]
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 import os
 import sys
 
-import pytest
 
 _BACKEND = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 if _BACKEND not in sys.path:

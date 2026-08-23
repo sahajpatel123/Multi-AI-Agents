@@ -18,7 +18,7 @@ prior coverage was transitive via the call sites.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from arena.core.datetime_utils import utcnow_naive
 

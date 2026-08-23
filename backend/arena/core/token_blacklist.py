@@ -25,7 +25,7 @@ from arena.core.datetime_utils import utcnow_naive
 import hashlib
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.exc import IntegrityError

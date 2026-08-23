@@ -10,7 +10,6 @@ from arena.core.agents import (
     PERSONA_METADATA,
     PERSONA_PROMPTS,
     SLOT_AGENT_IDS,
-    get_agent_config,
     get_all_agents,
     get_model_for_persona,
     get_persona_id_for_agent,

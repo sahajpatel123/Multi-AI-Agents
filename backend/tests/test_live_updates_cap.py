@@ -24,10 +24,8 @@ Tests pin:
 
 from __future__ import annotations
 
-import time
 from types import SimpleNamespace
 
-import pytest
 
 from arena.core.live_thread_checker import LIVE_UPDATES_MAX
 
@@ -134,7 +132,6 @@ def test_check_live_task_caps_updates(monkeypatch) -> None:
     """Integration: a pre-existing live_updates list at the cap
     is trimmed when a new entry is appended.
     """
-    from arena.core import live_thread_checker as ltc
 
     # Pre-populate the list to exactly the cap
     initial_updates = [_make_update(i) for i in range(LIVE_UPDATES_MAX)]

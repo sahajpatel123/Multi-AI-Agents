@@ -7,7 +7,6 @@ the AgentResponse shape the frontend consumes.
 """
 from __future__ import annotations
 
-from typing import Any
 
 import pytest
 

@@ -193,7 +193,6 @@ async def test_md_filename_includes_persona_and_window(app_client, make_user):
     # The server stamps UTC dates, so compare against UTC's today —
     # not the local one (they differ whenever this machine is ahead
     # of UTC).
-    from datetime import date
     assert datetime_now_utc_date().isoformat() in cd
 
 

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from arena.core import stance_archive
 from arena.core.stance_archive import (
     _normalize_topic,
     extract_topic,

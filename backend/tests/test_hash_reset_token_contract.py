@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import hashlib
 
-import pytest
 
 from arena.routes.auth import _hash_reset_token
 

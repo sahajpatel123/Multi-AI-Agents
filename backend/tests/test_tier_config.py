@@ -4,7 +4,6 @@ Pure functions; no I/O. Covers the tier matrix, persona access, feature flags,
 and limit helpers.
 """
 
-import pytest
 
 from arena.core.tier_config import (
     ALL_PERSONAS,

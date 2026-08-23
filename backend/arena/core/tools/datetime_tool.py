@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any
 
 from arena.core.tools.base import Tool, ToolResult
 

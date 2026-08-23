@@ -21,7 +21,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
 
 from arena.core.tier_config import UserTier, get_tier_str
 

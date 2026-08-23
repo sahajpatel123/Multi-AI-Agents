@@ -1,6 +1,5 @@
 """Unit tests for arena.core.llm_retry."""
 
-import asyncio
 
 import pytest
 

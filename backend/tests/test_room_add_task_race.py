@@ -30,8 +30,7 @@ from __future__ import annotations
 import pytest
 
 from arena.core.auth import create_access_token
-from arena.db_models import AgentTask, Room, RoomTask, User, UserTier
-from arena.database import SessionLocal
+from arena.db_models import AgentTask, Room, RoomTask, UserTier
 
 
 def _auth(user):

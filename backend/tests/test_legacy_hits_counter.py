@@ -92,7 +92,6 @@ class TestLegacyHitsCounter:
         clean ``(False, False)``; operators see the traceback in logs so the
         hash can be repaired. This is the same defence as the early-cycle
         silent-swallow fix on the same function."""
-        import logging
         from arena.core.auth import verify_password
 
         matched, used_legacy = verify_password("any-plain", "not-a-bcrypt-hash")

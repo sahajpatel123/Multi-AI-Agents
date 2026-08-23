@@ -28,7 +28,6 @@ import io
 import logging
 import sys
 
-import pytest
 
 
 def _make_settings(**overrides):

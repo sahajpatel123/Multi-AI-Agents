@@ -161,7 +161,7 @@ class TestLogoutIDORProperty:
         the attacker's OWN access token should still get blacklisted
         (so logging out genuinely ends the attacker's session).
         """
-        from arena.core.auth import create_access_token, create_refresh_token
+        from arena.core.auth import create_access_token
         from arena.core.token_blacklist import _hash_token
         from arena.db_models import RevokedToken, UserTier
 

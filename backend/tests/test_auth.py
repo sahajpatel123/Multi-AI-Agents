@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from arena.core.auth import (
     ACCESS_TOKEN_MAX_AGE_SECONDS,

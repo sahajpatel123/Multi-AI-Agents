@@ -125,7 +125,6 @@ class TestLogoutInvalidatesRefreshToken:
         from arena.core.token_blacklist import token_blacklist
         # Use a fresh session to read the table, separate from the
         # request-scoped app_client session.
-        from arena.db_models import RevokedToken
         SessionLocal = isolated_db
         s = SessionLocal()
         try:

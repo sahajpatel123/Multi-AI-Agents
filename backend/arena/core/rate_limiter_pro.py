@@ -1,6 +1,6 @@
 """Pro tier rolling window rate limiter"""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
 

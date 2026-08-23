@@ -28,7 +28,6 @@ Tests pin:
 
 from __future__ import annotations
 
-import pytest
 
 from arena.core.report_generator import (
     _markdown_answer_html,

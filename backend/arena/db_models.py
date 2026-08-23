@@ -1,11 +1,10 @@
 """SQLAlchemy ORM models — the actual database tables"""
 
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum as PyEnum
 from uuid import uuid4
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     Column,
     DateTime,

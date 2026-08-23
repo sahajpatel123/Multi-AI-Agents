@@ -16,7 +16,6 @@ Functionality:
 
 import logging
 from typing import Optional
-from datetime import datetime
 
 from pydantic import BaseModel, Field, model_validator
 from fastapi import APIRouter, Depends, HTTPException, Query

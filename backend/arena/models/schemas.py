@@ -1,7 +1,7 @@
 """Pydantic models for request/response data contracts"""
 
-from typing import Optional, List, Any, Dict, Literal
-from datetime import datetime, timezone
+from typing import Optional, Literal
+from datetime import datetime
 from arena.core.datetime_utils import utcnow_naive
 
 
@@ -9,7 +9,6 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from arena.core.input_validation import (
-    sanitize_model_html,
     sanitize_model_optional_html,
     sanitize_model_optional_text,
     sanitize_model_text,

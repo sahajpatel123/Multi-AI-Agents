@@ -3,13 +3,12 @@
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, raiseload
 
-from arena.config import get_settings
 from arena.core.model_router import estimate_call_cost
 from arena.core.tier_config import get_credit_budget, get_daily_limit, get_tier_str, normalize_tier, upgrade_target
 from arena.db_models import GuestRateLimit, User, UsageRecord

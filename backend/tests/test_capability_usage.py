@@ -4,7 +4,7 @@ from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 

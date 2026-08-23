@@ -21,7 +21,6 @@ Pins:
 
 from __future__ import annotations
 
-import pytest
 from fastapi import Request
 
 from arena.core.client_ip import get_request_client_ip
@@ -256,7 +255,6 @@ class TestGetRequestClientIpProductionNoTrust:
         from settings — in tests, ``is_production`` is False, so
         the helper returns the peer (no XFF)."""
         # Use a fresh module import to get the default ``_trust_proxy_headers``.
-        from arena.core import client_ip as client_ip_mod
         # Don't monkey-patch — rely on the default.
         # The default is False in test environments (ENVIRONMENT=test).
         # We can test by checking the helper's behavior matches

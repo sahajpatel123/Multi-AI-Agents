@@ -37,7 +37,7 @@ import pytest
 # -> arena.core -> arena.core.agents -> AgentConfig ->
 # arena.models.schemas [unfinished]).
 from arena.core.auth import orm_user_to_response  # noqa: F401
-from arena.models.schemas import DebateMessage, DebateRequest, DiscussChatMessage, DiscussRequest
+from arena.models.schemas import DebateRequest, DiscussRequest
 from pydantic import ValidationError
 
 

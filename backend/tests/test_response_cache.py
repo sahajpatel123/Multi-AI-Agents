@@ -1,6 +1,5 @@
 """Unit tests for arena.core.response_cache."""
 
-import pytest
 
 from arena.core.response_cache import ResponseCache, all_responses_healthy, make_cache_key
 

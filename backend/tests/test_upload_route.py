@@ -49,7 +49,7 @@ async def test_upload_accepts_small_file(app_client, make_user, monkeypatch):
     file_id + filename shape without needing a real PDF."""
     import uuid
 
-    from arena.core import file_ingest, upload_store
+    from arena.core import file_ingest
     from arena.routes import agent as agent_routes
 
     fake_meta = {

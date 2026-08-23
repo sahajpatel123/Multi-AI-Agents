@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse

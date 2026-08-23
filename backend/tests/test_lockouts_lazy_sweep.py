@@ -36,7 +36,6 @@ from __future__ import annotations
 import time
 from types import SimpleNamespace
 
-import pytest
 
 from arena.core.login_limiter import LoginRateLimiter
 

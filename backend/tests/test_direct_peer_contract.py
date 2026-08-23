@@ -22,7 +22,6 @@ Pins:
 
 from __future__ import annotations
 
-import pytest
 from fastapi import Request
 
 from arena.core.client_ip import _direct_peer

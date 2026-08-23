@@ -14,7 +14,6 @@ Pins:
 
 from __future__ import annotations
 
-import pytest
 
 from arena.core.client_ip import _trust_proxy_headers
 

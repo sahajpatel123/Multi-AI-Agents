@@ -1,5 +1,4 @@
 import pytest
-from datetime import timedelta
 from arena.core.datetime_utils import utcnow_naive
 from arena.core.auth import create_access_token
 from arena.db_models import AgentTask, UserTier

@@ -228,7 +228,7 @@ def _rules_based_toxicity(prompt: str) -> ToxicityResult | None:
         if phrase in lower:
             return ToxicityResult(
                 is_toxic=True,
-                reason=f"Matched blocked phrase",
+                reason="Matched blocked phrase",
                 confidence=1.0,
             )
 
@@ -236,7 +236,7 @@ def _rules_based_toxicity(prompt: str) -> ToxicityResult | None:
         if pattern.search(prompt):
             return ToxicityResult(
                 is_toxic=True,
-                reason=f"Matched content policy pattern",
+                reason="Matched content policy pattern",
                 confidence=0.95,
             )
 

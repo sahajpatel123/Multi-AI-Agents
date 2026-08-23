@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from arena.core.token_crypto import encrypt_token, get_fernet
+from arena.core.token_crypto import get_fernet
 from arena.db_models import MCPIntegration, UserTier
 
 

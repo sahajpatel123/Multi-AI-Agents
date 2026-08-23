@@ -6,7 +6,7 @@ from arena.core.datetime_utils import utcnow_naive
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from uuid import uuid4
 
 from sqlalchemy.orm import Session

@@ -3,8 +3,7 @@
 from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
-import json
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 

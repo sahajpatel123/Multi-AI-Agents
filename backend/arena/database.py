@@ -164,7 +164,7 @@ def _make_retrying_pg_creator(url: str, max_attempts: int = 3) -> Callable[[], A
                 connection = psycopg.connect(**kwargs)
                 clear_db_unreachable()
                 return connection
-            except Exception as exc:  # noqa: BLE001 — surface after retries
+            except Exception:  # noqa: BLE001 — surface after retries
 
                 return psycopg.connect(**kwargs)
             except Exception as exc:  # noqa: BLE001 — psycopg and network errors share this path

@@ -19,7 +19,6 @@ Pins:
 
 from __future__ import annotations
 
-import pytest
 
 from arena.config import _WEAK_SECRET_KEYS
 

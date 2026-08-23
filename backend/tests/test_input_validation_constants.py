@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import re
 
-import pytest
 
 from arena.core.input_validation import HTML_CHAR_RE, NULL_BYTE
 

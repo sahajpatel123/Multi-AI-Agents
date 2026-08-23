@@ -627,7 +627,7 @@ async def stream_prompt(
         try:
             try:
                 active_agents = get_all_agents(body.persona_ids)
-            except ValueError as e:
+            except ValueError:
                 yield _sse_event("error", {
                     "error": ErrorCodes.INVALID_PERSONA,
                     "message": "Invalid persona selection",
@@ -742,7 +742,7 @@ async def stream_prompt(
                     persona_ids=body.persona_ids,
                     user_id=str(user.id),
                 )
-            except SessionOwnershipError as exc:
+            except SessionOwnershipError:
                 yield _sse_event(
                     "error",
                     {

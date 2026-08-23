@@ -7,7 +7,6 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-import anthropic
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings

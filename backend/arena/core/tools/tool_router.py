@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict
 
 from arena.core.tools.base import Tool, ToolResult
 from arena.core.tools.calculator import CalculatorTool

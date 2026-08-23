@@ -19,7 +19,6 @@ Pins:
 
 from __future__ import annotations
 
-import pytest
 
 from arena.core.file_ingest import MAX_TEXT, _truncate
 

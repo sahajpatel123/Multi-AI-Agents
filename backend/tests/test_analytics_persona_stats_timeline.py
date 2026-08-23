@@ -406,7 +406,7 @@ async def test_timeline_dates_are_chronological(app_client, make_user):
     dates = [row["date"] for row in timeline]
     assert dates == sorted(dates)
     # 7 distinct dates, contiguous.
-    from datetime import date, timedelta
+    from datetime import date
 
     first = date.fromisoformat(dates[0])
     last = date.fromisoformat(dates[-1])
@@ -577,7 +577,7 @@ async def test_timeline_window_start_is_window_days_ago(
         "/api/analytics/persona-stats/analyst/timeline?days=30",
         headers=_pro_headers(user),
     )
-    from datetime import date, timedelta
+    from datetime import date
 
     body = res.json()
     end = date.fromisoformat(body["window_end"])

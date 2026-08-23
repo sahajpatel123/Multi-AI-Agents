@@ -11,8 +11,7 @@ from __future__ import annotations
 import os
 import sys
 import asyncio
-import contextlib
-from typing import Iterator, AsyncIterator
+from typing import Iterator
 
 import pytest
 
@@ -115,7 +114,7 @@ def isolated_db(monkeypatch) -> Iterator:
     Uses StaticPool so the in-memory DB is shared across sessions in the same
     thread (necessary for SQLAlchemy 2 with check_same_thread=False).
     """
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy.pool import StaticPool
 

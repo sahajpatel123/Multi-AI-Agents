@@ -22,7 +22,6 @@ about the original security intent.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 

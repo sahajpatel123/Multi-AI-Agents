@@ -23,7 +23,6 @@ Tests pin:
 
 from __future__ import annotations
 
-import pytest
 
 # Import order matters: arena.core.auth FIRST to resolve the
 # circular import.

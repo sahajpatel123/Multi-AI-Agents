@@ -4,7 +4,7 @@ Validates daily counter logic, tier-based message caps, Pro rolling window, and
 the usage record accumulator.
 """
 
-from datetime import datetime, timezone, timedelta
+from datetime import timedelta
 
 import pytest
 
@@ -15,14 +15,13 @@ from arena.core.cost_tracker import (
     _reset_if_new_day,
     check_and_increment_guest,
     check_and_increment_user,
-    check_token_budget,
     estimate_cost,
     get_today_token_usage,
     record_usage,
 )
 from arena.core.rate_limiter_pro import check_pro_window_limit
 from arena.core.tier_config import TIER_MESSAGE_LIMITS, UserTier
-from arena.db_models import GuestRateLimit, UsageRecord
+from arena.db_models import GuestRateLimit
 
 
 class TestRequestCostAccumulator:
@@ -89,8 +88,7 @@ class TestGuestRateLimit:
 
 class TestUserRateLimit:
     def test_user_at_limit_raises(self, make_user):
-        from arena.core.auth import hash_password
-        from arena.db_models import User, UserTier
+        from arena.db_models import UserTier
         from arena.database import SessionLocal
 
         user = make_user(tier=UserTier.FREE, prompt_count_today=10)

@@ -2,7 +2,6 @@
 
 import logging
 import re
-from typing import List, Dict, Any
 
 from arena.core.tools.base import Tool, ToolResult
 

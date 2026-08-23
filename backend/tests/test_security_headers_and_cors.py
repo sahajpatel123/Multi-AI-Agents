@@ -98,7 +98,6 @@ async def test_security_headers_hsts_branch(monkeypatch, isolated_db):
     The middleware's HSTS branch is captured at ``create_app()`` time, so a
     fresh app must be built with ENVIRONMENT=production to exercise it.
     """
-    import os
     import httpx
     from arena.config import Settings as _Settings
     from arena.config import get_settings as _get_settings

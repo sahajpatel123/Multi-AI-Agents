@@ -36,7 +36,7 @@ async def test_me_rejects_blacklisted_token(app_client, make_user, db_session):
     be observably dead."""
     user = make_user(email="me-black@test.com", tier=UserTier.PRO)
     from arena.core.token_blacklist import add as blacklist_add
-    from datetime import datetime, timezone, timedelta
+    from datetime import timedelta
     token = create_access_token(user.id, user.email)
     blacklist_add(
         token,

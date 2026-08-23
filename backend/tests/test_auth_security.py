@@ -3,7 +3,6 @@
 from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
-import re
 from pathlib import Path
 
 import pytest
@@ -137,7 +136,7 @@ async def test_security_last_active_at_reflects_recent_prompt(
 ):
     """last_active_at should be set when the user has prompts."""
     import uuid
-    from datetime import datetime, timezone, timedelta
+    from datetime import timedelta
     from arena.db_models import UsageRecord
 
     user = make_user(email="sec-active@test.com", tier=UserTier.PRO)

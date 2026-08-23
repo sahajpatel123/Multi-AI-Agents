@@ -23,7 +23,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from datetime import datetime
 
-import pytest
 
 from arena.core.auth import orm_user_to_response
 from arena.core.tier_config import UserTier

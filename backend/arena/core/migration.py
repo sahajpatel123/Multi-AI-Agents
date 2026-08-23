@@ -7,7 +7,6 @@ from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
 import logging
-from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import func

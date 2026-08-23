@@ -12,13 +12,11 @@ are integration-tested elsewhere; here we pin the sync primitives.
 """
 from __future__ import annotations
 
-import json
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from arena.core import observability
 from arena.core.observability import (
     log_agent_timeout,
     log_rate_limit_hit,

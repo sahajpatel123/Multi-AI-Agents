@@ -247,7 +247,6 @@ class TestPromptStreamingEndpoint:
     ):
         """Free tier user hits daily message limit on streaming endpoint."""
         from arena.db_models import UserTier
-        from datetime import datetime, timezone
 
         # Create a FREE user at their daily limit
         user = make_user(
