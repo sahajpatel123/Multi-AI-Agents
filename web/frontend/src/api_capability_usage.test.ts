@@ -10,7 +10,7 @@ const usagePayload = {
   window_days: 30,
   window_start: '2026-07-25',
   window_end: '2026-08-23',
-  by_mode: { arena: 5, agent: 12, debate: 0, discuss: 0, other: 0 },
+  by_mode: { arena: 5, agent: 12, debate: 0, discuss: 0, other: 3 },
   by_category: { research: 5, coding: 12 },
   totals: { agent: 12, web: 5, all: 17 },
   daily_trend: [],
@@ -35,6 +35,9 @@ describe('getCapabilityUsage', () => {
       {},
     );
     expect(result.totals).toEqual({ agent: 12, web: 5, all: 17 });
+    // The full mode split rides along — totals.all (17) misses the
+    // three 'other' calls, byMode keeps them visible.
+    expect(result.byMode).toEqual({ arena: 5, agent: 12, debate: 0, discuss: 0, other: 3 });
     expect(result.byCategory).toEqual([
       { category: 'coding', count: 12 },
       { category: 'research', count: 5 },

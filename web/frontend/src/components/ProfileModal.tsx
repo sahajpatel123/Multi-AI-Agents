@@ -2732,13 +2732,50 @@ export function ProfileModal() {
                   </div>
                 ) : capabilityUsage ? (
                   <div role="group" aria-label="Capability usage">
-                    <p style={{ fontSize: 12, color: '#8C7355', margin: '0 0 10px' }}>
-                      {capabilityUsage.totals.all.toLocaleString()} calls in window ·{' '}
-                      <strong style={{ color: '#F0B84E' }}>
-                        {capabilityUsage.totals.agent.toLocaleString()}
-                      </strong>{' '}
-                      agent · {capabilityUsage.totals.web.toLocaleString()} web
-                    </p>
+                    {(() => {
+                      // totals.all skips 'other'-mode calls; the mode
+                      // split is the complete count, so headline from it.
+                      const modeEntries = Object.entries(capabilityUsage.byMode).filter(
+                        ([, count]) => count > 0,
+                      );
+                      const grandTotal =
+                        modeEntries.reduce((sum, [, count]) => sum + count, 0) ||
+                        capabilityUsage.totals.all;
+                      return (
+                        <>
+                          <p style={{ fontSize: 12, color: '#8C7355', margin: '0 0 6px' }}>
+                            {grandTotal.toLocaleString()}{' '}
+                            {grandTotal === 1 ? 'call' : 'calls'} in window
+                          </p>
+                          {modeEntries.length > 0 ? (
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 6,
+                                margin: '0 0 10px',
+                              }}
+                            >
+                              {modeEntries.map(([mode, count]) => (
+                                <span
+                                  key={mode}
+                                  style={{
+                                    fontSize: 10,
+                                    padding: '2px 7px',
+                                    borderRadius: 9,
+                                    border: '0.5px solid #E0D5C5',
+                                    background: '#F0E8DC',
+                                    color: mode === 'agent' ? '#F0B84E' : '#A0A39A',
+                                  }}
+                                >
+                                  {count.toLocaleString()} {mode}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                     {capabilityUsage.byCategory.length === 0 ? (
                       <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
                         No Agent calls recorded in the last {capabilityWindowDays} days yet.
@@ -2766,7 +2803,13 @@ export function ProfileModal() {
                                     {row.count === 1 ? ' call' : ' calls'}
                                   </span>
                                 </div>
-                                <div style={{ height: 5, background: '#EDE4D8', borderRadius: 3 }}>
+                                <div
+                                  role="img"
+                                  aria-label={`${row.category}: ${row.count} ${
+                                    row.count === 1 ? 'call' : 'calls'
+                                  }`}
+                                  style={{ height: 5, background: '#EDE4D8', borderRadius: 3 }}
+                                >
                                   <div
                                     style={{
                                       height: '100%',

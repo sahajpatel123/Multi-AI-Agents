@@ -417,6 +417,7 @@ const hoistedMocks = vi.hoisted(() => {
     windowStart: '2026-07-25',
     windowEnd: '2026-08-23',
     totals: { agent: 0, web: 0, all: 0 },
+    byMode: {},
     byCategory: [],
   }),
   getRecentAgentFeedback: vi.fn().mockResolvedValue([]),
@@ -3748,6 +3749,7 @@ describe('ProfileModal', () => {
       windowStart: '2026-07-25',
       windowEnd: '2026-08-23',
       totals: { agent: 12, web: 5, all: 17 },
+      byMode: { arena: 5, agent: 12, debate: 0, discuss: 0, other: 2 },
       byCategory: [
         { category: 'coding', count: 12 },
         { category: 'research', count: 5 },
@@ -3760,7 +3762,14 @@ describe('ProfileModal', () => {
     screen.getByRole('button', { name: /usage/i }).click();
 
     const group = await screen.findByRole('group', { name: /capability usage/i });
-    expect(within(group).getByText(/17 calls in window/)).toHaveTextContent('agent');
+    // totals.all is 17 but the mode split sums to 19 — the headline
+    // counts every call, including the two 'other'-mode ones.
+    expect(within(group).getByText(/19 calls in window/)).toBeInTheDocument();
+    expect(within(group).getByText('12 agent')).toBeInTheDocument();
+    expect(within(group).getByText('5 arena')).toBeInTheDocument();
+    expect(within(group).getByText('2 other')).toBeInTheDocument();
+    expect(within(group).queryByText('0 debate')).not.toBeInTheDocument();
+    expect(within(group).getByRole('img', { name: 'coding: 12 calls' })).toBeInTheDocument();
     expect(within(group).getByText('coding')).toBeInTheDocument();
     expect(within(group).getByText('12 calls')).toBeInTheDocument();
     expect(within(group).getByText('research')).toBeInTheDocument();

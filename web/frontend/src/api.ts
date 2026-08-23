@@ -1815,6 +1815,10 @@ export type CapabilityUsageSummary = {
   windowStart: string;
   windowEnd: string;
   totals: { agent: number; web: number; all: number };
+  // Full mode split as the server reports it. totals.all only counts
+  // agent + web, so any 'other'-mode calls would silently vanish if
+  // the UI trusted that alone — byMode keeps every call visible.
+  byMode: Record<string, number>;
   byCategory: { category: string; count: number }[];
 };
 
@@ -1844,9 +1848,15 @@ export async function getCapabilityUsage(
     window_start?: string;
     window_end?: string;
     totals?: { agent?: number; web?: number; all?: number };
+    by_mode?: Record<string, unknown>;
     by_category?: Record<string, unknown>;
   }>(response);
   const rawTotals = data?.totals ?? {};
+  // Coerce every mode bucket so a stray null can't poison the sum.
+  const byMode: Record<string, number> = {};
+  for (const [mode, count] of Object.entries(data?.by_mode ?? {})) {
+    byMode[mode] = Number(count) || 0;
+  }
   // Heaviest categories first; ties break alphabetically so the bars
   // never shuffle between reads.
   const byCategory = Object.entries(data?.by_category ?? {})
@@ -1861,6 +1871,7 @@ export async function getCapabilityUsage(
       web: Number(rawTotals.web ?? 0),
       all: Number(rawTotals.all ?? 0),
     },
+    byMode,
     byCategory,
   };
 }

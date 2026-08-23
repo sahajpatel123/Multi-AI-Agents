@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- The capability usage card now counts every call: the server's
+  totals skip 'other'-mode rows entirely, so the headline is computed
+  from the full mode split instead — and each nonzero mode shows as a
+  chip (12 agent · 5 arena · 2 other) rather than collapsing into one
+  web number. Bars carry image roles with per-category counts so the
+  proportions read without sight
 - Deleting a calibration rating now keeps pagination honest: removing
   a row can empty the tail page outright (five ratings to a page), so
   a delete that falls out of range drops back to the last page that
