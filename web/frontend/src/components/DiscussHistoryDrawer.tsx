@@ -22,6 +22,12 @@ function formatTimeAgo(timestamp: string | null): string {
   return `${days}d ago`;
 }
 
+interface AgentFilterOption {
+  id: string;
+  name: string;
+  color: string;
+}
+
 interface DiscussHistoryDrawerProps {
   /** Bump to make the drawer refetch (e.g. right after a fresh save). */
   refreshTick?: number;
@@ -31,6 +37,8 @@ interface DiscussHistoryDrawerProps {
   onContinue?: (thread: DiscussThreadDetail) => void;
   /** Why continuing is currently blocked, or falsy when allowed. */
   continueBlockedReason?: string;
+  /** Known agents offered as filter chips; absent means no agent filter. */
+  agents?: AgentFilterOption[];
 }
 
 /**
@@ -43,6 +51,7 @@ export function DiscussHistoryDrawer({
   onClose,
   onContinue,
   continueBlockedReason,
+  agents,
 }: DiscussHistoryDrawerProps) {
   const [threads, setThreads] = useState<DiscussThreadSummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -56,6 +65,8 @@ export function DiscussHistoryDrawer({
   // applied value is what the server sees, the input is just the draft.
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
+  // Chips commit instantly — no draft state like search needs.
+  const [appliedAgentId, setAppliedAgentId] = useState<string | null>(null);
   const [resultTotal, setResultTotal] = useState(0);
   // Bumping this forces a refetch even if the tick value is unchanged.
   const [reloadTick, setReloadTick] = useState(0);
@@ -73,6 +84,7 @@ export function DiscussHistoryDrawer({
     listDiscussThreads({
       perPage: 20,
       search: appliedSearch.trim() || undefined,
+      agentId: appliedAgentId || undefined,
     })
       .then((result) => {
         if (!cancelled) {
@@ -92,7 +104,9 @@ export function DiscussHistoryDrawer({
     return () => {
       cancelled = true;
     };
-  }, [reloadTick, refreshTick, appliedSearch]);
+  }, [reloadTick, refreshTick, appliedSearch, appliedAgentId]);
+
+  const filteredAgent = agents?.find((agent) => agent.id === appliedAgentId);
 
   const clearSearch = useCallback(() => {
     setSearchInput('');
@@ -167,6 +181,63 @@ export function DiscussHistoryDrawer({
       ) : null}
     </div>
   );
+
+  // One chip per known agent plus an explicit All; a chip composes with
+  // any applied title search because the server filters on both.
+  const agentFilterRow =
+    agents && agents.length > 0 ? (
+      <div
+        role="group"
+        aria-label="Filter by agent"
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}
+      >
+        <button
+          type="button"
+          aria-pressed={!appliedAgentId}
+          onClick={() => setAppliedAgentId(null)}
+          style={{
+            background: 'none',
+            border: '0.5px solid #E0D8D0',
+            borderRadius: 999,
+            padding: '2px 8px',
+            fontSize: 10,
+            color: appliedAgentId ? '#A0A39A' : '#1A1714',
+            cursor: 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          All agents
+        </button>
+        {agents.map((agent) => {
+          const active = appliedAgentId === agent.id;
+          return (
+            <button
+              key={agent.id}
+              type="button"
+              aria-pressed={active}
+              title={
+                active
+                  ? `Showing discussions saved with ${agent.name}`
+                  : `Show only discussions saved with ${agent.name}`
+              }
+              onClick={() => setAppliedAgentId(active ? null : agent.id)}
+              style={{
+                background: 'none',
+                border: `0.5px solid ${active ? agent.color : '#E0D8D0'}`,
+                borderRadius: 999,
+                padding: '2px 8px',
+                fontSize: 10,
+                color: active ? agent.color : '#A0A39A',
+                cursor: 'pointer',
+                fontFamily: 'var(--vp-font-sans)',
+              }}
+            >
+              {agent.name}
+            </button>
+          );
+        })}
+      </div>
+    ) : null;
 
   const handleToggleRow = useCallback(
     async (thread: DiscussThreadSummary) => {
@@ -305,6 +376,7 @@ export function DiscussHistoryDrawer({
         }}
       >
         {searchRow}
+        {agentFilterRow}
         <p style={{ margin: 0 }}>
           {appliedSearch ? (
             <>
@@ -324,6 +396,26 @@ export function DiscussHistoryDrawer({
                 }}
               >
                 Clear search
+              </button>
+            </>
+          ) : filteredAgent ? (
+            <>
+              No saved discussions with {filteredAgent.name}.{' '}
+              <button
+                type="button"
+                onClick={() => setAppliedAgentId(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  fontSize: 12,
+                  color: '#5A8C6A',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontFamily: 'var(--vp-font-sans)',
+                }}
+              >
+                Show all agents
               </button>
             </>
           ) : (
@@ -359,6 +451,7 @@ export function DiscussHistoryDrawer({
         </p>
       ) : null}
       {searchRow}
+      {agentFilterRow}
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {threads.map((thread) => {
           const isOpen = openId === thread.id;

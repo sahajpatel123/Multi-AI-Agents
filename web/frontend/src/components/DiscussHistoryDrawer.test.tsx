@@ -329,4 +329,92 @@ describe('DiscussHistoryDrawer', () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByText('Why did the migration fail?')).toBeInTheDocument();
   });
+
+  it('filters saved threads by agent via the roster chips', async () => {
+    const roster = [
+      { id: 'claude-sonnet', name: 'The Analyst', color: '#8C9BAB' },
+      { id: 'gpt-critic', name: 'The Philosopher', color: '#9B8FAA' },
+    ];
+    render(<DiscussHistoryDrawer agents={roster} />);
+    await screen.findByText('Why did the migration fail?');
+
+    expect(
+      screen.getByRole('group', { name: /filter by agent/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All agents' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /the philosopher/i }));
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({
+        perPage: 20,
+        agentId: 'gpt-critic',
+      });
+    });
+    expect(screen.getByRole('button', { name: /the philosopher/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'All agents' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'All agents' }));
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({ perPage: 20 });
+    });
+  });
+
+  it('composes an agent chip with an applied title search', async () => {
+    const roster = [{ id: 'claude-sonnet', name: 'The Analyst', color: '#8C9BAB' }];
+    render(<DiscussHistoryDrawer agents={roster} />);
+    await screen.findByText('Why did the migration fail?');
+
+    const input = screen.getByRole('textbox', { name: /search saved discussions by title/i });
+    fireEvent.change(input, { target: { value: 'migration' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({
+        perPage: 20,
+        search: 'migration',
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /the analyst/i }));
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({
+        perPage: 20,
+        search: 'migration',
+        agentId: 'claude-sonnet',
+      });
+    });
+  });
+
+  it('explains an empty agent filter and restores all agents from there', async () => {
+    // Initial load shows the thread, the filtered fetch finds nothing, and
+    // dropping the filter (base mock) brings the thread back.
+    mockedApi.listDiscussThreads
+      .mockResolvedValueOnce({ threads: [summary], total: 1, totalPages: 1 })
+      .mockResolvedValueOnce({ threads: [], total: 0, totalPages: 0 });
+    const roster = [{ id: 'gpt-critic', name: 'The Philosopher', color: '#9B8FAA' }];
+    render(<DiscussHistoryDrawer agents={roster} />);
+    await screen.findByText('Why did the migration fail?');
+
+    fireEvent.click(screen.getByRole('button', { name: /the philosopher/i }));
+
+    expect(
+      await screen.findByText(/No saved discussions with The Philosopher\./),
+    ).toBeInTheDocument();
+    // The chips survive so a dead-end filter is never a dead end.
+    expect(screen.getByRole('button', { name: /the philosopher/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /show all agents/i }));
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({ perPage: 20 });
+    });
+    await screen.findByText('Why did the migration fail?');
+  });
 });

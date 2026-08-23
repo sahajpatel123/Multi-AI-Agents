@@ -114,6 +114,16 @@ export function DiscussMode({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyTick, setHistoryTick] = useState(0);
+  // Roster for the history drawer's agent-filter chips.
+  const discussAgents = useMemo(
+    () =>
+      Object.values(AGENTS).map((agent) => ({
+        id: agent.agent_id,
+        name: agent.name,
+        color: agent.color,
+      })),
+    [],
+  );
   const saveInFlightRef = useRef(false);
   /** Which message key last copied: 'seed' | `msg-${i}` | null */
   const [msgCopyKey, setMsgCopyKey] = useState<string | null>(null);
@@ -1003,6 +1013,7 @@ export function DiscussMode({
         {historyOpen ? (
           <DiscussHistoryDrawer
             refreshTick={historyTick}
+            agents={discussAgents}
             onClose={() => setHistoryOpen(false)}
             onContinue={(thread) => {
               // Seeding mid-stream would corrupt the in-flight reply's

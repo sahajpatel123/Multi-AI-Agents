@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Saved discussions can now be filtered by agent: the history drawer
+  renders one chip per known agent (plus "All agents") wired to the list
+  endpoint's agent_id param that had been sitting unused alongside
+  search. Chips commit instantly, compose with an applied title search,
+  and an agent with no saved threads says so — with a one-click way back
+
 ### Improved
 - Search refinement no longer dead-ends: an applied search shows how
   many threads it matched, and the input survives into the no-match
