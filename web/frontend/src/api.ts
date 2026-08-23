@@ -1907,7 +1907,11 @@ export async function getAgentCapabilities(): Promise<AgentCapability[]> {
       id: String(cap.id),
       description: String(cap.description ?? ''),
       execution: String(cap.execution ?? ''),
-    }));
+    }))
+    // The registry arrives in insertion order; the sibling docs
+    // endpoint deliberately returns alphabetical "so the UI doesn't
+    // shuffle" — match it.
+    .sort((a, b) => a.id.localeCompare(b.id));
 }
 
 // Long-form markdown doc for one capability. The backend answers 404

@@ -11,12 +11,17 @@ describe('getAgentCapabilities', () => {
     vi.clearAllMocks();
   });
 
-  it('returns the taxonomy entries as-is', async () => {
+  it('returns the taxonomy alphabetized regardless of registry order', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           request_id: 'req-caps-1',
           capabilities: [
+            {
+              id: 'web.search',
+              description: 'Search the web.',
+              execution: 'server',
+            },
             { id: 'arena.respond', description: 'Four-agent panel response.', execution: 'local' },
             {
               id: 'file.organize',
@@ -34,9 +39,10 @@ describe('getAgentCapabilities', () => {
     const result = await getAgentCapabilities();
 
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/agent/capabilities', {});
-    expect(result).toEqual([
-      { id: 'arena.respond', description: 'Four-agent panel response.', execution: 'local' },
-      { id: 'file.organize', description: 'Organize files.', execution: 'server' },
+    expect(result.map((cap) => cap.id)).toEqual([
+      'arena.respond',
+      'file.organize',
+      'web.search',
     ]);
   });
 

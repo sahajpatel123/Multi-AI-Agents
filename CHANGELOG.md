@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Capability docs read like docs now: the markdown the registry
+  returns renders as headings, bullets, bold text, and inline code
+  spans instead of literal asterisks in a monospace pre block — no
+  new dependency, just the subset the registry actually uses. The
+  taxonomy list is alphabetized client-side to match the sibling
+  docs endpoint's stable order
 - The capability usage card now counts every call: the server's
   totals skip 'other'-mode rows entirely, so the headline is computed
   from the full mode split instead — and each nonzero mode shows as a

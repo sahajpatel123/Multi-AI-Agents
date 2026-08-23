@@ -3877,9 +3877,13 @@ describe('ProfileModal', () => {
     within(region)
       .getByRole('button', { name: /expand capability arena\.respond/i })
       .click();
+    // Markdown renders structured: the bold lead is a real <strong>,
+    // not literal asterisks in a pre block.
     expect(
-      await within(region).findByText(/Four-agent panel response\.\*\* Details here/),
+      await within(region).findByText('Four-agent panel response.', { selector: 'strong' }),
     ).toBeInTheDocument();
+    expect(within(region).getByText(/Details here/)).toBeInTheDocument();
+    expect(within(region).queryByText(/\*\*/)).not.toBeInTheDocument();
     expect(hoistedMocks.getCapabilityDoc).toHaveBeenCalledTimes(1);
 
     // Collapse, then re-expand: the cached doc renders with no refetch.
@@ -3893,14 +3897,47 @@ describe('ProfileModal', () => {
         within(region).getByRole('button', { name: /expand capability arena\.respond/i }),
       ).toBeInTheDocument();
     });
-    expect(within(region).queryByText(/Details here/)).not.toBeInTheDocument();
+    expect(
+      within(region).queryByText('Four-agent panel response.', { selector: 'strong' }),
+    ).not.toBeInTheDocument();
     within(region)
       .getByRole('button', { name: /expand capability arena\.respond/i })
       .click();
     expect(
-      await within(region).findByText(/Four-agent panel response\.\*\* Details here/),
+      await within(region).findByText('Four-agent panel response.', { selector: 'strong' }),
     ).toBeInTheDocument();
     expect(hoistedMocks.getCapabilityDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders headings, bullets, and code spans from a doc', async () => {
+    hoistedMocks.getAgentCapabilities.mockResolvedValueOnce(referenceCaps);
+    hoistedMocks.getCapabilityDoc.mockResolvedValueOnce({
+      id: 'arena.respond',
+      description: 'Four-agent panel response.',
+      execution: 'local',
+      markdown:
+        '## Notes\n\n- First item\n- Second item\n\nRun `arena.respond` locally.',
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    (
+      await screen.findByRole('button', { name: /view capability reference/i })
+    ).click();
+    const region = await screen.findByRole('region', { name: /capability reference/i });
+
+    within(region)
+      .getByRole('button', { name: /expand capability arena\.respond/i })
+      .click();
+
+    const docRegion = await within(region).findByText('Notes');
+    expect(docRegion.tagName).toBe('DIV');
+    expect(within(region).getByText('First item').tagName).toBe('LI');
+    expect(within(region).getByText('Second item').tagName).toBe('LI');
+    // The id row also reads "arena.respond", so pin the code span by tag.
+    expect(within(region).getByText('arena.respond', { selector: 'code' })).toBeInTheDocument();
   });
 
   it('surfaces a doc refusal verbatim inside its row', async () => {

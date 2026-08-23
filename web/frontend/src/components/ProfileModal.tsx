@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import '../styles/profile-modal.css';
@@ -148,6 +148,106 @@ const CALIBRATION_HISTORY_SORT_LABELS: Record<CalibrationHistorySort, string> = 
   delta_desc: 'Underestimates first',
   delta_asc: 'Overestimates first',
 };
+
+// Capability docs arrive as markdown. Rather than show literal
+// asterisks in a <pre>, these two render the subset the registry
+// actually uses — headings, bullets, bold, italics, code spans —
+// with no external dependency.
+const CAP_DOC_INLINE_PATTERN = /\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*/g;
+
+function renderCapabilityDocInline(text: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const match of text.matchAll(CAP_DOC_INLINE_PATTERN)) {
+    const token = match[0];
+    const start = match.index ?? 0;
+    if (start > last) out.push(text.slice(last, start));
+    if (token.startsWith('**')) {
+      out.push(
+        <strong key={start} style={{ color: '#F3F0E7' }}>
+          {token.slice(2, -2)}
+        </strong>,
+      );
+    } else if (token.startsWith('`')) {
+      out.push(
+        <code
+          key={start}
+          style={{
+            background: '#EDE4D8',
+            borderRadius: 3,
+            padding: '0 4px',
+            fontFamily: 'var(--vp-font-mono, monospace)',
+            fontSize: 10,
+            color: '#F3F0E7',
+          }}
+        >
+          {token.slice(1, -1)}
+        </code>,
+      );
+    } else {
+      out.push(<em key={start}>{token.slice(1, -1)}</em>);
+    }
+    last = start + token.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+function CapabilityDocBody({ markdown }: { markdown: string }) {
+  const blocks: ReactNode[] = [];
+  let listBuffer: string[] = [];
+  let listCount = 0;
+  const flushList = () => {
+    if (!listBuffer.length) return;
+    const items = listBuffer;
+    listBuffer = [];
+    listCount += 1;
+    blocks.push(
+      <ul key={`list-${listCount}`} style={{ margin: '4px 0 6px', paddingLeft: 18 }}>
+        {items.map((item, index) => (
+          <li
+            key={index}
+            style={{ fontSize: 11, lineHeight: 1.55, color: '#C4A882', marginBottom: 2 }}
+          >
+            {renderCapabilityDocInline(item)}
+          </li>
+        ))}
+      </ul>,
+    );
+  };
+  markdown.split('\n').forEach((rawLine, index) => {
+    const line = rawLine.trimEnd();
+    if (line.startsWith('- ')) {
+      listBuffer.push(line.slice(2));
+      return;
+    }
+    flushList();
+    if (line.trim() === '') return;
+    if (line.startsWith('#')) {
+      blocks.push(
+        <div
+          key={index}
+          style={{
+            fontSize: 12,
+            color: '#F3F0E7',
+            fontWeight: 600,
+            margin: '8px 0 3px',
+          }}
+        >
+          {renderCapabilityDocInline(line.replace(/^#+\s*/, ''))}
+        </div>,
+      );
+      return;
+    }
+    blocks.push(
+      <p key={index} style={{ margin: '0 0 6px', fontSize: 11, lineHeight: 1.55, color: '#C4A882' }}>
+        {renderCapabilityDocInline(line)}
+      </p>,
+    );
+  });
+  flushList();
+  return <>{blocks}</>;
+}
 
 function CalibrationHistoryPagination({
   page,
@@ -3046,19 +3146,9 @@ export function ProfileModal() {
                                       {capDocErrText}
                                     </p>
                                   ) : cachedDoc ? (
-                                    <pre
-                                      style={{
-                                        margin: 0,
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-word',
-                                        fontSize: 11,
-                                        lineHeight: 1.55,
-                                        color: '#C4A882',
-                                        fontFamily: 'var(--vp-font-mono, monospace)',
-                                      }}
-                                    >
-                                      {cachedDoc.markdown}
-                                    </pre>
+                                    <div style={{ maxWidth: '100%' }}>
+                                      <CapabilityDocBody markdown={cachedDoc.markdown} />
+                                    </div>
                                   ) : null}
                                 </div>
                               ) : null}
