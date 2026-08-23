@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Send } from 'lucide-react';
-import { streamDiscuss } from '../api';
+import { saveDiscussThread, streamDiscuss } from '../api';
 import {
   ScoredAgent,
   DiscussChatMessage,
@@ -8,6 +8,7 @@ import {
 } from '../types';
 import { AgentAnswerMarkdown } from './AgentAnswerMarkdown';
 import { AgentDot } from './AgentDot';
+import { DiscussHistoryDrawer } from './DiscussHistoryDrawer';
 import { usePanel } from '../context/PanelContext';
 import {
   charBudgetLabel,
@@ -109,6 +110,11 @@ export function DiscussMode({
   const [copyJsonFeedback, setCopyJsonFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadJsonFeedback, setDownloadJsonFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
   const [verifyFeedback, setVerifyFeedback] = useState<'idle' | 'failed'>('idle');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTick, setHistoryTick] = useState(0);
+  const saveInFlightRef = useRef(false);
   /** Which message key last copied: 'seed' | `msg-${i}` | null */
   const [msgCopyKey, setMsgCopyKey] = useState<string | null>(null);
   const [msgCopyStatus, setMsgCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -184,6 +190,8 @@ export function DiscussMode({
     setCopyJsonFeedback('idle');
     setDownloadJsonFeedback('idle');
     setVerifyFeedback('idle');
+    setSaveState('idle');
+    setSaveError(null);
   }, [activeAgent.response.agent_id]);
 
   useEffect(() => {
@@ -234,6 +242,50 @@ export function DiscussMode({
     return Boolean(
       (activeAgent.response.verdict || activeAgent.response.one_liner || '').trim(),
     );
+  };
+
+  const handleSaveThread = async () => {
+    if (saveInFlightRef.current || isStreaming) return;
+    if (!threadHasContent()) {
+      setSaveError('Nothing to save yet — send a message first.');
+      return;
+    }
+    saveInFlightRef.current = true;
+    setSaveState('saving');
+    setSaveError(null);
+    try {
+      // The title is what the discussion is about: the original prompt,
+      // falling back to the first user turn, then to the agent's name.
+      const firstUser = currentHistory.find((m) => m.role === 'user');
+      const title =
+        originalPrompt.trim().slice(0, 80) ||
+        (firstUser?.content || '').trim().slice(0, 80) ||
+        `${agentConfig.name} chat`;
+      await saveDiscussThread({
+        agentId: activeAgent.response.agent_id,
+        title,
+        messages: buildThreadMessages(),
+        originalPrompt,
+        originalVerdict:
+          activeAgent.response.verdict || activeAgent.response.one_liner || '',
+      });
+      if (mountedRef.current) {
+        setSaveState('saved');
+        // A freshly saved thread should appear in an open history drawer.
+        setHistoryTick((tick) => tick + 1);
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        setSaveState('idle');
+        setSaveError(
+          error instanceof Error && error.message
+            ? error.message
+            : 'Could not save the discussion — try again.',
+        );
+      }
+    } finally {
+      saveInFlightRef.current = false;
+    }
   };
 
   const handleCopyThread = async () => {
@@ -855,6 +907,46 @@ export function DiscussMode({
                   ? 'Download failed'
                   : 'Download .json'}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleSaveThread();
+              }}
+              disabled={isStreaming || saveState === 'saving'}
+              aria-busy={saveState === 'saving'}
+              title="Save this conversation to your history"
+              style={{
+                fontSize: 12,
+                color: saveState === 'saved' ? '#5A8C6A' : '#F0B84E',
+                background: 'none',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: 999,
+                padding: '4px 10px',
+                cursor: isStreaming || saveState === 'saving' ? 'not-allowed' : 'pointer',
+                opacity: isStreaming ? 0.5 : 1,
+                fontFamily: 'var(--vp-font-sans)',
+              }}
+            >
+              {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Save thread'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryOpen((open) => !open)}
+              aria-expanded={historyOpen}
+              title="Browse previously saved discussions"
+              style={{
+                fontSize: 12,
+                color: historyOpen ? '#1A1714' : '#F0B84E',
+                background: 'none',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: 999,
+                padding: '4px 10px',
+                cursor: 'pointer',
+                fontFamily: 'var(--vp-font-sans)',
+              }}
+            >
+              History
+            </button>
             {onVerifyInAgent ? (
               <button
                 type="button"
@@ -903,6 +995,12 @@ export function DiscussMode({
                   : 'Could not download — try Copy thread instead.'}
           </p>
         ) : null}
+        {saveError ? (
+          <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: '0 0 8px' }}>
+            {saveError}
+          </p>
+        ) : null}
+        {historyOpen ? <DiscussHistoryDrawer refreshTick={historyTick} /> : null}
 
         {/* Messages */}
         <div style={{ position: 'relative', marginBottom: '1rem' }}>

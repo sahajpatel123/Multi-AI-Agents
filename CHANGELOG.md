@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- 1-on-1 discussions can now outlive the chat: DiscussMode grows a Save
+  thread button and a History drawer backed by the discuss-thread API
+  that had been sitting dormant server-side (list with pagination,
+  full-thread hydrate, delete). Titles derive from the original prompt,
+  threads expand read-only in place with their starting context, deletes
+  only land after the server accepts, and every refusal — tier gating,
+  delete rate limits — surfaces verbatim with its request ID
+
 ### Fixed
 - Duplicate presets no longer drift away from their original: the copy
   used to take the neighbor's slot (original position + 1), letting the

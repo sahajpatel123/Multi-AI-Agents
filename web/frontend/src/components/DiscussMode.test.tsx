@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { streamDiscuss } from '../api';
+import { saveDiscussThread, streamDiscuss } from '../api';
 import type { Persona } from '../data/personas';
 import type { ScoredAgent } from '../types';
 import { DiscussMode } from './DiscussMode';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
-  return { ...actual, streamDiscuss: vi.fn() };
+  return { ...actual, streamDiscuss: vi.fn(), saveDiscussThread: vi.fn() };
 });
 
 const { MOCK_PANEL } = vi.hoisted(() => {
@@ -470,5 +470,78 @@ describe('DiscussMode verify-in-Agent bridge', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Verify in Agent Mode' }));
     expect(onVerifyInAgent).toHaveBeenCalledWith('Ship on Friday instead.');
+  });
+});
+
+describe('DiscussMode save thread', () => {
+  const saveMock = vi.mocked(saveDiscussThread);
+
+  beforeEach(() => {
+    saveMock.mockReset();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  it('saves the current conversation and confirms with Saved', async () => {
+    saveMock.mockResolvedValue({
+      id: 7,
+      agentId: 'agent_1',
+      title: 'Should we ship today?',
+      lastMessageAt: null,
+      createdAt: null,
+      messageCount: 1,
+      messages: [],
+      originalPrompt: 'Should we ship today?',
+      originalVerdict: 'Ship the smallest honest slice.',
+    });
+    renderDiscuss();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save thread' }));
+
+    await waitFor(() => {
+      expect(saveMock).toHaveBeenCalledTimes(1);
+      // Title derives from the original prompt; verdict rides along so the
+      // saved thread keeps its starting context.
+      expect(saveMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agent_1',
+          title: 'Should we ship today?',
+          originalPrompt: 'Should we ship today?',
+          originalVerdict: 'Ship the smallest honest slice.',
+        }),
+      );
+      expect(screen.getByText('Saved')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
+  it('surfaces a save refusal verbatim and returns the button to Save thread', async () => {
+    saveMock.mockRejectedValue(
+      new Error('Discuss requires a Plus or Pro subscription. (Request ID: req-sv)'),
+    );
+    renderDiscuss();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save thread' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Discuss requires a Plus or Pro subscription. (Request ID: req-sv)',
+    );
+    expect(screen.getByRole('button', { name: 'Save thread' })).toBeInTheDocument();
+    expect(screen.queryByText('Saved')).not.toBeInTheDocument();
+  });
+
+  it('refuses to save an empty thread without calling the API', async () => {
+    renderDiscuss(emptyTake);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save thread' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Nothing to save yet — send a message first.',
+    );
+    expect(saveMock).not.toHaveBeenCalled();
   });
 });

@@ -1081,6 +1081,185 @@ export async function streamDiscuss(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Saved discuss threads — the durable record behind the 1-on-1 chat. The
+// backend keeps these endpoints next to the stream so a conversation can
+// outlive the component that produced it.
+// ---------------------------------------------------------------------------
+
+export type DiscussThreadSummary = {
+  id: number;
+  agentId: string;
+  title: string;
+  lastMessageAt: string | null;
+  createdAt: string | null;
+  messageCount: number;
+};
+
+export type DiscussThreadDetail = DiscussThreadSummary & {
+  messages: DiscussChatMessage[];
+  originalPrompt: string;
+  originalVerdict: string;
+};
+
+type DiscussThreadRow = {
+  id?: unknown;
+  agent_id?: unknown;
+  title?: unknown;
+  last_message_at?: unknown;
+  created_at?: unknown;
+  message_count?: unknown;
+  messages?: unknown;
+  original_prompt?: unknown;
+  original_verdict?: unknown;
+};
+
+function normalizeDiscussThreadSummary(row: DiscussThreadRow): DiscussThreadSummary {
+  return {
+    id: typeof row.id === 'number' ? row.id : 0,
+    agentId: typeof row.agent_id === 'string' ? row.agent_id : '',
+    title: typeof row.title === 'string' ? row.title : '',
+    lastMessageAt: typeof row.last_message_at === 'string' ? row.last_message_at : null,
+    createdAt: typeof row.created_at === 'string' ? row.created_at : null,
+    messageCount: typeof row.message_count === 'number' ? row.message_count : 0,
+  };
+}
+
+function normalizeDiscussThreadDetail(row: DiscussThreadRow): DiscussThreadDetail {
+  const base = normalizeDiscussThreadSummary(row);
+  const rawMessages = Array.isArray(row.messages) ? row.messages : [];
+  const messages: DiscussChatMessage[] = [];
+  for (const m of rawMessages) {
+    if (!m || typeof m !== 'object') continue;
+    const rec = m as Record<string, unknown>;
+    messages.push({
+      role: rec.role === 'agent' ? 'agent' : 'user',
+      content: typeof rec.content === 'string' ? rec.content : '',
+      timestamp:
+        typeof rec.timestamp === 'string'
+          ? rec.timestamp
+          : (base.lastMessageAt ?? new Date(0).toISOString()),
+    });
+  }
+  return {
+    ...base,
+    messageCount: messages.length || base.messageCount,
+    messages,
+    originalPrompt: typeof row.original_prompt === 'string' ? row.original_prompt : '',
+    originalVerdict: typeof row.original_verdict === 'string' ? row.original_verdict : '',
+  };
+}
+
+export type SaveDiscussThreadInput = {
+  agentId: string;
+  title?: string;
+  messages: Array<{ role: 'user' | 'agent'; content: string; timestamp?: string }>;
+  originalPrompt?: string;
+  originalVerdict?: string;
+};
+
+export async function saveDiscussThread(input: SaveDiscussThreadInput): Promise<DiscussThreadDetail> {
+  if (!input.agentId.trim()) {
+    throw new RangeError('agentId must not be empty');
+  }
+  if (!Array.isArray(input.messages) || input.messages.length === 0) {
+    throw new RangeError('messages must contain at least one entry');
+  }
+  if (input.title && input.title.length > 255) {
+    throw new RangeError('title must be at most 255 characters');
+  }
+  const res = await apiFetch(`/api/discuss/threads`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      agent_id: input.agentId,
+      title: input.title ?? '',
+      messages: input.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        ...(m.timestamp !== undefined ? { timestamp: m.timestamp } : {}),
+      })),
+      original_prompt: input.originalPrompt ?? '',
+      original_verdict: input.originalVerdict ?? '',
+    }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to save the discussion'), res));
+  }
+  const data =
+    (await parseJsonSafely<{ thread?: DiscussThreadRow }>(res)) ||
+    (() => {
+      throw new Error('Saving the discussion returned no thread.');
+    })();
+  if (!data.thread || typeof data.thread !== 'object') {
+    throw new Error('Saving the discussion returned an unexpected shape.');
+  }
+  return normalizeDiscussThreadDetail(data.thread);
+}
+
+export async function listDiscussThreads(
+  params: { page?: number; perPage?: number; search?: string; agentId?: string } = {},
+): Promise<{ threads: DiscussThreadSummary[]; total: number; totalPages: number }> {
+  const query = new URLSearchParams();
+  if (params.page !== undefined) query.set('page', String(params.page));
+  if (params.perPage !== undefined) query.set('per_page', String(params.perPage));
+  if (params.search && params.search.trim()) query.set('search', params.search.trim());
+  if (params.agentId && params.agentId.trim()) query.set('agent_id', params.agentId.trim());
+  const qs = query.toString();
+  const res = await apiFetch(`/api/discuss/threads${qs ? `?${qs}` : ''}`, {});
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to load saved discussions'), res),
+    );
+  }
+  const data =
+    (await parseJsonSafely<{
+      threads?: DiscussThreadRow[];
+      total?: unknown;
+      total_pages?: unknown;
+    }>(res)) || {};
+  const threads = Array.isArray(data.threads)
+    ? data.threads.map(normalizeDiscussThreadSummary)
+    : [];
+  return {
+    threads,
+    total: typeof data.total === 'number' ? data.total : threads.length,
+    totalPages: typeof data.total_pages === 'number' ? data.total_pages : 0,
+  };
+}
+
+export async function getDiscussThread(threadId: number): Promise<DiscussThreadDetail> {
+  if (!Number.isInteger(threadId) || threadId < 1) {
+    throw new RangeError('threadId must be a positive integer');
+  }
+  const res = await apiFetch(`/api/discuss/threads/${encodeURIComponent(String(threadId))}`, {});
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to load the discussion'), res));
+  }
+  const data =
+    (await parseJsonSafely<DiscussThreadRow>(res)) ||
+    (() => {
+      throw new Error('Loading the discussion returned no thread.');
+    })();
+  return normalizeDiscussThreadDetail(data);
+}
+
+export async function deleteDiscussThread(threadId: number): Promise<void> {
+  if (!Number.isInteger(threadId) || threadId < 1) {
+    throw new RangeError('threadId must be a positive integer');
+  }
+  const res = await apiFetch(`/api/discuss/threads/${encodeURIComponent(String(threadId))}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to delete the discussion'), res));
+  }
+}
+
 // Shared SSE consumer — handles AbortSignal-driven cancellation so
 // navigating away mid-stream cleans up the open connection instead
 // of leaving it hanging until the server closes.
