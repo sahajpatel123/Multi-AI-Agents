@@ -142,6 +142,17 @@ export function ExportPresetsPanel() {
         if (!downloadBlobFile(blob, filename)) {
           throw new Error(`Could not download "${preset.name}" — try again.`);
         }
+        // The server stamps last_used_at on every use; mirror it locally
+        // so the row's recency stamp updates without a refetch.
+        setPresets((current) =>
+          current
+            ? current.map((item) =>
+                item.id === preset.id
+                  ? { ...item, last_used_at: new Date().toISOString() }
+                  : item,
+              )
+            : current,
+        );
         return `Downloaded "${preset.name}".`;
       }),
     [runAction],
@@ -297,6 +308,10 @@ export function ExportPresetsPanel() {
         setReloadTick((value) => value + 1);
         const noun = result.importedCount === 1 ? 'preset' : 'presets';
         let message = `Restored ${result.importedCount} ${noun}.`;
+        if (result.skippedCount > 0) {
+          const skipNoun = result.skippedCount === 1 ? 'row' : 'rows';
+          message += ` ${result.skippedCount} ${skipNoun} couldn't be imported.`;
+        }
         if (result.duplicatedNames.length > 0) {
           const suffixNoun =
             result.duplicatedNames.length === 1 ? 'name matches' : 'names match';
@@ -965,6 +980,9 @@ export function ExportPresetsPanel() {
           type="button"
           disabled={busyKey !== null || presets.length === 0}
           aria-busy={busyKey === 'backup'}
+          title={
+            presets.length === 0 ? 'Nothing to back up yet — add a preset first' : undefined
+          }
           aria-label="Back up export presets to a JSON file"
           onClick={() => void handleBackup()}
           style={{

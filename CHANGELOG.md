@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Three honesty gaps in the presets panel: a restore that partially
+  failed now says so ("N rows couldn't be imported") instead of
+  reporting only the successes; downloading a preset updates its
+  "used Xm ago" stamp immediately instead of leaving it stale until the
+  next refetch; and the disabled Back up button explains itself at zero
+  presets ("Nothing to back up yet") instead of just being inert
+
 ### Added
 - Export presets can now be backed up and restored: a Back up button
   downloads the backend's versioned JSON envelope as a dated file, and

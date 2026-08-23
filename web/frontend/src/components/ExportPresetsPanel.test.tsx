@@ -746,4 +746,60 @@ describe('ExportPresetsPanel', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No presets found in that file');
   });
+
+  it("mentions skipped rows when part of a restore didn't import", async () => {
+    mockedApi.importPresetsBackup.mockResolvedValue({
+      importedCount: 1,
+      skippedCount: 2,
+      duplicatedNames: [],
+    });
+    render(<ExportPresetsPanel />);
+    await screen.findByText('High Score Responses');
+
+    const file = new File([], 'backup.json', { type: 'application/json' });
+    file.text = async () => JSON.stringify({ presets: [{ name: 'A' }] });
+    const input = screen.getByLabelText(/choose a preset backup file to restore/i);
+    Object.defineProperty(input, 'files', { value: [file] });
+    fireEvent.change(input);
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Restored 1 preset. 2 rows couldn\'t be imported.',
+    );
+  });
+
+  it('updates the used stamp in place after downloading a preset', async () => {
+    mockedApi.useExportPreset.mockResolvedValue({
+      blob: new Blob(['id,prompt'], { type: 'text/csv' }),
+      filename: 'arena-saved-export.csv',
+    });
+    mockedApi.listExportPresets.mockResolvedValue([
+      { ...hoisted.presetCsv, last_used_at: null },
+    ]);
+    render(<ExportPresetsPanel />);
+
+    // No stamp before the download…
+    expect(await screen.findByText('High Score Responses')).toBeInTheDocument();
+    expect(screen.queryByText(/used .* ago/)).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /download export preset high score responses/i }),
+    );
+
+    // …and "just now" right after — mirrored locally, not on a refetch.
+    expect(await screen.findByRole('status')).toHaveTextContent('Downloaded');
+    await waitFor(() => {
+      expect(screen.getByText(/used just now/)).toBeInTheDocument();
+    });
+  });
+
+  it('explains why Back up is disabled when the library is empty', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([]);
+    render(<ExportPresetsPanel />);
+
+    const backup = await screen.findByRole('button', {
+      name: /back up export presets to a json file/i,
+    });
+    expect(backup).toBeDisabled();
+    expect(backup).toHaveAttribute('title', 'Nothing to back up yet — add a preset first');
+  });
 });
