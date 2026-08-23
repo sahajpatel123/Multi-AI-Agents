@@ -507,4 +507,42 @@ describe('DiscussHistoryDrawer', () => {
     expect(screen.queryByText(/older saved thread/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /load more/i })).toBeInTheDocument();
   });
+
+  it('shows how much of the history is on screen while pages remain', async () => {
+    mockedApi.listDiscussThreads.mockResolvedValue({
+      threads: [summary],
+      total: 2,
+      totalPages: 2,
+    });
+    render(<DiscussHistoryDrawer />);
+
+    expect(
+      await screen.findByText(/showing 1 of 2 saved discussions/i),
+    ).toBeInTheDocument();
+    // The census is announced politely, not just painted.
+    expect(screen.getByRole('status')).toHaveTextContent(/showing 1 of 2/i);
+  });
+
+  it('announces the complete census once every page has been loaded', async () => {
+    const older = { ...summary, id: 8, title: 'Older saved thread' };
+    mockedApi.listDiscussThreads
+      .mockResolvedValueOnce({ threads: [summary], total: 2, totalPages: 2 })
+      .mockResolvedValueOnce({ threads: [older], total: 2, totalPages: 2 });
+    render(<DiscussHistoryDrawer />);
+    await screen.findByText('Why did the migration fail?');
+
+    fireEvent.click(screen.getByRole('button', { name: /load more/i }));
+    await screen.findByText('Older saved thread');
+
+    const status = await screen.findByText(/all 2 saved discussions shown/i);
+    expect(status).toHaveAttribute('role', 'status');
+  });
+
+  it('skips the census for histories that fit on one page', async () => {
+    render(<DiscussHistoryDrawer />);
+    await screen.findByText('Why did the migration fail?');
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText(/showing \d+ of/i)).not.toBeInTheDocument();
+  });
 });

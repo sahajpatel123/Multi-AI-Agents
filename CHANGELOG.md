@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- The end of the saved-discussion history is now legible: a census
+  line under the list reads "Showing X of Y saved discussions" while
+  pages remain and "All Y saved discussions shown" once pagination
+  has run its course (single-page histories stay silent). It's a
+  role="status" live region, so screen readers hear each page land
+
 ### Added
 - Saved-discussion history now paginates: the drawer's "Load more"
   button — showing how many older threads remain, e.g. "Load more

@@ -476,6 +476,38 @@ export function DiscussHistoryDrawer({
     );
   }
 
+  // Honest census: say what portion of the history is on screen while
+  // pages remain, and mark the true end once pagination actually
+  // happened (more than one page fetched). role="status" announces
+  // changes politely as pages load. Defined after the early returns —
+  // threads is guaranteed non-null from here on.
+  const listFooter =
+    threads.length > 0 && threads.length < resultTotal ? (
+      <p
+        role="status"
+        style={{
+          margin: '6px 0 0',
+          fontSize: 10,
+          color: '#A0A39A',
+          textAlign: 'center',
+        }}
+      >
+        Showing {threads.length} of {resultTotal} saved discussions
+      </p>
+    ) : loadedPage > 1 ? (
+      <p
+        role="status"
+        style={{
+          margin: '6px 0 0',
+          fontSize: 10,
+          color: '#A0A39A',
+          textAlign: 'center',
+        }}
+      >
+        All {resultTotal} saved discussions shown
+      </p>
+    ) : null;
+
   return (
     <div
       role="region"
@@ -721,6 +753,7 @@ export function DiscussHistoryDrawer({
             : `Load more (${Math.max(0, resultTotal - threads.length)} older)`}
         </button>
       ) : null}
+      {listFooter}
     </div>
   );
 }
