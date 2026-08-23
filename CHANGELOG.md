@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- Saved-handoff rows now admit when their link has aged out: every
+  handoff is signed with a 24-hour window, so drafts past it show a
+  "signature expired" marker and the copy button explains itself on
+  hover instead of quietly handing over a dead condura:// link
+
 ### Added
 - Saved handoffs can now be recovered: the Condura dialog lists the
   handoff drafts you've saved (labeled by their intent summary with

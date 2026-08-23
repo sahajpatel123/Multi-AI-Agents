@@ -41,6 +41,19 @@ function draftLabel(draft: ConduraHandoffDraftSummary): string {
   return summary || draft.capability || 'Saved handoff';
 }
 
+/**
+ * Handoff signatures are only valid for 24 h after issuance, so a saved
+ * draft can outlive its own usefulness. Returns the payload's expiry
+ * stamp when present and parseable.
+ */
+function draftExpiry(draft: ConduraHandoffDraftSummary): Date | null {
+  const auth = (draft.payload as { auth?: { expires_at?: unknown } } | null)?.auth;
+  const raw = typeof auth?.expires_at === 'string' ? auth.expires_at : '';
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function ConduraInstallCTA({
   open,
   onClose,
@@ -380,6 +393,8 @@ export function ConduraInstallCTA({
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
               {drafts.map((draft) => {
                 const busy = busyDraftId === draft.id;
+                const expiry = draftExpiry(draft);
+                const isExpired = expiry !== null && expiry.getTime() < Date.now();
                 return (
                   <li
                     key={draft.id}
@@ -390,6 +405,9 @@ export function ConduraInstallCTA({
                       <span style={{ display: 'block', fontSize: 10, color: '#A0A39A' }}>
                         {draft.capability || 'unknown capability'}
                         {draft.createdAt ? ` · ${formatDraftTime(draft.createdAt)}` : ''}
+                        {isExpired ? (
+                          <span style={{ color: '#993C1D' }}> · signature expired</span>
+                        ) : null}
                       </span>
                     </span>
                     {confirmingDeleteId === draft.id ? (
@@ -437,6 +455,11 @@ export function ConduraInstallCTA({
                         <button
                           type="button"
                           aria-label={`Copy link for saved handoff ${draftLabel(draft)}`}
+                          title={
+                            isExpired
+                              ? 'This handoff was signed with a 24-hour window that has since passed — consider starting a fresh handoff'
+                              : undefined
+                          }
                           onClick={() => void copySavedDraft(draft)}
                           style={{
                             background: 'none',
@@ -444,7 +467,12 @@ export function ConduraInstallCTA({
                             borderRadius: 6,
                             padding: '2px 7px',
                             fontSize: 10,
-                            color: copiedDraftId === draft.id ? '#5A8C6A' : '#4A3728',
+                            color:
+                              copiedDraftId === draft.id
+                                ? '#5A8C6A'
+                                : isExpired
+                                  ? '#A0A39A'
+                                  : '#4A3728',
                             cursor: 'pointer',
                             fontFamily: 'var(--vp-font-sans)',
                           }}

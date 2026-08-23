@@ -243,4 +243,34 @@ describe('ConduraInstallCTA', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('backend unreachable');
     expect(screen.queryByText(/tidy the downloads folder/i)).not.toBeInTheDocument();
   });
+
+  it('marks drafts whose 24-hour signature window has passed', async () => {
+    const expired = {
+      id: 4,
+      capability: 'file.organize',
+      payload: {
+        intent: { capability: 'file.organize', summary: 'Old tidy request' },
+        auth: { expires_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
+      },
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    listConduraHandoffDraftsMock.mockResolvedValue({
+      drafts: [expired, savedDraft],
+      total: 2,
+      totalPages: 1,
+    });
+    renderCta();
+
+    expect(await screen.findByText('· signature expired')).toBeInTheDocument();
+    // The copy button explains itself instead of pretending the link works.
+    expect(
+      screen.getByRole('button', { name: /copy link for saved handoff old tidy request/i }),
+    ).toHaveAttribute('title', expect.stringContaining('24-hour'));
+    // A draft without an expiry stamp (or an unexpired one) gets no warning.
+    const freshCopy = screen.getByRole('button', {
+      name: /copy link for saved handoff tidy the downloads folder/i,
+    });
+    expect(freshCopy.getAttribute('title')).toBeNull();
+    expect(screen.getAllByText(/signature expired/)).toHaveLength(1);
+  });
 });
