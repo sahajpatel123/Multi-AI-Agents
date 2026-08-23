@@ -51,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Capability rows now say how they actually run: the registry-stats
+  endpoint (dormant until now) feeds condura method and stream
+  heartbeat facts into the capability reference — "condura POST ·
+  stream heartbeat 600s" appears on the collapsed row itself, only
+  for capabilities that have those facts, and a failed stats fetch
+  quietly leaves the plain reference intact rather than alarming
+  anyone over metadata it never promised
 - The Account tab finally tells you where you stand: a Security
   details expander calls the account-security endpoint that was built
   for this panel but never had a frontend caller — member since, last

@@ -51,6 +51,7 @@ import {
   getAgentCapabilities,
   getCapabilityDoc,
   getCapabilityExamples,
+  getCapabilityStats,
   getAccountSecurity,
   searchMcpIntegration,
   deleteCalibrationRating,
@@ -76,6 +77,7 @@ import {
   type AgentCapability,
   type CapabilityDoc,
   type CapabilityUsageSummary,
+  type CapabilityStat,
   type McpSearchResult,
   type AccountSecurity,
   type CalibrationHistoryRating,
@@ -1347,6 +1349,9 @@ export function ProfileModal() {
   // "Try it" prompts per capability, loaded once with the taxonomy.
   // A failed examples read never blocks docs — it just admits itself.
   const [capExamples, setCapExamples] = useState<Record<string, string[]>>({});
+  // Execution facts (condura method, stream heartbeat) keyed by capability
+  // id — enrichment only, so a failed fetch leaves the plain rows intact.
+  const [capStats, setCapStats] = useState<Record<string, CapabilityStat>>({});
   const [capExamplesErr, setCapExamplesErr] = useState(false);
   const [copiedExampleKey, setCopiedExampleKey] = useState<string | null>(null);
   const copiedExampleTimerRef = useRef<number | null>(null);
@@ -1508,6 +1513,29 @@ export function ProfileModal() {
       })
       .finally(() => {
         if (!cancelled) setCapListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, capReferenceOpen, capReferenceReload]);
+
+  // Stats ride along with the reference list: same open/reload triggers.
+  // Deliberately quiet on failure — rows keep their execution badge and
+  // simply don't gain heartbeat/condura lines, which beats scaring the
+  // user over metadata the reference never promised.
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage' || !capReferenceOpen) return;
+    let cancelled = false;
+    void getCapabilityStats()
+      .then((stats) => {
+        if (!cancelled) {
+          const byId: Record<string, CapabilityStat> = {};
+          for (const stat of stats) byId[stat.id] = stat;
+          setCapStats(byId);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCapStats({});
       });
     return () => {
       cancelled = true;
@@ -3329,6 +3357,16 @@ export function ProfileModal() {
                         {capList.map((cap) => {
                           const docOpen = capOpenDocId === cap.id;
                           const cachedDoc = capDocs[cap.id];
+                          // Facts only the stats endpoint knows — shown
+                          // without expanding, when they exist at all.
+                          const stat = capStats[cap.id];
+                          const statBits: string[] = [];
+                          if (stat?.conduraMethod) {
+                            statBits.push(`condura ${stat.conduraMethod}`);
+                          }
+                          if (typeof stat?.streamHeartbeatSeconds === 'number') {
+                            statBits.push(`stream heartbeat ${stat.streamHeartbeatSeconds}s`);
+                          }
                           return (
                             <div key={cap.id}>
                               <button
@@ -3386,6 +3424,19 @@ export function ProfileModal() {
                                 >
                                   {cap.description}
                                 </span>
+                                {statBits.length > 0 ? (
+                                  <span
+                                    style={{
+                                      display: 'block',
+                                      fontSize: 9,
+                                      color: '#A0A39A',
+                                      marginTop: 2,
+                                      letterSpacing: '0.03em',
+                                    }}
+                                  >
+                                    {statBits.join(' · ')}
+                                  </span>
+                                ) : null}
                               </button>
                               {docOpen ? (
                                 <div style={{ padding: '2px 8px 6px' }}>

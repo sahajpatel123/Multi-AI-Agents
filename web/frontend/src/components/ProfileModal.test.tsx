@@ -428,6 +428,7 @@ const hoistedMocks = vi.hoisted(() => {
     markdown: '',
   }),
   getCapabilityExamples: vi.fn().mockResolvedValue([]),
+  getCapabilityStats: vi.fn().mockResolvedValue([]),
   getRecentAgentFeedback: vi.fn().mockResolvedValue([]),
   getAgentFeedbackSummary: vi.fn().mockResolvedValue({
     total: 4,
@@ -554,6 +555,7 @@ vi.mock('../api', () => ({
   getAgentCapabilities: hoistedMocks.getAgentCapabilities,
   getCapabilityDoc: hoistedMocks.getCapabilityDoc,
   getCapabilityExamples: hoistedMocks.getCapabilityExamples,
+  getCapabilityStats: hoistedMocks.getCapabilityStats,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getAgentFeedbackSummary: hoistedMocks.getAgentFeedbackSummary,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
@@ -692,6 +694,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getAgentCapabilities).mockClear();
     vi.mocked(hoistedMocks.getCapabilityDoc).mockClear();
     vi.mocked(hoistedMocks.getCapabilityExamples).mockClear();
+    vi.mocked(hoistedMocks.getCapabilityStats).mockClear();
     vi.mocked(hoistedMocks.searchMcpIntegration).mockClear();
     vi.mocked(hoistedMocks.getAccountSecurity).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
@@ -3871,6 +3874,46 @@ describe('ProfileModal', () => {
     expect(within(region).getByText('file.organize')).toBeInTheDocument();
     expect(within(region).getByText('server')).toBeInTheDocument();
     expect(hoistedMocks.getAgentCapabilities).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows condura and heartbeat facts on rows without expanding', async () => {
+    hoistedMocks.getAgentCapabilities.mockResolvedValueOnce([
+      ...referenceCaps,
+      {
+        id: 'handoff.send',
+        description: 'Send a Condura handoff.',
+        execution: 'hybrid',
+      },
+    ]);
+    hoistedMocks.getCapabilityStats.mockResolvedValueOnce([
+      { id: 'arena.respond', description: 'Four-agent panel response.', execution: 'local' },
+      { id: 'file.organize', description: 'Organize files into folders.', execution: 'server' },
+      {
+        id: 'handoff.send',
+        description: 'Send a Condura handoff.',
+        execution: 'hybrid',
+        conduraMethod: 'POST',
+        streamHeartbeatSeconds: 600,
+      },
+    ]);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    (
+      await screen.findByRole('button', { name: /view capability reference/i })
+    ).click();
+
+    const region = await screen.findByRole('region', { name: /capability reference/i });
+    // The enriched row announces how it actually runs — collapsed.
+    expect(await within(region).findByText('condura POST · stream heartbeat 600s')).toBeInTheDocument();
+    // Plain capabilities gain no fabricated facts.
+    expect(
+      within(
+        within(region).getByRole('button', { name: /expand capability arena\.respond/i }),
+      ).queryByText(/condura|heartbeat/),
+    ).not.toBeInTheDocument();
   });
 
   it('fetches a doc once on expand and keeps it cached across collapse', async () => {

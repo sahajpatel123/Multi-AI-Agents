@@ -1985,6 +1985,53 @@ export type McpSearchResult = {
   url: string;
 };
 
+export type CapabilityStat = {
+  id: string;
+  description: string;
+  execution: string;
+  /** Only present on capabilities that route through Condura. */
+  conduraMethod?: string;
+  /** Only present on streaming hybrids — how often the stream beats. */
+  streamHeartbeatSeconds?: number;
+};
+
+// Per-capability registry metadata. The docs endpoint carries id,
+// description, and execution — but only this one knows HOW hybrid and
+// condura capabilities actually run (heartbeat interval, handoff
+// method), so the reference rows can say what expansion alone can't.
+export async function getCapabilityStats(): Promise<CapabilityStat[]> {
+  const response = await apiFetch(`/api/agent/capabilities/stats`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load capability stats'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<{ stats?: unknown }>(response);
+  const raw = Array.isArray(data?.stats) ? data.stats : [];
+  const stats = raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      id: String(item.id ?? ''),
+      description: String(item.description ?? ''),
+      execution: String(item.execution ?? ''),
+      conduraMethod:
+        typeof item.condura_method === 'string' && item.condura_method !== ''
+          ? item.condura_method
+          : undefined,
+      streamHeartbeatSeconds:
+        typeof item.stream_heartbeat_seconds === 'number' &&
+        Number.isFinite(item.stream_heartbeat_seconds)
+          ? item.stream_heartbeat_seconds
+          : undefined,
+    }))
+    .filter((stat) => stat.id !== '');
+  // The backend already sorts alphabetically; keep its order.
+  return stats;
+}
+
 // Live search through one connected integration (Notion, GitHub,
 // Google Drive). Doubles as an honest connection check: the backend
 // answers 404 for unknown/inactive rows and an empty list when the
