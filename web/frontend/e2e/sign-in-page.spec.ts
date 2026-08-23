@@ -268,11 +268,18 @@ test.describe('Sign-in page (mocked)', () => {
     // the E2E job first ran.
     const signinCard = page.locator('.auth-page__form-card');
     await expect(signinCard.getByText(/ACCESS\s*\/\s*01/i)).toBeVisible();
-    await expect(signinCard.getByText(/IDENTITY CHECK/i)).toBeVisible();
+    // Exact-case: the stage labels are uppercase eyebrows, and a
+    // case-insensitive /…/i also matches the sentence-case form titles
+    // ("Create your panel" h2) — a strict-mode violation this spec hit.
+    await expect(
+      signinCard.getByText('IDENTITY CHECK', { exact: true }),
+    ).toBeVisible();
 
     await page.getByRole('tab', { name: 'Sign up' }).click();
     const signupCard = page.locator('.auth-page__form-card');
     await expect(signupCard.getByText(/ACCESS\s*\/\s*02/i)).toBeVisible();
-    await expect(signupCard.getByText(/CREATE YOUR PANEL/i)).toBeVisible();
+    await expect(
+      signupCard.getByText('CREATE YOUR PANEL', { exact: true }),
+    ).toBeVisible();
   });
 });

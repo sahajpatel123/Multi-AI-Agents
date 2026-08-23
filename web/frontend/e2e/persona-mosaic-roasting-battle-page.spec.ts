@@ -26,11 +26,13 @@ test.describe('Persona Mosaic Roasting Battle page (mocked)', () => {
       }),
     ).toBeVisible();
 
-    // Input form — two textareas labelled A and B.
+    // Input form — two textareas labelled A and B. Role-scoped like the
+    // tests below: getByLabel alone substring-matches the stats div
+    // ("Mosaic roasting battle stats") and strict mode rejects both.
     const textareas = page.getByRole('textbox');
     expect(await textareas.count()).toBe(2);
-    await expect(page.getByLabel('Mosaic Roasting A')).toBeVisible();
-    await expect(page.getByLabel('Mosaic Roasting B')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Mosaic Roasting A' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Mosaic Roasting B' })).toBeVisible();
 
     // Sample list — 4 curated matchups.
     const samples = page.locator('.pmrb-sample');

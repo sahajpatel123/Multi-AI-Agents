@@ -32,13 +32,19 @@ test.describe('Persona Playground Index page', () => {
     const rows = page.locator('.pidx-row');
     expect(await rows.count()).toBe(27);
 
-    // At least one letter section (A+) and the heading "A" is visible.
-    // The letter h2 carries aria-label="Letter A", which OVERRIDES its
-    // accessible name (better screen-reader announcement), so match the
-    // label — a bare name:'A' never resolves.
-    await expect(
-      page.getByRole('heading', { name: 'Letter A', level: 2 }),
-    ).toBeVisible();
+    // One aria-labelled letter h2 heads each group. Letters are data-driven
+    // from the tool catalog (today's names start at D), so pin the STRUCTURE
+    // — a single-uppercase-letter h2 carrying a "Letter X" aria-label — not
+    // any specific letter.
+    const firstLetterHeading = page
+      .getByRole('heading', { level: 2 })
+      .filter({ hasText: /^[A-Z]$/ })
+      .first();
+    await expect(firstLetterHeading).toBeVisible();
+    await expect(firstLetterHeading).toHaveAttribute(
+      'aria-label',
+      /^Letter [A-Z]$/,
+    );
   });
 
   test('deep-links into a tool from the index', async ({ page }) => {
