@@ -1006,7 +1006,7 @@ export function DiscussMode({
             onClose={() => setHistoryOpen(false)}
             onContinue={(thread) => {
               // Seeding mid-stream would corrupt the in-flight reply's
-              // conversation history.
+              // conversation history; the button is disabled meanwhile.
               if (isStreaming) return;
               setHistories((prev) => ({
                 ...prev,
@@ -1017,6 +1017,11 @@ export function DiscussMode({
               }
               setHistoryOpen(false);
             }}
+            continueBlockedReason={
+              isStreaming
+                ? 'Wait for the reply to finish before continuing a saved discussion.'
+                : undefined
+            }
           />
         ) : null}
 

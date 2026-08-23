@@ -637,3 +637,76 @@ describe('DiscussMode continue saved thread', () => {
     expect(screen.queryByRole('region', { name: 'Saved discussions' })).not.toBeInTheDocument();
   });
 });
+
+describe('DiscussMode continue blocked while streaming', () => {
+  const listMock = vi.mocked(listDiscussThreads);
+  const getThreadMock = vi.mocked(getDiscussThread);
+
+  beforeEach(() => {
+    streamDiscussMock.mockReset();
+    listMock.mockReset().mockResolvedValue({
+      threads: [
+        {
+          id: 7,
+          agentId: 'agent_1',
+          title: 'Should we ship today?',
+          lastMessageAt: '2026-08-23T07:30:00',
+          createdAt: '2026-08-23T07:00:00',
+          messageCount: 2,
+        },
+      ],
+      total: 1,
+      totalPages: 1,
+    });
+    getThreadMock.mockReset().mockResolvedValue({
+      id: 7,
+      agentId: 'agent_1',
+      title: 'Should we ship today?',
+      lastMessageAt: '2026-08-23T07:30:00',
+      createdAt: '2026-08-23T07:00:00',
+      messageCount: 2,
+      messages: [
+        { role: 'user' as const, content: 'What is the risk?', timestamp: '2026-08-23T07:00:00' },
+        { role: 'agent' as const, content: 'Shipping before the audit.', timestamp: '2026-08-23T07:30:00' },
+      ],
+      originalPrompt: 'Should we ship today?',
+      originalVerdict: '',
+    });
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  it('disables Continue mid-stream with the reason instead of silently no-oping', async () => {
+    streamDiscussMock.mockImplementation(() => new Promise<void>(() => {}));
+    renderDiscuss();
+
+    // Start a stream and keep it pending.
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'What is the risk?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Send message to/i }));
+    await waitFor(() => expect(streamDiscussMock).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^should we ship today\?/i }),
+    );
+    const button = await screen.findByRole('button', {
+      name: /continue discussion should we ship today/i,
+    });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute(
+      'title',
+      'Wait for the reply to finish before continuing a saved discussion.',
+    );
+    // Expanding legitimately fetched the body; what's blocked is the
+    // handover — clicking the disabled button leaves the thread unseeded,
+    // so nothing replaces the streaming view and the drawer stays open.
+    fireEvent.click(button);
+    expect(screen.getByRole('region', { name: 'Saved discussions' })).toBeInTheDocument();
+  });
+});

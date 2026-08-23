@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- Continuing a saved discussion mid-reply no longer silently no-ops:
+  the Continue button disables itself with its reason ("Wait for the
+  reply to finish…") until the stream ends, matching the rule that a
+  disabled control explains itself
+
 ### Added
 - Saved discussions are no longer read-only: an expanded thread offers
   "Continue this discussion", seeding its messages back into the live

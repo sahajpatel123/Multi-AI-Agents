@@ -29,6 +29,8 @@ interface DiscussHistoryDrawerProps {
   onClose?: () => void;
   /** Resume a saved thread in the live chat (receives its full body). */
   onContinue?: (thread: DiscussThreadDetail) => void;
+  /** Why continuing is currently blocked, or falsy when allowed. */
+  continueBlockedReason?: string;
 }
 
 /**
@@ -40,6 +42,7 @@ export function DiscussHistoryDrawer({
   refreshTick = 0,
   onClose,
   onContinue,
+  continueBlockedReason,
 }: DiscussHistoryDrawerProps) {
   const [threads, setThreads] = useState<DiscussThreadSummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -404,9 +407,14 @@ export function DiscussHistoryDrawer({
                       {onContinue && detail.messages.length > 0 ? (
                         <button
                           type="button"
+                          disabled={Boolean(continueBlockedReason)}
                           aria-label={`Continue discussion ${thread.title || 'Untitled discussion'}`}
                           onClick={() => onContinue(detail)}
-                          title="Resume this conversation in the chat"
+                          // A disabled control explains itself rather than
+                          // silently no-oping mid-stream.
+                          title={
+                            continueBlockedReason || 'Resume this conversation in the chat'
+                          }
                           style={{
                             justifySelf: 'start',
                             marginTop: 2,
@@ -415,8 +423,9 @@ export function DiscussHistoryDrawer({
                             borderRadius: 999,
                             padding: '3px 9px',
                             fontSize: 11,
-                            color: '#5A8C6A',
-                            cursor: 'pointer',
+                            color: continueBlockedReason ? '#A0A39A' : '#5A8C6A',
+                            cursor: continueBlockedReason ? 'not-allowed' : 'pointer',
+                            opacity: continueBlockedReason ? 0.55 : 1,
                             fontFamily: 'var(--vp-font-sans)',
                           }}
                         >

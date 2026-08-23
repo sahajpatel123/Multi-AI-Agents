@@ -196,4 +196,31 @@ describe('DiscussHistoryDrawer', () => {
     expect(onContinue).toHaveBeenCalledTimes(1);
     expect(onContinue).toHaveBeenCalledWith(detail);
   });
+
+  it('disables Continue with its reason while continuing is blocked', async () => {
+    mockedApi.getDiscussThread.mockResolvedValue(detail);
+    const onContinue = vi.fn();
+    render(
+      <DiscussHistoryDrawer
+        onContinue={onContinue}
+        continueBlockedReason="Wait for the reply to finish before continuing a saved discussion."
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^why did the migration fail\?/i }),
+    );
+
+    const button = await screen.findByRole('button', {
+      name: /continue discussion why did the migration fail/i,
+    });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute(
+      'title',
+      'Wait for the reply to finish before continuing a saved discussion.',
+    );
+    // Disabled means disabled: clicking must not hand anything over.
+    fireEvent.click(button);
+    expect(onContinue).not.toHaveBeenCalled();
+  });
 });
