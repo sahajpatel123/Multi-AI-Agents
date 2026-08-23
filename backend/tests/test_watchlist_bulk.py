@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -77,13 +77,21 @@ async def test_resume_all_respects_active_cap(
     assert body["active_count"] == 10
     assert body["paused_count"] == 3
     assert body["active_cap"] == 10
-    resumed = (
-        db_session.query(WatchlistItem)
-        .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
-        .all()
+    # Assert through the same request session the mutation ran in. The
+    # earlier form re-queried via the test's own db_session and once read
+    # a stale snapshot (resumed rows still carrying their seeded
+    # next_run_at), flaking roughly once per hundred runs. The list
+    # endpoint is also the user-facing contract, so this asserts what
+    # clients actually see.
+    listed = await app_client.get(
+        "/api/agent/watchlist",
+        headers=_pro_headers(user),
     )
-    assert len(resumed) == 10
-    newly_resumed = [item for item in resumed if item.question.startswith("Paused")]
+    assert listed.status_code == 200, listed.text
+    newly_resumed = [
+        it for it in listed.json()["items"]
+        if it["question"].startswith("Paused") and it["is_active"]
+    ]
     assert len(newly_resumed) == 9
     # Resume must reschedule, not merely reactivate: every resumed watch
     # lands at least its full interval (>= 24h here) in the future. The
@@ -91,8 +99,9 @@ async def test_resume_all_respects_active_cap(
     # comparison; this version fails only when resume genuinely forgets
     # to push next_run_at forward.
     assert all(
-        item.next_run_at >= utcnow_naive() + timedelta(hours=23)
-        for item in newly_resumed
+        datetime.fromisoformat(it["next_run_at"])
+        >= utcnow_naive() + timedelta(hours=23)
+        for it in newly_resumed
     )
 
 
