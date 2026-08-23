@@ -1978,6 +1978,55 @@ export async function getCapabilityExamples(): Promise<CapabilityExampleSet[]> {
     }));
 }
 
+export type McpSearchResult = {
+  title: string;
+  excerpt: string;
+  source: string;
+  url: string;
+};
+
+// Live search through one connected integration (Notion, GitHub,
+// Google Drive). Doubles as an honest connection check: the backend
+// answers 404 for unknown/inactive rows and an empty list when the
+// stored token is missing or undecryptable.
+export async function searchMcpIntegration(
+  integrationId: number,
+  query: string,
+): Promise<McpSearchResult[]> {
+  if (!Number.isInteger(integrationId) || integrationId <= 0) {
+    throw new RangeError('integrationId must be a positive integer');
+  }
+  const trimmed = query.trim();
+  if (!trimmed) {
+    throw new RangeError('query must not be empty');
+  }
+  const response = await apiFetch(`/api/mcp/integrations/${integrationId}/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: trimmed }),
+  });
+  const data = await parseJsonSafely<{
+    results?: unknown;
+    detail?: string | { message?: string };
+  }>(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to search that integration'), response),
+      response.status,
+      data,
+    );
+  }
+  const raw = Array.isArray(data?.results) ? data.results : [];
+  return raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      title: String(item.title ?? ''),
+      excerpt: String(item.excerpt ?? ''),
+      source: String(item.source ?? ''),
+      url: String(item.url ?? ''),
+    }));
+}
+
 export async function exportAgentFeedbackSummaryJson(
   windowDays: number = 30,
 ): Promise<AgentFeedbackActivityExport> {

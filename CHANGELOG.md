@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Connected integrations can prove themselves: each connected row in
+  the Integrations tab gains a Test search expander that runs a live
+  query against the vendor (Notion, GitHub, Google Drive) through the
+  endpoint that had no frontend caller — results render as titled
+  links with source badges, a refusal surfaces verbatim inside the
+  row, and an empty result set says exactly that instead of posing as
+  success or failure
 - Capability docs now come with a "Try it" row: each expanded
   reference entry lists that capability's curated example prompts —
   from the endpoint built for a chip row that never shipped — with

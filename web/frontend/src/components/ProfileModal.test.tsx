@@ -483,6 +483,7 @@ const hoistedMocks = vi.hoisted(() => {
       filename: `arena-feedback-activity-1-${windowDays}d-20260818.md`,
     })),
   getMcpIntegrations: vi.fn().mockResolvedValue({ integrations: [] }),
+  searchMcpIntegration: vi.fn().mockResolvedValue([]),
   };
 });
 
@@ -554,6 +555,7 @@ vi.mock('../api', () => ({
   exportAgentFeedbackSummaryJson: hoistedMocks.exportAgentFeedbackSummaryJson,
   exportAgentFeedbackSummaryMarkdown: hoistedMocks.exportAgentFeedbackSummaryMarkdown,
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
+  searchMcpIntegration: hoistedMocks.searchMcpIntegration,
   exportAnalyticsActivityCsv: hoistedMocks.exportAnalyticsActivityCsv,
   exportAnalyticsActivityJson: hoistedMocks.exportAnalyticsActivityJson,
   exportAnalyticsActivityMarkdown: hoistedMocks.exportAnalyticsActivityMarkdown,
@@ -680,6 +682,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getAgentCapabilities).mockClear();
     vi.mocked(hoistedMocks.getCapabilityDoc).mockClear();
     vi.mocked(hoistedMocks.getCapabilityExamples).mockClear();
+    vi.mocked(hoistedMocks.searchMcpIntegration).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).mockClear();
@@ -4037,6 +4040,85 @@ describe('ProfileModal', () => {
       await within(region).findByText('Example prompts are unavailable right now.'),
     ).toBeInTheDocument();
     expect(within(region).queryByText('Try it')).not.toBeInTheDocument();
+  });
+
+  const connectedNotion = {
+    id: 7,
+    service: 'notion',
+    is_active: true,
+    connected_at: '2026-08-20T10:00:00Z',
+  };
+
+  async function openIntegrationTestSearch() {
+    // getMcpIntegrations resolves to the row array itself.
+    hoistedMocks.getMcpIntegrations.mockResolvedValueOnce([connectedNotion]);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    (
+      await screen.findByRole('button', { name: /^integrations$/i })
+    ).click();
+    (
+      await screen.findByRole('button', { name: /test search notion/i })
+    ).click();
+    return await screen.findByRole('region', { name: /test search for notion/i });
+  }
+
+  it('runs a live test search against a connected integration', async () => {
+    hoistedMocks.searchMcpIntegration.mockResolvedValueOnce([
+      {
+        title: 'Launch checklist',
+        excerpt: 'Final pre-flight items',
+        source: 'Notion',
+        url: 'https://notion.so/launch',
+      },
+    ]);
+    const region = await openIntegrationTestSearch();
+
+    fireEvent.change(
+      await within(region).findByRole('textbox', { name: /search query for notion/i }),
+      { target: { value: 'launch' } },
+    );
+    within(region).getByRole('button', { name: 'Search' }).click();
+
+    const link = await within(region).findByRole('link', { name: 'Launch checklist' });
+    expect(link).toHaveAttribute('href', 'https://notion.so/launch');
+    expect(within(region).getByText('Final pre-flight items')).toBeInTheDocument();
+    expect(hoistedMocks.searchMcpIntegration).toHaveBeenCalledWith(7, 'launch');
+  });
+
+  it('surfaces a test-search refusal verbatim and keeps the form', async () => {
+    hoistedMocks.searchMcpIntegration.mockRejectedValueOnce(
+      new Error('Too many integration searches. Please try again later.'),
+    );
+    const region = await openIntegrationTestSearch();
+
+    fireEvent.change(
+      await within(region).findByRole('textbox', { name: /search query for notion/i }),
+      { target: { value: 'launch' } },
+    );
+    within(region).getByRole('button', { name: 'Search' }).click();
+
+    expect(await within(region).findByRole('alert')).toHaveTextContent(
+      'Too many integration searches. Please try again later.',
+    );
+    expect(
+      within(region).getByRole('textbox', { name: /search query for notion/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('reports an empty result set as exactly that', async () => {
+    hoistedMocks.searchMcpIntegration.mockResolvedValueOnce([]);
+    const region = await openIntegrationTestSearch();
+
+    fireEvent.change(
+      await within(region).findByRole('textbox', { name: /search query for notion/i }),
+      { target: { value: 'nothing-matches-this' } },
+    );
+    within(region).getByRole('button', { name: 'Search' }).click();
+
+    expect(await within(region).findByText('No results returned.')).toBeInTheDocument();
   });
 
   it('surfaces a doc refusal verbatim inside its row', async () => {

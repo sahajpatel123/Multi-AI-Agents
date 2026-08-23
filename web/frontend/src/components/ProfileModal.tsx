@@ -51,6 +51,7 @@ import {
   getAgentCapabilities,
   getCapabilityDoc,
   getCapabilityExamples,
+  searchMcpIntegration,
   deleteCalibrationRating,
   getCalibrationHistory,
   getCalibrationStats,
@@ -74,6 +75,7 @@ import {
   type AgentCapability,
   type CapabilityDoc,
   type CapabilityUsageSummary,
+  type McpSearchResult,
   type CalibrationHistoryRating,
   type CalibrationHistoryResponse,
   type CalibrationHistorySort,
@@ -1368,6 +1370,13 @@ export function ProfileModal() {
     id: number;
     name: string;
   } | null>(null);
+  // Per-integration live search ("does this token actually work?").
+  // One row open at a time; results and refusals reset on every toggle.
+  const [mcpTestOpenId, setMcpTestOpenId] = useState<number | null>(null);
+  const [mcpTestQuery, setMcpTestQuery] = useState('');
+  const [mcpTestBusy, setMcpTestBusy] = useState(false);
+  const [mcpTestResults, setMcpTestResults] = useState<McpSearchResult[] | null>(null);
+  const [mcpTestError, setMcpTestError] = useState<string | null>(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768);
@@ -1867,6 +1876,36 @@ export function ProfileModal() {
     const t = window.setTimeout(() => setMcpToast(null), 2000);
     return () => clearTimeout(t);
   }, [mcpToast]);
+
+  const toggleMcpTestSearch = useCallback((id: number) => {
+    setMcpTestOpenId((current) => (current === id ? null : id));
+    setMcpTestQuery('');
+    setMcpTestResults(null);
+    setMcpTestError(null);
+  }, []);
+
+  // A refused search surfaces verbatim; an empty result list is shown
+  // as-is rather than dressed up as success or failure.
+  const runMcpTestSearch = useCallback(async () => {
+    if (mcpTestOpenId === null || mcpTestBusy) return;
+    const trimmed = mcpTestQuery.trim();
+    if (!trimmed) return;
+    setMcpTestBusy(true);
+    setMcpTestError(null);
+    try {
+      const results = await searchMcpIntegration(mcpTestOpenId, trimmed);
+      setMcpTestResults(results);
+    } catch (error) {
+      setMcpTestResults(null);
+      setMcpTestError(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Could not search that integration.',
+      );
+    } finally {
+      setMcpTestBusy(false);
+    }
+  }, [mcpTestOpenId, mcpTestQuery, mcpTestBusy]);
 
   useEffect(() => {
     if (!exportNotice) return;
@@ -7155,6 +7194,152 @@ export function ProfileModal() {
                                 Disconnect
                               </Button>
                             )}
+                            <div style={{ marginTop: 8 }}>
+                              <button
+                                type="button"
+                                aria-expanded={mcpTestOpenId === row.id}
+                                aria-label={`Test search ${service.name}`}
+                                onClick={() => toggleMcpTestSearch(row.id)}
+                                style={{
+                                  padding: 0,
+                                  border: 'none',
+                                  background: 'none',
+                                  color: '#F0B84E',
+                                  cursor: 'pointer',
+                                  fontSize: 11,
+                                  fontFamily: 'var(--vp-font-sans)',
+                                  textDecoration: 'underline',
+                                }}
+                              >
+                                {mcpTestOpenId === row.id
+                                  ? 'Hide test search'
+                                  : 'Test search'}
+                              </button>
+                              {mcpTestOpenId === row.id ? (
+                                <div
+                                  role="region"
+                                  aria-label={`Test search for ${service.name}`}
+                                  style={{
+                                    marginTop: 8,
+                                    padding: 10,
+                                    background: '#FDFAF6',
+                                    border: '0.5px solid #E0D5C5',
+                                    borderRadius: 8,
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <input
+                                      type="text"
+                                      value={mcpTestQuery}
+                                      disabled={mcpTestBusy}
+                                      aria-label={`Search query for ${service.name}`}
+                                      placeholder="Try a query…"
+                                      onChange={(event) => setMcpTestQuery(event.target.value)}
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                          void runMcpTestSearch();
+                                        }
+                                      }}
+                                      style={{
+                                        flex: 1,
+                                        minWidth: 0,
+                                        padding: '5px 8px',
+                                        borderRadius: 6,
+                                        border: '0.5px solid #E0D5C5',
+                                        background: '#FAF7F2',
+                                        color: '#F3F0E7',
+                                        fontSize: 11,
+                                        fontFamily: 'var(--vp-font-sans)',
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => void runMcpTestSearch()}
+                                      disabled={mcpTestBusy || !mcpTestQuery.trim()}
+                                      style={{
+                                        padding: '5px 10px',
+                                        borderRadius: 6,
+                                        border: '0.5px solid #E0D5C5',
+                                        background: '#F0E8DC',
+                                        color: '#F3F0E7',
+                                        fontSize: 11,
+                                        cursor: mcpTestBusy ? 'wait' : 'pointer',
+                                        fontFamily: 'var(--vp-font-sans)',
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {mcpTestBusy ? 'Searching…' : 'Search'}
+                                    </button>
+                                  </div>
+                                  {mcpTestError ? (
+                                    <p
+                                      role="alert"
+                                      style={{ fontSize: 11, color: '#993C1D', margin: '8px 0 0' }}
+                                    >
+                                      {mcpTestError}
+                                    </p>
+                                  ) : null}
+                                  {mcpTestResults && mcpTestResults.length > 0 ? (
+                                    <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                                      {mcpTestResults.map((result, index) => (
+                                        <div key={`${result.url}-${index}`}>
+                                          {result.url ? (
+                                            <a
+                                              href={result.url}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              style={{
+                                                fontSize: 11,
+                                                color: '#F0B84E',
+                                                textDecoration: 'underline',
+                                                wordBreak: 'break-word',
+                                              }}
+                                            >
+                                              {result.title || result.url}
+                                            </a>
+                                          ) : (
+                                            <span style={{ fontSize: 11, color: '#F3F0E7' }}>
+                                              {result.title}
+                                            </span>
+                                          )}
+                                          <span
+                                            style={{
+                                              fontSize: 9,
+                                              marginLeft: 6,
+                                              padding: '1px 6px',
+                                              borderRadius: 8,
+                                              border: '0.5px solid #E0D5C5',
+                                              background: '#EDE4D8',
+                                              color: '#A0A39A',
+                                            }}
+                                          >
+                                            {result.source || service.name}
+                                          </span>
+                                          {result.excerpt ? (
+                                            <p
+                                              style={{
+                                                fontSize: 10,
+                                                color: '#8C7355',
+                                                margin: '2px 0 0',
+                                                wordBreak: 'break-word',
+                                              }}
+                                            >
+                                              {result.excerpt}
+                                            </p>
+                                          ) : null}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : mcpTestResults && mcpTestResults.length === 0 ? (
+                                    <p
+                                      style={{ fontSize: 11, color: '#8C7355', margin: '8px 0 0' }}
+                                    >
+                                      No results returned.
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </div>
                           </>
                         )}
                       </div>
