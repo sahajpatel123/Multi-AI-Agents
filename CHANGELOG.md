@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- Recent handoffs can now be refreshed in place: statuses move
+  server-side (the reconciler retires stale streams), so the section
+  header carries a Refresh button that re-reads the list and drops
+  cached timelines — an expanded row collapses rather than show
+  events it no longer trusts. A refused refresh surfaces its reason
+  verbatim and keeps the loaded rows
+
 ### Added
 - Dispatched handoffs are no longer invisible after sending: the
   Condura dialog lists your recent recorded handoffs with their live

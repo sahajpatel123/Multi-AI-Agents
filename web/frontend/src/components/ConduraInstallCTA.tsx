@@ -109,6 +109,7 @@ export function ConduraInstallCTA({
   const [handoffDetails, setHandoffDetails] = useState<Record<number, ConduraHandoffDetail>>({});
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const [busyHandoffId, setBusyHandoffId] = useState<number | null>(null);
+  const [refreshingHandoffs, setRefreshingHandoffs] = useState(false);
   const mobile = isMobileUa();
   const firstBtnRef = useRef<HTMLButtonElement | null>(null);
   const lastBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -149,6 +150,7 @@ export function ConduraInstallCTA({
       setHandoffDetails({});
       setHandoffError(null);
       setBusyHandoffId(null);
+      setRefreshingHandoffs(false);
       clearCopyTimer();
       return;
     }
@@ -340,6 +342,29 @@ export function ConduraInstallCTA({
       );
     } finally {
       setBusyHandoffId(null);
+    }
+  };
+
+  // Statuses move server-side (the reconciler retires stale streams), so
+  // the list can go stale while the dialog sits open. Refreshing replaces
+  // the list AND drops cached timelines — a row's events may have
+  // advanced, so an expanded row collapses rather than lie.
+  const refreshHandoffs = async () => {
+    if (refreshingHandoffs) return;
+    setRefreshingHandoffs(true);
+    setHandoffsError(null);
+    try {
+      const result = await listConduraHandoffs({ perPage: 5 });
+      setHandoffs(result.handoffs);
+      setOpenHandoffId(null);
+      setHandoffDetails({});
+      setHandoffError(null);
+    } catch (e) {
+      setHandoffsError(
+        e instanceof Error && e.message ? e.message : 'Could not refresh recent handoffs.',
+      );
+    } finally {
+      setRefreshingHandoffs(false);
     }
   };
 
@@ -585,17 +610,47 @@ export function ConduraInstallCTA({
             aria-label="Recent handoffs"
             style={{ marginTop: 14, borderTop: '0.5px solid rgba(140,115,85,0.25)', paddingTop: 10 }}
           >
-            <h3
+            <div
               style={{
-                margin: '0 0 6px',
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#8C7355',
-                fontFamily: 'var(--vp-font-sans)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 6,
+                marginBottom: 6,
               }}
             >
-              Recent handoffs ({handoffs.length})
-            </h3>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#8C7355',
+                  fontFamily: 'var(--vp-font-sans)',
+                }}
+              >
+                Recent handoffs ({handoffs.length})
+              </h3>
+              <button
+                type="button"
+                disabled={refreshingHandoffs}
+                aria-busy={refreshingHandoffs}
+                aria-label="Refresh recent handoffs"
+                title="Handoff statuses move server-side — re-check for progress"
+                onClick={() => void refreshHandoffs()}
+                style={{
+                  background: 'none',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: 999,
+                  padding: '2px 8px',
+                  fontSize: 10,
+                  color: refreshingHandoffs ? '#A0A39A' : '#4A3728',
+                  cursor: refreshingHandoffs ? 'wait' : 'pointer',
+                  fontFamily: 'var(--vp-font-sans)',
+                }}
+              >
+                {refreshingHandoffs ? 'Refreshing…' : 'Refresh'}
+              </button>
+            </div>
             {handoffsError ? (
               <p role="alert" style={{ margin: '0 0 6px', fontSize: 12, color: '#993C1D' }}>
                 {handoffsError}

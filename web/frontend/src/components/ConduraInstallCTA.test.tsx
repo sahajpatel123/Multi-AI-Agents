@@ -375,4 +375,50 @@ describe('ConduraInstallCTA', () => {
       screen.getByRole('button', { name: /tidy the downloads folder/i }),
     ).toHaveAttribute('aria-expanded', 'false');
   });
+
+  it('refreshes statuses and drops cached timelines so expansion refetches', async () => {
+    const updated = { ...handoffRecord, status: 'failed' };
+    listConduraHandoffsMock
+      .mockResolvedValueOnce({ handoffs: [handoffRecord], total: 1, totalPages: 1 })
+      .mockResolvedValue({ handoffs: [updated], total: 1, totalPages: 1 });
+    getConduraHandoffMock.mockResolvedValue(handoffDetail);
+    renderCta();
+
+    // Expand once: caches the timeline.
+    fireEvent.click(
+      await screen.findByRole('button', { name: /tidy the downloads folder/i }),
+    );
+    await screen.findByText('started');
+    expect(getConduraHandoffMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh recent handoffs' }));
+    await waitFor(() => {
+      expect(listConduraHandoffsMock).toHaveBeenLastCalledWith({ perPage: 5 });
+    });
+
+    // The refreshed status is shown verbatim.
+    expect(await screen.findByText(/^failed/)).toBeInTheDocument();
+
+    // Re-expanding must hit the server again, not trust the stale cache.
+    fireEvent.click(screen.getByRole('button', { name: /tidy the downloads folder/i }));
+    await screen.findByText('started');
+    expect(getConduraHandoffMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces a refresh refusal verbatim and keeps the loaded rows', async () => {
+    listConduraHandoffsMock
+      .mockResolvedValueOnce({ handoffs: [handoffRecord], total: 1, totalPages: 1 })
+      .mockRejectedValueOnce(new Error('Too many handoff list reads. Please slow down.'));
+    renderCta();
+    await screen.findByText('Tidy the downloads folder');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh recent handoffs' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Too many handoff list reads. Please slow down.',
+    );
+    // The previously loaded rows survive a failed refresh.
+    expect(screen.getByText('Tidy the downloads folder')).toBeInTheDocument();
+    expect(screen.getByText(/^complete/)).toBeInTheDocument();
+  });
 });
