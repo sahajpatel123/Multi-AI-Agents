@@ -3917,19 +3917,62 @@ export async function cancelAgentTask(
   return data;
 }
 
-export async function getMemoryContext(task: string = ''): Promise<unknown> {
+export interface AgentMemoryContext {
+  taskCount: number;
+  recentTasks: Array<{ task: string; score: number | null; createdAt: string }>;
+  topTopics: string[];
+  unresolvedContradictions: Array<{ summary: string; severity: string }>;
+}
+
+// What the agent will actually lean on next prompt: run history,
+// recurring topics, and where it thinks you contradicted yourself.
+// Typed and normalized now that the Memory page surfaces it.
+export async function getMemoryContext(task: string = ''): Promise<AgentMemoryContext> {
   const q = encodeURIComponent(task);
   const response = await apiFetch(`/api/agent/memory/context?task=${q}`);
-  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  const data = await parseJsonSafely<{
+    task_count?: unknown;
+    recent_tasks?: unknown;
+    top_topics?: unknown;
+    unresolved_contradictions?: unknown;
+    detail?: string | { message?: string };
+  }>(response);
   if (!response.ok) {
     throw new ApiError(
-      withRequestId(getErrorMessage(data, 'Memory context failed'), response),
+      withRequestId(
+        getErrorMessage(data, 'Failed to load what Arena remembers'),
+        response,
+      ),
       response.status,
       data,
     );
   }
-  if (!data) throw new Error(withRequestId('Empty memory context', response));
-  return data;
+  const recent = Array.isArray(data?.recent_tasks) ? data.recent_tasks : [];
+  const topics = Array.isArray(data?.top_topics) ? data.top_topics : [];
+  const contradictions = Array.isArray(data?.unresolved_contradictions)
+    ? data.unresolved_contradictions
+    : [];
+  return {
+    taskCount:
+      typeof data?.task_count === 'number' && Number.isFinite(data.task_count)
+        ? data.task_count
+        : 0,
+    recentTasks: recent
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+      .map((item) => ({
+        task: String(item.task ?? ''),
+        score:
+          typeof item.score === 'number' && Number.isFinite(item.score) ? item.score : null,
+        createdAt: String(item.createdAt ?? item.created_at ?? ''),
+      })),
+    topTopics: topics.filter((topic): topic is string => typeof topic === 'string' && topic.trim() !== ''),
+    unresolvedContradictions: contradictions
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+      .map((item) => ({
+        summary: String(item.summary ?? ''),
+        severity: String(item.severity ?? ''),
+      })),
+  };
 }
 
 export async function submitTaskFeedback(

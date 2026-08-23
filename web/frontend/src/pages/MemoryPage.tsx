@@ -9,9 +9,11 @@ import {
   deleteMemorySummary,
   deleteMemorySummaries,
   exportMemorySummaries,
+  getMemoryContext,
   getMemorySummary,
   listMemorySummaries,
   MEMORY_BULK_DELETE_MAX,
+  type AgentMemoryContext,
 } from '../api';
 import type { MemorySummary, MemorySummarySort } from '../types';
 import { useTier } from '../context/TierContext';
@@ -269,6 +271,33 @@ export function MemoryPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The live agent-memory context: what the agent actually leans on
+  // next prompt. Fetched once on mount; refusals say so verbatim.
+  const [memoryCtx, setMemoryCtx] = useState<AgentMemoryContext | null>(null);
+  const [ctxLoading, setCtxLoading] = useState(true);
+  const [ctxError, setCtxError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getMemoryContext()
+      .then((ctx) => {
+        if (!cancelled) setMemoryCtx(ctx);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setMemoryCtx(null);
+          setCtxError(
+            err instanceof Error && err.message ? err.message : 'Could not load agent memory.',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCtxLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detailState, setDetailState] = useState<Record<number, DetailState>>({});
   const [deleteArmedId, setDeleteArmedId] = useState<number | null>(null);
@@ -921,6 +950,121 @@ export function MemoryPage() {
           </p>
         </div>
       </header>
+
+      {/* What the agent leans on next prompt — run history, recurring
+          topics, and contradictions it still believes are open. */}
+      <section className="memory-page__ctx" aria-label="What Arena remembers">
+        {ctxLoading ? (
+          <p role="status" style={{ fontSize: 13, color: '#8c7355', margin: '0 0 14px' }}>
+            Loading agent memory…
+          </p>
+        ) : ctxError ? (
+          <p
+            role="alert"
+            tabIndex={-1}
+            autoFocus
+            style={{ fontSize: 13, color: '#993c1d', margin: '0 0 14px' }}
+          >
+            {ctxError}
+          </p>
+        ) : memoryCtx ? (
+          <div
+            style={{
+              border: '0.5px solid #d4c4b0',
+              borderRadius: 12,
+              background: 'rgba(255, 255, 255, 0.78)',
+              padding: '14px 16px',
+              marginBottom: 18,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                gap: 8,
+                flexWrap: 'wrap',
+              }}
+            >
+              <h2 style={{ fontSize: 15, margin: 0 }}>Agent memory</h2>
+              <span style={{ fontSize: 12, color: '#8c7355' }}>
+                {memoryCtx.taskCount === 1 ? '1 task run' : `${memoryCtx.taskCount} tasks run`}
+              </span>
+            </div>
+            {memoryCtx.taskCount === 0 ? (
+              <p style={{ fontSize: 12, color: '#8c7355', margin: '10px 0 0' }}>
+                No agent tasks yet — Arena has nothing to remember.
+              </p>
+            ) : (
+              <>
+                {memoryCtx.topTopics.length > 0 ? (
+                  <p style={{ fontSize: 12, margin: '10px 0 0', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ color: '#8c7355' }}>Recurring topics:</span>
+                    {memoryCtx.topTopics.map((topic) => (
+                      <span
+                        key={topic}
+                        style={{
+                          fontSize: 11,
+                          border: '0.5px solid #d4c4b0',
+                          borderRadius: 8,
+                          padding: '1px 7px',
+                          background: '#f5f0e8',
+                        }}
+                      >
+                        {topic}
+                      </span>
+                    ))}
+                  </p>
+                ) : (
+                  <p style={{ fontSize: 12, color: '#8c7355', margin: '10px 0 0' }}>
+                    No recurring topics yet.
+                  </p>
+                )}
+                {memoryCtx.recentTasks.length > 0 ? (
+                  <ul
+                    aria-label="Recent agent tasks"
+                    style={{ listStyle: 'none', padding: 0, margin: '10px 0 0', display: 'grid', gap: 6 }}
+                  >
+                    {memoryCtx.recentTasks.map((recent, index) => (
+                      <li key={`${recent.createdAt}-${index}`} style={{ fontSize: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ minWidth: 0, wordBreak: 'break-word' }}>{recent.task}</span>
+                        <span style={{ color: '#8c7355', flexShrink: 0 }}>
+                          {recent.score === null ? 'unscored' : `score ${recent.score}`}
+                          {recent.createdAt ? ` · ${formatRelativePast(recent.createdAt)}` : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <p style={{ fontSize: 12, margin: '10px 0 0' }}>
+                  {memoryCtx.unresolvedContradictions.length === 0 ? (
+                    <span style={{ color: '#8c7355' }}>No unresolved contradictions.</span>
+                  ) : (
+                    <span style={{ display: 'grid', gap: 4 }}>
+                      <span style={{ color: '#8c7355' }}>Unresolved contradictions:</span>
+                      {memoryCtx.unresolvedContradictions.map((contradiction, index) => (
+                        <span key={index} style={{ display: 'block', wordBreak: 'break-word' }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.04em',
+                              marginRight: 6,
+                            }}
+                          >
+                            {contradiction.severity || 'unknown'}
+                          </span>
+                          {contradiction.summary}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </p>
+              </>
+            )}
+          </div>
+        ) : null}
+      </section>
 
       <main className="memory-page__main">
         <div className="memory-search">

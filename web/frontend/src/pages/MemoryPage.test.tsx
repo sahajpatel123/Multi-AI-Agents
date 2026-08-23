@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { MemoryPage } from './MemoryPage';
 import { ApiError, type MemorySummary, type MemorySummariesResponse } from '../api';
@@ -65,6 +65,9 @@ const getMemorySummaryMock = vi.fn();
 const deleteMemorySummaryMock = vi.fn();
 const deleteMemorySummariesMock = vi.fn();
 const exportMemorySummariesMock = vi.fn();
+// The agent-memory context card fetches on mount; every test gets a
+// quiet empty default unless it opts into richer facts.
+const getMemoryContextMock = vi.fn();
 
 vi.mock('../context/TierContext', () => ({
   useTier: () => tierState,
@@ -87,6 +90,7 @@ vi.mock('../api', async () => {
     deleteMemorySummary: (...args: unknown[]) => deleteMemorySummaryMock(...args),
     deleteMemorySummaries: (...args: unknown[]) => deleteMemorySummariesMock(...args),
     exportMemorySummaries: (...args: unknown[]) => exportMemorySummariesMock(...args),
+    getMemoryContext: (...args: unknown[]) => getMemoryContextMock(...args),
   };
 });
 
@@ -129,6 +133,13 @@ describe('MemoryPage', () => {
     deleteMemorySummaryMock.mockReset();
     deleteMemorySummariesMock.mockReset();
     exportMemorySummariesMock.mockReset();
+    getMemoryContextMock.mockReset();
+    getMemoryContextMock.mockResolvedValue({
+      taskCount: 0,
+      recentTasks: [],
+      topTopics: [],
+      unresolvedContradictions: [],
+    });
     vi.mocked(copyToClipboard).mockReset().mockResolvedValue(true);
     vi.mocked(downloadJsonFile).mockReset().mockReturnValue(true);
     vi.mocked(downloadMarkdownFile).mockReset().mockReturnValue(true);
@@ -1067,5 +1078,50 @@ describe('MemoryPage', () => {
 
     expect(await screen.findByText('Nothing remembered yet')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Arena' })).toBeInTheDocument();
+  });
+
+  it('surfaces the agent memory context with topics, runs, and contradictions', async () => {
+    getMemoryContextMock.mockResolvedValue({
+      taskCount: 12,
+      recentTasks: [
+        { task: 'Compare EV subsidies across EU states', score: 8.4, createdAt: '2026-08-20T10:00:00Z' },
+        { task: 'Draft launch checklist', score: null, createdAt: '' },
+      ],
+      topTopics: ['ev-policy', 'launch'],
+      unresolvedContradictions: [
+        { summary: 'Previously said rollout was Q3, later said Q4.', severity: 'medium' },
+      ],
+    });
+    renderPage();
+
+    const region = await screen.findByRole('region', { name: /what arena remembers/i });
+    expect(await within(region).findByText('12 tasks run')).toBeInTheDocument();
+    expect(within(region).getByText('ev-policy')).toBeInTheDocument();
+    expect(within(region).getByText('Compare EV subsidies across EU states')).toBeInTheDocument();
+    // A run without a score says so instead of rendering "null".
+    expect(within(region).getByText(/unscored/)).toBeInTheDocument();
+    expect(
+      within(region).getByText('Previously said rollout was Q3, later said Q4.'),
+    ).toBeInTheDocument();
+    expect(within(region).getByText('medium', { exact: false })).toBeInTheDocument();
+  });
+
+  it('says an empty agent memory plainly and surfaces refusals verbatim', async () => {
+    renderPage();
+    const region = await screen.findByRole('region', { name: /what arena remembers/i });
+    expect(
+      await within(region).findByText('No agent tasks yet — Arena has nothing to remember.'),
+    ).toBeInTheDocument();
+
+    getMemoryContextMock.mockReset();
+    listMemorySummariesMock.mockImplementation(async () => listResponse([], 0, 0));
+    getMemoryContextMock.mockRejectedValue(
+      new Error('Too many memory-context lookups. Please slow down. (Request ID: req-mem-9)'),
+    );
+    renderPage('/memory?fresh=1');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Too many memory-context lookups. Please slow down.',
+    );
   });
 });

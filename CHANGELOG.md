@@ -56,6 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- The Memory page now shows what the agent itself leans on: a new
+  "Agent memory" card calls the dormant memory-context endpoint and
+  lays out your run count, recurring topics as chips, the last five
+  runs with scores (unscored says so), and any contradictions Arena
+  still believes are open — severity included. An empty history
+  states plainly that there is nothing to remember, and refusals land
+  verbatim with their request ID
 - Capability rows now say how they actually run: the registry-stats
   endpoint (dormant until now) feeds condura method and stream
   heartbeat facts into the capability reference — "condura POST ·
