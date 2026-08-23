@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Try-it prompts now wrap instead of truncating behind an ellipsis —
+  you can actually read the full prompt before copying it — and the
+  "Copied" flash carries aria-live so assistive tech announces the
+  confirmation too
 - Capability docs read like docs now: the markdown the registry
   returns renders as headings, bullets, bold text, and inline code
   spans instead of literal asterisks in a monospace pre block — no

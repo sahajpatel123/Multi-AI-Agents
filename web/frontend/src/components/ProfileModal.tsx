@@ -3242,16 +3242,19 @@ export function ProfileModal() {
                                                   <span
                                                     style={{
                                                       fontSize: 11,
+                                                      lineHeight: 1.5,
                                                       color: '#C4A882',
-                                                      overflow: 'hidden',
-                                                      textOverflow: 'ellipsis',
-                                                      whiteSpace: 'nowrap',
+                                                      // Prompts wrap rather than
+                                                      // truncate: read what you
+                                                      // copy.
+                                                      minWidth: 0,
                                                     }}
                                                   >
                                                     “{example}”
                                                   </span>
                                                   <button
                                                     type="button"
+                                                    aria-live="polite"
                                                     aria-label={`Copy example prompt ${
                                                       index + 1
                                                     } for capability ${cap.id}`}

@@ -3970,11 +3970,16 @@ describe('ProfileModal', () => {
       .click();
 
     expect(await within(region).findByText('Try it')).toBeInTheDocument();
-    expect(within(region).getByText('“Debate this topic”')).toBeInTheDocument();
+    const promptSpan = within(region).getByText('“Debate this topic”');
+    // Prompts wrap so the whole text is readable — never ellipsized.
+    expect(promptSpan.getAttribute('style') ?? '').not.toContain('ellipsis');
+    expect(promptSpan.getAttribute('style') ?? '').not.toContain('nowrap');
 
     const copyButton = within(region).getByRole('button', {
       name: /copy example prompt 1 for capability arena\.respond/i,
     });
+    // The Copied flash announces itself to assistive tech.
+    expect(copyButton).toHaveAttribute('aria-live', 'polite');
     copyButton.click();
     await waitFor(() => {
       expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('Debate this topic');
