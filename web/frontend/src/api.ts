@@ -5171,6 +5171,73 @@ export async function reorderExportPresets(
   };
 }
 
+export type ExportPresetFilterPatch = {
+  /** Empty string clears the stored term; null is rejected client-side. */
+  search?: string;
+  minScore?: number | null;
+  maxScore?: number | null;
+  sort?: string;
+};
+
+export async function updateExportPresetFilters(
+  presetId: number,
+  patch: ExportPresetFilterPatch,
+): Promise<ExportPreset> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  const body: Record<string, unknown> = {};
+  if (patch.search !== undefined) {
+    if (patch.search.length > 100) {
+      throw new RangeError('search must be at most 100 characters');
+    }
+    // Blank means "clear" — that's the convention the backend update
+    // route honors for optional terms.
+    body.search = patch.search.trim();
+  }
+  for (const key of ['minScore', 'maxScore'] as const) {
+    const value = patch[key];
+    if (value === undefined) continue;
+    if (value !== null && (!Number.isInteger(value) || value < 0 || value > 100)) {
+      throw new RangeError(`${key} must be null or an integer between 0 and 100`);
+    }
+    body[key === 'minScore' ? 'min_score' : 'max_score'] = value;
+  }
+  if (
+    typeof patch.minScore === 'number' &&
+    typeof patch.maxScore === 'number' &&
+    patch.minScore > patch.maxScore
+  ) {
+    throw new RangeError('minScore must be less than or equal to maxScore');
+  }
+  if (patch.sort !== undefined) {
+    if (!patch.sort.trim()) {
+      throw new RangeError('sort must not be empty');
+    }
+    body.sort = patch.sort.trim();
+  }
+  if (Object.keys(body).length === 0) {
+    throw new RangeError('patch must set at least one filter');
+  }
+  const res = await apiFetch(`/api/export-presets/${encodeURIComponent(String(presetId))}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to update export preset filters'), res),
+    );
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Export preset filter update returned no preset.');
+    })();
+  return normalizeExportPreset(data);
+}
+
 export type ExportPresetBackupEntry = {
   name: string;
   description: string | null;

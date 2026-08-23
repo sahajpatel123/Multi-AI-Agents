@@ -11,6 +11,7 @@ import {
   previewExportPreset,
   renameExportPreset,
   reorderExportPresets,
+  updateExportPresetFilters,
   setDefaultExportPreset,
   useExportPreset,
   type ExportPreset,
@@ -78,6 +79,15 @@ export function ExportPresetsPanel() {
   // Inline rename: which preset's name is being edited and its draft value.
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  // Inline filter editor: which preset's filters are being edited and
+  // the draft values (strings so empty inputs mean "clear").
+  const [editingFiltersId, setEditingFiltersId] = useState<number | null>(null);
+  const [filterDraft, setFilterDraft] = useState({
+    search: '',
+    minScore: '',
+    maxScore: '',
+    sort: 'newest',
+  });
   // Bulk delete: selection mode with per-row checkboxes. bulkBlocked
   // records that the server refused the last attempt because the default
   // preset is in the selection — the bar then offers an explicit
@@ -221,6 +231,38 @@ export function ExportPresetsPanel() {
         return `Renamed to "${updated.name}".`;
       }),
     [renameValue, runAction],
+  );
+
+  const openFilterEditor = useCallback((preset: ExportPreset) => {
+    setEditingFiltersId(preset.id);
+    setFilterDraft({
+      search: preset.search ?? '',
+      minScore: preset.min_score === null ? '' : String(preset.min_score),
+      maxScore: preset.max_score === null ? '' : String(preset.max_score),
+      sort: preset.sort ?? 'newest',
+    });
+  }, []);
+
+  const handleFilterSave = useCallback(
+    (preset: ExportPreset) =>
+      runAction(`filters-${preset.id}`, async () => {
+        // Blank inputs mean "clear" — the convention the update route
+        // honors for optional filter fields.
+        const updated = await updateExportPresetFilters(preset.id, {
+          search: filterDraft.search.trim(),
+          minScore: filterDraft.minScore.trim() === '' ? null : Number(filterDraft.minScore),
+          maxScore: filterDraft.maxScore.trim() === '' ? null : Number(filterDraft.maxScore),
+          sort: filterDraft.sort,
+        });
+        setPresets((current) =>
+          current
+            ? current.map((item) => (item.id === updated.id ? updated : item))
+            : current,
+        );
+        setEditingFiltersId(null);
+        return `Filters updated for "${updated.name}".`;
+      }),
+    [filterDraft, runAction],
   );
 
   const handleMakeDefault = useCallback(
@@ -541,13 +583,146 @@ export function ExportPresetsPanel() {
                     ) : null}
                   </div>
                   )}
-                  {(filters || usedLabel) && renamingId !== preset.id ? (
-                    <div style={{ fontSize: 10, color: '#A0A39A' }}>
-                      {filters}
-                      {filters && usedLabel ? ' · ' : null}
-                      {usedLabel}
+                  {editingFiltersId === preset.id ? (
+                    <div style={{ display: 'grid', gap: 4, marginTop: 2 }}>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <input
+                          type="text"
+                          value={filterDraft.search}
+                          maxLength={100}
+                          placeholder="search — blank clears"
+                          aria-label={`Search term for export preset ${preset.name}`}
+                          onChange={(event) =>
+                            setFilterDraft((draft) => ({ ...draft, search: event.target.value }))
+                          }
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            fontSize: 11,
+                            color: '#4A3728',
+                            background: '#FAF7F4',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 5,
+                            padding: '2px 6px',
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        />
+                        <select
+                          value={filterDraft.sort}
+                          aria-label={`Sort order for export preset ${preset.name}`}
+                          onChange={(event) =>
+                            setFilterDraft((draft) => ({ ...draft, sort: event.target.value }))
+                          }
+                          style={{
+                            fontSize: 11,
+                            color: '#4A3728',
+                            background: '#FAF7F4',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 5,
+                            padding: '2px 4px',
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        >
+                          <option value="newest">Newest</option>
+                          <option value="oldest">Oldest</option>
+                          <option value="score">Top score</option>
+                          <option value="pinned">Pinned</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          placeholder="min"
+                          aria-label={`Minimum score for export preset ${preset.name}`}
+                          value={filterDraft.minScore}
+                          onChange={(event) =>
+                            setFilterDraft((draft) => ({ ...draft, minScore: event.target.value }))
+                          }
+                          style={{
+                            width: 46,
+                            fontSize: 11,
+                            color: '#4A3728',
+                            background: '#FAF7F4',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 5,
+                            padding: '2px 6px',
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        />
+                        <span style={{ fontSize: 10, color: '#A0A39A' }}>to</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          placeholder="max"
+                          aria-label={`Maximum score for export preset ${preset.name}`}
+                          value={filterDraft.maxScore}
+                          onChange={(event) =>
+                            setFilterDraft((draft) => ({ ...draft, maxScore: event.target.value }))
+                          }
+                          style={{
+                            width: 46,
+                            fontSize: 11,
+                            color: '#4A3728',
+                            background: '#FAF7F4',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 5,
+                            padding: '2px 6px',
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={busyKey !== null}
+                          aria-busy={busyKey === `filters-${preset.id}`}
+                          aria-label={`Save filters for export preset ${preset.name}`}
+                          onClick={() => void handleFilterSave(preset)}
+                          style={{
+                            marginLeft: 'auto',
+                            background: 'none',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 6,
+                            color: '#5A8C6A',
+                            cursor: busyKey !== null ? 'wait' : 'pointer',
+                            padding: '2px 7px',
+                            fontSize: 10,
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        >
+                          {busyKey === `filters-${preset.id}` ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busyKey !== null}
+                          aria-label={`Cancel editing filters for export preset ${preset.name}`}
+                          onClick={() => setEditingFiltersId(null)}
+                          style={{
+                            background: 'none',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 6,
+                            color: '#A0A39A',
+                            cursor: busyKey !== null ? 'wait' : 'pointer',
+                            padding: '2px 7px',
+                            fontSize: 10,
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                  ) : null}
+                  ) : (
+                    (filters || usedLabel) &&
+                    renamingId !== preset.id ? (
+                      <div style={{ fontSize: 10, color: '#A0A39A' }}>
+                        {filters}
+                        {filters && usedLabel ? ' · ' : null}
+                        {usedLabel}
+                      </div>
+                    ) : null
+                  )}
                   {renamingId === preset.id ? (
                     <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                       <button
@@ -675,6 +850,28 @@ export function ExportPresetsPanel() {
                   >
                     Rename
                   </button>
+                  ) : null}
+                  {editingFiltersId !== preset.id && renamingId !== preset.id ? (
+                    <button
+                      type="button"
+                      disabled={busyKey !== null}
+                      aria-label={`Edit filters for export preset ${preset.name}`}
+                      onClick={() => openFilterEditor(preset)}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        color: '#4A3728',
+                        cursor: busyKey !== null ? 'wait' : 'pointer',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      Filters
+                    </button>
                   ) : null}
                   {!preset.is_default && renamingId !== preset.id ? (
                     <button

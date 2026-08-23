@@ -770,7 +770,11 @@ async def update_export_preset(
             detail={"error": "not_found", "message": "Export preset not found"},
         )
 
-    # Update fields
+    # Update fields. Optional filter fields (search, score bounds) are
+    # clearable: an explicitly provided blank search clears the term, and
+    # an explicitly provided null score bound removes it — without this,
+    # a preset could never shed a filter once saved.
+    provided_fields = body.model_fields_set
     if body.name is not None:
         preset.name = sanitize_model_text(body.name, max_length=100, field_name="name")
     if body.description is not None:
@@ -778,12 +782,16 @@ async def update_export_preset(
     if body.format is not None:
         preset.format = body.format
     if body.search is not None:
-        preset.search = sanitize_model_text(body.search, max_length=100, field_name="search")
+        preset.search = (
+            sanitize_model_text(body.search, max_length=100, field_name="search")
+            if body.search.strip()
+            else None
+        )
     if body.persona_id is not None:
         preset.persona_id = body.persona_id
-    if body.min_score is not None:
+    if "min_score" in provided_fields:
         preset.min_score = body.min_score
-    if body.max_score is not None:
+    if "max_score" in provided_fields:
         preset.max_score = body.max_score
     if body.sort is not None:
         preset.sort = body.sort

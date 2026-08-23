@@ -13,6 +13,7 @@ import {
   bulkDeleteExportPresets,
   exportPresetsBackup,
   importPresetsBackup,
+  updateExportPresetFilters,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -687,6 +688,76 @@ describe('export preset API helpers', () => {
       );
       await expect(importPresetsBackup([{ name: 'X' }])).rejects.toThrow(
         'Import would exceed preset limit (50). Delete some before importing. (Request ID: req-import-400)',
+      );
+    });
+  });
+
+  describe('updateExportPresetFilters', () => {
+    it('puts a snake_case patch and returns the normalized preset', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'updated', ...presetFixture, search: 'eth' }), {
+          status: 200,
+        }),
+      );
+
+      const res = await updateExportPresetFilters(3, {
+        search: 'eth',
+        minScore: 20,
+        maxScore: null,
+        sort: 'score',
+      });
+      expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/3', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ search: 'eth', min_score: 20, max_score: null, sort: 'score' }),
+      });
+      expect(res.search).toBe('eth');
+    });
+
+    it('sends an empty search string as an explicit clear', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'updated', ...presetFixture, search: null }), {
+          status: 200,
+        }),
+      );
+
+      await updateExportPresetFilters(3, { search: '   ' });
+      const call = vi.mocked(apiFetchModule.apiFetch).mock.calls.at(-1);
+      expect(JSON.parse((call?.[1] as RequestInit).body as string)).toEqual({ search: '' });
+    });
+
+    it('rejects invalid patches before fetching', async () => {
+      await expect(updateExportPresetFilters(0, { search: 'x' })).rejects.toThrow(
+        'presetId must be a positive integer',
+      );
+      await expect(updateExportPresetFilters(3, { search: 'x'.repeat(101) })).rejects.toThrow(
+        'search must be at most 100 characters',
+      );
+      await expect(updateExportPresetFilters(3, { minScore: 101 })).rejects.toThrow(
+        'minScore must be null or an integer between 0 and 100',
+      );
+      await expect(
+        updateExportPresetFilters(3, { minScore: 80, maxScore: 20 }),
+      ).rejects.toThrow('minScore must be less than or equal to maxScore');
+      await expect(updateExportPresetFilters(3, {})).rejects.toThrow(
+        'patch must set at least one filter',
+      );
+      await expect(updateExportPresetFilters(3, { sort: '  ' })).rejects.toThrow(
+        'sort must not be empty',
+      );
+      expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+    });
+
+    it('surfaces rate-limit failures with their message and request ID', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'Too many export preset updates.' }), {
+          status: 429,
+          headers: { 'x-request-id': 'req-filters-429' },
+        }),
+      );
+
+      await expect(updateExportPresetFilters(3, { search: 'x' })).rejects.toThrow(
+        'Too many export preset updates. (Request ID: req-filters-429)',
       );
     });
   });

@@ -28,6 +28,7 @@ vi.mock('../api', () => ({
   setDefaultExportPreset: vi.fn(),
   exportPresetsBackup: vi.fn(),
   importPresetsBackup: vi.fn(),
+  updateExportPresetFilters: vi.fn(),
 }));
 
 vi.mock('../lib/downloadTextFile', () => ({
@@ -801,5 +802,102 @@ describe('ExportPresetsPanel', () => {
     });
     expect(backup).toBeDisabled();
     expect(backup).toHaveAttribute('title', 'Nothing to back up yet — add a preset first');
+  });
+
+  it('opens the filter editor prefilled from the row and saves changes', async () => {
+    mockedApi.updateExportPresetFilters.mockResolvedValue({
+      ...hoisted.presetCsv,
+      search: 'ethereum',
+      min_score: 60,
+      max_score: null,
+      sort: 'score',
+    });
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /edit filters for export preset high score responses/i }),
+    );
+
+    // Prefilled from the saved preset (min 80, no max).
+    const search = await screen.findByRole('textbox', { name: /search term for export preset/i });
+    expect(search).toHaveValue('');
+    expect(
+      screen.getByRole('spinbutton', { name: /minimum score for export preset/i }),
+    ).toHaveValue(80);
+    expect(
+      screen.getByRole('combobox', { name: /sort order for export preset/i }),
+    ).toHaveValue('score');
+
+    fireEvent.change(search, { target: { value: 'ethereum' } });
+    fireEvent.change(
+      screen.getByRole('spinbutton', { name: /minimum score for export preset/i }),
+      { target: { value: '60' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^save filters for export preset/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.updateExportPresetFilters).toHaveBeenCalledWith(3, {
+        search: 'ethereum',
+        minScore: 60,
+        maxScore: null,
+        sort: 'score',
+      });
+      expect(screen.getByRole('status')).toHaveTextContent('Filters updated');
+      // The metadata line reflects the new filters and the editor closed.
+      expect(screen.getByText(/“ethereum”/)).toBeInTheDocument();
+      expect(screen.queryByText(/^save filters for export preset$/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it('clears the stored search term by saving a blank input', async () => {
+    mockedApi.listExportPresets.mockResolvedValue([
+      { ...hoisted.presetCsv, search: 'bitcoin' },
+    ]);
+    mockedApi.updateExportPresetFilters.mockResolvedValue({
+      ...hoisted.presetCsv,
+      search: null,
+    });
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /edit filters for export preset high score responses/i }),
+    );
+    const search = await screen.findByRole('textbox', { name: /search term for export preset/i });
+    fireEvent.change(search, { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save filters for export preset/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.updateExportPresetFilters).toHaveBeenCalledWith(
+        3,
+        expect.objectContaining({ search: '' }),
+      );
+    });
+    // The term vanishes from the metadata line.
+    await waitFor(() => {
+      expect(screen.queryByText(/“bitcoin”/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps the editor open with the draft when saving fails', async () => {
+    mockedApi.updateExportPresetFilters.mockRejectedValue(
+      new apiModule.ApiError('minScore must be less than or equal to maxScore.', 400),
+    );
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /edit filters for export preset high score responses/i }),
+    );
+    fireEvent.change(
+      await screen.findByRole('spinbutton', { name: /minimum score for export preset/i }),
+      { target: { value: '90' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^save filters for export preset/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'minScore must be less than or equal to maxScore.',
+    );
+    expect(
+      screen.getByRole('spinbutton', { name: /minimum score for export preset/i }),
+    ).toHaveValue(90);
   });
 });

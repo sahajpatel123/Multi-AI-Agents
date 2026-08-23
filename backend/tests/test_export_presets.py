@@ -1855,6 +1855,83 @@ async def test_create_export_preset_with_max_score(app_client, make_user, db_ses
 
 
 @pytest.mark.asyncio
+async def test_update_clears_search_with_blank_string(app_client, make_user, db_session, cleanup_export_presets):
+    """An explicitly blank search term clears the filter instead of erroring."""
+    user = cleanup_export_presets
+
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Searchy", "format": "csv", "search": "bitcoin"},
+        headers=_pro_headers(user),
+    )
+    preset_id = create_res.json()["id"]
+    assert create_res.json()["search"] == "bitcoin"
+
+    res = await app_client.put(
+        f"/api/export-presets/{preset_id}",
+        json={"search": ""},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "updated"
+    assert res.json()["search"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_clears_score_bounds_with_explicit_nulls(app_client, make_user, db_session, cleanup_export_presets):
+    """Explicit null score bounds remove the filters; absent ones leave them."""
+    user = cleanup_export_presets
+
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Bounded", "format": "csv", "min_score": 40, "max_score": 90},
+        headers=_pro_headers(user),
+    )
+    preset_id = create_res.json()["id"]
+
+    # Omitting the fields entirely must not touch them.
+    partial_res = await app_client.put(
+        f"/api/export-presets/{preset_id}",
+        json={"name": "Bounded Renamed"},
+        headers=_pro_headers(user),
+    )
+    assert partial_res.status_code == 200
+    assert partial_res.json()["min_score"] == 40
+    assert partial_res.json()["max_score"] == 90
+
+    # Explicit nulls clear them.
+    clear_res = await app_client.put(
+        f"/api/export-presets/{preset_id}",
+        json={"min_score": None, "max_score": None},
+        headers=_pro_headers(user),
+    )
+    assert clear_res.status_code == 200
+    assert clear_res.json()["min_score"] is None
+    assert clear_res.json()["max_score"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_trims_and_keeps_nonblank_search(app_client, make_user, db_session, cleanup_export_presets):
+    """A padded but non-blank term is still sanitized, not treated as clear."""
+    user = cleanup_export_presets
+
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Trimmy", "format": "csv"},
+        headers=_pro_headers(user),
+    )
+    preset_id = create_res.json()["id"]
+
+    res = await app_client.put(
+        f"/api/export-presets/{preset_id}",
+        json={"search": "  ethereum merge  "},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert res.json()["search"] == "ethereum merge"
+
+
+@pytest.mark.asyncio
 async def test_update_export_preset_max_score(app_client, make_user, db_session, cleanup_export_presets):
     """Test updating an export preset max_score."""
     user = cleanup_export_presets

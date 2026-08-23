@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Preset filters are now editable from the sidebar panel: a Filters
+  button opens an inline editor prefilled from the row (search term,
+  score bounds, sort order), and saving PUTs only the touched fields.
+  The backend update route learned to let filters go — a blank search
+  string now clears the term and explicitly-null score bounds remove
+  them (absent fields still leave values untouched) — because without
+  that, no preset could ever shed a filter once saved. Failed saves
+  keep the editor open with the draft intact
+
 ### Fixed
 - Three honesty gaps in the presets panel: a restore that partially
   failed now says so ("N rows couldn't be imported") instead of
