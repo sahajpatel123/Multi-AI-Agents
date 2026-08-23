@@ -439,4 +439,72 @@ describe('DiscussHistoryDrawer', () => {
     expect(screen.getAllByText('The Analyst').length).toBeGreaterThan(1);
     expect(screen.queryByText('claude-sonnet')).not.toBeInTheDocument();
   });
+
+  it('appends older pages via Load more and hides it once everything is shown', async () => {
+    const older = { ...summary, id: 8, title: 'Older saved thread' };
+    mockedApi.listDiscussThreads
+      .mockResolvedValueOnce({ threads: [summary], total: 2, totalPages: 2 })
+      .mockResolvedValueOnce({ threads: [older], total: 2, totalPages: 2 });
+    render(<DiscussHistoryDrawer />);
+    await screen.findByText('Why did the migration fail?');
+
+    // The button states the honest count up front.
+    const loadMore = screen.getByRole('button', { name: /load more \(1 older\)/i });
+    fireEvent.click(loadMore);
+
+    await screen.findByText('Older saved thread');
+    expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({
+      perPage: 20,
+      page: 2,
+    });
+    // Both rows coexist and the button retires once nothing is hidden.
+    expect(screen.getByText('Why did the migration fail?')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument();
+  });
+
+  it('re-sends active filters when loading an older page', async () => {
+    const older = { ...summary, id: 8, title: 'Older saved thread' };
+    mockedApi.listDiscussThreads
+      .mockResolvedValueOnce({ threads: [summary], total: 2, totalPages: 2 })
+      .mockResolvedValueOnce({ threads: [older], total: 2, totalPages: 2 });
+    render(<DiscussHistoryDrawer />);
+    await screen.findByText('Why did the migration fail?');
+
+    const input = screen.getByRole('textbox', { name: /search saved discussions by title/i });
+    fireEvent.change(input, { target: { value: 'fail' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({
+        perPage: 20,
+        search: 'fail',
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /load more/i }));
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({
+        perPage: 20,
+        page: 2,
+        search: 'fail',
+      });
+    });
+  });
+
+  it('surfaces a Load more refusal verbatim and keeps the loaded rows', async () => {
+    mockedApi.listDiscussThreads
+      .mockResolvedValueOnce({ threads: [summary], total: 3, totalPages: 2 })
+      .mockRejectedValueOnce(new Error('Too many requests. Slow down.'));
+    render(<DiscussHistoryDrawer />);
+    await screen.findByText('Why did the migration fail?');
+
+    fireEvent.click(screen.getByRole('button', { name: /load more/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Too many requests. Slow down.',
+    );
+    // Nothing was appended, nothing was lost.
+    expect(screen.getByText('Why did the migration fail?')).toBeInTheDocument();
+    expect(screen.queryByText(/older saved thread/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /load more/i })).toBeInTheDocument();
+  });
 });

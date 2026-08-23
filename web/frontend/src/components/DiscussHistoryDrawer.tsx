@@ -81,6 +81,10 @@ export function DiscussHistoryDrawer({
   // Chips commit instantly — no draft state like search needs.
   const [appliedAgentId, setAppliedAgentId] = useState<string | null>(null);
   const [resultTotal, setResultTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  // Highest page fetched for the CURRENT filters; 0 until page 1 lands.
+  const [loadedPage, setLoadedPage] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   // Bumping this forces a refetch even if the tick value is unchanged.
   const [reloadTick, setReloadTick] = useState(0);
 
@@ -103,6 +107,8 @@ export function DiscussHistoryDrawer({
         if (!cancelled) {
           setThreads(result.threads);
           setResultTotal(result.total);
+          setTotalPages(result.totalPages);
+          setLoadedPage(1);
         }
       })
       .catch((error: unknown) => {
@@ -325,6 +331,37 @@ export function DiscussHistoryDrawer({
     },
     [openId],
   );
+
+  // Older pages append to the current list; the filters in effect are
+  // re-sent so pagination composes with search and the agent chips.
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || loadedPage < 1) return;
+    const nextPage = loadedPage + 1;
+    setLoadingMore(true);
+    setActionError(null);
+    try {
+      const result = await listDiscussThreads({
+        perPage: 20,
+        page: nextPage,
+        search: appliedSearch.trim() || undefined,
+        agentId: appliedAgentId || undefined,
+      });
+      // Rows appear only after the server actually sent them — a failed
+      // page leaves the already-loaded list exactly as it was.
+      setThreads((current) => [...(current ?? []), ...result.threads]);
+      setResultTotal(result.total);
+      setTotalPages(result.totalPages);
+      setLoadedPage(nextPage);
+    } catch (error) {
+      setActionError(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Could not load older discussions — try again.',
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [appliedAgentId, appliedSearch, loadedPage, loadingMore]);
 
   if (loadError) {
     return (
@@ -659,6 +696,31 @@ export function DiscussHistoryDrawer({
           );
         })}
       </ul>
+      {loadedPage < totalPages ? (
+        <button
+          type="button"
+          disabled={loadingMore}
+          aria-busy={loadingMore}
+          onClick={() => void handleLoadMore()}
+          title={`Showing ${threads.length} of ${resultTotal} saved discussions`}
+          style={{
+            display: 'block',
+            margin: '8px auto 0',
+            background: 'none',
+            border: '0.5px solid #E0D8D0',
+            borderRadius: 999,
+            padding: '3px 12px',
+            fontSize: 11,
+            color: loadingMore ? '#A0A39A' : '#4A3728',
+            cursor: loadingMore ? 'wait' : 'pointer',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {loadingMore
+            ? 'Loading…'
+            : `Load more (${Math.max(0, resultTotal - threads.length)} older)`}
+        </button>
+      ) : null}
     </div>
   );
 }

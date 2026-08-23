@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Saved-discussion history now paginates: the drawer's "Load more"
+  button — showing how many older threads remain, e.g. "Load more
+  (12 older)" — walks the list endpoint's page param that had been
+  sitting unused alongside search and agent_id. Older pages append
+  only after the server answers, re-send the active filters, retire
+  the button once everything is shown, and a refused page surfaces
+  its reason verbatim without losing what's loaded
+
 ### Improved
 - The saved-discussion history now speaks one language: known agents
   appear by their human names ("The Analyst") in row metadata and in
