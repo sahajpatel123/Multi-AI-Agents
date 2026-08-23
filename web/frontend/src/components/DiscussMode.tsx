@@ -1004,6 +1004,19 @@ export function DiscussMode({
           <DiscussHistoryDrawer
             refreshTick={historyTick}
             onClose={() => setHistoryOpen(false)}
+            onContinue={(thread) => {
+              // Seeding mid-stream would corrupt the in-flight reply's
+              // conversation history.
+              if (isStreaming) return;
+              setHistories((prev) => ({
+                ...prev,
+                [thread.agentId]: thread.messages,
+              }));
+              if (thread.agentId !== activeAgent.response.agent_id) {
+                onSwitchAgent(thread.agentId);
+              }
+              setHistoryOpen(false);
+            }}
           />
         ) : null}
 

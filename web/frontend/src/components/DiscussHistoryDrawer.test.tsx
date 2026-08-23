@@ -178,4 +178,22 @@ describe('DiscussHistoryDrawer', () => {
     });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('offers Continue in the expanded view and hands over the full thread', async () => {
+    mockedApi.getDiscussThread.mockResolvedValue(detail);
+    const onContinue = vi.fn();
+    render(<DiscussHistoryDrawer onContinue={onContinue} />);
+
+    // Collapsed rows offer no continue action.
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^why did the migration fail\?/i }),
+    );
+    await screen.findByText('The lock table was stale.');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /continue discussion why did the migration fail/i }),
+    );
+    expect(onContinue).toHaveBeenCalledTimes(1);
+    expect(onContinue).toHaveBeenCalledWith(detail);
+  });
 });

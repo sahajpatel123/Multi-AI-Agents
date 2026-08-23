@@ -27,6 +27,8 @@ interface DiscussHistoryDrawerProps {
   refreshTick?: number;
   /** Called when the user presses Escape inside the drawer. */
   onClose?: () => void;
+  /** Resume a saved thread in the live chat (receives its full body). */
+  onContinue?: (thread: DiscussThreadDetail) => void;
 }
 
 /**
@@ -34,7 +36,11 @@ interface DiscussHistoryDrawerProps {
  * most recent threads, expands one into its full message body on demand,
  * and deletes rows — every server refusal surfaced verbatim.
  */
-export function DiscussHistoryDrawer({ refreshTick = 0, onClose }: DiscussHistoryDrawerProps) {
+export function DiscussHistoryDrawer({
+  refreshTick = 0,
+  onClose,
+  onContinue,
+}: DiscussHistoryDrawerProps) {
   const [threads, setThreads] = useState<DiscussThreadSummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<number, DiscussThreadDetail>>({});
@@ -395,6 +401,28 @@ export function DiscussHistoryDrawer({ refreshTick = 0, onClose }: DiscussHistor
                           </p>
                         </div>
                       ))}
+                      {onContinue && detail.messages.length > 0 ? (
+                        <button
+                          type="button"
+                          aria-label={`Continue discussion ${thread.title || 'Untitled discussion'}`}
+                          onClick={() => onContinue(detail)}
+                          title="Resume this conversation in the chat"
+                          style={{
+                            justifySelf: 'start',
+                            marginTop: 2,
+                            background: 'none',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 999,
+                            padding: '3px 9px',
+                            fontSize: 11,
+                            color: '#5A8C6A',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        >
+                          Continue this discussion
+                        </button>
+                      ) : null}
                     </>
                   ) : null}
                 </div>

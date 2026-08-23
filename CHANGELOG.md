@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Saved discussions are no longer read-only: an expanded thread offers
+  "Continue this discussion", seeding its messages back into the live
+  chat — and handing off to the saved thread's agent first when it
+  differs from the active mind. Continuing is blocked mid-stream so an
+  in-flight reply's conversation history can't be corrupted
+
 ### Improved
 - Deleting a saved discussion no longer happens on a single click:
   since the server has no undo, the first click only arms an inline

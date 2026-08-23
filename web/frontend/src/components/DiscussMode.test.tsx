@@ -1,13 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { saveDiscussThread, streamDiscuss } from '../api';
+import { getDiscussThread, listDiscussThreads, saveDiscussThread, streamDiscuss } from '../api';
 import type { Persona } from '../data/personas';
 import type { ScoredAgent } from '../types';
 import { DiscussMode } from './DiscussMode';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
-  return { ...actual, streamDiscuss: vi.fn(), saveDiscussThread: vi.fn() };
+  return {
+    ...actual,
+    streamDiscuss: vi.fn(),
+    saveDiscussThread: vi.fn(),
+    listDiscussThreads: vi.fn(),
+    getDiscussThread: vi.fn(),
+  };
 });
 
 const { MOCK_PANEL } = vi.hoisted(() => {
@@ -113,7 +119,7 @@ function installClipboard() {
   return writeText;
 }
 
-function renderDiscuss(activeAgent: ScoredAgent = analyst) {
+function renderDiscuss(activeAgent: ScoredAgent = analyst, overrides: { onSwitchAgent?: () => void } = {}) {
   return render(
     <DiscussMode
       originalPrompt="Should we ship today?"
@@ -121,7 +127,7 @@ function renderDiscuss(activeAgent: ScoredAgent = analyst) {
       allResponses={[analyst, philosopher]}
       sessionId="s1"
       onExit={vi.fn()}
-      onSwitchAgent={vi.fn()}
+      onSwitchAgent={overrides.onSwitchAgent ?? vi.fn()}
     />,
   );
 }
@@ -543,5 +549,91 @@ describe('DiscussMode save thread', () => {
       'Nothing to save yet — send a message first.',
     );
     expect(saveMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('DiscussMode continue saved thread', () => {
+  const savedThread = {
+    id: 7,
+    agentId: 'agent_1',
+    title: 'Should we ship today?',
+    lastMessageAt: '2026-08-23T07:30:00',
+    createdAt: '2026-08-23T07:00:00',
+    messageCount: 2,
+    messages: [
+      { role: 'user' as const, content: 'What is the risk?', timestamp: '2026-08-23T07:00:00' },
+      { role: 'agent' as const, content: 'Shipping before the audit.', timestamp: '2026-08-23T07:30:00' },
+    ],
+    originalPrompt: 'Should we ship today?',
+    originalVerdict: 'Ship the smallest honest slice.',
+  };
+
+  const listMock = vi.mocked(listDiscussThreads);
+  const getThreadMock = vi.mocked(getDiscussThread);
+
+  beforeEach(() => {
+    listMock.mockReset().mockResolvedValue({
+      threads: [
+        {
+          id: 7,
+          agentId: 'agent_1',
+          title: 'Should we ship today?',
+          lastMessageAt: '2026-08-23T07:30:00',
+          createdAt: '2026-08-23T07:00:00',
+          messageCount: 2,
+        },
+      ],
+      total: 1,
+      totalPages: 1,
+    });
+    getThreadMock.mockReset().mockResolvedValue(savedThread);
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  it('seeds the live chat with a saved thread from the same agent', async () => {
+    renderDiscuss();
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^should we ship today\?/i }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: /continue discussion should we ship today/i }),
+    );
+
+    // The drawer closes and the saved exchange becomes the live thread.
+    expect(screen.queryByRole('region', { name: 'Saved discussions' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Shipping before the audit.')).toBeInTheDocument();
+    expect(screen.getByText('What is the risk?')).toBeInTheDocument();
+    // No agent switch needed — the thread belongs to the active mind.
+    expect(getThreadMock).toHaveBeenCalledWith(7);
+  });
+
+  it('hands off to the saved thread\'s agent when it differs', async () => {
+    const onSwitchAgent = vi.fn();
+    getThreadMock.mockResolvedValue({
+      ...savedThread,
+      agentId: 'agent_2',
+      messages: savedThread.messages.map((m) => ({ ...m })),
+    });
+    renderDiscuss(analyst, { onSwitchAgent });
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^should we ship today\?/i }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: /continue discussion should we ship today/i }),
+    );
+
+    await waitFor(() => {
+      expect(onSwitchAgent).toHaveBeenCalledWith('agent_2');
+    });
+    expect(screen.queryByRole('region', { name: 'Saved discussions' })).not.toBeInTheDocument();
   });
 });
