@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Calibration history rows can now be deleted: each rating carries a
+  confirm-gated Delete control ("Delete forever?" → Confirm/Keep),
+  and the row leaves the list only after the server accepts — the
+  total shrinks in place while the stats panel re-reads and
+  recalibrates itself. A refusal (unknown task, hourly delete limit)
+  surfaces verbatim above the list and the row stays put. Wiring the
+  DELETE /api/calibration/rating/{task_id} endpoint, which had no
+  frontend callers at all
 - Dispatched handoffs are no longer invisible after sending: the
   Condura dialog lists your recent recorded handoffs with their live
   status (colored by outcome — complete green, failed/cancelled/

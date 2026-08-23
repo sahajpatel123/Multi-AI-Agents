@@ -411,6 +411,7 @@ const hoistedMocks = vi.hoisted(() => {
     coverage: 0,
     avg_gap: null,
   }),
+  deleteCalibrationRating: vi.fn().mockResolvedValue({ status: 'deleted', taskId: 'task-x' }),
   getRecentAgentFeedback: vi.fn().mockResolvedValue([]),
   getAgentFeedbackSummary: vi.fn().mockResolvedValue({
     total: 4,
@@ -522,6 +523,7 @@ vi.mock('../api', () => ({
   exportAnalyticsPersonaStatsTimelineJson: hoistedMocks.exportAnalyticsPersonaStatsTimelineJson,
   exportAnalyticsPersonaStatsTimelineMarkdown: hoistedMocks.exportAnalyticsPersonaStatsTimelineMarkdown,
   getCalibrationStats: hoistedMocks.getCalibrationStats,
+  deleteCalibrationRating: hoistedMocks.deleteCalibrationRating,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getAgentFeedbackSummary: hoistedMocks.getAgentFeedbackSummary,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
@@ -651,6 +653,9 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineJson).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaStatsTimelineMarkdown).mockClear();
     vi.mocked(hoistedMocks.getCalibrationHistory).mockClear();
+    // Counted per-test: the delete flow re-reads stats exactly once more.
+    vi.mocked(hoistedMocks.getCalibrationStats).mockClear();
+    vi.mocked(hoistedMocks.deleteCalibrationRating).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).mockClear();
@@ -2430,6 +2435,126 @@ describe('ProfileModal', () => {
     expect(within(history).getByDisplayValue('Underestimates first')).toBeInTheDocument();
     expect(within(history).getByText('Underestimates first · 6 total ratings')).toBeInTheDocument();
     expect(await within(history).findByText('You underestimated this answer')).toBeInTheDocument();
+  });
+
+  const historyRating = {
+    id: 11,
+    task_id: 'task-history-1',
+    user_rating: 4,
+    system_score: 95,
+    delta: 15,
+    verdict: 'You underestimated this answer',
+    created_at: '2026-08-11T10:00:00Z',
+  };
+
+  async function openHistoryWithRatings() {
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 6,
+      avg_delta: 2.0,
+      trend: 'stable',
+      calibration_score: 92,
+      recent_ratings: [{ delta: 5, created_at: '2026-08-11T10:00:00Z' }],
+    });
+    hoistedMocks.getCalibrationHistory.mockResolvedValueOnce({
+      ratings: [historyRating],
+      total: 6,
+      page: 1,
+      per_page: 5,
+      total_pages: 2,
+      filters: { min_delta: null, max_delta: null, sort: 'newest' },
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const openHistory = await screen.findByRole('button', {
+      name: /view calibration history \(6\)/i,
+    });
+    openHistory.click();
+    return await screen.findByRole('region', { name: /calibration history/i });
+  }
+
+  it('arms a confirm before deleting a calibration rating and sends nothing first', async () => {
+    const history = await openHistoryWithRatings();
+
+    within(history)
+      .getByRole('button', {
+        name: /delete calibration rating for task task-history-1/i,
+      })
+      .click();
+
+    // Arming destroys nothing.
+    expect(await within(history).findByText('Delete forever?')).toBeInTheDocument();
+    expect(
+      within(history).getByRole('button', {
+        name: /confirm deleting rating for task task-history-1/i,
+      }),
+    ).toBeInTheDocument();
+    expect(hoistedMocks.deleteCalibrationRating).not.toHaveBeenCalled();
+
+    // Keep backs out; the plain Delete button returns.
+    within(history)
+      .getByRole('button', { name: /keep rating for task task-history-1/i })
+      .click();
+    expect(
+      await within(history).findByRole('button', {
+        name: /delete calibration rating for task task-history-1/i,
+      }),
+    ).toBeInTheDocument();
+    expect(within(history).queryByText('Delete forever?')).not.toBeInTheDocument();
+    expect(hoistedMocks.deleteCalibrationRating).not.toHaveBeenCalled();
+  });
+
+  it('deletes a rating after confirm, removing the row and recalibrating stats', async () => {
+    const history = await openHistoryWithRatings();
+    // Second stats read fires once the delete lands and the tick bumps.
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 5,
+      avg_delta: 2.0,
+      trend: 'stable',
+      calibration_score: 92,
+      recent_ratings: [],
+    });
+
+    within(history)
+      .getByRole('button', { name: /delete calibration rating for task task-history-1/i })
+      .click();
+    const confirm = await within(history).findByRole('button', {
+      name: /confirm deleting rating for task task-history-1/i,
+    });
+    confirm.click();
+
+    await waitFor(() => {
+      expect(hoistedMocks.deleteCalibrationRating).toHaveBeenCalledWith('task-history-1');
+      expect(
+        within(history).queryByText('You underestimated this answer'),
+      ).not.toBeInTheDocument();
+    });
+    // The stats panel recalibrates after the server accepts the delete.
+    await waitFor(() => {
+      expect(hoistedMocks.getCalibrationStats).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('surfaces a delete refusal verbatim and keeps the row', async () => {
+    hoistedMocks.deleteCalibrationRating.mockRejectedValueOnce(
+      new Error('Too many calibration deletes. Limit is 60 per hour.'),
+    );
+    const history = await openHistoryWithRatings();
+
+    within(history)
+      .getByRole('button', { name: /delete calibration rating for task task-history-1/i })
+      .click();
+    const confirm = await within(history).findByRole('button', {
+      name: /confirm deleting rating for task task-history-1/i,
+    });
+    confirm.click();
+
+    expect(await within(history).findByRole('alert')).toHaveTextContent(
+      'Too many calibration deletes. Limit is 60 per hour.',
+    );
+    expect(within(history).getByText('You underestimated this answer')).toBeInTheDocument();
   });
 
   it('downloads calibration history CSV with the server filename', async () => {

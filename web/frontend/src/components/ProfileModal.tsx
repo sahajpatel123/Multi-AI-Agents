@@ -47,6 +47,7 @@ import {
   getAnalyticsPersonaWinRate,
   getAnalyticsPersonaStatsTimeline,
   getAgentFeedbackSummary,
+  deleteCalibrationRating,
   getCalibrationHistory,
   getCalibrationStats,
   getMcpIntegrations,
@@ -66,6 +67,7 @@ import {
   type AgentFeedbackExportDateRange,
   type AgentFeedbackVerdict,
   type AnswerFeedbackStats,
+  type CalibrationHistoryRating,
   type CalibrationHistoryResponse,
   type CalibrationHistorySort,
   type RecentFeedbackItem,
@@ -1179,6 +1181,12 @@ export function ProfileModal() {
   const [calHistoryPage, setCalHistoryPage] = useState(1);
   const [calHistorySort, setCalHistorySort] = useState<CalibrationHistorySort>('newest');
   const [calHistoryReload, setCalHistoryReload] = useState(0);
+  // Deleting a rating: the first click only arms the inline confirm.
+  const [calConfirmingDeleteId, setCalConfirmingDeleteId] = useState<number | null>(null);
+  const [calDeleteBusyId, setCalDeleteBusyId] = useState<number | null>(null);
+  const [calDeleteError, setCalDeleteError] = useState<string | null>(null);
+  // Bumped after a delete so the stats panel recalibrates itself.
+  const [calStatsTick, setCalStatsTick] = useState(0);
   const [fbAcc, setFbAcc] = useState<AnswerFeedbackStats | null>(null);
   const [fbAccLoading, setFbAccLoading] = useState(false);
   const [fbAccErr, setFbAccErr] = useState<string | null>(null);
@@ -1458,7 +1466,49 @@ export function ProfileModal() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, activeTab]);
+  }, [isOpen, activeTab, calStatsTick]);
+
+  // A deleted rating leaves the history list immediately, and the stats
+  // panel recalibrates via calStatsTick — the server recomputes them.
+  const handleCalDeleteRequest = useCallback((ratingId: number) => {
+    setCalDeleteError(null);
+    setCalConfirmingDeleteId(ratingId);
+  }, []);
+
+  const handleCalDeleteCancel = useCallback(() => {
+    setCalConfirmingDeleteId(null);
+  }, []);
+
+  const handleCalDeleteConfirm = useCallback(
+    async (rating: CalibrationHistoryRating) => {
+      setCalConfirmingDeleteId(null);
+      setCalDeleteBusyId(rating.id);
+      setCalDeleteError(null);
+      try {
+        await deleteCalibrationRating(rating.task_id);
+        // The row leaves only after the server accepts the deletion.
+        setCalHistory((current) =>
+          current
+            ? {
+                ...current,
+                ratings: current.ratings.filter((item) => item.id !== rating.id),
+                total: Math.max(0, current.total - 1),
+              }
+            : current,
+        );
+        setCalStatsTick((tick) => tick + 1);
+      } catch (error) {
+        setCalDeleteError(
+          error instanceof Error && error.message
+            ? error.message
+            : 'Could not delete that rating.',
+        );
+      } finally {
+        setCalDeleteBusyId(null);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -4931,9 +4981,15 @@ export function ProfileModal() {
                                   {CALIBRATION_HISTORY_SORT_LABELS[calHistorySort]} · {calHistory.total} total rating
                                   {calHistory.total === 1 ? '' : 's'}
                                 </div>
+                                {calDeleteError ? (
+                                  <p role="alert" style={{ margin: '0 0 6px', fontSize: 12, color: '#993C1D' }}>
+                                    {calDeleteError}
+                                  </p>
+                                ) : null}
                                 <div style={{ display: 'grid', gap: 6 }}>
                                   {calHistory.ratings.map((rating) => {
                                     const delta = Number(rating.delta ?? 0);
+                                    const busy = calDeleteBusyId === rating.id;
                                     return (
                                       <div
                                         key={rating.id}
@@ -4941,7 +4997,7 @@ export function ProfileModal() {
                                         aria-label={`${formatCalibrationDate(rating.created_at)}: rated ${rating.user_rating} out of 5, delta ${formatSignedDelta(delta)}, ${rating.verdict}`}
                                         style={{
                                           display: 'grid',
-                                          gridTemplateColumns: '72px 42px 48px minmax(0, 1fr)',
+                                          gridTemplateColumns: '72px 42px 48px minmax(0, 1fr) auto',
                                           alignItems: 'center',
                                           gap: 6,
                                           fontSize: 11,
@@ -4960,6 +5016,71 @@ export function ProfileModal() {
                                         </span>
                                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                           {rating.verdict}
+                                        </span>
+                                        <span style={{ justifySelf: 'end' }}>
+                                          {calConfirmingDeleteId === rating.id ? (
+                                            <>
+                                              <span style={{ fontSize: 10, color: '#993C1D', marginRight: 4 }}>
+                                                Delete forever?
+                                              </span>
+                                              <button
+                                                type="button"
+                                                disabled={calDeleteBusyId !== null}
+                                                aria-label={`Confirm deleting rating for task ${rating.task_id}`}
+                                                onClick={() => void handleCalDeleteConfirm(rating)}
+                                                style={{
+                                                  background: 'none',
+                                                  border: '0.5px solid #D85A30',
+                                                  borderRadius: 4,
+                                                  padding: '1px 5px',
+                                                  fontSize: 10,
+                                                  color: busy ? '#A0A39A' : '#993C1D',
+                                                  cursor: calDeleteBusyId !== null ? 'wait' : 'pointer',
+                                                  fontFamily: 'var(--vp-font-sans)',
+                                                }}
+                                              >
+                                                {busy ? 'Deleting…' : 'Confirm'}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                disabled={calDeleteBusyId !== null}
+                                                aria-label={`Keep rating for task ${rating.task_id}`}
+                                                onClick={handleCalDeleteCancel}
+                                                style={{
+                                                  background: 'none',
+                                                  border: '0.5px solid #E0D8D0',
+                                                  borderRadius: 4,
+                                                  padding: '1px 5px',
+                                                  fontSize: 10,
+                                                  marginLeft: 3,
+                                                  color: '#4A3728',
+                                                  cursor: calDeleteBusyId !== null ? 'wait' : 'pointer',
+                                                  fontFamily: 'var(--vp-font-sans)',
+                                                }}
+                                              >
+                                                Keep
+                                              </button>
+                                            </>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              disabled={calDeleteBusyId !== null}
+                                              aria-label={`Delete calibration rating for task ${rating.task_id}`}
+                                              onClick={() => handleCalDeleteRequest(rating.id)}
+                                              style={{
+                                                background: 'none',
+                                                border: '0.5px solid #E0D8D0',
+                                                borderRadius: 4,
+                                                padding: '1px 5px',
+                                                fontSize: 10,
+                                                color: '#D85A30',
+                                                cursor: calDeleteBusyId !== null ? 'wait' : 'pointer',
+                                                fontFamily: 'var(--vp-font-sans)',
+                                              }}
+                                            >
+                                              Delete
+                                            </button>
+                                          )}
                                         </span>
                                       </div>
                                     );

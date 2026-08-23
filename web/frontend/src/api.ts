@@ -3381,6 +3381,34 @@ export async function getCalibrationHistory(
   };
 }
 
+export async function deleteCalibrationRating(
+  taskId: string,
+): Promise<{ status: string; taskId: string }> {
+  if (!taskId.trim()) {
+    throw new RangeError('taskId must not be empty');
+  }
+  const response = await apiFetch(
+    `/api/calibration/rating/${encodeURIComponent(taskId.trim())}`,
+    { method: 'DELETE' },
+  );
+  const data = await parseJsonSafely<{
+    status?: string;
+    task_id?: string;
+    detail?: string | { message?: string };
+  }>(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to delete the calibration rating'), response),
+      response.status,
+      data,
+    );
+  }
+  return {
+    status: String(data?.status || 'deleted'),
+    taskId: String(data?.task_id ?? taskId.trim()),
+  };
+}
+
 export type CalibrationHistoryCsvExport = {
   blob: Blob;
   filename: string;
