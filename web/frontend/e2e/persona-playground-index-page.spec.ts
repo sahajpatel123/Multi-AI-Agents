@@ -33,7 +33,12 @@ test.describe('Persona Playground Index page', () => {
     expect(await rows.count()).toBe(27);
 
     // At least one letter section (A+) and the heading "A" is visible.
-    await expect(page.getByRole('heading', { name: 'A', level: 2 })).toBeVisible();
+    // The letter h2 carries aria-label="Letter A", which OVERRIDES its
+    // accessible name (better screen-reader announcement), so match the
+    // label — a bare name:'A' never resolves.
+    await expect(
+      page.getByRole('heading', { name: 'Letter A', level: 2 }),
+    ).toBeVisible();
   });
 
   test('deep-links into a tool from the index', async ({ page }) => {

@@ -43,9 +43,13 @@ test.describe('Persona Mosaic Roasting Battle page (mocked)', () => {
   test('4-mind panel renders after both inputs are filled', async ({ page }) => {
     await page.goto('/persona-mosaic-roasting-battle');
 
-    // Type two contrasting outputs.
-    await page.getByLabel('Mosaic Roasting A').fill('It depends on the context. Many factors to consider.');
-    await page.getByLabel('Mosaic Roasting B').fill('Take the bold path. The cost of being wrong now is lower than the cost of being late.');
+    // Type two contrasting outputs. Role-scoped locators: getByLabel
+    // alone substring-matches the stats div ("Mosaic roasting battle
+    // stats") and result region ("Mosaic Roasting battle result") — a
+    // strict-mode violation that failed this spec on the E2E job's
+    // first run.
+    await page.getByRole('textbox', { name: 'Mosaic Roasting A' }).fill('It depends on the context. Many factors to consider.');
+    await page.getByRole('textbox', { name: 'Mosaic Roasting B' }).fill('Take the bold path. The cost of being wrong now is lower than the cost of being late.');
 
     // Click "Run the battle".
     await page.getByRole('button', { name: /run the battle/i }).click();
@@ -70,9 +74,10 @@ test.describe('Persona Mosaic Roasting Battle page (mocked)', () => {
     const b = 'A vague take with no evidence and no mechanism.';
     await page.goto(`/persona-mosaic-roasting-battle?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
 
-    // The textareas pre-fill from the query string.
-    await expect(page.getByLabel('Mosaic Roasting A')).toHaveValue(a);
-    await expect(page.getByLabel('Mosaic Roasting B')).toHaveValue(b);
+    // The textareas pre-fill from the query string (role-scoped — see
+    // the strict-mode note in the test above).
+    await expect(page.getByRole('textbox', { name: 'Mosaic Roasting A' })).toHaveValue(a);
+    await expect(page.getByRole('textbox', { name: 'Mosaic Roasting B' })).toHaveValue(b);
 
     // Verdict appears immediately (computed on first render).
     await expect(page.locator('.pmrb-result__winner-pill')).toBeVisible();

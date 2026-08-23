@@ -70,10 +70,13 @@ test.describe('Product page (mocked)', () => {
     await page.getByRole('button', { name: /try a live question/i }).click();
     await expect(page).toHaveURL(/\/signin\?tab=signup/);
 
-    // Compare-plans CTA at the bottom routes to /pricing.
+    // Compare-section CTA at the bottom routes to /pricing. The button's
+    // accessible label is "Pricing" (ProductPage renders it as a ghost
+    // button next to "See all capabilities") — a /compare plans/i locator
+    // never resolves and timed this test out on the E2E job's first run.
     await page.goto('/product');
     await page
-      .getByRole('button', { name: /compare plans/i })
+      .getByRole('button', { name: /^pricing$/i })
       .first()
       .click();
     await expect(page).toHaveURL(/\/pricing$/);
@@ -123,22 +126,28 @@ test.describe('Product page (mocked)', () => {
 
     // Click each "RUN" button in order and verify the destination.
     // Use first() because the section has one RUN button per row.
+    //
+    // This suite runs UNAUTHENTICATED: ProductPage's go() routes guests
+    // through /signin?tab=signup with the destination stored as redirect
+    // intent (the /app, /agent, /agent/watchlist destinations apply only
+    // to signed-in users — this spec pinned those and failed on the E2E
+    // job's first run with "received .../signin?tab=signup").
     await routingSection.getByRole('button', { name: /^run$/i }).first().click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expect(page).toHaveURL(/\/signin\?tab=signup/);
     await page.goBack();
 
     await page.goto('/product');
     await routingSection.getByRole('button', { name: /^run$/i }).nth(1).click();
-    await expect(page).toHaveURL(/\/app$/); // debate also → /app
+    await expect(page).toHaveURL(/\/signin\?tab=signup/); // debate rows gate too
     await page.goBack();
 
     await page.goto('/product');
     await routingSection.getByRole('button', { name: /^run$/i }).nth(2).click();
-    await expect(page).toHaveURL(/\/agent$/);
+    await expect(page).toHaveURL(/\/signin\?tab=signup/);
     await page.goBack();
 
     await page.goto('/product');
     await routingSection.getByRole('button', { name: /^run$/i }).nth(3).click();
-    await expect(page).toHaveURL(/\/agent\/watchlist$/);
+    await expect(page).toHaveURL(/\/signin\?tab=signup/);
   });
 });

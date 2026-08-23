@@ -260,13 +260,19 @@ test.describe('Sign-in page (mocked)', () => {
     // Pin both pairs:
     //   - sign-in: "ACCESS / 01" + "IDENTITY CHECK"
     //   - sign-up: "ACCESS / 02" + "CREATE YOUR PANEL"
-    const signinForm = page.locator('form.auth-page__form--signin');
-    await expect(signinForm.getByText(/ACCESS\s*\/\s*01/i)).toBeVisible();
-    await expect(signinForm.getByText(/IDENTITY CHECK/i)).toBeVisible();
+    //
+    // Scoped to the form CARD, not the <form> element: the form-index
+    // eyebrow is a sibling of the form inside .auth-page__form-card
+    // (SignInPage renders them as card children), so a form-scoped
+    // locator never resolves — this spec failed on exactly that once
+    // the E2E job first ran.
+    const signinCard = page.locator('.auth-page__form-card');
+    await expect(signinCard.getByText(/ACCESS\s*\/\s*01/i)).toBeVisible();
+    await expect(signinCard.getByText(/IDENTITY CHECK/i)).toBeVisible();
 
     await page.getByRole('tab', { name: 'Sign up' }).click();
-    const signupForm = page.locator('form.auth-page__form--signup');
-    await expect(signupForm.getByText(/ACCESS\s*\/\s*02/i)).toBeVisible();
-    await expect(signupForm.getByText(/CREATE YOUR PANEL/i)).toBeVisible();
+    const signupCard = page.locator('.auth-page__form-card');
+    await expect(signupCard.getByText(/ACCESS\s*\/\s*02/i)).toBeVisible();
+    await expect(signupCard.getByText(/CREATE YOUR PANEL/i)).toBeVisible();
   });
 });
