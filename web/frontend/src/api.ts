@@ -4020,7 +4020,11 @@ export async function submitTaskFeedback(
   });
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Feedback failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Feedback failed'), response),
+      response.status,
+      data,
+    );
   }
   if (!data) throw new Error('Empty feedback response');
   return data;

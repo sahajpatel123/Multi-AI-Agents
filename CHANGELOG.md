@@ -71,6 +71,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Completed runs can now be marked for accuracy, not just rated: an
+  Accurate / Partially accurate / Inaccurate control sits beside the
+  calibration rating on every finished answer — wired to the feedback
+  endpoint that never had a caller, applied optimistically and rolled
+  back on refusal, with refusals shown verbatim plus their request ID.
+  The history filter could already filter by these verdicts; until
+  now nothing in the UI could produce one
 - A live prompt-pipeline status now sits beside the composer: the
   readiness probe (dormant until now) reports db/memory/route health
   as a quiet green or red line above the research-task input, a 503
