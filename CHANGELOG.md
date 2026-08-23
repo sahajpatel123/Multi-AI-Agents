@@ -66,6 +66,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- A live prompt-pipeline status now sits beside the composer: the
+  readiness probe (dormant until now) reports db/memory/route health
+  as a quiet green or red line above the research-task input, a 503
+  is parsed as degraded data naming the failing checks rather than
+  swallowed as an error, and Refresh and Retry are both explicit —
+  with status swaps announced via aria-live
 - Rated runs now confess their contradictions: each rating in the
   recent-feedback list gains a "View run detail" expander backed by
   the task-detail endpoint that never had a caller — open

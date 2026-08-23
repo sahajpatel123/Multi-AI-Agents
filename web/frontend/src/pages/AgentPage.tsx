@@ -64,6 +64,7 @@ import {
 import { ConduraInstallCTA } from '../components/ConduraInstallCTA';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { EmptyState } from '../components/EmptyState';
+import { PromptPipelineStatus } from '../components/PromptPipelineStatus';
 import { RoomsDiscoverPanel } from '../components/RoomsDiscoverPanel';
 import { TemporalEvolutionPanel } from '../components/TemporalEvolutionPanel';
 import { buildHandoffPayload } from '../lib/conduraHandoff';
@@ -6862,6 +6863,9 @@ export function AgentPage() {
                                 })}
                               </div>
                             ) : null}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+                              <PromptPipelineStatus />
+                            </div>
                             <div
                               style={{
                                 display: 'flex',

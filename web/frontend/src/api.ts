@@ -3917,6 +3917,39 @@ export async function cancelAgentTask(
   return data;
 }
 
+export type PromptReadiness = {
+  ok: boolean;
+  checkedAt: string;
+  checks: Array<{ name: string; state: string }>;
+};
+
+// Prompt-pipeline readiness probe. Unauthenticated by design; a 503 is
+// NOT a refusal here — the backend returns the full degraded report
+// with that status, so it parses as data. Only a missing body fails.
+export async function getPromptReadiness(): Promise<PromptReadiness> {
+  const response = await apiFetch('/api/prompt/readiness');
+  const data = await parseJsonSafely<{
+    status?: unknown;
+    checked_at?: unknown;
+    checks?: unknown;
+  }>(response);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(withRequestId('Prompt pipeline status unavailable', response));
+  }
+  const rawChecks =
+    data.checks && typeof data.checks === 'object' && !Array.isArray(data.checks)
+      ? (data.checks as Record<string, unknown>)
+      : {};
+  return {
+    ok: response.ok && data.status === 'ok',
+    checkedAt: typeof data.checked_at === 'string' ? data.checked_at : '',
+    checks: Object.entries(rawChecks).map(([name, state]) => ({
+      name,
+      state: String(state),
+    })),
+  };
+}
+
 export interface AgentMemoryContext {
   taskCount: number;
   recentTasks: Array<{ task: string; score: number | null; createdAt: string }>;
