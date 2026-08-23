@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Export presets can now be backed up and restored: a Back up button
+  downloads the backend's versioned JSON envelope as a dated file, and
+  Restore accepts it (or any JSON with a presets array) back through the
+  import endpoint. The server's honest bookkeeping surfaces in the UI —
+  imported counts, duplicate names getting an "Imported" suffix instead
+  of silent overwrite, the preset-limit refusal shown verbatim — and
+  malformed or empty files are rejected client-side before anything is
+  sent. The list refetches after a restore since ids and positions are
+  the server's to assign
+
 ### Improved
 - Bulk-delete selection gets real ergonomics: All and None buttons keep
   the selection one click away from complete or empty (and disable

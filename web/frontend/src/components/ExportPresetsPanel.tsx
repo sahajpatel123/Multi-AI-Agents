@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ApiError,
   bulkDeleteExportPresets,
   createExportPresetFromTemplate,
   deleteExportPreset,
+  exportPresetsBackup,
+  importPresetsBackup,
   listExportPresetTemplates,
   listExportPresets,
   previewExportPreset,
@@ -15,7 +17,7 @@ import {
   type ExportPresetPreview,
   type ExportPresetTemplate,
 } from '../api';
-import { downloadBlobFile } from '../lib/downloadTextFile';
+import { downloadBlobFile, downloadJsonFile } from '../lib/downloadTextFile';
 
 /**
  * Saved-response export presets, surfaced in the sidebar's saved-takes
@@ -83,6 +85,9 @@ export function ExportPresetsPanel() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkBlocked, setBulkBlocked] = useState(false);
+  // Backup/restore: the file picker is a hidden input triggered by the
+  // Restore button so the flow stays keyboard- and test-friendly.
+  const restoreInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -252,6 +257,55 @@ export function ExportPresetsPanel() {
       current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
     );
   }, []);
+
+  const handleBackup = useCallback(
+    () =>
+      runAction('backup', async () => {
+        const backup = await exportPresetsBackup();
+        if (!downloadJsonFile(JSON.stringify(backup), 'arena-preset-backup')) {
+          throw new Error('Could not start the backup download — try again.');
+        }
+        const noun = backup.totalPresets === 1 ? 'preset' : 'presets';
+        return `Backed up ${backup.totalPresets} ${noun} to JSON.`;
+      }),
+    [runAction],
+  );
+
+  const handleRestoreFile = useCallback(
+    (file: File) =>
+      runAction('restore', async () => {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(await file.text());
+        } catch {
+          throw new Error("That file isn't valid JSON — pick an untouched backup.");
+        }
+        // Accept either the full backup envelope or a bare presets array.
+        const entries = Array.isArray(parsed)
+          ? parsed
+          : (parsed as { presets?: unknown } | null)?.presets;
+        if (
+          !Array.isArray(entries) ||
+          entries.length === 0 ||
+          entries.some((entry) => typeof entry !== 'object' || entry === null)
+        ) {
+          throw new Error('No presets found in that file — is it a preset backup?');
+        }
+        const result = await importPresetsBackup(entries as Array<Record<string, unknown>>);
+        // New ids and positions come from the server; refetch rather
+        // than trying to mirror them locally.
+        setReloadTick((value) => value + 1);
+        const noun = result.importedCount === 1 ? 'preset' : 'presets';
+        let message = `Restored ${result.importedCount} ${noun}.`;
+        if (result.duplicatedNames.length > 0) {
+          const suffixNoun =
+            result.duplicatedNames.length === 1 ? 'name matches' : 'names match';
+          message += ` ${result.duplicatedNames.length} ${suffixNoun} an existing preset — suffixed with "Imported".`;
+        }
+        return message;
+      }),
+    [runAction],
+  );
 
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
@@ -905,6 +959,60 @@ export function ExportPresetsPanel() {
           })}
         </div>
       ) : null}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '2px 0 8px' }}>
+        <button
+          type="button"
+          disabled={busyKey !== null || presets.length === 0}
+          aria-busy={busyKey === 'backup'}
+          aria-label="Back up export presets to a JSON file"
+          onClick={() => void handleBackup()}
+          style={{
+            background: 'none',
+            border: '0.5px dashed #E0D8D0',
+            borderRadius: 6,
+            color: busyKey === 'backup' ? '#A0A39A' : '#4A3728',
+            cursor: busyKey !== null ? 'wait' : 'pointer',
+            padding: '3px 8px',
+            fontSize: 10,
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {busyKey === 'backup' ? 'Backing up…' : '⇩ Back up'}
+        </button>
+        <button
+          type="button"
+          disabled={busyKey !== null}
+          aria-busy={busyKey === 'restore'}
+          aria-label="Restore export presets from a backup"
+          onClick={() => restoreInputRef.current?.click()}
+          style={{
+            background: 'none',
+            border: '0.5px dashed #E0D8D0',
+            borderRadius: 6,
+            color: busyKey === 'restore' ? '#A0A39A' : '#4A3728',
+            cursor: busyKey !== null ? 'wait' : 'pointer',
+            padding: '3px 8px',
+            fontSize: 10,
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        >
+          {busyKey === 'restore' ? 'Restoring…' : '⇧ Restore'}
+        </button>
+        <input
+          ref={restoreInputRef}
+          type="file"
+          accept=".json,application/json"
+          aria-label="Choose a preset backup file to restore"
+          style={{ display: 'none' }}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            // Reset so picking the same file twice re-fires onChange.
+            event.target.value = '';
+            if (file) void handleRestoreFile(file);
+          }}
+        />
+      </div>
 
       {status ? (
         <p role="status" style={{ fontSize: 11, color: '#5A8C6A', margin: '4px 0 0' }}>

@@ -5171,6 +5171,98 @@ export async function reorderExportPresets(
   };
 }
 
+export type ExportPresetBackupEntry = {
+  name: string;
+  description: string | null;
+  preset_type: string;
+  format: string;
+  search: string | null;
+  persona_id: string | null;
+  min_score: number | null;
+  max_score: number | null;
+  sort: string | null;
+};
+
+export type ExportPresetBackup = {
+  version: string;
+  exportedAt: string | null;
+  totalPresets: number;
+  presets: ExportPresetBackupEntry[];
+};
+
+export async function exportPresetsBackup(): Promise<ExportPresetBackup> {
+  const res = await apiFetch(`/api/export-presets/export`);
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to create a preset backup'), res));
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Preset backup returned no data.');
+    })();
+  const rawPresets = Array.isArray(data.presets)
+    ? (data.presets as Array<Record<string, unknown>>)
+    : [];
+  return {
+    version: typeof data.version === 'string' || typeof data.version === 'number'
+      ? String(data.version)
+      : '',
+    exportedAt: typeof data.exported_at === 'string' ? data.exported_at : null,
+    totalPresets:
+      typeof data.total_presets === 'number' ? data.total_presets : rawPresets.length,
+    presets: rawPresets.map((raw) => ({
+      name: String(raw.name || ''),
+      description: raw.description ? String(raw.description) : null,
+      preset_type: String(raw.preset_type || 'saved'),
+      format: String(raw.format || ''),
+      search: raw.search ? String(raw.search) : null,
+      persona_id: raw.persona_id ? String(raw.persona_id) : null,
+      min_score: typeof raw.min_score === 'number' ? raw.min_score : null,
+      max_score: typeof raw.max_score === 'number' ? raw.max_score : null,
+      sort: raw.sort ? String(raw.sort) : null,
+    })),
+  };
+}
+
+export type ExportPresetImportResult = {
+  importedCount: number;
+  skippedCount: number;
+  duplicatedNames: string[];
+};
+
+export async function importPresetsBackup(
+  presets: Array<Record<string, unknown>>,
+): Promise<ExportPresetImportResult> {
+  if (!Array.isArray(presets) || presets.length === 0) {
+    throw new RangeError('presets must contain at least one entry');
+  }
+  const res = await apiFetch(`/api/export-presets/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ presets }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to restore presets'), res));
+  }
+  const data =
+    (await parseJsonSafely<{
+      imported_count?: number;
+      skipped_count?: number;
+      duplicated_names?: string[];
+    }>(res)) || {};
+  return {
+    importedCount:
+      typeof data.imported_count === 'number' ? data.imported_count : 0,
+    skippedCount:
+      typeof data.skipped_count === 'number' ? data.skipped_count : 0,
+    duplicatedNames: Array.isArray(data.duplicated_names)
+      ? data.duplicated_names.map(String)
+      : [],
+  };
+}
+
 export type ExportPresetBulkDeleteResult = {
   status: string;
   deletedCount: number;

@@ -26,10 +26,13 @@ vi.mock('../api', () => ({
   renameExportPreset: vi.fn(),
   reorderExportPresets: vi.fn(),
   setDefaultExportPreset: vi.fn(),
+  exportPresetsBackup: vi.fn(),
+  importPresetsBackup: vi.fn(),
 }));
 
 vi.mock('../lib/downloadTextFile', () => ({
   downloadBlobFile: vi.fn(),
+  downloadJsonFile: vi.fn(),
 }));
 
 const hoisted = vi.hoisted(() => {
@@ -636,5 +639,111 @@ describe('ExportPresetsPanel', () => {
 
     expect(mockedApi.bulkDeleteExportPresets).not.toHaveBeenCalled();
     expect(screen.queryByRole('checkbox', { name: /select export preset/i })).not.toBeInTheDocument();
+  });
+
+  it('backs the library up to a dated JSON file and reports the count', async () => {
+    mockedApi.exportPresetsBackup.mockResolvedValue({
+      version: '1',
+      exportedAt: '2026-08-23T05:00:00',
+      totalPresets: 1,
+      presets: [
+        {
+          name: 'High Score Responses',
+          description: null,
+          preset_type: 'saved',
+          format: 'csv',
+          search: null,
+          persona_id: null,
+          min_score: null,
+          max_score: null,
+          sort: null,
+        },
+      ],
+    });
+    vi.mocked(downloadModule.downloadJsonFile).mockReturnValue(true);
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /back up export presets to a json file/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockedApi.exportPresetsBackup).toHaveBeenCalled();
+      expect(downloadModule.downloadJsonFile).toHaveBeenCalledWith(
+        expect.stringContaining('"presets"'),
+        'arena-preset-backup',
+      );
+      expect(screen.getByRole('status')).toHaveTextContent('Backed up 1 preset to JSON.');
+    });
+  });
+
+  it('surfaces a failed backup as an alert without losing rows', async () => {
+    mockedApi.exportPresetsBackup.mockRejectedValue(
+      new apiModule.ApiError('Please slow down.', 429),
+    );
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /back up export presets to a json file/i }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Please slow down.');
+    expect(screen.getByText('High Score Responses')).toBeInTheDocument();
+  });
+
+  it('restores presets from a chosen backup file and refetches the list', async () => {
+    mockedApi.importPresetsBackup.mockResolvedValue({
+      importedCount: 2,
+      skippedCount: 0,
+      duplicatedNames: ['High Score Responses'],
+    });
+    render(<ExportPresetsPanel />);
+    await screen.findByText('High Score Responses');
+
+    const backupFile = new File([], 'backup.json', { type: 'application/json' });
+    // jsdom lacks Blob#text(), so stub the read the handler performs.
+    backupFile.text = async () =>
+      JSON.stringify({ version: 1, presets: [{ name: 'A' }, { name: 'B' }] });
+    const input = screen.getByLabelText(/choose a preset backup file to restore/i);
+    Object.defineProperty(input, 'files', { value: [backupFile] });
+    fireEvent.change(input);
+
+    await waitFor(() => {
+      expect(mockedApi.importPresetsBackup).toHaveBeenCalledWith([
+        { name: 'A' },
+        { name: 'B' },
+      ]);
+      // The list refetches because the server assigns fresh ids/positions.
+      expect(mockedApi.listExportPresets).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Restored 2 presets. 1 name matches an existing preset — suffixed with "Imported".',
+      );
+    });
+  });
+
+  it('rejects a non-JSON restore file with an honest message', async () => {
+    render(<ExportPresetsPanel />);
+    await screen.findByText('High Score Responses');
+
+    const bad = new File(['not json at all'], 'backup.json', { type: 'application/json' });
+    const input = screen.getByLabelText(/choose a preset backup file to restore/i);
+    Object.defineProperty(input, 'files', { value: [bad] });
+    fireEvent.change(input);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("isn't valid JSON");
+    expect(mockedApi.importPresetsBackup).not.toHaveBeenCalled();
+  });
+
+  it('rejects a JSON file with no presets in it', async () => {
+    render(<ExportPresetsPanel />);
+    await screen.findByText('High Score Responses');
+
+    const empty = new File([], 'backup.json', { type: 'application/json' });
+    empty.text = async () => JSON.stringify({ something: 'else' });
+    const input = screen.getByLabelText(/choose a preset backup file to restore/i);
+    Object.defineProperty(input, 'files', { value: [empty] });
+    fireEvent.change(input);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No presets found in that file');
   });
 });

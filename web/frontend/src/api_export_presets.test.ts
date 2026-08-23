@@ -11,6 +11,8 @@ import {
   reorderExportPresets,
   setDefaultExportPreset,
   bulkDeleteExportPresets,
+  exportPresetsBackup,
+  importPresetsBackup,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -579,6 +581,112 @@ describe('export preset API helpers', () => {
 
       await expect(bulkDeleteExportPresets([3])).rejects.toThrow(
         'Too many bulk delete requests. (Request ID: req-bulk-429)',
+      );
+    });
+  });
+
+  describe('exportPresetsBackup', () => {
+    it('normalizes the versioned backup envelope', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            status: 'exported',
+            version: 1,
+            user_id: 7,
+            exported_at: '2026-08-23T05:00:00',
+            total_presets: 2,
+            presets: [
+              { name: 'Alpha', format: 'csv', preset_type: 'saved', min_score: 80 },
+              { name: 'Beta', format: 'json', description: 'All recent' },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const backup = await exportPresetsBackup();
+      expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/export', {});
+      expect(backup.version).toBe('1');
+      expect(backup.exportedAt).toBe('2026-08-23T05:00:00');
+      expect(backup.totalPresets).toBe(2);
+      expect(backup.presets[0]).toEqual({
+        name: 'Alpha',
+        description: null,
+        preset_type: 'saved',
+        format: 'csv',
+        search: null,
+        persona_id: null,
+        min_score: 80,
+        max_score: null,
+        sort: null,
+      });
+      expect(backup.presets[1].description).toBe('All recent');
+    });
+
+    it('surfaces failures with the server message and request ID', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'Please slow down.' }), {
+          status: 429,
+          headers: { 'x-request-id': 'req-backup-429' },
+        }),
+      );
+      await expect(exportPresetsBackup()).rejects.toThrow(
+        'Please slow down. (Request ID: req-backup-429)',
+      );
+    });
+  });
+
+  describe('importPresetsBackup', () => {
+    it('posts the presets envelope and reports imported/skipped/duplicates', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            status: 'imported',
+            imported_count: 2,
+            imported_ids: [11, 12],
+            skipped_count: 1,
+            errors: [{ index: 2, error: 'bad row' }],
+            duplicated_names: ['Alpha'],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const entries = [{ name: 'Alpha', format: 'csv' }, { name: 'Beta', format: 'json' }];
+      const res = await importPresetsBackup(entries);
+      expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presets: entries }),
+      });
+      expect(res).toEqual({
+        importedCount: 2,
+        skippedCount: 1,
+        duplicatedNames: ['Alpha'],
+      });
+    });
+
+    it('refuses an empty entry list before fetching', async () => {
+      await expect(importPresetsBackup([])).rejects.toThrow(
+        'presets must contain at least one entry',
+      );
+      expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the preset-limit refusal from the server', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            detail: {
+              error: 'preset_limit_reached',
+              message: 'Import would exceed preset limit (50). Delete some before importing.',
+            },
+          }),
+          { status: 400, headers: { 'x-request-id': 'req-import-400' } },
+        ),
+      );
+      await expect(importPresetsBackup([{ name: 'X' }])).rejects.toThrow(
+        'Import would exceed preset limit (50). Delete some before importing. (Request ID: req-import-400)',
       );
     });
   });
