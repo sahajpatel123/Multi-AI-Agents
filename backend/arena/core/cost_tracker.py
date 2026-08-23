@@ -114,7 +114,7 @@ def check_and_increment_guest(db: Session, ip: str) -> None:
     """
     Check guest rate limit. Increments counter.
     Raises RateLimitExceeded if over limit.
-    
+
     Message counting rules:
     - User submits a prompt → agents respond = 1 message
     - User triggers debate mode = 1 message

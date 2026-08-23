@@ -23,6 +23,8 @@ import {
   canUseNativeShare,
   invokeNativeShare,
 } from '../lib/shareUrl';
+import { formatRoundShareText, parseRoundShareUrl } from '../lib/roundShare';
+import { saveSharedArenaPrompt } from '../lib/sharePrompt';
 import '../styles/share-landing.css';
 
 const MAX_PARAM_LEN = 2000;
@@ -86,19 +88,23 @@ export function SharePage() {
   const prompt = sanitizeParam(params.get('prompt'));
   const response = sanitizeParam(params.get('response'));
   const agent = useMemo(() => resolveAgent(agentId), [agentId]);
+  const round = useMemo(() => parseRoundShareUrl(params), [params]);
+  const roundRequested = params.get('round') === '1';
+  const isRound = round !== null;
 
-  const hasContent = Boolean(response || prompt);
+  const hasContent = roundRequested ? Boolean(round) : Boolean(response || prompt);
+  const displayPrompt = isRound && round ? round.prompt : prompt;
 
   // Prefer mind name (then prompt) in the tab so shared links are scannable in multitasking.
   useEffect(() => {
     applyAbsoluteDocumentTitle(
       titleForShare({
         agentName: agentId ? agent.name : '',
-        prompt: hasContent ? prompt : '',
+        prompt: hasContent ? displayPrompt : '',
       }),
     );
     return () => applyDocumentTitle('/share');
-  }, [agentId, agent.name, prompt, hasContent]);
+  }, [agentId, agent.name, displayPrompt, hasContent]);
 
   const pageUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -111,7 +117,7 @@ export function SharePage() {
 
   useEffect(() => {
     setPromptExpanded(false);
-  }, [prompt]);
+  }, [displayPrompt]);
 
   useEffect(() => {
     if (!copied) return;
@@ -120,6 +126,10 @@ export function SharePage() {
   }, [copied]);
 
   const goTry = () => {
+    // Hand the shared question to the next Arena mount so "Try this in
+    // Arena" lands with the prompt already in the compose box. The handoff
+    // is a no-op for empty/expired share links.
+    saveSharedArenaPrompt(isRound ? (round?.prompt || '') : prompt);
     if (isAuthenticated) {
       navigate('/app');
       return;
@@ -130,6 +140,21 @@ export function SharePage() {
 
   const handleCopyTake = async () => {
     setCopyError(null);
+    if (isRound && round) {
+      const text = formatRoundShareText({
+        prompt: round.prompt,
+        takes: round.takes,
+        resolveAgentName: (id) => resolveAgent(id).name,
+        shareUrl: pageUrl || undefined,
+      });
+      const ok = await copyToClipboard(text);
+      if (ok) {
+        setCopied('take');
+      } else {
+        setCopyError('Could not copy the round — select the text manually.');
+      }
+      return;
+    }
     const text = buildShareTakeClipboardText({
       agentName: agent.name,
       prompt,
@@ -157,9 +182,11 @@ export function SharePage() {
 
   const handleNativeShare = async () => {
     setCopyError(null);
-    const oneLiner = response || agent.oneLiner;
+    const oneLiner = isRound
+      ? displayPrompt || round?.takes[0]?.oneLiner || 'Four minds answered one question on Arena.'
+      : response || agent.oneLiner;
     const data = buildNativeShareData({
-      agentName: agent.name,
+      agentName: isRound ? 'Arena round' : agent.name,
       oneLiner,
       shareUrl: pageUrl || (typeof window !== 'undefined' ? window.location.href : ''),
     });
@@ -171,6 +198,24 @@ export function SharePage() {
 
   const handleDownloadTake = () => {
     setCopyError(null);
+    if (isRound && round) {
+      const text = formatRoundShareText({
+        prompt: round.prompt,
+        takes: round.takes,
+        resolveAgentName: (id) => resolveAgent(id).name,
+        shareUrl: pageUrl || undefined,
+      });
+      const ok = downloadMarkdownFile(`${text}\n`, 'arena-share-round');
+      if (ok) {
+        setDownloadStatus('done');
+        window.setTimeout(() => setDownloadStatus('idle'), 2000);
+      } else {
+        setDownloadStatus('failed');
+        setCopyError('Could not download — try Copy round instead.');
+        window.setTimeout(() => setDownloadStatus('idle'), 2800);
+      }
+      return;
+    }
     const text = buildShareTakeClipboardText({
       agentName: agent.name,
       prompt,
@@ -189,7 +234,9 @@ export function SharePage() {
     }
   };
 
-  const promptClamped = Boolean(prompt && !promptExpanded && isCollapsiblePrompt(prompt));
+  const promptClamped = Boolean(
+    displayPrompt && !promptExpanded && isCollapsiblePrompt(displayPrompt),
+  );
 
   return (
     <div
@@ -209,7 +256,15 @@ export function SharePage() {
         </p>
 
         <h1 className="share-landing__title">
-          One mind. <em>One take.</em>
+          {isRound ? (
+            <>
+              Four minds. <em>One round.</em>
+            </>
+          ) : (
+            <>
+              One mind. <em>One take.</em>
+            </>
+          )}
         </h1>
 
         {!hasContent ? (
@@ -224,113 +279,192 @@ export function SharePage() {
             }
           />
         ) : (
-          <article
-            className="share-take"
-            style={{ ['--take-color' as string]: agent.color }}
-          >
-            <div className="share-take__rail" aria-hidden="true" />
-            <div className="share-take__body">
-              <div className="share-take__head">
-                <span className="share-take__dot" aria-hidden="true" />
-                <span className="share-take__name">{agent.name}</span>
-                <span className="share-take__badge">Arena take</span>
-              </div>
+          <div className={isRound ? 'share-round' : undefined}>
+            {isRound && round ? (
+              <>
+                {round.prompt ? (
+                  <article className="share-take share-take--question">
+                    <div className="share-take__rail" aria-hidden="true" />
+                    <div className="share-take__body">
+                      <div className="share-take__head">
+                        <span className="share-take__dot" aria-hidden="true" />
+                        <span className="share-take__name">The question</span>
+                        <span className="share-take__badge">Arena round</span>
+                      </div>
+                      <div className="share-take__section">
+                        <p className="share-take__label">The question</p>
+                        <p
+                          className={`share-take__prompt${promptClamped ? ' is-clamped' : ''}`}
+                        >
+                          {round.prompt}
+                        </p>
+                        {isCollapsiblePrompt(round.prompt) ? (
+                          <button
+                            type="button"
+                            className="share-take__expand"
+                            onClick={() => setPromptExpanded((v) => !v)}
+                          >
+                            {promptExpanded ? 'Show less' : 'Show full question'}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </article>
+                ) : null}
+                {round.takes.map((take, index) => {
+                  const takeAgent = resolveAgent(take.agentId);
+                  const isWinner = round.winnerAgentId
+                    ? take.agentId === round.winnerAgentId
+                    : false;
+                  return (
+                    <article
+                      key={`${take.agentId || 'take'}-${index}`}
+                      className="share-take"
+                      style={{ ['--take-color' as string]: takeAgent.color }}
+                    >
+                      <div className="share-take__rail" aria-hidden="true" />
+                      <div className="share-take__body">
+                        <div className="share-take__head">
+                          <span className="share-take__dot" aria-hidden="true" />
+                          <span className="share-take__name">{takeAgent.name}</span>
+                          <span className="share-take__badge">
+                            {isWinner ? 'Arena winner' : 'Arena take'}
+                          </span>
+                        </div>
+                        {Number.isFinite(take.score) ? (
+                          <p className="share-take__score">
+                            Score: {Math.round(take.score ?? 0)}/100
+                          </p>
+                        ) : null}
+                        <div className="share-take__answer">
+                          <AgentAnswerMarkdown
+                            markdown={take.oneLiner}
+                            question={round.prompt || undefined}
+                          />
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </>
+            ) : (
+              <article
+                className="share-take"
+                style={{ ['--take-color' as string]: agent.color }}
+              >
+                <div className="share-take__rail" aria-hidden="true" />
+                <div className="share-take__body">
+                  <div className="share-take__head">
+                    <span className="share-take__dot" aria-hidden="true" />
+                    <span className="share-take__name">{agent.name}</span>
+                    <span className="share-take__badge">Arena take</span>
+                  </div>
 
-              {prompt ? (
-                <div className="share-take__section">
-                  <p className="share-take__label">The question</p>
-                  <p className={`share-take__prompt${promptClamped ? ' is-clamped' : ''}`}>
-                    {prompt}
+                  {displayPrompt ? (
+                    <div className="share-take__section">
+                      <p className="share-take__label">The question</p>
+                      <p className={`share-take__prompt${promptClamped ? ' is-clamped' : ''}`}>
+                        {displayPrompt}
+                      </p>
+                      {isCollapsiblePrompt(displayPrompt) ? (
+                        <button
+                          type="button"
+                          className="share-take__expand"
+                          onClick={() => setPromptExpanded((v) => !v)}
+                        >
+                          {promptExpanded ? 'Show less' : 'Show full question'}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {response ? (
+                    <div className="share-take__answer">
+                      <AgentAnswerMarkdown markdown={response} question={prompt || undefined} />
+                    </div>
+                  ) : (
+                    <p className="share-take__fallback">{agent.oneLiner}</p>
+                  )}
+                </div>
+              </article>
+            )}
+
+            <article className="share-take share-take--tools">
+              <div className="share-take__body">
+                <p className="share-take__lede">
+                  Four minds answer every question. Challenge any take. Keep the best.
+                </p>
+
+                {copyError ? (
+                  <p className="share-take__error" role="alert">
+                    {copyError}
                   </p>
-                  {isCollapsiblePrompt(prompt) ? (
+                ) : null}
+
+                <div className="share-take__tools">
+                  <button
+                    type="button"
+                    className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'take' ? ' is-success' : ''}`}
+                    onClick={() => {
+                      void handleCopyTake();
+                    }}
+                  >
+                    {copied === 'take'
+                      ? isRound
+                        ? 'Round copied'
+                        : 'Copied take'
+                      : isRound
+                        ? 'Copy round'
+                        : 'Copy take'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}`}
+                    onClick={handleDownloadTake}
+                  >
+                    {downloadStatus === 'done'
+                      ? 'Downloaded'
+                      : downloadStatus === 'failed'
+                        ? 'Download failed'
+                        : 'Download .md'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'link' ? ' is-success' : ''}`}
+                    onClick={() => {
+                      void handleCopyLink();
+                    }}
+                  >
+                    {copied === 'link' ? 'Link copied' : 'Copy link'}
+                  </button>
+                  {nativeShareAvailable ? (
                     <button
                       type="button"
-                      className="share-take__expand"
-                      onClick={() => setPromptExpanded((v) => !v)}
+                      className="arena-btn arena-btn--secondary arena-btn--sm"
+                      onClick={() => {
+                        void handleNativeShare();
+                      }}
                     >
-                      {promptExpanded ? 'Show less' : 'Show full question'}
+                      Share…
                     </button>
                   ) : null}
                 </div>
-              ) : null}
 
-              {response ? (
-                <div className="share-take__answer">
-                  <AgentAnswerMarkdown markdown={response} question={prompt || undefined} />
-                </div>
-              ) : (
-                <p className="share-take__fallback">{agent.oneLiner}</p>
-              )}
-            </div>
-
-            <div className="share-take__foot">
-              <p className="share-take__lede">
-                Four minds answer every question. Challenge any take. Keep the best.
-              </p>
-
-              {copyError ? (
-                <p className="share-take__error" role="alert">
-                  {copyError}
-                </p>
-              ) : null}
-
-              <div className="share-take__tools">
-                <button
-                  type="button"
-                  className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'take' ? ' is-success' : ''}`}
-                  onClick={() => {
-                    void handleCopyTake();
-                  }}
-                >
-                  {copied === 'take' ? 'Copied take' : 'Copy take'}
-                </button>
-                <button
-                  type="button"
-                  className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}`}
-                  onClick={handleDownloadTake}
-                >
-                  {downloadStatus === 'done'
-                    ? 'Downloaded'
-                    : downloadStatus === 'failed'
-                      ? 'Download failed'
-                      : 'Download .md'}
-                </button>
-                <button
-                  type="button"
-                  className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'link' ? ' is-success' : ''}`}
-                  onClick={() => {
-                    void handleCopyLink();
-                  }}
-                >
-                  {copied === 'link' ? 'Link copied' : 'Copy link'}
-                </button>
-                {nativeShareAvailable ? (
+                <div className="share-take__ctas">
+                  <MotionButton type="button" variant="primary" size="md" onClick={goTry}>
+                    {isAuthenticated ? 'Open Arena' : 'Try this in Arena'} →
+                  </MotionButton>
                   <button
                     type="button"
-                    className="arena-btn arena-btn--secondary arena-btn--sm"
-                    onClick={() => {
-                      void handleNativeShare();
-                    }}
+                    className="arena-btn arena-btn--ghost arena-btn--md"
+                    onClick={() => navigate('/product')}
                   >
-                    Share…
+                    How it works
                   </button>
-                ) : null}
+                </div>
               </div>
-
-              <div className="share-take__ctas">
-                <MotionButton type="button" variant="primary" size="md" onClick={goTry}>
-                  {isAuthenticated ? 'Open Arena' : 'Try this in Arena'} →
-                </MotionButton>
-                <button
-                  type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--md"
-                  onClick={() => navigate('/product')}
-                >
-                  How it works
-                </button>
-              </div>
-            </div>
-          </article>
+            </article>
+          </div>
         )}
 
         {hasContent ? (

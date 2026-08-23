@@ -513,6 +513,11 @@ class AgentTask(Base):
     live_next_check = Column(DateTime, nullable=True)
     live_reschedule_hours = Column(Integer, default=24, nullable=False)
     live_updates = Column(JSON, nullable=True)
+    # Public share link for a completed report. The token is random and
+    # unguessable; NULL means the task is not currently shared. Revoking a
+    # share clears the token (and its unique index entry) so old links die.
+    share_token = Column(String(64), unique=True, nullable=True, index=True)
+    share_created_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="agent_tasks", lazy="joined")
@@ -599,6 +604,7 @@ class AnswerFeedback(Base):
     __tablename__ = "answer_feedback"
     __table_args__ = (
         UniqueConstraint("user_id", "task_id", name="uq_answer_feedback_user_task"),
+        Index("idx_answer_feedback_user_created", "user_id", "created_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)

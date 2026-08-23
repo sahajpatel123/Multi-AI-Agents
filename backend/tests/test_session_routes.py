@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import pytest
 
 from arena.core.memory import get_memory_manager
-from arena.models.schemas import SessionData
+from arena.models.schemas import SessionData, SessionTurn, AgentResponse
 from arena.db_models import UserTier
 
 
@@ -145,6 +145,720 @@ async def test_list_row_includes_topic_and_turn_count(app_client, make_user):
     assert row["turn_count"] == 0  # no turns seeded
 
 
+@pytest.mark.asyncio
+async def test_list_row_includes_last_prompt(app_client, make_user):
+    """The list row should carry the most recent prompt so the UI can show a
+    readable resume title instead of topic keywords alone."""
+    user = make_user(email="sess-last-prompt@test.com", tier=UserTier.PRO)
+    state = _seed_in_memory(user.id, session_id="s1", topics=["market"])
+    state["session_data"].turns = [
+        SessionTurn(
+            turn_id="turn-1",
+            prompt="Should we launch the market experiment now?",
+            agent_responses={
+                "agent_1": AgentResponse(
+                    agent_id="agent_1",
+                    agent_number=1,
+                    verdict="Yes, bounded experiment.",
+                    one_liner="Yes, bounded experiment.",
+                    confidence=82,
+                    key_assumption="The test stays small.",
+                    timestamp="2026-08-12T10:00:00Z",
+                )
+            },
+            winner_id="agent_1",
+            timestamp="2026-08-12T10:00:00Z",
+        )
+    ]
+
+    res = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert res.status_code == 200
+    row = res.json()["sessions"][0]
+    assert row["session_id"] == "s1"
+    assert row["last_prompt"] == "Should we launch the market experiment now?"
+    assert row["turn_count"] == 1
+
+
+# ─── Rename ────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_rename_updates_session_title_in_list(app_client, make_user):
+    user = make_user(email="sess-rename@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.patch(
+        "/api/session/mine",
+        headers=_pro_headers(user),
+        json={"title": "   Launch plan review  "},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "renamed",
+        "session_id": "mine",
+        "title": "Launch plan review",
+    }
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    row = listing.json()["sessions"][0]
+    assert row["title"] == "Launch plan review"
+
+
+@pytest.mark.asyncio
+async def test_rename_collapses_internal_whitespace(app_client, make_user):
+    user = make_user(email="sess-rename-space@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.patch(
+        "/api/session/mine",
+        headers=_pro_headers(user),
+        json={"title": "Launch \n  plan\treview"},
+    )
+    assert res.status_code == 200
+    assert res.json()["title"] == "Launch plan review"
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert listing.json()["sessions"][0]["title"] == "Launch plan review"
+
+
+@pytest.mark.asyncio
+async def test_rename_404_for_foreign_session(app_client, make_user):
+    alice = make_user(email="sess-rename-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-rename-b@test.com", tier=UserTier.PRO)
+    _seed_in_memory(alice.id, session_id="alice-1")
+
+    res = await app_client.patch(
+        "/api/session/alice-1",
+        headers=_pro_headers(bob),
+        json={"title": "Not mine"},
+    )
+    assert res.status_code == 404
+    assert res.json()["detail"]["error"] == "not_found"
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    assert listing.json()["sessions"][0]["title"] is None
+
+
+@pytest.mark.asyncio
+async def test_rename_404_for_missing_session(app_client, make_user):
+    user = make_user(email="sess-rename-miss@test.com", tier=UserTier.PRO)
+    res = await app_client.patch(
+        "/api/session/never-existed",
+        headers=_pro_headers(user),
+        json={"title": "Ghost"},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_rename_rejects_empty_title(app_client, make_user):
+    user = make_user(email="sess-rename-empty@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+    res = await app_client.patch(
+        "/api/session/mine",
+        headers=_pro_headers(user),
+        json={"title": "   "},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_rename_rejects_overlong_title(app_client, make_user):
+    user = make_user(email="sess-rename-long@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+    res = await app_client.patch(
+        "/api/session/mine",
+        headers=_pro_headers(user),
+        json={"title": "x" * 121},
+    )
+    assert res.status_code == 422
+
+
+# ─── Duplicate ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_duplicate_creates_independent_copy(app_client, make_user):
+    user = make_user(email="sess-dup@test.com", tier=UserTier.PRO)
+    state = _seed_in_memory(user.id, session_id="orig", topics=["launch"])
+    state["session_title"] = "Launch plan review"
+    state["session_pinned"] = True
+    state["session_data"].turns = [
+        SessionTurn(
+            turn_id="turn-1",
+            prompt="Should we launch the experiment now?",
+            agent_responses={
+                "agent_1": AgentResponse(
+                    agent_id="agent_1",
+                    agent_number=1,
+                    verdict="Yes, bounded experiment.",
+                    one_liner="Yes, bounded experiment.",
+                    confidence=82,
+                    key_assumption="The test stays small.",
+                    timestamp="2026-08-12T10:00:00Z",
+                )
+            },
+            winner_id="agent_1",
+            timestamp="2026-08-12T10:00:00Z",
+        )
+    ]
+
+    res = await app_client.post(
+        "/api/session/orig/duplicate", headers=_pro_headers(user)
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "duplicated"
+    assert body["session_id"] != "orig"
+
+    dup = body["session"]
+    assert dup["title"] == "Launch plan review"
+    assert dup["topics"] == ["launch"]
+    assert dup["primary_topic"] == "launch"
+    assert dup["last_prompt"] == "Should we launch the experiment now?"
+    assert dup["turn_count"] == 1
+    assert dup["pinned"] is False
+    assert dup["last_active"] is not None
+
+    # Both chats appear in the sidebar list.
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    sids = {row["session_id"] for row in listing.json()["sessions"]}
+    assert sids == {"orig", body["session_id"]}
+
+    # The copy is a real fork: appending to the original does not change it.
+    memory = get_memory_manager()
+    dup_state = memory.short_term._store[body["session_id"]]
+    orig_state = memory.short_term._store["orig"]
+    assert len(dup_state["session_data"].turns) == 1
+    assert dup_state["session_pinned"] is False
+    # The fork starts its own activity clock and leaves the source pin alone.
+    assert dup_state["session_data"].created_at == dup_state["session_data"].last_active
+    assert orig_state["session_pinned"] is True
+    orig_state["session_data"].turns.append(
+        SessionTurn(
+            turn_id="turn-2",
+            prompt="What about the risk?",
+            agent_responses={
+                "agent_2": AgentResponse(
+                    agent_id="agent_2",
+                    agent_number=2,
+                    verdict="Keep it small.",
+                    one_liner="Keep it small.",
+                    confidence=74,
+                    key_assumption="The team can move fast.",
+                    timestamp="2026-08-12T10:10:00Z",
+                )
+            },
+            winner_id="agent_2",
+            timestamp="2026-08-12T10:10:00Z",
+        )
+    )
+    assert len(dup_state["session_data"].turns) == 1
+
+
+@pytest.mark.asyncio
+async def test_duplicate_404_for_foreign_session(app_client, make_user):
+    alice = make_user(email="sess-dup-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-dup-b@test.com", tier=UserTier.PRO)
+    _seed_in_memory(alice.id, session_id="alice-1")
+
+    res = await app_client.post(
+        "/api/session/alice-1/duplicate", headers=_pro_headers(bob)
+    )
+    assert res.status_code == 404
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    assert len(listing.json()["sessions"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_duplicate_uses_session_data_owner_when_state_owner_missing(
+    app_client, make_user
+):
+    """Ownership falls back to session_data when the top-level owner is stale."""
+    user = make_user(email="sess-dup-fallback@test.com", tier=UserTier.PRO)
+    memory = get_memory_manager()
+    state = memory.short_term._get_or_create_state("fallback-1", user_id=str(user.id))
+    state["session_data"] = _make_session(
+        user.id, session_id="fallback-1", topics=["fork"]
+    )
+    state.pop("user_id", None)  # Simulate a stale/missing top-level owner.
+
+    res = await app_client.post(
+        "/api/session/fallback-1/duplicate", headers=_pro_headers(user)
+    )
+    assert res.status_code == 200
+
+    # A foreign caller still gets the uniform 404 oracle.
+    bob = make_user(email="sess-dup-fallback-b@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/session/fallback-1/duplicate", headers=_pro_headers(bob)
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_duplicate_404_for_malformed_state_without_session_data(
+    app_client, make_user
+):
+    """A broken state must 404 like a missing session, never 500."""
+    user = make_user(email="sess-dup-broken@test.com", tier=UserTier.PRO)
+    memory = get_memory_manager()
+    state = memory.short_term._get_or_create_state("broken-1", user_id=str(user.id))
+    state["session_data"] = None
+
+    res = await app_client.post(
+        "/api/session/broken-1/duplicate", headers=_pro_headers(user)
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_duplicate_404_for_missing_session(app_client, make_user):
+    user = make_user(email="sess-dup-miss@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/session/never-existed/duplicate", headers=_pro_headers(user)
+    )
+    assert res.status_code == 404
+
+
+# ─── Bulk duplicate ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_bulk_duplicate_forks_only_requested_owned_sessions(
+    app_client, make_user
+):
+    """Bulk duplicate must fork exactly the requested owned sessions and
+    leave unselected, foreign, and missing sessions alone."""
+    alice = make_user(email="sess-bulk-dup-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-bulk-dup-b@test.com", tier=UserTier.PRO)
+    state_a = _seed_in_memory(alice.id, session_id="a-1", topics=["launch"])
+    state_a["session_title"] = "Launch review"
+    state_b = _seed_in_memory(alice.id, session_id="a-2", topics=["risk"])
+    state_b["session_title"] = "Risk review"
+    _seed_in_memory(alice.id, session_id="a-keep")
+    _seed_in_memory(bob.id, session_id="b-1")
+
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(alice),
+        json={"session_ids": ["a-1", "a-2", "b-1", "missing"]},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "duplicated"
+    assert body["duplicated"] == 2
+    assert len(body["sessions"]) == 2
+
+    dup_titles = {row["title"] for row in body["sessions"]}
+    assert dup_titles == {"Launch review", "Risk review"}
+    dup_ids = {row["session_id"] for row in body["sessions"]}
+    assert dup_ids.isdisjoint({"a-1", "a-2", "a-keep", "b-1"})
+    assert all(row["pinned"] is False for row in body["sessions"])
+
+    # The caller now sees originals plus the new forks; Bob's chat is untouched.
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    sids = {row["session_id"] for row in listing.json()["sessions"]}
+    assert sids == {"a-1", "a-2", "a-keep", *dup_ids}
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(bob))
+    assert {row["session_id"] for row in listing.json()["sessions"]} == {"b-1"}
+
+
+@pytest.mark.asyncio
+async def test_bulk_duplicate_deduplicates_and_accepts_empty_result(
+    app_client, make_user
+):
+    user = make_user(email="sess-bulk-dup-dedup@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine", topics=["fork"])
+
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(user),
+        json={"session_ids": ["mine", "mine", "ghost"]},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["duplicated"] == 1
+    assert len(body["sessions"]) == 1
+
+    # Only missing/foreign ids are a successful no-op, never an error.
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(user),
+        json={"session_ids": ["ghost"]},
+    )
+    assert res.status_code == 200
+    assert res.json()["duplicated"] == 0
+    assert res.json()["sessions"] == []
+
+
+@pytest.mark.asyncio
+async def test_bulk_duplicate_rejects_empty_or_overlong_id_lists(
+    app_client, make_user
+):
+    user = make_user(email="sess-bulk-dup-bounds@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(user),
+        json={"session_ids": []},
+    )
+    assert res.status_code == 422
+
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(user),
+        json={"session_ids": [f"x{i}" for i in range(101)]},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_bulk_duplicate_skips_anonymous_sessions(app_client, make_user):
+    """Bulk duplicate must not fork anonymous sessions for an authenticated
+    caller, matching the list/get/single-duplicate ownership oracle."""
+    user = make_user(email="sess-bulk-dup-anon@test.com", tier=UserTier.PRO)
+    memory = get_memory_manager()
+    state = memory.short_term._get_or_create_state("anon-bulk", user_id="anonymous")
+    state["session_data"] = _make_session("anonymous", session_id="anon-bulk")
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.post(
+        "/api/sessions/bulk/duplicate",
+        headers=_pro_headers(user),
+        json={"session_ids": ["anon-bulk", "mine"]},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["duplicated"] == 1
+    assert len(body["sessions"]) == 1
+    assert body["sessions"][0]["session_id"] != "anon-bulk"
+
+    # The anonymous session remains untouched; only the owned fork was added.
+    store_ids = set(memory.short_term._store)
+    assert "anon-bulk" in store_ids
+    assert store_ids == {"anon-bulk", "mine", body["sessions"][0]["session_id"]}
+
+
+# ─── Import ────────────────────────────────────────────────────────────────
+
+
+def _import_chat(
+    *,
+    title: str | None,
+    winner_id: str = "agent_1",
+    agent_ids: list[str] | None = None,
+) -> dict:
+    """Build one minimal imported chat for archive-restore tests."""
+    ids = agent_ids or ["agent_1"]
+    responses = {}
+    for agent_id in ids:
+        responses[agent_id] = {
+            "agent_id": agent_id,
+            "verdict": f"{agent_id} says yes.",
+            "one_liner": "Yes.",
+            "confidence": 80,
+            "key_assumption": "Scope stays small.",
+            "timestamp": "2026-08-12T10:00:00Z",
+        }
+    return {
+        "title": title,
+        "turns": [
+            {
+                "turn_id": "turn-1",
+                "prompt": "Should we launch the experiment now?",
+                "prompt_category": "question",
+                "winner_id": winner_id,
+                "timestamp": "2026-08-12T10:00:00Z",
+                "agent_responses": responses,
+            }
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_import_creates_owned_resumable_chats(app_client, make_user):
+    user = make_user(email="sess-import@test.com", tier=UserTier.PRO)
+
+    res = await app_client.post(
+        "/api/sessions/import",
+        headers=_pro_headers(user),
+        json={
+            "chats": [
+                _import_chat(title="Launch review"),
+                _import_chat(title="Risk review", winner_id="agent_2", agent_ids=["agent_1", "agent_2"]),
+            ]
+        },
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "imported"
+    assert body["imported"] == 2
+    assert {row["title"] for row in body["sessions"]} == {
+        "Launch review",
+        "Risk review",
+    }
+    assert all(row["pinned"] is False for row in body["sessions"])
+    assert all(row["turn_count"] == 1 for row in body["sessions"])
+
+    restored = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    sids = {row["session_id"] for row in restored.json()["sessions"]}
+    assert len(sids) == 2
+
+    imported_id = body["sessions"][0]["session_id"]
+    session = await app_client.get(
+        f"/api/session/{imported_id}", headers=_pro_headers(user)
+    )
+    assert session.status_code == 200
+    payload = session.json()
+    assert payload["turns"][0]["prompt"] == "Should we launch the experiment now?"
+    assert payload["turns"][0]["winner_id"] == "agent_1"
+
+
+@pytest.mark.asyncio
+async def test_import_rejects_empty_archive(app_client, make_user):
+    user = make_user(email="sess-import-empty@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/sessions/import",
+        headers=_pro_headers(user),
+        json={"chats": []},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_import_drops_unknown_agent_ids_and_falls_back_to_valid_winner(
+    app_client, make_user
+):
+    user = make_user(email="sess-import-drop@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/sessions/import",
+        headers=_pro_headers(user),
+        json={
+            "chats": [
+                _import_chat(
+                    title="Safe restore",
+                    winner_id="agent_999",
+                    agent_ids=["agent_1", "agent_999"],
+                )
+            ]
+        },
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["imported"] == 1
+    session_id = body["sessions"][0]["session_id"]
+
+    session = await app_client.get(
+        f"/api/session/{session_id}", headers=_pro_headers(user)
+    )
+    turn = session.json()["turns"][0]
+    assert set(turn["agent_responses"].keys()) == {"agent_1"}
+    assert turn["winner_id"] == "agent_1"
+
+
+@pytest.mark.asyncio
+async def test_import_does_not_leak_original_owner_ids(app_client, make_user):
+    """Imported archives create fresh ids; source ids never appear as
+    the live session id or leak into another user's list."""
+    user = make_user(email="sess-import-fresh@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/sessions/import",
+        headers=_pro_headers(user),
+        json={
+            "chats": [
+                {
+                    "title": "Original source title",
+                    "turns": [
+                        {
+                            "turn_id": "source-turn-1",
+                            "prompt": "Keep this question.",
+                            "prompt_category": "question",
+                            "winner_id": "agent_1",
+                            "timestamp": "2026-07-01T09:00:00Z",
+                            "agent_responses": {
+                                "agent_1": {
+                                    "agent_id": "agent_1",
+                                    "verdict": "Keep.",
+                                    "one_liner": "Keep.",
+                                    "confidence": 90,
+                                    "key_assumption": "None.",
+                                    "timestamp": "2026-07-01T09:00:00Z",
+                                }
+                            },
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    assert res.status_code == 200
+    row = res.json()["sessions"][0]
+    assert row["session_id"] != "source-session-id"
+    assert row["last_prompt"] == "Keep this question."
+
+
+@pytest.mark.asyncio
+async def test_import_accepts_empty_timestamps_from_partial_archives(
+    app_client, make_user
+):
+    """Archives without per-exchange timestamps (null or empty strings) must
+    restore instead of failing Pydantic datetime parsing."""
+    user = make_user(email="sess-import-no-times@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/sessions/import",
+        headers=_pro_headers(user),
+        json={
+            "chats": [
+                {
+                    "title": "No timestamps",
+                    "turns": [
+                        {
+                            "turn_id": "source-turn-1",
+                            "prompt": "Keep this question.",
+                            "prompt_category": "question",
+                            "winner_id": "agent_1",
+                            "timestamp": "",
+                            "agent_responses": {
+                                "agent_1": {
+                                    "agent_id": "agent_1",
+                                    "verdict": "Keep.",
+                                    "one_liner": "Keep.",
+                                    "confidence": 90,
+                                    "key_assumption": "None.",
+                                    "timestamp": "",
+                                }
+                            },
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["imported"] == 1
+
+    session_id = res.json()["sessions"][0]["session_id"]
+    session = await app_client.get(
+        f"/api/session/{session_id}", headers=_pro_headers(user)
+    )
+    assert session.status_code == 200
+    turn = session.json()["turns"][0]
+    assert turn["prompt"] == "Keep this question."
+    assert turn["timestamp"]
+    assert turn["agent_responses"]["agent_1"]["timestamp"]
+
+
+@pytest.mark.asyncio
+async def test_list_skips_malformed_state_without_session_data(app_client, make_user):
+    """Listing must not 500 on a malformed state; it skips the broken row."""
+    user = make_user(email="sess-list-broken@test.com", tier=UserTier.PRO)
+    memory = get_memory_manager()
+    state = memory.short_term._get_or_create_state("broken-list", user_id=str(user.id))
+    state["session_data"] = None
+    _seed_in_memory(user.id, session_id="healthy")
+
+    res = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert res.status_code == 200
+    sids = {row["session_id"] for row in res.json()["sessions"]}
+    assert sids == {"healthy"}
+
+
+# ─── Pin / unpin ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_pin_marks_session_in_list(app_client, make_user):
+    user = make_user(email="sess-pin@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.patch(
+        "/api/session/mine/pin",
+        headers=_pro_headers(user),
+        json={"pinned": True},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "pinned",
+        "session_id": "mine",
+        "pinned": True,
+    }
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert listing.json()["sessions"][0]["pinned"] is True
+
+
+@pytest.mark.asyncio
+async def test_unpin_clears_session_flag(app_client, make_user):
+    user = make_user(email="sess-unpin@test.com", tier=UserTier.PRO)
+    state = _seed_in_memory(user.id, session_id="mine")
+    state["session_pinned"] = True
+
+    res = await app_client.patch(
+        "/api/session/mine/pin",
+        headers=_pro_headers(user),
+        json={"pinned": False},
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "unpinned"
+    assert res.json()["pinned"] is False
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert listing.json()["sessions"][0]["pinned"] is False
+
+
+@pytest.mark.asyncio
+async def test_unpinned_sessions_default_to_false_in_list(app_client, make_user):
+    user = make_user(email="sess-pin-default@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    assert listing.json()["sessions"][0]["pinned"] is False
+
+
+@pytest.mark.asyncio
+async def test_pin_404_for_foreign_session(app_client, make_user):
+    alice = make_user(email="sess-pin-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-pin-b@test.com", tier=UserTier.PRO)
+    _seed_in_memory(alice.id, session_id="alice-1")
+
+    res = await app_client.patch(
+        "/api/session/alice-1/pin",
+        headers=_pro_headers(bob),
+        json={"pinned": True},
+    )
+    assert res.status_code == 404
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    assert listing.json()["sessions"][0]["pinned"] is False
+
+
+@pytest.mark.asyncio
+async def test_pin_404_for_missing_session(app_client, make_user):
+    user = make_user(email="sess-pin-miss@test.com", tier=UserTier.PRO)
+    res = await app_client.patch(
+        "/api/session/never-existed/pin",
+        headers=_pro_headers(user),
+        json={"pinned": True},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_pin_rejects_non_boolean_body(app_client, make_user):
+    user = make_user(email="sess-pin-bool@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+    res = await app_client.patch(
+        "/api/session/mine/pin",
+        headers=_pro_headers(user),
+        json={"pinned": "not-a-boolean"},
+    )
+    assert res.status_code == 422
+
+
 # ─── Delete single ──────────────────────────────────────────────────────────
 
 
@@ -228,6 +942,248 @@ async def test_delete_all_zero_when_nothing_owned(app_client, make_user):
     assert res.json()["deleted"] == 0
 
 
+@pytest.mark.asyncio
+async def test_delete_selected_only_removes_requested_owned_sessions(
+    app_client, make_user
+):
+    """Bulk delete must remove exactly the requested owned sessions and
+    leave unselected and foreign sessions alone."""
+    alice = make_user(email="sess-bulk-sel-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-bulk-sel-b@test.com", tier=UserTier.PRO)
+    _seed_in_memory(alice.id, session_id="a-1")
+    _seed_in_memory(alice.id, session_id="a-2")
+    _seed_in_memory(alice.id, session_id="a-keep")
+    _seed_in_memory(bob.id, session_id="b-1")
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(alice),
+        json={"session_ids": ["a-1", "a-2", "b-1", "missing"]},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "deleted",
+        "deleted": 2,
+        "deleted_ids": ["a-1", "a-2"],
+    }
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    sids = {s["session_id"] for s in listing.json()["sessions"]}
+    assert sids == {"a-keep"}
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(bob))
+    sids = {s["session_id"] for s in listing.json()["sessions"]}
+    assert sids == {"b-1"}
+
+
+@pytest.mark.asyncio
+async def test_delete_selected_deduplicates_and_accepts_empty_result(
+    app_client, make_user
+):
+    user = make_user(email="sess-bulk-sel-dedup@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(user),
+        json={"session_ids": ["mine", "mine", "ghost"]},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "deleted",
+        "deleted": 1,
+        "deleted_ids": ["mine"],
+    }
+
+    # Only missing/foreign ids are a successful no-op, never an error.
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(user),
+        json={"session_ids": ["ghost"]},
+    )
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 0
+    assert res.json()["deleted_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_delete_selected_rejects_empty_or_overlong_id_lists(app_client, make_user):
+    user = make_user(email="sess-bulk-sel-bounds@test.com", tier=UserTier.PRO)
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(user),
+        json={"session_ids": []},
+    )
+    assert res.status_code == 422
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(user),
+        json={"session_ids": [f"x{i}" for i in range(101)]},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_delete_selected_clears_persona_integrity_history(
+    app_client, make_user
+):
+    """Selected bulk delete must drop drift history for removed sessions
+    while preserving history for sessions that were not selected."""
+    user = make_user(email="sess-bulk-sel-drift@test.com", tier=UserTier.PRO)
+    from arena.core import persona_integrity
+
+    _seed_in_memory(user.id, session_id="remove-me")
+    _seed_in_memory(user.id, session_id="keep-me")
+    persona_integrity.record_response("agent_1", "v", "remove-me")
+    persona_integrity.record_response("agent_1", "v", "keep-me")
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/sessions/bulk",
+        headers=_pro_headers(user),
+        json={"session_ids": ["remove-me"]},
+    )
+    assert res.status_code == 200
+    assert res.json()["deleted_ids"] == ["remove-me"]
+
+    assert "remove-me" not in persona_integrity._session_history
+    assert "keep-me" in persona_integrity._session_history
+
+
+# ─── Bulk pin / unpin ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_bulk_pin_only_updates_requested_owned_sessions(
+    app_client, make_user
+):
+    """Bulk pin must flip exactly the requested owned sessions and leave
+    unselected, foreign, and missing sessions alone."""
+    alice = make_user(email="sess-bulk-pin-a@test.com", tier=UserTier.PRO)
+    bob = make_user(email="sess-bulk-pin-b@test.com", tier=UserTier.PRO)
+    _seed_in_memory(alice.id, session_id="a-1")
+    _seed_in_memory(alice.id, session_id="a-2")
+    _seed_in_memory(alice.id, session_id="a-keep")
+    _seed_in_memory(bob.id, session_id="b-1")
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(alice),
+        json={
+            "session_ids": ["a-1", "a-2", "b-1", "missing"],
+            "pinned": True,
+        },
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "pinned",
+        "updated": 2,
+        "updated_ids": ["a-1", "a-2"],
+    }
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(alice))
+    by_id = {row["session_id"]: row for row in listing.json()["sessions"]}
+    assert by_id["a-1"]["pinned"] is True
+    assert by_id["a-2"]["pinned"] is True
+    assert by_id["a-keep"]["pinned"] is False
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(bob))
+    assert listing.json()["sessions"][0]["pinned"] is False
+
+
+@pytest.mark.asyncio
+async def test_bulk_unpin_clears_selected_flags(app_client, make_user):
+    user = make_user(email="sess-bulk-unpin@test.com", tier=UserTier.PRO)
+    state_a = _seed_in_memory(user.id, session_id="a-1")
+    state_b = _seed_in_memory(user.id, session_id="a-2")
+    state_keep = _seed_in_memory(user.id, session_id="keep")
+    state_a["session_pinned"] = True
+    state_b["session_pinned"] = True
+    state_keep["session_pinned"] = True
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": ["a-1", "a-2"], "pinned": False},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "unpinned",
+        "updated": 2,
+        "updated_ids": ["a-1", "a-2"],
+    }
+
+    listing = await app_client.get("/api/sessions", headers=_pro_headers(user))
+    by_id = {row["session_id"]: row for row in listing.json()["sessions"]}
+    assert by_id["a-1"]["pinned"] is False
+    assert by_id["a-2"]["pinned"] is False
+    assert by_id["keep"]["pinned"] is True
+
+
+@pytest.mark.asyncio
+async def test_bulk_pin_deduplicates_and_accepts_empty_result(
+    app_client, make_user
+):
+    user = make_user(email="sess-bulk-pin-dedup@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": ["mine", "mine", "ghost"], "pinned": True},
+    )
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "pinned",
+        "updated": 1,
+        "updated_ids": ["mine"],
+    }
+
+    # Only missing/foreign ids are a successful no-op, never an error.
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": ["ghost"], "pinned": True},
+    )
+    assert res.status_code == 200
+    assert res.json()["updated"] == 0
+    assert res.json()["updated_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_bulk_pin_rejects_bad_lists_and_pinned_type(app_client, make_user):
+    user = make_user(email="sess-bulk-pin-bounds@test.com", tier=UserTier.PRO)
+    _seed_in_memory(user.id, session_id="mine")
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": [], "pinned": True},
+    )
+    assert res.status_code == 422
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": [f"x{i}" for i in range(101)], "pinned": True},
+    )
+    assert res.status_code == 422
+
+    res = await app_client.patch(
+        "/api/sessions/bulk/pin",
+        headers=_pro_headers(user),
+        json={"session_ids": ["mine"], "pinned": "not-a-boolean"},
+    )
+    assert res.status_code == 422
+
+
 # ─── Auth ───────────────────────────────────────────────────────────────────
 
 
@@ -235,8 +1191,14 @@ async def test_delete_all_zero_when_nothing_owned(app_client, make_user):
 async def test_session_endpoints_require_auth(app_client):
     for method, path in [
         ("GET", "/api/sessions"),
+        ("PATCH", "/api/session/x"),
+        ("POST", "/api/session/x/duplicate"),
+        ("POST", "/api/sessions/bulk/duplicate"),
+        ("PATCH", "/api/session/x/pin"),
         ("DELETE", "/api/session/x"),
         ("DELETE", "/api/sessions"),
+        ("DELETE", "/api/sessions/bulk"),
+        ("PATCH", "/api/sessions/bulk/pin"),
     ]:
         res = await app_client.request(method, path)
         assert res.status_code == 401, f"{method} {path} returned {res.status_code}"

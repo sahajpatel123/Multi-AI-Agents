@@ -143,7 +143,9 @@ async def discuss_with_agent(
     Send a message to a single agent in a 1-on-1 conversation.
     The agent stays in character with full memory of the thread.
     """
-    user_tier = _enforce_discuss_access(user)
+    # Access enforcement happens inside the helper; its return value is
+    # intentionally unused here.
+    _enforce_discuss_access(user)
 
     # Check rate limit BEFORE any LLM calls
     try:
@@ -181,7 +183,7 @@ async def discuss_with_agent(
     previous_responses = memory.short_term.get_agent_memory(
         session_id, request.agent_id, user_id=str(user.id)
     )
-    
+
     # Build context string for previous responses
     if previous_responses:
         prev_context = "YOUR PREVIOUS RESPONSES IN THIS SESSION:\n"
@@ -198,18 +200,16 @@ async def discuss_with_agent(
         original_verdict=request.original_verdict,
         previous_responses_context=prev_context,
     )
-    messages = _build_messages(request)
-
     try:
         # Get persona_id and route to appropriate API
         persona_id = get_persona_id_for_agent(request.agent_id, request.persona_ids)
-        
+
         # Build single user message from conversation history
         conversation_text = "\n\n".join(
             f"{msg.role.upper()}: {msg.content}" for msg in request.conversation_history
         )
         full_user_message = f"{conversation_text}\n\nUSER: {request.message}" if conversation_text else request.message
-        
+
         reply_content, _, _ = await call_persona(
             persona_id=persona_id,
             system_prompt=system_prompt,
@@ -258,7 +258,9 @@ async def stream_discuss(
     - "result" → final DiscussResponse with updated history
     - "error"  → something went wrong
     """
-    user_tier = _enforce_discuss_access(user)
+    # Access enforcement happens inside the helper; its return value is
+    # intentionally unused here.
+    _enforce_discuss_access(user)
 
     # Check rate limit BEFORE any LLM calls
     try:
@@ -296,7 +298,7 @@ async def stream_discuss(
     previous_responses = memory.short_term.get_agent_memory(
         session_id, request.agent_id, user_id=str(user.id)
     )
-    
+
     # Build context string for previous responses
     if previous_responses:
         prev_context = "YOUR PREVIOUS RESPONSES IN THIS SESSION:\n"
@@ -313,7 +315,6 @@ async def stream_discuss(
         original_verdict=request.original_verdict,
         previous_responses_context=prev_context,
     )
-    messages = _build_messages(request)
 
     async def event_generator():
         # First event tells the client which request ID this stream maps to,
@@ -325,14 +326,14 @@ async def stream_discuss(
             persona_id = get_persona_id_for_agent(request.agent_id, request.persona_ids)
             model_type = get_model_for_persona(persona_id)
             route = get_route_for_persona(persona_id)
-            
+
             if model_type != "claude":
                 # Grok doesn't support streaming - get full response
                 conversation_text = "\n\n".join(
                     f"{msg.role.upper()}: {msg.content}" for msg in request.conversation_history
                 )
                 full_user_message = f"{conversation_text}\n\nUSER: {request.message}" if conversation_text else request.message
-                
+
                 content, _, _ = await call_persona(
                     persona_id=persona_id,
                     system_prompt=system_prompt,

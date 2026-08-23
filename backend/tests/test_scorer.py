@@ -98,8 +98,11 @@ class TestScorerScoringHappyPath:
 
         scorer = Scorer()
         responses = [_make_response(f"agent_{i}") for i in range(1, 5)]
-        scored = await scorer.score_responses("prompt", responses)
+        result = await scorer.score_responses("prompt", responses)
+        scored = result.scored_responses
         assert len(scored) == 4
+        assert result.reasoning == "best"
+        assert result.fallback_used is False
         winner = scorer.get_winner(scored)
         assert winner.response.agent_id == "agent_1"
 
@@ -113,9 +116,11 @@ class TestScorerScoringHappyPath:
 
         scorer = Scorer()
         responses = [_make_response("agent_1")]
-        scored = await scorer.score_responses("p", responses)
+        result = await scorer.score_responses("p", responses)
+        scored = result.scored_responses
         assert stub_anthropic.calls, "stub was not invoked"
         assert scored[0].score == 80
+        assert result.reasoning is None
 
     @pytest.mark.asyncio
     async def test_fallback_on_parse_error(self, stub_anthropic):
@@ -123,7 +128,73 @@ class TestScorerScoringHappyPath:
 
         scorer = Scorer()
         responses = [_make_response("agent_1")]
-        scored = await scorer.score_responses("p", responses)
+        result = await scorer.score_responses("p", responses)
+        scored = result.scored_responses
         # Falls back to score=50, is_winner=True for the first response
         assert scored[0].score == 50
         assert scored[0].is_winner is True
+        assert result.fallback_used is True
+        assert result.reasoning is None
+
+    @pytest.mark.asyncio
+    async def test_collapses_whitespace_in_reasoning(self, stub_anthropic):
+        stub_anthropic.response_text = json.dumps({
+            "scores": {"agent_1": 88},
+            "winner": "agent_1",
+            "reasoning": "  directly \n addresses \n\n the question   ",
+        })
+
+        result = await Scorer().score_responses("p", [_make_response("agent_1")])
+        assert result.reasoning == "directly addresses the question"
+
+    @pytest.mark.asyncio
+    async def test_truncates_overlong_reasoning_at_word_boundary(self, stub_anthropic):
+        stub_anthropic.response_text = json.dumps({
+            "scores": {"agent_1": 88},
+            "winner": "agent_1",
+            "reasoning": "word " * 500,
+        })
+
+        result = await Scorer().score_responses("p", [_make_response("agent_1")])
+        assert result.reasoning is not None
+        assert len(result.reasoning) <= 601
+        assert result.reasoning.endswith("…")
+
+    @pytest.mark.asyncio
+    async def test_drops_non_string_reasoning(self, stub_anthropic):
+        stub_anthropic.response_text = json.dumps({
+            "scores": {"agent_1": 88},
+            "winner": "agent_1",
+            "reasoning": {"nested": "not a string"},
+        })
+
+        result = await Scorer().score_responses("p", [_make_response("agent_1")])
+        assert result.reasoning is None
+
+    @pytest.mark.asyncio
+    async def test_rewrites_agent_slots_to_persona_names(self, stub_anthropic):
+        stub_anthropic.response_text = json.dumps({
+            "scores": {"agent_1": 88, "agent_2": 70},
+            "winner": "agent_1",
+            "reasoning": "agent_1 out-reasoned AGENT-2 while agent 1 stayed honest.",
+        })
+
+        result = await Scorer().score_responses(
+            "p",
+            [_make_response("agent_1"), _make_response("agent_2")],
+            persona_ids=["analyst", "philosopher", "pragmatist", "contrarian"],
+        )
+        assert result.reasoning == (
+            "The Analyst out-reasoned The Philosopher while The Analyst stayed honest."
+        )
+
+    @pytest.mark.asyncio
+    async def test_leaves_unmapped_words_untouched(self, stub_anthropic):
+        stub_anthropic.response_text = json.dumps({
+            "scores": {"agent_1": 88},
+            "winner": "agent_1",
+            "reasoning": "the agent's reply was direct and agent_5 never ran",
+        })
+
+        result = await Scorer().score_responses("p", [_make_response("agent_1")])
+        assert result.reasoning == "the agent's reply was direct and agent_5 never ran"

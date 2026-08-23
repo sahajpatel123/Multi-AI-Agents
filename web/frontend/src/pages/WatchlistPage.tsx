@@ -6,34 +6,70 @@ import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
 import { EmptyState } from '../components/EmptyState';
 import { MotionButton } from '../components/MotionButton';
+import { ExpertiseSelector } from '../components/ExpertiseSelector';
 import {
   ApiError,
+  createAgentTaskShare,
+  deleteAgentWatchlistBulk,
   deleteAgentWatchlist,
+  exportAgentWatchlistHistoryCsv,
+  exportAgentWatchlistHistoryJson,
+  exportAgentWatchlistStatisticsCsv,
   getAgentWatchlist,
   getAgentWatchlistHistory,
+  getAgentWatchlistStatistics,
+  patchAgentWatchlistBulk,
   patchAgentWatchlist,
+  postAgentWatchlistDuplicate,
+  postAgentWatchlistRun,
   type AgentWatchlistHistoryResponse,
+  type AgentWatchlistHistoryRun,
   type AgentWatchlistItem,
+  type AgentWatchlistStatistics,
 } from '../api';
 import { useTier } from '../context/TierContext';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import {
+  downloadBlobFile,
+  downloadMarkdownFile,
+  downloadTextFile,
+  withDownloadDate,
+} from '../lib/downloadTextFile';
 import { prefersReducedMotion } from '../lib/motion';
 import {
   formatWatchlistHistoryExport,
   formatWatchlistHistoryStats,
+  readableAgentAnswerText,
   watchlistScoreTrend,
 } from '../lib/watchlistHistory';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
-import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import {
+  isWatchlistCopyKey,
+  isWatchlistCopyJsonKey,
+  isWatchlistDownloadCsvKey,
+  isWatchlistDownloadDigestKey,
+  isWatchlistDownloadJsonKey,
+  isWatchlistDownloadMarkdownKey,
+  isWatchlistDownloadStatsCsvKey,
+  isWatchlistRunAllKey,
+} from '../lib/keyboardShortcuts';
+import {
+  formatWatchlistBulkRunNotice,
+  runActiveWatchlistItems,
+} from '../lib/watchlistBulkRun';
 import {
   WATCHLIST_INTERVALS,
   type WatchlistIntervalHours,
 } from '../lib/watchlistIntervals';
 import {
   formatWatchlistExport,
+  formatWatchlistCsvExport,
   formatWatchlistItemCopy,
+  formatWatchlistJsonExport,
+  formatWatchlistLatestResultCopy,
   formatWatchlistQuestionCopy,
+  formatWatchlistResultsDigest,
 } from '../lib/watchlistExport';
 import {
   WATCHLIST_SORT_OPTIONS,
@@ -81,8 +117,12 @@ import {
 } from '../lib/watchlistDomainFilter';
 import { formatRelativeFuture, formatRelativePast } from '../lib/relativeTime';
 import { watchlistBodyMode } from '../lib/watchlistView';
+import { WatchlistStatsStrip } from '../components/WatchlistStatsStrip';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function intervalBadge(hours: number): { num: string; unit: string } {
   if (hours === 168) return { num: '7', unit: 'DAYS' };
@@ -101,9 +141,25 @@ export function WatchlistPage() {
   const [items, setItems] = useState<AgentWatchlistItem[]>([]);
   const [activeCount, setActiveCount] = useState(0);
   const [activeCap, setActiveCap] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<'pause_all' | 'resume_all' | null>(null);
+  const [runAllNotice, setRunAllNotice] = useState<string | null>(null);
+  const [runAllBusy, setRunAllBusy] = useState(false);
   const [cadenceBusyId, setCadenceBusyId] = useState<string | null>(null);
+  const [runNowBusyId, setRunNowBusyId] = useState<string | null>(null);
+  const [duplicateBusyId, setDuplicateBusyId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteArmed, setBulkDeleteArmed] = useState(false);
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
+  const [editingItem, setEditingItem] = useState<AgentWatchlistItem | null>(null);
+  const [editQuestion, setEditQuestion] = useState('');
+  const [editLevel, setEditLevel] = useState('curious');
+  const [editDomain, setEditDomain] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WatchlistStatusFilter>('all');
   const [scoreFilter, setScoreFilter] = useState<AgentHistoryScoreFilter>('all');
@@ -115,12 +171,29 @@ export function WatchlistPage() {
   const [listSort, setListSort] = useState<WatchlistSort>('next_soon');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [csvDownloadStatus, setCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [jsonCopyStatus, setJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [digestCopyStatus, setDigestCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [digestDownloadStatus, setDigestDownloadStatus] = useState<
+    'idle' | 'done' | 'failed'
+  >('idle');
   /** Per-card copy: which item id last acted, and which action. */
   const [itemCopyId, setItemCopyId] = useState<string | null>(null);
-  const [itemCopyKind, setItemCopyKind] = useState<'watch' | 'question' | null>(null);
+  const [itemCopyKind, setItemCopyKind] = useState<
+    'watch' | 'question' | 'result' | null
+  >(null);
   const [itemCopyStatus, setItemCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const itemCopyTimerRef = useRef<number | null>(null);
+  /** Per-card latest-result share: which item last acted, and with what result. */
+  const [latestShareBusyId, setLatestShareBusyId] = useState<string | null>(null);
+  const [latestShareId, setLatestShareId] = useState<string | null>(null);
+  const [latestShareStatus, setLatestShareStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const latestShareTimerRef = useRef<number | null>(null);
+  const latestShareBusyRef = useRef(false);
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [historyMoreBusyId, setHistoryMoreBusyId] = useState<string | null>(null);
+  const [historyMoreError, setHistoryMoreError] = useState<string | null>(null);
   const [historyCache, setHistoryCache] = useState<
     Record<
       string,
@@ -131,14 +204,55 @@ export function WatchlistPage() {
   >({});
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyJsonDownloadStatus, setHistoryJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyCsvDownloadStatus, setHistoryCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  /** Inline per-run answer expansion: which run is open, plus copy feedback. */
+  const [historyAnswerTaskId, setHistoryAnswerTaskId] = useState<string | null>(null);
+  const [historyAnswerCopyStatus, setHistoryAnswerCopyStatus] = useState<
+    'idle' | 'copied' | 'failed'
+  >('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
+  const historyJsonDownloadTimerRef = useRef<number | null>(null);
+  const historyCsvDownloadTimerRef = useRef<number | null>(null);
+  const historyAnswerCopyTimerRef = useRef<number | null>(null);
+  const [stats, setStats] = useState<AgentWatchlistStatistics | null>(null);
+  const [statsDownloadBusy, setStatsDownloadBusy] = useState(false);
+  const [statsDownloadStatus, setStatsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const statsDownloadTimerRef = useRef<number | null>(null);
   const historyCacheRef = useRef(historyCache);
   historyCacheRef.current = historyCache;
+  /** Bumped whenever the history cache is replaced (forced reload / page
+   * refresh) so an in-flight "load older runs" response cannot append stale
+   * rows or stale total/has_more flags onto a refreshed cache. */
+  const loadMoreEpochRef = useRef(0);
   const errorRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const editQuestionRef = useRef<HTMLTextAreaElement | null>(null);
+  const editDialogRef = useRef<HTMLDivElement | null>(null);
+  const editTriggerRef = useRef<HTMLElement | null>(null);
+  const watchlistExportActionsRef = useRef<{
+    copyWatchlist: () => Promise<void>;
+    copyWatchlistJson: () => Promise<void>;
+    downloadWatchlist: () => void;
+    downloadWatchlistCsv: () => void;
+    downloadWatchlistJson: () => void;
+    downloadDigest: () => void;
+    downloadStatsCsv: (() => Promise<void>) | null;
+    runAllNow: (() => void) | null;
+  } | null>(null);
+  const runAllBusyRef = useRef(false);
+  const statsDownloadBusyRef = useRef(false);
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
+  const csvDownloadStatusTimerRef = useRef<number | null>(null);
+  const jsonDownloadStatusTimerRef = useRef<number | null>(null);
+  const jsonCopyStatusTimerRef = useRef<number | null>(null);
+  const jsonCopyBusyRef = useRef(false);
+  const digestCopyStatusTimerRef = useRef<number | null>(null);
+  const digestCopyBusyRef = useRef(false);
+  const digestDownloadStatusTimerRef = useRef<number | null>(null);
+  const digestDownloadBusyRef = useRef(false);
   const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
@@ -162,6 +276,7 @@ export function WatchlistPage() {
       const existing = historyCacheRef.current[itemId];
       if (existing && (existing.status === 'ready' || existing.status === 'loading')) return;
     }
+    loadMoreEpochRef.current += 1;
     setHistoryCache((prev) => ({ ...prev, [itemId]: { status: 'loading' } }));
     try {
       const data = await getAgentWatchlistHistory(itemId, 30);
@@ -181,13 +296,80 @@ export function WatchlistPage() {
     (itemId: string) => {
       if (historyOpenId === itemId) {
         setHistoryOpenId(null);
+        setHistoryAnswerTaskId(null);
+        setHistoryAnswerCopyStatus('idle');
         return;
       }
       setHistoryOpenId(itemId);
+      setHistoryMoreError(null);
+      setHistoryAnswerTaskId(null);
+      setHistoryAnswerCopyStatus('idle');
       void loadWatchHistory(itemId);
     },
     [historyOpenId, loadWatchHistory],
   );
+
+  const toggleHistoryAnswer = useCallback((taskId: string) => {
+    setHistoryAnswerTaskId((current) => (current === taskId ? null : taskId));
+    setHistoryAnswerCopyStatus('idle');
+  }, []);
+
+  const loadMoreWatchHistory = useCallback(
+    async (itemId: string) => {
+      if (historyMoreBusyId === itemId) return;
+      const hist = historyCacheRef.current[itemId];
+      if (!hist || hist.status !== 'ready') return;
+      const lastRun = hist.data.items[hist.data.items.length - 1];
+      if (!lastRun) return;
+      const epoch = loadMoreEpochRef.current;
+      setHistoryMoreBusyId(itemId);
+      setHistoryMoreError(null);
+      try {
+        // Cursor-based paging keeps load-more stable when new runs land
+        // between pages; the offset is a fallback if the cursor row is gone.
+        const next = await getAgentWatchlistHistory(
+          itemId,
+          50,
+          hist.data.items.length,
+          lastRun.task_id,
+        );
+        setHistoryCache((prev) => {
+          const current = prev[itemId];
+          if (!current || current.status !== 'ready') return prev;
+          if (loadMoreEpochRef.current !== epoch) return prev;
+          const seen = new Set(current.data.items.map((run) => run.task_id));
+          const appended = next.items.filter((run) => !seen.has(run.task_id));
+          return {
+            ...prev,
+            [itemId]: {
+              status: 'ready',
+              data: {
+                items: [...current.data.items, ...appended],
+                stats: next.stats,
+                total: next.total,
+                has_more: next.has_more,
+              },
+            },
+          };
+        });
+      } catch (e) {
+        setHistoryMoreError(
+          e instanceof ApiError ? e.message : 'Could not load older runs',
+        );
+      } finally {
+        setHistoryMoreBusyId(null);
+      }
+    },
+    [historyMoreBusyId],
+  );
+
+  const refreshStats = useCallback(async () => {
+    try {
+      setStats(await getAgentWatchlistStatistics());
+    } catch {
+      setStats(null);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     if (!canWatchlist) {
@@ -196,22 +378,31 @@ export function WatchlistPage() {
     }
     setError(null);
     setLoading(true);
+    setStats(null);
     try {
       const data = await getAgentWatchlist();
       setItems(data.items);
       setActiveCount(data.active_count);
       setActiveCap(data.active_cap);
+      setTotalCount(data.total);
+      setBulkNotice(null);
       setLoadFailed(false);
+      loadMoreEpochRef.current += 1;
       setHistoryCache({});
       setHistoryOpenId(null);
+      setHistoryAnswerTaskId(null);
+      setHistoryAnswerCopyStatus('idle');
+      setHistoryMoreBusyId(null);
+      setHistoryMoreError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not load watchlist');
       setItems([]);
       setLoadFailed(true);
     } finally {
       setLoading(false);
+      void refreshStats();
     }
-  }, [canWatchlist]);
+  }, [canWatchlist, refreshStats]);
 
   useEffect(() => {
     void load();
@@ -231,6 +422,64 @@ export function WatchlistPage() {
     return () => document.removeEventListener('keydown', onKey);
   }, [pendingDeleteId]);
 
+  useEffect(() => {
+    if (!editingItem) return;
+    editQuestionRef.current?.focus();
+    editQuestionRef.current?.select();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      const trigger = editTriggerRef.current;
+      if (trigger) {
+        trigger.focus();
+        editTriggerRef.current = null;
+      }
+    };
+  }, [editingItem]);
+
+  useEffect(() => {
+    if (!editingItem) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (!editBusy) {
+          e.preventDefault();
+          setEditingItem(null);
+          setEditError(null);
+        }
+        return;
+      }
+      if (e.key !== 'Tab' || !editDialogRef.current) return;
+
+      const nodes = Array.from(
+        editDialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ).filter((el) => {
+        if (el.hasAttribute('disabled') || el.getAttribute('aria-hidden') === 'true') {
+          return false;
+        }
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (nodes.length === 0) return;
+
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (e.shiftKey) {
+        if (active === first || !editDialogRef.current.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !editDialogRef.current.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [editingItem, editBusy]);
+
   // `/` focuses watchlist search when not typing in another field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -246,10 +495,13 @@ export function WatchlistPage() {
   const onToggle = async (item: AgentWatchlistItem) => {
     try {
       setError(null);
+      setBulkNotice(null);
       const updated = await patchAgentWatchlist(item.id, { is_active: !item.is_active });
       setItems((prev) => prev.map((x) => (x.id === item.id ? updated : x)));
       const data = await getAgentWatchlist();
       setActiveCount(data.active_count);
+      setTotalCount(data.total);
+      void refreshStats();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Update failed');
     }
@@ -269,18 +521,231 @@ export function WatchlistPage() {
     }
   };
 
+  const onRunNow = async (item: AgentWatchlistItem) => {
+    if (runNowBusyId === item.id) return;
+    setRunNowBusyId(item.id);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      const result = await postAgentWatchlistRun(item.id);
+      setItems((prev) => prev.map((x) => (x.id === item.id ? result.item : x)));
+      setBulkNotice('Re-check started — the latest result will update shortly.');
+      void refreshStats();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not start this re-check');
+    } finally {
+      setRunNowBusyId(null);
+    }
+  };
+
+  const onRunAllNow = async () => {
+    if (runAllBusyRef.current || runAllBusy || activeCount === 0) return;
+    // The ref guards against a double click / repeated Shift+R landing
+    // before React re-renders with `runAllBusy` true.
+    runAllBusyRef.current = true;
+    setRunAllBusy(true);
+    setRunAllNotice(null);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      const result = await runActiveWatchlistItems(items, async (item) => {
+        const started = await postAgentWatchlistRun(item.id);
+        setItems((prev) =>
+          prev.map((x) => (x.id === item.id ? started.item : x)),
+        );
+      });
+      setRunAllNotice(formatWatchlistBulkRunNotice(result));
+      if (result.started.length > 0) {
+        void refreshStats();
+      }
+    } catch (e) {
+      setRunAllNotice(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not run watches — check your connection and try again.',
+      );
+    } finally {
+      runAllBusyRef.current = false;
+      setRunAllBusy(false);
+    }
+  };
+
+  const onDuplicate = async (item: AgentWatchlistItem) => {
+    if (duplicateBusyId === item.id) return;
+    setDuplicateBusyId(item.id);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      const copy = await postAgentWatchlistDuplicate(item.id);
+      setItems((prev) => [copy, ...prev.filter((x) => x.id !== copy.id)]);
+      setTotalCount((prev) => prev + 1);
+      setActiveCount((prev) => prev + (copy.is_active ? 1 : 0));
+      // The copy is deliberately paused; if the user was looking only at
+      // active watches, show the full list so the new copy is not invisible.
+      setStatusFilter((current) => (current === 'active' ? 'all' : current));
+      setBulkNotice('Duplicated watch — the paused copy is ready to edit or resume.');
+      void refreshStats();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not duplicate this watch');
+    } finally {
+      setDuplicateBusyId(null);
+    }
+  };
+
   const onDelete = async (id: string) => {
     try {
       setError(null);
+      setBulkNotice(null);
       await deleteAgentWatchlist(id);
       setItems((prev) => prev.filter((x) => x.id !== id));
+      setSelectedIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       setPendingDeleteId(null);
       const data = await getAgentWatchlist();
       setActiveCount(data.active_count);
+      setTotalCount(data.total);
+      void refreshStats();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Delete failed');
     }
   };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+    setBulkDeleteArmed(false);
+  };
+
+  const onBulkDeleteSelected = async () => {
+    if (bulkDeleteBusy || selectedIds.size === 0) return;
+    if (!bulkDeleteArmed) {
+      setBulkDeleteArmed(true);
+      return;
+    }
+    const ids = [...selectedIds];
+    setBulkDeleteBusy(true);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      const result = await deleteAgentWatchlistBulk(ids);
+      setItems((prev) => prev.filter((x) => !result.deleted_ids.includes(x.id)));
+      setSelectedIds(new Set());
+      setBulkDeleteArmed(false);
+      // Newer backends report the post-delete counters on the delete
+      // response itself. Prefer those (they are computed in the same
+      // transaction as the delete); fall back to a refetch only for older
+      // backends, and never let a failed refetch misreport a deletion that
+      // already succeeded as a failure.
+      if (
+        typeof result.active_count === 'number' &&
+        typeof result.total === 'number'
+      ) {
+        setActiveCount(result.active_count);
+        setTotalCount(result.total);
+      } else {
+        try {
+          const data = await getAgentWatchlist();
+          setActiveCount(data.active_count);
+          setTotalCount(data.total);
+        } catch {
+          // Counters re-sync on the next load; the deletion itself succeeded.
+        }
+      }
+      const skipped = result.requested - result.deleted;
+      setBulkNotice(
+        skipped > 0
+          ? `Removed ${result.deleted} of ${result.requested} selected ${
+              result.requested === 1 ? 'watch' : 'watches'
+            }; ${skipped} could not be removed.`
+          : `Removed ${result.deleted} selected ${
+              result.deleted === 1 ? 'watch' : 'watches'
+            }.`,
+      );
+      void refreshStats();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Bulk delete failed');
+    } finally {
+      setBulkDeleteBusy(false);
+    }
+  };
+
+  const openEdit = (item: AgentWatchlistItem, trigger: HTMLElement | null = null) => {
+    setError(null);
+    setEditError(null);
+    setEditingItem(item);
+    setEditQuestion(item.question);
+    setEditLevel((item.expertise_level || 'curious').trim().toLowerCase() || 'curious');
+    setEditDomain(item.expertise_domain || '');
+    editTriggerRef.current =
+      trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  };
+
+  const closeEdit = () => {
+    if (editBusy) return;
+    setEditingItem(null);
+    setEditError(null);
+  };
+
+  const onEditSave = async () => {
+    if (!editingItem || editBusy) return;
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      const updated = await patchAgentWatchlist(editingItem.id, {
+        question: editQuestion,
+        expertise_level: editLevel,
+        expertise_domain: editDomain,
+      });
+      setItems((prev) => prev.map((x) => (x.id === editingItem.id ? updated : x)));
+      setEditingItem(null);
+    } catch (e) {
+      setEditError(e instanceof ApiError ? e.message : 'Could not save changes');
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const onBulkStatusChange = async (action: 'pause_all' | 'resume_all') => {
+    if (bulkBusy) return;
+    setBulkBusy(action);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      const result = await patchAgentWatchlistBulk(action);
+      const data = await getAgentWatchlist();
+      setItems(data.items);
+      setActiveCount(data.active_count);
+      setActiveCap(data.active_cap);
+      setTotalCount(data.total);
+      if (action === 'pause_all') {
+        setBulkNotice(`Paused ${result.applied} active watch${result.applied === 1 ? '' : 'es'}.`);
+      } else if (result.skipped > 0) {
+        setBulkNotice(
+          `Resumed ${result.applied} paused watch${result.applied === 1 ? '' : 'es'}; ${result.skipped} stayed paused because the ${result.active_cap}-watch active cap is full.`,
+        );
+      } else {
+        setBulkNotice(`Resumed ${result.applied} paused watch${result.applied === 1 ? '' : 'es'}.`);
+      }
+      void refreshStats();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Bulk watchlist update failed');
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
+  const pausedCount = Math.max(0, totalCount - activeCount);
 
   const bodyMode = watchlistBodyMode({
     loading,
@@ -391,14 +856,44 @@ export function WatchlistPage() {
       if (downloadStatusTimerRef.current != null) {
         window.clearTimeout(downloadStatusTimerRef.current);
       }
+      if (csvDownloadStatusTimerRef.current != null) {
+        window.clearTimeout(csvDownloadStatusTimerRef.current);
+      }
+      if (jsonDownloadStatusTimerRef.current != null) {
+        window.clearTimeout(jsonDownloadStatusTimerRef.current);
+      }
+      if (jsonCopyStatusTimerRef.current != null) {
+        window.clearTimeout(jsonCopyStatusTimerRef.current);
+      }
+      if (digestCopyStatusTimerRef.current != null) {
+        window.clearTimeout(digestCopyStatusTimerRef.current);
+      }
+      if (digestDownloadStatusTimerRef.current != null) {
+        window.clearTimeout(digestDownloadStatusTimerRef.current);
+      }
       if (historyCopyTimerRef.current != null) {
         window.clearTimeout(historyCopyTimerRef.current);
       }
       if (itemCopyTimerRef.current != null) {
         window.clearTimeout(itemCopyTimerRef.current);
       }
+      if (latestShareTimerRef.current != null) {
+        window.clearTimeout(latestShareTimerRef.current);
+      }
       if (historyDownloadTimerRef.current != null) {
         window.clearTimeout(historyDownloadTimerRef.current);
+      }
+      if (historyJsonDownloadTimerRef.current != null) {
+        window.clearTimeout(historyJsonDownloadTimerRef.current);
+      }
+      if (historyCsvDownloadTimerRef.current != null) {
+        window.clearTimeout(historyCsvDownloadTimerRef.current);
+      }
+      if (historyAnswerCopyTimerRef.current != null) {
+        window.clearTimeout(historyAnswerCopyTimerRef.current);
+      }
+      if (statsDownloadTimerRef.current != null) {
+        window.clearTimeout(statsDownloadTimerRef.current);
       }
     };
   }, []);
@@ -425,6 +920,72 @@ export function WatchlistPage() {
     }, status === 'done' ? 2200 : 3200);
   };
 
+  const flashCsvDownloadStatus = (status: 'done' | 'failed') => {
+    if (csvDownloadStatusTimerRef.current != null) {
+      window.clearTimeout(csvDownloadStatusTimerRef.current);
+    }
+    setCsvDownloadStatus(status);
+    csvDownloadStatusTimerRef.current = window.setTimeout(() => {
+      setCsvDownloadStatus('idle');
+      csvDownloadStatusTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashJsonDownloadStatus = (status: 'done' | 'failed') => {
+    if (jsonDownloadStatusTimerRef.current != null) {
+      window.clearTimeout(jsonDownloadStatusTimerRef.current);
+    }
+    setJsonDownloadStatus(status);
+    jsonDownloadStatusTimerRef.current = window.setTimeout(() => {
+      setJsonDownloadStatus('idle');
+      jsonDownloadStatusTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashJsonCopyStatus = (status: 'copied' | 'failed') => {
+    if (jsonCopyStatusTimerRef.current != null) {
+      window.clearTimeout(jsonCopyStatusTimerRef.current);
+    }
+    setJsonCopyStatus(status);
+    jsonCopyStatusTimerRef.current = window.setTimeout(() => {
+      setJsonCopyStatus('idle');
+      jsonCopyStatusTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const flashDigestCopyStatus = (status: 'copied' | 'failed') => {
+    if (digestCopyStatusTimerRef.current != null) {
+      window.clearTimeout(digestCopyStatusTimerRef.current);
+    }
+    setDigestCopyStatus(status);
+    digestCopyStatusTimerRef.current = window.setTimeout(() => {
+      setDigestCopyStatus('idle');
+      digestCopyStatusTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const flashDigestDownloadStatus = (status: 'done' | 'failed') => {
+    if (digestDownloadStatusTimerRef.current != null) {
+      window.clearTimeout(digestDownloadStatusTimerRef.current);
+    }
+    setDigestDownloadStatus(status);
+    digestDownloadStatusTimerRef.current = window.setTimeout(() => {
+      setDigestDownloadStatus('idle');
+      digestDownloadStatusTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashStatsDownloadStatus = (status: 'done' | 'failed') => {
+    if (statsDownloadTimerRef.current != null) {
+      window.clearTimeout(statsDownloadTimerRef.current);
+    }
+    setStatsDownloadStatus(status);
+    statsDownloadTimerRef.current = window.setTimeout(() => {
+      setStatsDownloadStatus('idle');
+      statsDownloadTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
   const flashHistoryCopyStatus = (status: 'copied' | 'failed') => {
     if (historyCopyTimerRef.current != null) {
       window.clearTimeout(historyCopyTimerRef.current);
@@ -438,7 +999,7 @@ export function WatchlistPage() {
 
   const flashItemCopy = (
     itemId: string,
-    kind: 'watch' | 'question',
+    kind: 'watch' | 'question' | 'result',
     status: 'copied' | 'failed',
   ) => {
     if (itemCopyTimerRef.current != null) {
@@ -455,10 +1016,83 @@ export function WatchlistPage() {
     }, status === 'copied' ? 2200 : 3200);
   };
 
-  const copyWatchItem = async (item: AgentWatchlistItem, kind: 'watch' | 'question') => {
+  const flashLatestShare = (itemId: string, status: 'copied' | 'failed') => {
+    if (latestShareTimerRef.current != null) {
+      window.clearTimeout(latestShareTimerRef.current);
+    }
+    setLatestShareId(itemId);
+    setLatestShareStatus(status);
+    latestShareTimerRef.current = window.setTimeout(() => {
+      setLatestShareStatus('idle');
+      setLatestShareId(null);
+      latestShareTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  /** Publish (once) and copy the latest completed result's public link. */
+  const shareLatestResult = async (item: AgentWatchlistItem) => {
+    const latest = item.latest_task;
+    if (!latest || !latest.is_complete || latestShareBusyRef.current) return;
+
+    let shareUrl = latest.share_url;
+    if (!shareUrl) {
+      latestShareBusyRef.current = true;
+      setLatestShareBusyId(item.id);
+      try {
+        const share = await createAgentTaskShare(latest.task_id);
+        shareUrl = share.shareUrl;
+        setItems((prev) =>
+          prev.map((entry) =>
+            entry.id === item.id && entry.latest_task
+              ? {
+                  ...entry,
+                  latest_task: {
+                    ...entry.latest_task,
+                    is_shared: true,
+                    share_url: share.shareUrl,
+                  },
+                }
+              : entry,
+          ),
+        );
+      } catch (e) {
+        flashLatestShare(item.id, 'failed');
+        setError(
+          e instanceof ApiError
+            ? e.message
+            : 'Could not share this result — open it in Agent and try again.',
+        );
+        return;
+      } finally {
+        latestShareBusyRef.current = false;
+        setLatestShareBusyId(null);
+      }
+    }
+
+    const absoluteUrl = `${window.location.origin}${shareUrl}`;
+    const ok = await copyToClipboard(absoluteUrl);
+    flashLatestShare(item.id, ok ? 'copied' : 'failed');
+    if (!ok) {
+      setError('Could not copy the share link — try opening the latest result and sharing there.');
+    }
+  };
+
+  const copyWatchItem = async (
+    item: AgentWatchlistItem,
+    kind: 'watch' | 'question' | 'result',
+  ) => {
     const text =
       kind === 'question'
         ? formatWatchlistQuestionCopy(item.question)
+        : kind === 'result'
+          ? formatWatchlistLatestResultCopy({
+              question: item.question,
+              title: item.latest_task?.title,
+              finalAnswer: item.latest_task?.final_answer,
+              finalScore: item.latest_task?.final_score,
+              createdAt: item.latest_task?.created_at,
+              taskId: item.latest_task?.task_id,
+            })
         : formatWatchlistItemCopy({
             question: item.question,
             intervalHours: item.interval_hours,
@@ -476,7 +1110,9 @@ export function WatchlistPage() {
       setError(
         kind === 'question'
           ? 'Nothing to copy — this watch has no question text.'
-          : 'Nothing to copy on this watch.',
+          : kind === 'result'
+            ? 'No completed answer to copy — open it in Agent for details.'
+            : 'Nothing to copy on this watch.',
       );
       return;
     }
@@ -486,7 +1122,9 @@ export function WatchlistPage() {
       setError(
         kind === 'question'
           ? 'Could not copy question — try again.'
-          : 'Could not copy this watch — try the list Copy export.',
+          : kind === 'result'
+            ? 'Could not copy this result — try again.'
+            : 'Could not copy this watch — try the list Copy export.',
       );
     }
   };
@@ -500,6 +1138,53 @@ export function WatchlistPage() {
       setHistoryDownloadStatus('idle');
       historyDownloadTimerRef.current = null;
     }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashHistoryJsonDownloadStatus = (status: 'done' | 'failed') => {
+    if (historyJsonDownloadTimerRef.current != null) {
+      window.clearTimeout(historyJsonDownloadTimerRef.current);
+    }
+    setHistoryJsonDownloadStatus(status);
+    historyJsonDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryJsonDownloadStatus('idle');
+      historyJsonDownloadTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashHistoryCsvDownloadStatus = (status: 'done' | 'failed') => {
+    if (historyCsvDownloadTimerRef.current != null) {
+      window.clearTimeout(historyCsvDownloadTimerRef.current);
+    }
+    setHistoryCsvDownloadStatus(status);
+    historyCsvDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryCsvDownloadStatus('idle');
+      historyCsvDownloadTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashHistoryAnswerCopyStatus = (status: 'copied' | 'failed') => {
+    if (historyAnswerCopyTimerRef.current != null) {
+      window.clearTimeout(historyAnswerCopyTimerRef.current);
+    }
+    setHistoryAnswerCopyStatus(status);
+    historyAnswerCopyTimerRef.current = window.setTimeout(() => {
+      setHistoryAnswerCopyStatus('idle');
+      historyAnswerCopyTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const copyHistoryAnswer = async (run: AgentWatchlistHistoryRun) => {
+    const text = readableAgentAnswerText(run.final_answer);
+    if (!text) {
+      flashHistoryAnswerCopyStatus('failed');
+      setError('No answer recorded for this run yet.');
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    flashHistoryAnswerCopyStatus(ok ? 'copied' : 'failed');
+    if (!ok) {
+      setError('Could not copy this answer — try again.');
+    }
   };
 
   const exportOpenWatchHistory = async (mode: 'copy' | 'download', question: string, itemId: string) => {
@@ -524,7 +1209,55 @@ export function WatchlistPage() {
     if (!ok) setError('Could not download run history — try Copy instead.');
   };
 
-  const buildWatchlistMarkdown = () => {
+  const downloadWatchHistoryJson = async (question: string, itemId: string) => {
+    const stem = `watch-history-${question.slice(0, 40) || itemId}`;
+    try {
+      const blob = await exportAgentWatchlistHistoryJson(itemId, 100);
+      const ok = downloadBlobFile(blob, `${withDownloadDate(stem)}.json`);
+      flashHistoryJsonDownloadStatus(ok ? 'done' : 'failed');
+      if (!ok) setError('Could not download run history JSON — try again.');
+    } catch (e) {
+      flashHistoryJsonDownloadStatus('failed');
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not download run history JSON — try again.',
+      );
+    }
+  };
+
+  const downloadWatchHistoryCsv = async (question: string, itemId: string) => {
+    const stem = `watch-history-${question.slice(0, 40) || itemId}`;
+    try {
+      const blob = await exportAgentWatchlistHistoryCsv(itemId, 100);
+      const ok = downloadBlobFile(blob, `${withDownloadDate(stem)}.csv`);
+      flashHistoryCsvDownloadStatus(ok ? 'done' : 'failed');
+      if (!ok) setError('Could not download run history CSV — try again.');
+    } catch (e) {
+      flashHistoryCsvDownloadStatus('failed');
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not download run history CSV — try again.',
+      );
+    }
+  };
+
+  const buildWatchlistExportItems = () =>
+    filteredItems.map((item) => ({
+      question: item.question,
+      intervalHours: item.interval_hours,
+      isActive: item.is_active,
+      runCount: item.run_count,
+      lastRunAt: item.last_run_at,
+      nextRunAt: item.next_run_at,
+      latestTitle: item.latest_task?.title,
+      latestScore: item.latest_task?.final_score,
+      expertiseLevel: item.expertise_level,
+      expertiseDomain: item.expertise_domain,
+    }));
+
+  const buildWatchlistFilterNote = () => {
     const filterBits: string[] = [];
     if (statusFilter !== 'all') filterBits.push(`status: ${statusFilter}`);
     if (cadenceFilter !== 'all') {
@@ -547,22 +1280,15 @@ export function WatchlistPage() {
     const q = searchQuery.trim();
     if (q) filterBits.push(`search: “${q}”`);
     if (listSort !== 'next_soon') filterBits.push(`sort: ${watchlistSortLabel(listSort)}`);
+    return filterBits.length > 0 ? filterBits.join(' · ') : undefined;
+  };
+
+  const buildWatchlistMarkdown = () => {
     return formatWatchlistExport({
-      items: filteredItems.map((item) => ({
-        question: item.question,
-        intervalHours: item.interval_hours,
-        isActive: item.is_active,
-        runCount: item.run_count,
-        lastRunAt: item.last_run_at,
-        nextRunAt: item.next_run_at,
-        latestTitle: item.latest_task?.title,
-        latestScore: item.latest_task?.final_score,
-        expertiseLevel: item.expertise_level,
-        expertiseDomain: item.expertise_domain,
-      })),
+      items: buildWatchlistExportItems(),
       activeCount,
       activeCap,
-      filterNote: filterBits.length > 0 ? filterBits.join(' · ') : undefined,
+      filterNote: buildWatchlistFilterNote(),
     });
   };
 
@@ -587,6 +1313,217 @@ export function WatchlistPage() {
       setError('Could not download watchlist — try Copy instead.');
     }
   };
+
+  const downloadWatchlistCsv = () => {
+    const csv = formatWatchlistCsvExport(buildWatchlistExportItems());
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('agent-watchlist')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    if (ok) {
+      flashCsvDownloadStatus('done');
+    } else {
+      flashCsvDownloadStatus('failed');
+      setError('Could not download watchlist CSV — try Copy instead.');
+    }
+  };
+
+  const downloadWatchlistJson = () => {
+    const json = formatWatchlistJsonExport({
+      items: buildWatchlistExportItems(),
+      activeCount,
+      activeCap,
+      filterNote: buildWatchlistFilterNote(),
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('agent-watchlist')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    if (ok) {
+      flashJsonDownloadStatus('done');
+    } else {
+      flashJsonDownloadStatus('failed');
+      setError('Could not download watchlist JSON — try again.');
+    }
+  };
+
+  const copyWatchlistJson = async () => {
+    if (jsonCopyBusyRef.current) return;
+    jsonCopyBusyRef.current = true;
+    try {
+      const json = formatWatchlistJsonExport({
+        items: buildWatchlistExportItems(),
+        activeCount,
+        activeCap,
+        filterNote: buildWatchlistFilterNote(),
+      });
+      const ok = await copyToClipboard(json);
+      flashJsonCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy watchlist JSON — try Download .json instead.');
+      }
+    } catch {
+      flashJsonCopyStatus('failed');
+      setError('Could not copy watchlist JSON — try Download .json instead.');
+    } finally {
+      jsonCopyBusyRef.current = false;
+    }
+  };
+
+  const buildWatchlistDigestItems = () =>
+    filteredItems.map((item) => ({
+      question: item.question,
+      title: item.latest_task?.title,
+      finalAnswer: item.latest_task?.final_answer,
+      finalScore: item.latest_task?.final_score,
+      createdAt: item.latest_task?.created_at,
+      taskId: item.latest_task?.task_id,
+      isComplete: item.latest_task?.is_complete,
+    }));
+
+  const copyWatchlistDigest = async () => {
+    if (digestCopyBusyRef.current) return;
+    digestCopyBusyRef.current = true;
+    try {
+      const digest = formatWatchlistResultsDigest({
+        items: buildWatchlistDigestItems(),
+        activeCount,
+        activeCap,
+        filterNote: buildWatchlistFilterNote(),
+      });
+      if (!digest) {
+        flashDigestCopyStatus('failed');
+        setError(
+          'No completed results in this view — a digest needs at least one finished answer.',
+        );
+        return;
+      }
+      const ok = await copyToClipboard(digest);
+      flashDigestCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy the results digest — try again.');
+      }
+    } catch {
+      flashDigestCopyStatus('failed');
+      setError('Could not copy the results digest — try again.');
+    } finally {
+      digestCopyBusyRef.current = false;
+    }
+  };
+
+  const downloadWatchlistDigest = () => {
+    if (digestDownloadBusyRef.current) return;
+    digestDownloadBusyRef.current = true;
+    try {
+      const digest = formatWatchlistResultsDigest({
+        items: buildWatchlistDigestItems(),
+        activeCount,
+        activeCap,
+        filterNote: buildWatchlistFilterNote(),
+      });
+      if (!digest) {
+        flashDigestDownloadStatus('failed');
+        setError(
+          'No completed results in this view — a digest needs at least one finished answer.',
+        );
+        return;
+      }
+      const ok = downloadMarkdownFile(digest, 'agent-watchlist-digest');
+      flashDigestDownloadStatus(ok ? 'done' : 'failed');
+      if (!ok) {
+        setError('Could not download the results digest — try Copy digest instead.');
+      }
+    } catch {
+      flashDigestDownloadStatus('failed');
+      setError('Could not download the results digest — try Copy digest instead.');
+    } finally {
+      digestDownloadBusyRef.current = false;
+    }
+  };
+
+  const downloadStatsCsv = async () => {
+    if (statsDownloadBusyRef.current) return;
+    statsDownloadBusyRef.current = true;
+    setStatsDownloadBusy(true);
+    try {
+      const blob = await exportAgentWatchlistStatisticsCsv();
+      const ok = downloadBlobFile(blob, `${withDownloadDate('arena-watchlist-stats')}.csv`);
+      flashStatsDownloadStatus(ok ? 'done' : 'failed');
+      if (!ok) setError('Could not download watchlist statistics — try again.');
+    } catch (e) {
+      flashStatsDownloadStatus('failed');
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not download watchlist statistics — try again.',
+      );
+    } finally {
+      statsDownloadBusyRef.current = false;
+      setStatsDownloadBusy(false);
+    }
+  };
+
+  // The header/overview export controls only exist once the list has loaded
+  // (and the stats strip has data), so keep the keyboard actions inert until
+  // their visible counterpart can be triggered.
+  watchlistExportActionsRef.current =
+    bodyMode === 'list' && items.length > 0
+      ? {
+          copyWatchlist,
+          copyWatchlistJson,
+          downloadWatchlist,
+          downloadWatchlistCsv,
+          downloadWatchlistJson,
+          downloadDigest: downloadWatchlistDigest,
+          downloadStatsCsv: stats ? downloadStatsCsv : null,
+          runAllNow: activeCount > 0 && !runAllBusy ? onRunAllNow : null,
+        }
+      : null;
+
+  // Keyboard-first watchlist actions: Shift+C / Shift+D / Shift+E / Shift+J /
+  // Shift+M / Shift+O / Shift+F mirror the export buttons, and Shift+R starts
+  // every active watch.
+  // Form controls are skipped so normal Shift+letter typing is never
+  // swallowed, and open dialogs keep ownership of their keystrokes. The
+  // actions ref is only populated when the matching visible control is
+  // available.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isAriaModalOpen()) return;
+      if (!shouldCaptureSlashFocus(e.target)) return;
+      const actions = watchlistExportActionsRef.current;
+      if (!actions) return;
+      if (isWatchlistCopyKey(e)) {
+        e.preventDefault();
+        void actions.copyWatchlist();
+      } else if (isWatchlistCopyJsonKey(e)) {
+        e.preventDefault();
+        void actions.copyWatchlistJson();
+      } else if (isWatchlistDownloadMarkdownKey(e)) {
+        e.preventDefault();
+        actions.downloadWatchlist();
+      } else if (isWatchlistDownloadCsvKey(e)) {
+        e.preventDefault();
+        actions.downloadWatchlistCsv();
+      } else if (isWatchlistDownloadJsonKey(e)) {
+        e.preventDefault();
+        actions.downloadWatchlistJson();
+      } else if (isWatchlistDownloadDigestKey(e)) {
+        e.preventDefault();
+        actions.downloadDigest();
+      } else if (isWatchlistDownloadStatsCsvKey(e)) {
+        if (!actions.downloadStatsCsv) return;
+        e.preventDefault();
+        void actions.downloadStatsCsv();
+      } else if (isWatchlistRunAllKey(e)) {
+        if (!actions.runAllNow) return;
+        e.preventDefault();
+        actions.runAllNow();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   if (!canWatchlist) {
     return (
@@ -647,8 +1584,93 @@ export function WatchlistPage() {
           <div className="watchlist-page__header-actions">
             <button
               type="button"
+              onClick={() => void onRunAllNow()}
+              disabled={runAllBusy || activeCount === 0}
+              title={
+                activeCount === 0
+                  ? 'No active watches to run'
+                  : `Run all ${activeCount} active watch${activeCount === 1 ? '' : 'es'} now (Shift+R)`
+              }
+              aria-keyshortcuts="Shift+R"
+              aria-label={
+                activeCount === 0
+                  ? 'Run all watches now (none active)'
+                  : `Run all ${activeCount} active watch${activeCount === 1 ? '' : 'es'} now`
+              }
+              className="watchlist-header-btn"
+            >
+              {runAllBusy ? 'Starting…' : `Run all (${activeCount})`}
+            </button>
+            <button
+              type="button"
+              onClick={() => void onBulkStatusChange('pause_all')}
+              disabled={bulkBusy !== null || activeCount === 0}
+              title={
+                activeCount === 0
+                  ? 'No active watches to pause'
+                  : `Pause all ${activeCount} active watch${activeCount === 1 ? '' : 'es'}`
+              }
+              aria-label={
+                activeCount === 0
+                  ? 'Pause all watches (none active)'
+                  : `Pause all ${activeCount} active watch${activeCount === 1 ? '' : 'es'}`
+              }
+              className="watchlist-header-btn"
+            >
+              {bulkBusy === 'pause_all' ? 'Pausing…' : `Pause all (${activeCount})`}
+            </button>
+            <button
+              type="button"
+              onClick={() => void onBulkStatusChange('resume_all')}
+              disabled={bulkBusy !== null || pausedCount === 0}
+              title={
+                pausedCount === 0
+                  ? 'No paused watches to resume'
+                  : `Resume ${pausedCount} paused watch${pausedCount === 1 ? '' : 'es'} up to the active cap`
+              }
+              aria-label={
+                pausedCount === 0
+                  ? 'Resume paused watches (none paused)'
+                  : `Resume ${pausedCount} paused watch${pausedCount === 1 ? '' : 'es'}`
+              }
+              className="watchlist-header-btn"
+            >
+              {bulkBusy === 'resume_all' ? 'Resuming…' : `Resume paused (${pausedCount})`}
+            </button>
+            {selectedIds.size > 0 ? (
+              <button
+                type="button"
+                onClick={() => void onBulkDeleteSelected()}
+                disabled={bulkDeleteBusy}
+                title={
+                  bulkDeleteArmed
+                    ? `Confirm removing ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'}`
+                    : `Remove ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'}`
+                }
+                aria-label={
+                  bulkDeleteArmed
+                    ? `Confirm remove ${selectedIds.size} selected watches`
+                    : `Remove ${selectedIds.size} selected watches`
+                }
+                className={[
+                  'watchlist-header-btn',
+                  bulkDeleteArmed ? 'watchlist-header-btn--danger' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                {bulkDeleteBusy
+                  ? 'Removing…'
+                  : bulkDeleteArmed
+                    ? `Remove ${selectedIds.size}?`
+                    : `Remove selected (${selectedIds.size})`}
+              </button>
+            ) : null}
+            <button
+              type="button"
               onClick={() => void copyWatchlist()}
-              title="Copy current view as markdown"
+              title="Copy current view as markdown (Shift+C)"
+              aria-keyshortcuts="Shift+C"
               aria-label={
                 copyStatus === 'copied'
                   ? 'Watchlist copied'
@@ -669,7 +1691,8 @@ export function WatchlistPage() {
             <button
               type="button"
               onClick={() => downloadWatchlist()}
-              title="Download current view as markdown"
+              title="Download current view as markdown (Shift+D)"
+              aria-keyshortcuts="Shift+D"
               aria-label={
                 downloadStatus === 'done'
                   ? 'Watchlist downloaded'
@@ -689,7 +1712,136 @@ export function WatchlistPage() {
                 ? 'Downloaded'
                 : downloadStatus === 'failed'
                   ? 'Failed'
-                  : 'Download .md'}
+                : 'Download .md'}
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadWatchlistCsv()}
+              title="Download current view as CSV (Shift+E)"
+              aria-keyshortcuts="Shift+E"
+              aria-label={
+                csvDownloadStatus === 'done'
+                  ? 'Watchlist CSV downloaded'
+                  : csvDownloadStatus === 'failed'
+                    ? 'CSV download failed'
+                    : 'Download watchlist as CSV'
+              }
+              className={[
+                'watchlist-header-btn',
+                csvDownloadStatus === 'done' ? 'watchlist-header-btn--ok' : '',
+                csvDownloadStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {csvDownloadStatus === 'done'
+                ? 'Downloaded'
+                : csvDownloadStatus === 'failed'
+                  ? 'Failed'
+                  : 'Download .csv'}
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadWatchlistJson()}
+              title="Download current view as JSON (Shift+J)"
+              aria-keyshortcuts="Shift+J"
+              aria-label={
+                jsonDownloadStatus === 'done'
+                  ? 'Watchlist JSON downloaded'
+                  : jsonDownloadStatus === 'failed'
+                    ? 'JSON download failed'
+                    : 'Download watchlist as JSON'
+              }
+              className={[
+                'watchlist-header-btn',
+                jsonDownloadStatus === 'done' ? 'watchlist-header-btn--ok' : '',
+                jsonDownloadStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {jsonDownloadStatus === 'done'
+                ? 'Downloaded'
+                : jsonDownloadStatus === 'failed'
+                  ? 'Failed'
+                  : 'Download .json'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyWatchlistJson()}
+              title="Copy current view as JSON (Shift+O)"
+              aria-keyshortcuts="Shift+O"
+              aria-label={
+                jsonCopyStatus === 'copied'
+                  ? 'Watchlist JSON copied'
+                  : jsonCopyStatus === 'failed'
+                    ? 'JSON copy failed'
+                    : 'Copy watchlist as JSON'
+              }
+              className={[
+                'watchlist-header-btn',
+                jsonCopyStatus === 'copied' ? 'watchlist-header-btn--ok' : '',
+                jsonCopyStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {jsonCopyStatus === 'copied'
+                ? 'Copied'
+                : jsonCopyStatus === 'failed'
+                  ? 'Copy failed'
+                  : 'Copy .json'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyWatchlistDigest()}
+              title="Copy every completed latest result in this view as one markdown digest"
+              aria-label={
+                digestCopyStatus === 'copied'
+                  ? 'Results digest copied'
+                  : digestCopyStatus === 'failed'
+                    ? 'Digest copy failed'
+                    : 'Copy all completed results as a markdown digest'
+              }
+              className={[
+                'watchlist-header-btn',
+                digestCopyStatus === 'copied' ? 'watchlist-header-btn--ok' : '',
+                digestCopyStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {digestCopyStatus === 'copied'
+                ? 'Digest copied'
+                : digestCopyStatus === 'failed'
+                  ? 'Copy failed'
+                  : 'Copy digest'}
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadWatchlistDigest()}
+              title="Download every completed latest result in this view as one markdown digest (Shift+M)"
+              aria-keyshortcuts="Shift+M"
+              aria-label={
+                digestDownloadStatus === 'done'
+                  ? 'Results digest downloaded'
+                  : digestDownloadStatus === 'failed'
+                    ? 'Digest download failed'
+                    : 'Download all completed results as a markdown digest'
+              }
+              className={[
+                'watchlist-header-btn',
+                digestDownloadStatus === 'done' ? 'watchlist-header-btn--ok' : '',
+                digestDownloadStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {digestDownloadStatus === 'done'
+                ? 'Digest downloaded'
+                : digestDownloadStatus === 'failed'
+                  ? 'Download failed'
+                  : 'Download digest'}
             </button>
           </div>
         ) : null}
@@ -708,6 +1860,25 @@ export function WatchlistPage() {
           >
             {error}
           </div>
+        ) : null}
+        {bulkNotice ? (
+          <p role="status" className="watchlist-page__bulk-notice">
+            {bulkNotice}
+          </p>
+        ) : null}
+        {runAllNotice ? (
+          <p role="status" className="watchlist-page__bulk-notice">
+            {runAllNotice}
+          </p>
+        ) : null}
+
+        {bodyMode === 'list' && items.length > 0 ? (
+          <WatchlistStatsStrip
+            stats={stats}
+            downloadBusy={statsDownloadBusy}
+            downloadStatus={statsDownloadStatus}
+            onDownload={() => void downloadStatsCsv()}
+          />
         ) : null}
 
         {bodyMode === 'loading' ? (
@@ -1104,6 +2275,7 @@ export function WatchlistPage() {
             filteredItems.map((item) => {
               const badge = intervalBadge(item.interval_hours);
               const urgency = watchlistUrgencyBucket(item);
+              const arenaQuestion = item.question.trim();
               return (
                 <div
                   key={item.id}
@@ -1115,6 +2287,18 @@ export function WatchlistPage() {
                     .filter(Boolean)
                     .join(' ')}
                 >
+                  <label className="watchlist-item__select">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={() => toggleSelected(item.id)}
+                      aria-label={
+                        selectedIds.has(item.id)
+                          ? `Deselect "${item.question}" for bulk remove`
+                          : `Select "${item.question}" for bulk remove`
+                      }
+                    />
+                  </label>
                   <div className="watchlist-item__badge">
                     <span className="watchlist-item__badge-num">{badge.num}</span>
                     <span className="watchlist-item__badge-unit">{badge.unit}</span>
@@ -1181,6 +2365,35 @@ export function WatchlistPage() {
                       })}
                     </div>
                     <div className="watchlist-item__actions">
+                      <button
+                        type="button"
+                        onClick={(e) => openEdit(item, e.currentTarget)}
+                        title="Edit the watched question and expertise settings"
+                        aria-label={`Edit watch: ${item.question.slice(0, 80) || 'watched question'}`}
+                        className="watchlist-link"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onRunNow(item)}
+                        disabled={runNowBusyId === item.id}
+                        title="Start an immediate re-check now"
+                        aria-label={`Run now: ${item.question.slice(0, 80) || 'watched question'}`}
+                        className="watchlist-link watchlist-link--accent"
+                      >
+                        {runNowBusyId === item.id ? 'Starting…' : 'Run now'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onDuplicate(item)}
+                        disabled={duplicateBusyId === item.id}
+                        title="Duplicate this watch as a paused copy"
+                        aria-label={`Duplicate watch: ${item.question.slice(0, 80) || 'watched question'}`}
+                        className="watchlist-link"
+                      >
+                        {duplicateBusyId === item.id ? 'Duplicating…' : 'Duplicate'}
+                      </button>
                       {item.latest_task_id && item.latest_task ? (
                         <button
                           type="button"
@@ -1194,6 +2407,100 @@ export function WatchlistPage() {
                           Latest result →
                         </button>
                       ) : null}
+                      {item.latest_task?.is_complete &&
+                      readableAgentAnswerText(item.latest_task.final_answer) ? (
+                        <button
+                          type="button"
+                          onClick={() => void copyWatchItem(item, 'result')}
+                          title="Copy the latest completed research answer as markdown"
+                          aria-label={`Copy latest result: ${item.question.slice(0, 80) || 'watched question'}`}
+                          className={[
+                            'watchlist-link',
+                            'watchlist-link--accent',
+                            itemCopyId === item.id &&
+                            itemCopyKind === 'result' &&
+                            itemCopyStatus === 'copied'
+                              ? 'watchlist-link--ok'
+                              : '',
+                            itemCopyId === item.id &&
+                            itemCopyKind === 'result' &&
+                            itemCopyStatus === 'failed'
+                              ? 'watchlist-link--err'
+                              : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                        >
+                          {itemCopyId === item.id &&
+                          itemCopyKind === 'result' &&
+                          itemCopyStatus === 'copied'
+                            ? 'Result copied'
+                            : itemCopyId === item.id &&
+                                itemCopyKind === 'result' &&
+                                itemCopyStatus === 'failed'
+                              ? 'Copy failed'
+                              : 'Copy result'}
+                        </button>
+                      ) : null}
+                      {item.latest_task_id &&
+                      item.latest_task &&
+                      item.latest_task.is_complete ? (
+                        <button
+                          type="button"
+                          onClick={() => void shareLatestResult(item)}
+                          disabled={latestShareBusyId === item.id}
+                          title={
+                            item.latest_task.share_url
+                              ? 'Copy the public link to the latest result'
+                              : 'Publish and copy a public link to the latest result'
+                          }
+                          aria-label={`Share latest result: ${item.question.slice(0, 80) || 'watched question'}`}
+                          className={[
+                            'watchlist-link',
+                            'watchlist-link--accent',
+                            latestShareId === item.id &&
+                            latestShareStatus === 'copied'
+                              ? 'watchlist-link--ok'
+                              : '',
+                            latestShareId === item.id &&
+                            latestShareStatus === 'failed'
+                              ? 'watchlist-link--err'
+                              : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                        >
+                          {latestShareBusyId === item.id
+                            ? 'Sharing…'
+                            : latestShareId === item.id &&
+                                latestShareStatus === 'copied'
+                              ? 'Link copied'
+                              : latestShareId === item.id &&
+                                  latestShareStatus === 'failed'
+                                ? 'Share failed'
+                                : item.latest_task.share_url
+                                  ? 'Copy result link'
+                                  : 'Share result'}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (arenaQuestion) {
+                            navigate('/app', {
+                              state: {
+                                agentStressPrompt: arenaQuestion,
+                                fromWatchlist: true,
+                              },
+                            });
+                          }
+                        }}
+                        title="Open this watched question in Arena for fresh four-mind takes"
+                        aria-label={`Ask in Arena: ${item.question.slice(0, 80) || 'watched question'}`}
+                        className="watchlist-link watchlist-link--accent"
+                      >
+                        Ask in Arena →
+                      </button>
                       {item.run_count > 0 ? (
                         <button
                           type="button"
@@ -1362,6 +2669,49 @@ export function WatchlistPage() {
                                           ? 'Failed'
                                           : 'Download .md'}
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void downloadWatchHistoryJson(item.question, item.id)}
+                                      title="Download run history as JSON"
+                                      className={[
+                                        'watchlist-history-btn',
+                                        historyJsonDownloadStatus === 'done' ? 'watchlist-history-btn--ok' : '',
+                                        historyJsonDownloadStatus === 'failed' ? 'watchlist-history-btn--err' : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                    >
+                                      {historyJsonDownloadStatus === 'done'
+                                        ? 'Downloaded'
+                                        : historyJsonDownloadStatus === 'failed'
+                                          ? 'Failed'
+                                          : '.json'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void downloadWatchHistoryCsv(item.question, item.id)}
+                                      title="Download run history as CSV"
+                                      aria-label={
+                                        historyCsvDownloadStatus === 'done'
+                                          ? 'Run history CSV downloaded'
+                                          : historyCsvDownloadStatus === 'failed'
+                                            ? 'Run history CSV download failed'
+                                            : 'Download run history as CSV'
+                                      }
+                                      className={[
+                                        'watchlist-history-btn',
+                                        historyCsvDownloadStatus === 'done' ? 'watchlist-history-btn--ok' : '',
+                                        historyCsvDownloadStatus === 'failed' ? 'watchlist-history-btn--err' : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                    >
+                                      {historyCsvDownloadStatus === 'done'
+                                        ? 'Downloaded'
+                                        : historyCsvDownloadStatus === 'failed'
+                                          ? 'Failed'
+                                          : '.csv'}
+                                    </button>
                                   </div>
                                 ) : null}
                               </div>
@@ -1371,48 +2721,141 @@ export function WatchlistPage() {
                                 <ul className="watchlist-history__list">
                                   {data.items.map((run) => {
                                     const score = run.final_score;
+                                    const runTitle = run.title?.trim() || 'Research run';
+                                    const answerText = readableAgentAnswerText(run.final_answer);
+                                    const hasAnswer = Boolean(answerText);
+                                    const answerOpen = historyAnswerTaskId === run.task_id;
                                     return (
-                                      <li key={run.task_id}>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            navigate(
-                                              `/agent?task_id=${encodeURIComponent(run.task_id)}`,
-                                            )
-                                          }
-                                          className="watchlist-history__run"
-                                        >
-                                          <div className="watchlist-history__run-row">
-                                            <span className="watchlist-history__run-title">
-                                              {run.title?.trim() || 'Research run'}
-                                            </span>
-                                            <span
+                                      <li key={run.task_id} className="watchlist-history__item">
+                                        <div className="watchlist-history__run-wrap">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              navigate(
+                                                `/agent?task_id=${encodeURIComponent(run.task_id)}`,
+                                              )
+                                            }
+                                            className="watchlist-history__run"
+                                          >
+                                            <div className="watchlist-history__run-row">
+                                              <span className="watchlist-history__run-title">
+                                                {runTitle}
+                                              </span>
+                                              <span
+                                                className={[
+                                                  'watchlist-score-chip',
+                                                  score == null
+                                                    ? 'watchlist-score-chip--neutral'
+                                                    : score >= 80
+                                                      ? 'watchlist-score-chip--high'
+                                                      : score >= 60
+                                                        ? 'watchlist-score-chip--mid'
+                                                        : 'watchlist-score-chip--low',
+                                                ].join(' ')}
+                                              >
+                                                {score != null ? `${score}/100` : '—'}
+                                              </span>
+                                            </div>
+                                            <div className="watchlist-history__run-meta">
+                                              {watchRelativePast(run.created_at)}
+                                              {run.user_feedback
+                                                ? ` · ${String(run.user_feedback)}`
+                                                : ''}
+                                            </div>
+                                          </button>
+                                          {hasAnswer ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => toggleHistoryAnswer(run.task_id)}
+                                              aria-expanded={answerOpen}
+                                              aria-controls={`watch-history-answer-${run.task_id}`}
+                                              aria-label={`${answerOpen ? 'Hide' : 'View'} answer for ${runTitle}`}
                                               className={[
-                                                'watchlist-score-chip',
-                                                score == null
-                                                  ? 'watchlist-score-chip--neutral'
-                                                  : score >= 80
-                                                    ? 'watchlist-score-chip--high'
-                                                    : score >= 60
-                                                      ? 'watchlist-score-chip--mid'
-                                                      : 'watchlist-score-chip--low',
-                                              ].join(' ')}
+                                                'watchlist-history__answer-toggle',
+                                                answerOpen ? 'watchlist-history__answer-toggle--open' : '',
+                                              ]
+                                                .filter(Boolean)
+                                                .join(' ')}
                                             >
-                                              {score != null ? `${score}/100` : '—'}
-                                            </span>
+                                              {answerOpen ? 'Hide answer' : 'Answer'}
+                                            </button>
+                                          ) : null}
+                                        </div>
+                                        {answerOpen ? (
+                                          <div
+                                            id={`watch-history-answer-${run.task_id}`}
+                                            className="watchlist-history__answer"
+                                          >
+                                            <p className="watchlist-history__answer-text">
+                                              {answerText || 'No answer recorded for this run yet.'}
+                                            </p>
+                                            <div className="watchlist-history__answer-actions">
+                                              <button
+                                                type="button"
+                                                onClick={() => void copyHistoryAnswer(run)}
+                                                aria-label={
+                                                  historyAnswerCopyStatus === 'copied'
+                                                    ? 'Answer copied'
+                                                    : historyAnswerCopyStatus === 'failed'
+                                                      ? 'Answer copy failed'
+                                                      : 'Copy this run answer'
+                                                }
+                                                className={[
+                                                  'watchlist-history__answer-btn',
+                                                  historyAnswerCopyStatus === 'copied'
+                                                    ? 'watchlist-history__answer-btn--ok'
+                                                    : '',
+                                                  historyAnswerCopyStatus === 'failed'
+                                                    ? 'watchlist-history__answer-btn--err'
+                                                    : '',
+                                                ]
+                                                  .filter(Boolean)
+                                                  .join(' ')}
+                                              >
+                                                {historyAnswerCopyStatus === 'copied'
+                                                  ? 'Copied'
+                                                  : historyAnswerCopyStatus === 'failed'
+                                                    ? 'Failed'
+                                                    : 'Copy answer'}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  navigate(
+                                                    `/agent?task_id=${encodeURIComponent(run.task_id)}`,
+                                                  )
+                                                }
+                                                className="watchlist-history__answer-btn"
+                                              >
+                                                Open full report
+                                              </button>
+                                            </div>
                                           </div>
-                                          <div className="watchlist-history__run-meta">
-                                            {watchRelativePast(run.created_at)}
-                                            {run.user_feedback
-                                              ? ` · ${String(run.user_feedback)}`
-                                              : ''}
-                                          </div>
-                                        </button>
+                                        ) : null}
                                       </li>
                                     );
                                   })}
                                 </ul>
                               )}
+                              {data.has_more && data.total > data.items.length ? (
+                                <div className="watchlist-history__more">
+                                  <button
+                                    type="button"
+                                    onClick={() => void loadMoreWatchHistory(item.id)}
+                                    disabled={historyMoreBusyId === item.id}
+                                    className="watchlist-link watchlist-link--accent"
+                                  >
+                                    {historyMoreBusyId === item.id
+                                      ? 'Loading older runs…'
+                                      : `Load older runs (${data.total - data.items.length} more)`}
+                                  </button>
+                                  {historyMoreError ? (
+                                    <p className="watchlist-history__more-error">
+                                      {historyMoreError}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })()}
@@ -1467,6 +2910,87 @@ export function WatchlistPage() {
           </div>
         )}
       </main>
+
+      {editingItem ? (
+        <div
+          className="watchlist-edit-overlay"
+          onClick={editBusy ? undefined : closeEdit}
+        >
+          <div
+            ref={editDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="watchlist-edit-title"
+            aria-describedby="watchlist-edit-hint"
+            aria-busy={editBusy}
+            className="watchlist-edit-dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="watchlist-edit-title" className="watchlist-edit-dialog__title">
+              Edit watch
+            </h2>
+            <p id="watchlist-edit-hint" className="watchlist-edit-dialog__hint">
+              Refining the question or expertise keeps run history intact.
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void onEditSave();
+              }}
+            >
+              <label
+                htmlFor="watchlist-edit-question"
+                className="watchlist-edit-dialog__label"
+              >
+                Watched question
+              </label>
+              <textarea
+                id="watchlist-edit-question"
+                ref={editQuestionRef}
+                className="watchlist-edit-dialog__question"
+                value={editQuestion}
+                onChange={(e) => setEditQuestion(e.target.value)}
+                maxLength={2000}
+                rows={3}
+                disabled={editBusy}
+              />
+              <div className="watchlist-edit-dialog__expertise">
+                <ExpertiseSelector
+                  level={editLevel}
+                  domain={editDomain}
+                  onChange={(level, domain) => {
+                    setEditLevel(level);
+                    setEditDomain(domain);
+                  }}
+                  disabled={editBusy}
+                />
+              </div>
+              {editError ? (
+                <p role="alert" className="watchlist-edit-dialog__error">
+                  {editError}
+                </p>
+              ) : null}
+              <div className="watchlist-edit-dialog__actions">
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  disabled={editBusy}
+                  className="watchlist-edit-dialog__cancel"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editBusy || !editQuestion.trim()}
+                  className="watchlist-edit-dialog__save"
+                >
+                  {editBusy ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       <KeyboardShortcutsHelp surface="watchlist" />
     </div>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import logging
 import re
@@ -333,6 +334,95 @@ class ShortTermMemory:
     def clear_session(self, session_id: str) -> None:
         with self._lock:
             self._store.pop(session_id, None)
+
+    def duplicate_session(
+        self, session_id: str, user_id: str = "anonymous"
+    ) -> str | None:
+        """Clone a caller-owned session under a fresh id.
+
+        The duplicate keeps the original transcript, topics, and custom
+        title, but starts with a clean session start time, an unpinned
+        state, and its own id so the user can branch the conversation
+        without mutating the source chat. Foreign and missing sessions
+        both return None so the route can keep the 404-oracle contract.
+        """
+        with self._lock:
+            state = self._store.get(session_id)
+            if not state:
+                return None
+            session_data = state.get("session_data")
+            if session_data is None:
+                return None
+            try:
+                # Use the same fallback as the session routes' _is_owner so a
+                # stale/missing top-level owner never turns the owner's own
+                # duplicate into a false 404 (or a foreign fork).
+                owner = state.get("user_id") or getattr(session_data, "user_id", None)
+                assert_session_owner(owner, user_id)
+            except SessionOwnershipError:
+                return None
+
+            new_id = str(uuid.uuid4())
+            now = _now_utc()
+            new_state = copy.deepcopy(state)
+            new_state["session_id"] = new_id
+            new_state["user_id"] = user_id
+            new_state["session_start"] = now
+            new_state["session_pinned"] = False
+
+            new_session_data: SessionData = new_state["session_data"]
+            new_session_data.session_id = new_id
+            new_session_data.user_id = user_id
+            new_session_data.created_at = now
+            new_session_data.last_active = now
+
+            self._store[new_id] = new_state
+            return new_id
+
+    def restore_sessions(
+        self,
+        bundles: list[dict[str, Any]],
+        user_id: str = "anonymous",
+    ) -> list[dict[str, Any]]:
+        """Restore exported chat bundles as fresh, user-owned sessions.
+
+        Every restored chat gets a brand-new id, an unpinned flag, and its
+        own activity clock, so an imported archive can never collide with an
+        existing session or leak the original owner's id. The transcript
+        turns and exchange history are kept verbatim so the restored chat
+        behaves like any other resumable session.
+        """
+        restored: list[dict[str, Any]] = []
+        with self._lock:
+            for bundle in bundles:
+                turns = list(bundle.get("turns") or [])
+                if not turns:
+                    continue
+                exchanges = list(bundle.get("exchanges") or [])
+                now = _now_utc()
+                new_id = str(uuid.uuid4())
+                session_data = SessionData(
+                    session_id=new_id,
+                    user_id=user_id,
+                    turns=turns,
+                    topics=_extract_topics_from_exchanges(exchanges, limit=4),
+                    created_at=now,
+                    last_active=now,
+                )
+                state = {
+                    "session_id": new_id,
+                    "user_id": user_id,
+                    "exchanges": exchanges,
+                    "active_debate_thread": None,
+                    "session_start": now,
+                    "session_data": session_data,
+                }
+                title = bundle.get("title")
+                if isinstance(title, str) and title.strip():
+                    state["session_title"] = title.strip()
+                self._store[new_id] = state
+                restored.append(state)
+        return restored
 
 
 class SessionCompressor:

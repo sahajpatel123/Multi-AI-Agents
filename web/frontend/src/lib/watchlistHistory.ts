@@ -20,6 +20,53 @@ export type WatchlistHistoryRunLike = {
   created_at?: string | null;
 };
 
+function sentenceText(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (
+    value &&
+    typeof value === 'object' &&
+    typeof (value as { text?: unknown }).text === 'string'
+  ) {
+    return (value as { text: string }).text.trim();
+  }
+  return '';
+}
+
+/**
+ * Pull readable text from free text or structured Agent final_answer JSON.
+ *
+ * Completed Agent runs persist the synthesizer's structured payload
+ * (sentences with confidence labels), so inline history views must flatten
+ * it before display/copy instead of showing raw JSON.
+ */
+export function readableAgentAnswerText(raw: string | null | undefined): string {
+  const text = (raw ?? '').trim();
+  if (!text) return '';
+  if (text.startsWith('{') || text.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (Array.isArray(parsed)) {
+        const joined = parsed.map(sentenceText).filter(Boolean).join('\n\n');
+        if (joined) return joined;
+      } else if (parsed && typeof parsed === 'object') {
+        const obj = parsed as Record<string, unknown>;
+        if (Array.isArray(obj.sentences)) {
+          const joined = obj.sentences.map(sentenceText).filter(Boolean).join('\n\n');
+          if (joined) return joined;
+        }
+        for (const key of ['one_liner', 'final_answer', 'text']) {
+          const value = obj[key];
+          if (typeof value === 'string' && value.trim()) return value.trim();
+        }
+      }
+      return '';
+    } catch {
+      // Not JSON — fall through to the raw text.
+    }
+  }
+  return text;
+}
+
 export type WatchlistScoreTrend = {
   /** Latest scored run minus the prior scored run (items newest-first). */
   delta: number;

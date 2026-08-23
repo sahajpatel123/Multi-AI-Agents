@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from arena.core.blackboard import Blackboard
@@ -464,8 +464,14 @@ def get_task_detail(
         except (TypeError, ValueError):
             parsed_insight = None
 
+    task_payload = row.to_dict()
+    task_payload["is_shared"] = bool(row.share_token)
+    task_payload["share_url"] = (
+        f"/share/agent/{row.share_token}" if row.share_token else None
+    )
+
     return {
-        "task": row.to_dict(),
+        "task": task_payload,
         "insight_report": parsed_insight,
         "contradictions": [
             _serialize_contradiction(c, task_id) for c in contradictions
@@ -622,27 +628,86 @@ def get_watchlist_history(
     user_id: int,
     watchlist_item_id: str,
     limit: int = 50,
+    max_limit: int = 200,
+    offset: int = 0,
+    before_task_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """All spawned runs of a single watchlist item, newest first, with aggregate stats.
 
     Returns a dict shaped for the Watchlist history surface:
       - items: list of {task_id, title, final_score, final_confidence,
         created_at, user_feedback} newest first
-      - stats: {count, avg_score, min_score, max_score, scored_count}
+      - stats: {count, avg_score, min_score, max_score, scored_count} computed
+        across the FULL matching history (not just the current page) so paging
+        never makes aggregate numbers drift.
+      - total: total number of matching runs (for \"showing X of Y\" labels)
+      - has_more: whether older runs exist beyond this page
     The stats ignore unscored rows for min/avg/max but report the
     total run count separately so the UI can say \"3 runs, 2 scored\".
+    Limit is clamped to [1, max_limit] and offset to >= 0; the caller controls
+    the ceiling so interactive history stays at 200 rows while export endpoints
+    can opt into their advertised 500-row cap.
+
+    Paging is stable against concurrent inserts: pass ``before_task_id`` (the
+    task_id of the last loaded row) to fetch strictly older runs, so a new run
+    landing between pages cannot duplicate or skip rows. Ordering always
+    includes task_id as a tiebreaker for deterministic page boundaries. If the
+    cursor row no longer exists, the call falls back to ``offset`` paging so
+    the client never dead-ends on a stale cursor.
     """
-    cap = max(1, min(int(limit), 200))
-    rows = (
-        db.query(AgentTask)
-        .filter(
-            AgentTask.user_id == user_id,
-            AgentTask.watchlist_item_id == watchlist_item_id,
-        )
-        .order_by(AgentTask.created_at.desc())
-        .limit(cap)
-        .all()
+    cap = max(1, min(int(limit), max_limit))
+    off = max(0, int(offset))
+    base_filter = (
+        AgentTask.user_id == user_id,
+        AgentTask.watchlist_item_id == watchlist_item_id,
     )
+    total = db.query(func.count(AgentTask.task_id)).filter(*base_filter).scalar() or 0
+    order_by = (AgentTask.created_at.desc(), AgentTask.task_id.desc())
+
+    cursor_filter = None
+    if before_task_id and before_task_id.strip():
+        cursor_task_id = before_task_id.strip()
+        anchor = (
+            db.query(AgentTask)
+            .filter(
+                AgentTask.task_id == cursor_task_id,
+                AgentTask.user_id == user_id,
+                AgentTask.watchlist_item_id == watchlist_item_id,
+            )
+            .first()
+        )
+        if anchor is not None and anchor.created_at is not None:
+            cursor_filter = or_(
+                AgentTask.created_at < anchor.created_at,
+                and_(
+                    AgentTask.created_at == anchor.created_at,
+                    AgentTask.task_id < cursor_task_id,
+                ),
+            )
+            off = 0
+
+    if cursor_filter is not None:
+        # Fetch one extra row to derive has_more without depending on the
+        # full-count query, which can lag behind live inserts.
+        raw_rows = (
+            db.query(AgentTask)
+            .filter(*base_filter, cursor_filter)
+            .order_by(*order_by)
+            .limit(cap + 1)
+            .all()
+        )
+        has_more = len(raw_rows) > cap
+        rows = raw_rows[:cap]
+    else:
+        rows = (
+            db.query(AgentTask)
+            .filter(*base_filter)
+            .order_by(*order_by)
+            .offset(off)
+            .limit(cap)
+            .all()
+        )
+        has_more = off + len(rows) < total
 
     items = [
         {
@@ -659,16 +724,26 @@ def get_watchlist_history(
         for t in rows
     ]
 
-    scored = [t.final_score for t in rows if isinstance(t.final_score, (int, float))]
+    scored_rows = (
+        db.query(AgentTask.final_score)
+        .filter(*base_filter, AgentTask.final_score.isnot(None))
+        .all()
+    )
+    scored = [value for (value,) in scored_rows if isinstance(value, (int, float))]
     stats = {
-        "count": len(rows),
+        "count": total,
         "scored_count": len(scored),
         "avg_score": round(sum(scored) / len(scored), 1) if scored else None,
         "min_score": min(scored) if scored else None,
         "max_score": max(scored) if scored else None,
     }
 
-    return {"items": items, "stats": stats}
+    return {
+        "items": items,
+        "stats": stats,
+        "total": total,
+        "has_more": has_more,
+    }
 
 
 def get_watchlist_statistics(
@@ -690,10 +765,10 @@ def get_watchlist_statistics(
     """
     # Get all watchlist items for the user
     items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id).all()
-    
+
     total_items = len(items)
     active_items = sum(1 for item in items if item.is_active)
-    
+
     # Get all agent tasks for watchlist items
     tasks = (
         db.query(AgentTask)
@@ -703,32 +778,32 @@ def get_watchlist_statistics(
         )
         .all()
     )
-    
+
     total_runs = len(tasks)
-    
+
     # Calculate score statistics
     scored_tasks = [t for t in tasks if isinstance(t.final_score, (int, float))]
     scored_runs = len(scored_tasks)
-    
+
     scores = [t.final_score for t in scored_tasks]
     avg_score = round(sum(scores) / len(scores), 1) if scores else None
     min_score = min(scores) if scores else None
     max_score = max(scores) if scores else None
-    
+
     # Calculate success rate: scored runs are considered successful
     success_rate = round((scored_runs / total_runs * 100), 1) if total_runs > 0 else 0.0
-    
+
     # Per-item statistics
     item_stats = {}
     for item in items:
         item_tasks = [t for t in tasks if t.watchlist_item_id == item.id]
         item_scored = [t for t in item_tasks if isinstance(t.final_score, (int, float))]
         item_scores = [t.final_score for t in item_scored]
-        
+
         last_run_at = None
         if item_tasks:
             last_run_at = max(t.created_at for t in item_tasks if t.created_at)
-        
+
         item_stats[item.id] = {
             "question": item.question,
             "run_count": len(item_tasks),
@@ -738,7 +813,7 @@ def get_watchlist_statistics(
             "is_active": item.is_active,
             "interval_hours": item.interval_hours,
         }
-    
+
     return {
         "total_items": total_items,
         "active_items": active_items,

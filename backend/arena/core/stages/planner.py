@@ -5,11 +5,12 @@ import time
 
 from arena.core.attachment_prompts import build_attachment_text_block, claude_image_content_blocks
 
-logger = logging.getLogger(__name__)
 from arena.core.blackboard import Blackboard, StageStatus
 from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
+
+logger = logging.getLogger(__name__)
 
 AGENT_MAX_TOKENS = 4096
 

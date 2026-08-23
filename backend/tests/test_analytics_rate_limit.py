@@ -76,3 +76,95 @@ async def test_analytics_summary_rate_limited(app_client, make_user, monkeypatch
     headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
     res = await app_client.get("/api/analytics/summary", headers=headers)
     assert res.status_code == 429, res.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "scope"),
+    [
+        ("/api/analytics/summary/export.json", "analytics_summary_json"),
+        ("/api/analytics/summary/export.csv", "analytics_summary_csv"),
+        ("/api/analytics/summary/export.md", "analytics_summary_markdown"),
+    ],
+)
+async def test_analytics_summary_exports_use_only_their_own_rate_budget(
+    app_client, make_user, monkeypatch, path, scope
+):
+    """A summary download must not also consume dashboard refresh capacity."""
+    from arena.core import rate_limits
+
+    keys: list[str] = []
+    real_hit = rate_limits.rate_limiter.hit
+
+    def recording_hit(key, *, limit, window_seconds, message):
+        keys.append(key)
+        return real_hit(key, limit=limit, window_seconds=window_seconds, message=message)
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", recording_hit)
+
+    user = make_user(email=f"{scope}-budget@test.com", tier=UserTier.PRO)
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(path, headers=headers)
+
+    assert res.status_code == 200, res.text
+    assert f"user:{scope}:{user.id}" in keys
+    assert f"user:analytics_summary:{user.id}" not in keys
+
+
+@pytest.mark.asyncio
+async def test_analytics_activity_csv_rate_limited(app_client, make_user, monkeypatch):
+    """The CSV export has its own hourly budget and rejects when exhausted."""
+    from arena.core import rate_limits
+
+    hits = {"n": 0}
+    real_hit = rate_limits.rate_limiter.hit
+
+    def limited_hit(key, *, limit, window_seconds, message):
+        if key.startswith("user:analytics_activity_csv:"):
+            hits["n"] += 1
+            if hits["n"] > 0:
+                from fastapi import HTTPException, status
+
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "error": "rate_limit_exceeded",
+                        "message": message,
+                        "retry_after": 1,
+                    },
+                )
+            return
+        return real_hit(key, limit=limit, window_seconds=window_seconds, message=message)
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", limited_hit)
+
+    user = make_user(email="analytics-activity-csv-rl@test.com", tier=UserTier.PRO)
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get("/api/analytics/activity/export.csv", headers=headers)
+    assert res.status_code == 429, res.text
+
+
+@pytest.mark.asyncio
+async def test_analytics_activity_csv_keeps_own_rate_budget(
+    app_client, make_user, monkeypatch
+):
+    """Exporting the activity CSV must not consume the JSON endpoint's budget."""
+    from arena.core import rate_limits
+
+    keys: list[str] = []
+    real_hit = rate_limits.rate_limiter.hit
+
+    def recording_hit(key, *, limit, window_seconds, message):
+        keys.append(key)
+        return real_hit(key, limit=limit, window_seconds=window_seconds, message=message)
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", recording_hit)
+
+    user = make_user(email="analytics-activity-csv-budget@test.com", tier=UserTier.PRO)
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+    res = await app_client.get(
+        "/api/analytics/activity/export.csv?days=7", headers=headers
+    )
+    assert res.status_code == 200, res.text
+    assert f"user:analytics_activity_csv:{user.id}" in keys
+    assert f"user:analytics_activity:{user.id}" not in keys

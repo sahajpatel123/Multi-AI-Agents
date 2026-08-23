@@ -211,3 +211,193 @@ async def test_history_clamps_limit(app_client, make_user, db_session):
     )
     assert res.status_code == 422
 
+
+@pytest.mark.asyncio
+async def test_history_paginates_with_offset_and_has_more(
+    app_client, make_user, db_session
+):
+    """offset pages older runs while total/has_more stay coherent and stats
+    describe the full history rather than just the current page."""
+    user = _make_pro(make_user)
+    item = _seed_watch(db_session, user_id=user.id)
+    for days_ago, score in ((4, 10), (3, 20), (2, 30), (1, 40), (0, 50)):
+        _seed_run(
+            db_session,
+            user_id=user.id,
+            watchlist_item_id=item.id,
+            score=score,
+            days_ago=days_ago,
+        )
+    db_session.commit()
+
+    first = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&offset=0",
+        headers=_pro_headers(user),
+    )
+    assert first.status_code == 200
+    first_body = first.json()
+    assert [row["final_score"] for row in first_body["items"]] == [50, 40]
+    assert first_body["total"] == 5
+    assert first_body["has_more"] is True
+    assert first_body["stats"] == {
+        "count": 5,
+        "scored_count": 5,
+        "avg_score": 30.0,
+        "min_score": 10,
+        "max_score": 50,
+    }
+
+    middle = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&offset=2",
+        headers=_pro_headers(user),
+    )
+    assert middle.status_code == 200
+    middle_body = middle.json()
+    assert [row["final_score"] for row in middle_body["items"]] == [30, 20]
+    assert middle_body["total"] == 5
+    assert middle_body["has_more"] is True
+    assert middle_body["stats"]["count"] == 5
+
+    last = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&offset=4",
+        headers=_pro_headers(user),
+    )
+    assert last.status_code == 200
+    last_body = last.json()
+    assert [row["final_score"] for row in last_body["items"]] == [10]
+    assert last_body["total"] == 5
+    assert last_body["has_more"] is False
+    assert last_body["stats"]["count"] == 5
+
+    beyond = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&offset=99",
+        headers=_pro_headers(user),
+    )
+    assert beyond.status_code == 200
+    beyond_body = beyond.json()
+    assert beyond_body["items"] == []
+    assert beyond_body["total"] == 5
+    assert beyond_body["has_more"] is False
+
+
+@pytest.mark.asyncio
+async def test_history_rejects_negative_offset(app_client, make_user, db_session):
+    user = _make_pro(make_user)
+    item = _seed_watch(db_session, user_id=user.id)
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?offset=-1",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_history_cursor_pages_strictly_older_runs_across_concurrent_inserts(
+    app_client, make_user, db_session
+):
+    """A cursor page must not repeat or skip rows when a newer run lands
+    between page loads, and must stay deterministic when runs share a
+    created_at timestamp (task_id tiebreaker)."""
+    user = _make_pro(make_user)
+    item = _seed_watch(db_session, user_id=user.id)
+    for days_ago, score in ((4, 10), (3, 20), (2, 30), (0, 55), (0, 60)):
+        _seed_run(
+            db_session,
+            user_id=user.id,
+            watchlist_item_id=item.id,
+            score=score,
+            days_ago=days_ago,
+        )
+    db_session.commit()
+
+    first = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2",
+        headers=_pro_headers(user),
+    )
+    assert first.status_code == 200
+    first_rows = first.json()["items"]
+    # Newest first; equal timestamps are tie-broken by task_id descending.
+    assert [row["final_score"] for row in first_rows] == [60, 55]
+
+    # A brand-new run lands after the first page was fetched.
+    _seed_run(
+        db_session,
+        user_id=user.id,
+        watchlist_item_id=item.id,
+        score=70,
+        days_ago=0,
+    )
+    db_session.commit()
+
+    cursor = first_rows[-1]["task_id"]
+    next_page = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&before_task_id={cursor}",
+        headers=_pro_headers(user),
+    )
+    assert next_page.status_code == 200
+    next_body = next_page.json()
+    # Strictly older than the cursor: no duplicate of 60/55, no 70, no gap.
+    assert [row["final_score"] for row in next_body["items"]] == [30, 20]
+    assert next_body["has_more"] is True
+    assert next_body["total"] == 6
+
+    last_page = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&before_task_id={next_body['items'][-1]['task_id']}",
+        headers=_pro_headers(user),
+    )
+    assert last_page.status_code == 200
+    last_body = last_page.json()
+    assert [row["final_score"] for row in last_body["items"]] == [10]
+    assert last_body["has_more"] is False
+
+
+@pytest.mark.asyncio
+async def test_history_cursor_falls_back_to_offset_when_row_missing(
+    app_client, make_user, db_session
+):
+    """A stale or foreign cursor must not dead-end the client; the route falls
+    back to offset paging and still returns the expected slice."""
+    user = _make_pro(make_user)
+    item = _seed_watch(db_session, user_id=user.id)
+    for days_ago, score in ((4, 10), (3, 20), (2, 30), (1, 40), (0, 50)):
+        _seed_run(
+            db_session,
+            user_id=user.id,
+            watchlist_item_id=item.id,
+            score=score,
+            days_ago=days_ago,
+        )
+
+    other_user = make_user(email="wh-pro-2@test.com", tier=UserTier.PRO)
+    other_item = _seed_watch(db_session, user_id=other_user.id)
+    foreign_run = _seed_run(
+        db_session,
+        user_id=other_user.id,
+        watchlist_item_id=other_item.id,
+        score=99,
+        days_ago=0,
+    )
+    db_session.commit()
+
+    # Foreign cursor is ignored (not treated as this item's anchor).
+    res = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&offset=0&before_task_id={foreign_run.task_id}",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert [row["final_score"] for row in body["items"]] == [50, 40]
+    assert body["has_more"] is True
+
+    # Unknown cursor falls back to offset paging.
+    res = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=2&offset=2&before_task_id=missing-cursor",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert [row["final_score"] for row in body["items"]] == [30, 20]
+    assert body["has_more"] is True
+    assert body["total"] == 5

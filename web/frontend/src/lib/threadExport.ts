@@ -18,14 +18,23 @@ export type DebateExportRound = {
   }>;
 };
 
+/**
+ * Normalize a payload field for export. Values that are not strings are
+ * treated as empty so a malformed response can never crash the exporter —
+ * the caller decides whether an empty result means null or a fallback.
+ */
+function toTrimmedText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 /** One-on-one Discuss conversation as markdown. */
 export function formatDiscussExport(opts: {
   agentName: string;
   originalPrompt: string;
   messages: ThreadMessage[];
 }): string {
-  const agentName = (opts.agentName || 'Arena mind').trim() || 'Arena mind';
-  const question = (opts.originalPrompt || '').trim() || '(no prompt)';
+  const agentName = toTrimmedText(opts.agentName) || 'Arena mind';
+  const question = toTrimmedText(opts.originalPrompt) || '(no prompt)';
   const lines: string[] = [
     `# Arena Discuss — ${agentName}`,
     '',
@@ -33,12 +42,14 @@ export function formatDiscussExport(opts: {
     '',
   ];
 
-  const msgs = opts.messages || [];
+  const msgs = (Array.isArray(opts.messages) ? opts.messages : []).filter(
+    (m): m is ThreadMessage => Boolean(m),
+  );
   if (msgs.length === 0) {
     lines.push('_No messages yet._');
   } else {
     for (const m of msgs) {
-      const body = (m.content || '').trim();
+      const body = toTrimmedText(m.content);
       if (!body) continue;
       if (m.role === 'user') {
         lines.push(`**You:** ${body}`);
@@ -97,8 +108,8 @@ export function formatDebateExport(opts: {
   challengedOneLiner?: string;
   rounds: DebateExportRound[];
 }): string {
-  const challenged = (opts.challengedAgentName || 'Challenged mind').trim() || 'Challenged mind';
-  const question = (opts.originalPrompt || '').trim() || '(no prompt)';
+  const challenged = toTrimmedText(opts.challengedAgentName) || 'Challenged mind';
+  const question = toTrimmedText(opts.originalPrompt) || '(no prompt)';
   const lines: string[] = [
     '# Arena Debate',
     '',
@@ -106,31 +117,53 @@ export function formatDebateExport(opts: {
     '',
     `**Challenged:** ${challenged}`,
   ];
-  const oneLiner = (opts.challengedOneLiner || '').trim();
+  const oneLiner = toTrimmedText(opts.challengedOneLiner);
   if (oneLiner) {
     lines.push(`> ${oneLiner}`);
   }
   lines.push('');
 
-  const rounds = opts.rounds || [];
+  const rounds = (Array.isArray(opts.rounds) ? opts.rounds : []).filter(
+    (round): round is DebateExportRound => Boolean(round),
+  );
   if (rounds.length === 0) {
     lines.push('_No rounds yet._');
   } else {
-    for (const round of rounds) {
-      lines.push(`## Round ${round.roundNumber}`);
+    for (const [index, round] of rounds.entries()) {
+      // Defensive: malformed payloads (NaN/zero/negative) fall back to the
+      // position in the list instead of printing "Round NaN/undefined".
+      const rawRoundNumber =
+        typeof round.roundNumber === 'number'
+          ? round.roundNumber
+          : typeof round.roundNumber === 'string'
+            ? Number(round.roundNumber)
+            : Number.NaN;
+      const roundNumber =
+        Number.isFinite(rawRoundNumber) && rawRoundNumber > 0
+          ? rawRoundNumber
+          : index + 1;
+      lines.push(`## Round ${roundNumber}`);
       lines.push('');
-      const interjection = (round.userInterjection || '').trim();
+      const interjection = toTrimmedText(round.userInterjection);
       if (interjection) {
         lines.push(`**Your interjection:** ${interjection}`);
         lines.push('');
       }
-      for (const r of round.reactions || []) {
-        const name = (r.agentName || 'Mind').trim() || 'Mind';
-        const stance = (r.stance || '').trim();
+      const reactions = (Array.isArray(round.reactions) ? round.reactions : []).filter(
+        (r): r is DebateExportRound['reactions'][number] => Boolean(r),
+      );
+      if (reactions.length === 0) {
+        lines.push('_(No reactions in this round.)_');
+        lines.push('');
+        continue;
+      }
+      for (const r of reactions) {
+        const name = toTrimmedText(r.agentName) || 'Mind';
+        const stance = toTrimmedText(r.stance);
         const header = stance ? `### ${name} (${stance})` : `### ${name}`;
         lines.push(header);
         lines.push('');
-        lines.push((r.content || '').trim() || '_(empty)_');
+        lines.push(toTrimmedText(r.content) || '_(empty)_');
         lines.push('');
       }
     }
@@ -232,4 +265,107 @@ export function formatDebateChallengedCopy(opts: {
   }
 
   return lines.join('\n').trim() + '\n';
+}
+
+/**
+ * Structured JSON export of a 1-on-1 Discuss thread. Preserves message
+ * bodies verbatim (trimmed) so the archive can be re-imported or diffed,
+ * and skips null/whitespace-only entries exactly like the markdown export.
+ *
+ * Deterministic except for the optional exported-at timestamp: pass
+ * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
+ * the current UTC ISO timestamp.
+ */
+export function formatDiscussJsonExport(opts: {
+  agentName: string;
+  originalPrompt: string;
+  messages: ThreadMessage[];
+  exportedAt?: string;
+}): string {
+  const agentName = toTrimmedText(opts.agentName) || 'Arena mind';
+  const question = toTrimmedText(opts.originalPrompt) || '(no prompt)';
+  const exportedAt = toTrimmedText(opts.exportedAt) || new Date().toISOString();
+  const messages = (Array.isArray(opts.messages) ? opts.messages : [])
+    .filter((m): m is ThreadMessage => Boolean(m))
+    .map((m) => ({
+      role: m.role === 'user' ? 'user' : 'agent',
+      content: toTrimmedText(m.content) || null,
+    }))
+    .filter((m) => m.content !== null);
+  const data = {
+    exported_from: 'arena',
+    export_type: 'discuss_thread',
+    format_version: 1,
+    exported_at: exportedAt,
+    agent_name: agentName,
+    original_prompt: question,
+    message_count: messages.length,
+    messages,
+  };
+  return JSON.stringify(data, null, 2) + '\n';
+}
+
+/**
+ * Structured JSON export of a multi-round Debate colosseum. Mirrors the
+ * markdown transcript but keeps every field machine-readable, including the
+ * challenged take's verdict and key assumption. Malformed rounds/reactions
+ * are normalized (never NaN/undefined), matching the markdown exporter.
+ *
+ * Deterministic except for the optional exported-at timestamp: pass
+ * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
+ * the current UTC ISO timestamp.
+ */
+export function formatDebateJsonExport(opts: {
+  originalPrompt: string;
+  challengedAgentName: string;
+  challengedOneLiner?: string;
+  challengedVerdict?: string;
+  challengedKeyAssumption?: string;
+  rounds: DebateExportRound[];
+  exportedAt?: string;
+}): string {
+  const challenged = toTrimmedText(opts.challengedAgentName) || 'Challenged mind';
+  const question = toTrimmedText(opts.originalPrompt) || '(no prompt)';
+  const exportedAt = toTrimmedText(opts.exportedAt) || new Date().toISOString();
+  const rounds = (Array.isArray(opts.rounds) ? opts.rounds : [])
+    .filter((round): round is DebateExportRound => Boolean(round))
+    .map((round, index) => {
+      const rawRoundNumber =
+        typeof round.roundNumber === 'number'
+          ? round.roundNumber
+          : typeof round.roundNumber === 'string'
+            ? Number(round.roundNumber)
+            : Number.NaN;
+      const roundNumber =
+        Number.isFinite(rawRoundNumber) && rawRoundNumber > 0
+          ? rawRoundNumber
+          : index + 1;
+      const reactions = (Array.isArray(round.reactions) ? round.reactions : [])
+        .filter((r): r is DebateExportRound['reactions'][number] => Boolean(r))
+        .map((r) => ({
+          agent_name: toTrimmedText(r.agentName) || 'Mind',
+          stance: toTrimmedText(r.stance) || null,
+          content: toTrimmedText(r.content) || null,
+        }));
+      return {
+        round_number: roundNumber,
+        user_interjection: toTrimmedText(round.userInterjection) || null,
+        reaction_count: reactions.length,
+        reactions,
+      };
+    });
+  const data = {
+    exported_from: 'arena',
+    export_type: 'debate_transcript',
+    format_version: 1,
+    exported_at: exportedAt,
+    question,
+    challenged_agent_name: challenged,
+    challenged_one_liner: toTrimmedText(opts.challengedOneLiner) || null,
+    challenged_verdict: toTrimmedText(opts.challengedVerdict) || null,
+    challenged_key_assumption: toTrimmedText(opts.challengedKeyAssumption) || null,
+    round_count: rounds.length,
+    rounds,
+  };
+  return JSON.stringify(data, null, 2) + '\n';
 }

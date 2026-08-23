@@ -22,9 +22,20 @@ def _seed_audit(
     user_id: int,
     winner_persona_id: str,
     panel: list[str],
-    hours_ago: int = 1,
+    days_ago: int = 0,
     fallback_used: bool = False,
 ) -> ScoringAudit:
+    """Seed one scored exchange inside a DETERMINISTIC day bucket.
+
+    ``created_at`` is anchored to (today − days_ago) at 00:30 UTC rather
+    than ``now − N hours``. An hour-based offset silently crosses the
+    midnight boundary whenever the suite runs between 00:00 and 01:00
+    UTC, moving "today" rows into yesterday and red-lighting six tests
+    for a full hour every night. Bucket membership is what every
+    assertion here actually cares about, so anchor to the bucket.
+    """
+    now = utcnow_naive()
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     rec = ScoringAudit(
         session_id=str(uuid.uuid4()),
         user_id=user_id,
@@ -35,7 +46,7 @@ def _seed_audit(
         scores={"agent-1": 80},
         persona_ids_used=panel,
         fallback_used=fallback_used,
-        created_at=utcnow_naive() - timedelta(hours=hours_ago),
+        created_at=day_start - timedelta(days=days_ago) + timedelta(minutes=30),
     )
     db.add(rec)
     db.flush()
@@ -98,24 +109,22 @@ async def test_timeline_is_contiguous_with_zero_buckets(
 @pytest.mark.asyncio
 async def test_timeline_groups_by_day(app_client, make_user, db_session):
     user = make_user(email="ptl-group@test.com", tier=UserTier.PRO)
-    # 3 wins on day 0 (hours_ago=1 — must stay well inside "today" even
-    # when the test runs near midnight UTC). 2 wins on day 1
-    # (hours_ago=25, 26).
+    # 3 wins on day 0, 2 wins on day 1 — bucket-anchored so the day
+    # split holds no matter what wall-clock time the suite runs at.
     for _ in range(3):
         _seed_audit(
             db_session,
             user_id=user.id,
             winner_persona_id="analyst",
             panel=["analyst"],
-            hours_ago=1,
         )
-    for hours_ago in [25, 26]:
+    for _ in range(2):
         _seed_audit(
             db_session,
             user_id=user.id,
             winner_persona_id="analyst",
             panel=["analyst"],
-            hours_ago=hours_ago,
+            days_ago=1,
         )
     db_session.commit()
 
@@ -237,7 +246,6 @@ async def test_timeline_best_day_uses_highest_wins(
             user_id=user.id,
             winner_persona_id="analyst",
             panel=["analyst"],
-            hours_ago=1,
         )
     for _ in range(1):
         _seed_audit(
@@ -245,7 +253,7 @@ async def test_timeline_best_day_uses_highest_wins(
             user_id=user.id,
             winner_persona_id="analyst",
             panel=["analyst"],
-            hours_ago=25,
+            days_ago=1,
         )
     for _ in range(4):
         _seed_audit(
@@ -253,7 +261,7 @@ async def test_timeline_best_day_uses_highest_wins(
             user_id=user.id,
             winner_persona_id="analyst",
             panel=["analyst"],
-            hours_ago=72,
+            days_ago=3,
         )
     db_session.commit()
 
@@ -413,10 +421,10 @@ async def test_timeline_totals_match_sum_of_days(
     the rollup so a future 'pre-aggregate' optimization can't drift."""
     user = make_user(email="ptl-rollup@test.com", tier=UserTier.PRO)
     panel = ["analyst", "philosopher"]
-    for hours_ago in [2, 3, 24, 25, 48]:
+    for days_ago in [0, 0, 1, 1, 2]:
         _seed_audit(
             db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
-            hours_ago=hours_ago,
+            days_ago=days_ago,
         )
     # One philosopher win — must NOT count toward analyst's wins.
     _seed_audit(
@@ -455,16 +463,15 @@ async def test_timeline_best_day_win_rate_is_rolled_up(
             user_id=user.id,
             winner_persona_id="analyst",
             panel=["analyst"],
-            hours_ago=1,
         )
     # Day -1: 1 win from 4 appearances (25%) — should NOT be the best.
-    for hours_ago in [25, 26, 27, 28]:
+    for winner in ["analyst", "philosopher", "philosopher", "philosopher"]:
         _seed_audit(
             db_session,
             user_id=user.id,
-            winner_persona_id="analyst" if hours_ago == 25 else "philosopher",
+            winner_persona_id=winner,
             panel=["analyst"],
-            hours_ago=hours_ago,
+            days_ago=1,
         )
     db_session.commit()
 
@@ -521,7 +528,7 @@ async def test_timeline_no_appearance_on_today(
         user_id=user.id,
         winner_persona_id="analyst",
         panel=["analyst"],
-        hours_ago=24 * 5,  # 5 days ago
+        days_ago=5,  # 5 days ago
     )
     db_session.commit()
 
@@ -552,9 +559,9 @@ async def test_timeline_window_end_equals_today(
         "/api/analytics/persona-stats/analyst/timeline?days=30",
         headers=_pro_headers(user),
     )
-    from datetime import date
-
-    assert res.json()["window_end"] == date.today().isoformat()
+    # Compare against the UTC date, not the runner's local date — the
+    # two differ for most of each day in any non-UTC timezone.
+    assert res.json()["window_end"] == utcnow_naive().date().isoformat()
     # And the timeline's last row is window_end.
     assert res.json()["timeline"][-1]["date"] == res.json()["window_end"]
 
@@ -587,13 +594,13 @@ async def test_timeline_excludes_out_of_window_rows(
     A 30-day timeline must not pick up a row from 31 days ago, even
     if the row's persona matches."""
     user = make_user(email="ptl-out@test.com", tier=UserTier.PRO)
-    # hours_ago=24*31 = 31 days ago — outside a 30-day window.
+    # days_ago=31 — outside a 30-day window.
     _seed_audit(
         db_session,
         user_id=user.id,
         winner_persona_id="analyst",
         panel=["analyst"],
-        hours_ago=24 * 31,
+        days_ago=31,  # outside a 30-day window
     )
     db_session.commit()
 
@@ -668,23 +675,21 @@ async def test_timeline_best_day_win_rate_consistent_with_per_day(
     panel = ["analyst", "philosopher"]
     # Mixed: 1 win / 2 apps on day 0, 0 / 3 on day 1, 3 / 5 on day 2.
     _seed_audit(
-        db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
-        hours_ago=1,
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=panel
     )
     _seed_audit(
-        db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
-        hours_ago=1,
+        db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel
     )
     for _ in range(3):
         _seed_audit(
             db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
-            hours_ago=25,
+            days_ago=1,
         )
     for i in range(5):
         _seed_audit(
             db_session, user_id=user.id,
             winner_persona_id="analyst" if i < 3 else "philosopher",
-            panel=panel, hours_ago=49,
+            panel=panel, days_ago=2,
         )
     db_session.commit()
 

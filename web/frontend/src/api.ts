@@ -14,7 +14,11 @@ import {
   SavedResponseItem,
   TierStatus,
   ScoringAuditResponse,
+  MemorySummary,
+  MemorySummariesResponse,
+  MemorySummarySort,
 } from './types';
+import type { ImportedChat } from './lib/arenaChatsImport';
 
 export const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(
   /\/$/,
@@ -215,6 +219,102 @@ export async function getUserUsage(): Promise<UserUsageResponse> {
   return data;
 }
 
+const DEFAULT_USAGE_EXPORT_WINDOW_DAYS = 14;
+
+function usageExportPath(format: 'csv' | 'json' | 'md', windowDays: number): string {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const query = windowDays === DEFAULT_USAGE_EXPORT_WINDOW_DAYS
+    ? ''
+    : `?window_days=${encodeURIComponent(String(windowDays))}`;
+  return `/api/user/usage/export.${format}${query}`;
+}
+
+export type UserUsageCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportUserUsageCsv(
+  windowDays: number = DEFAULT_USAGE_EXPORT_WINDOW_DAYS,
+): Promise<UserUsageCsvExport> {
+  const res = await apiFetch(usageExportPath('csv', windowDays));
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to export usage CSV', res),
+      res.status,
+      err,
+    );
+  }
+  return {
+    blob: await res.blob(),
+    filename: contentDispositionFilename(res) ?? `arena-usage-${windowDays}d.csv`,
+  };
+}
+
+export type UserUsageJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+function contentDispositionFilename(res: Response): string | null {
+  const header = res.headers.get('content-disposition') ?? '';
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encoded?.[1]) {
+    try {
+      const decoded = decodeURIComponent(encoded[1]);
+      if (decoded) return decoded;
+    } catch {
+      // Fall through to the plain filename form.
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  return plain?.[1]?.trim() || null;
+}
+
+export async function exportUserUsageJson(
+  windowDays: number = DEFAULT_USAGE_EXPORT_WINDOW_DAYS,
+): Promise<UserUsageJsonExport> {
+  const res = await apiFetch(usageExportPath('json', windowDays));
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to export usage JSON', res),
+      res.status,
+      err,
+    );
+  }
+  return {
+    blob: await res.blob(),
+    filename: contentDispositionFilename(res) ?? `arena-usage-${windowDays}d.json`,
+  };
+}
+
+export type UserUsageMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportUserUsageMarkdown(
+  windowDays: number = DEFAULT_USAGE_EXPORT_WINDOW_DAYS,
+): Promise<UserUsageMarkdownExport> {
+  const res = await apiFetch(usageExportPath('md', windowDays));
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to export usage Markdown', res),
+      res.status,
+      err,
+    );
+  }
+  return {
+    blob: await res.blob(),
+    filename: contentDispositionFilename(res) ?? `arena-usage-${windowDays}d.md`,
+  };
+}
+
 export async function patchUserProfile(body: {
   name?: string;
   expertise_level?: string;
@@ -296,6 +396,192 @@ export async function saveMemory(sessionId: string, trigger: 'session_end' | 'ne
   if (!res.ok) {
     throw new Error(withRequestId('Failed to save memory', res));
   }
+}
+
+export async function listMemorySummaries(
+  params: {
+    page?: number;
+    perPage?: number;
+    search?: string;
+    category?: string;
+    personaId?: string;
+    fromDate?: string;
+    toDate?: string;
+    sort?: MemorySummarySort;
+  } = {},
+): Promise<MemorySummariesResponse> {
+  const query = new URLSearchParams();
+  if (params.page && params.page > 1) query.set('page', String(params.page));
+  if (params.perPage) query.set('per_page', String(params.perPage));
+  const search = (params.search || '').trim();
+  if (search) query.set('search', search);
+  const category = (params.category || '').trim();
+  if (category) query.set('category', category);
+  const personaId = (params.personaId || '').trim();
+  if (personaId) query.set('persona_id', personaId);
+  const fromDate = (params.fromDate || '').trim();
+  if (fromDate) query.set('from_date', fromDate);
+  const toDate = (params.toDate || '').trim();
+  if (toDate) query.set('to_date', toDate);
+  const sort = params.sort || 'newest';
+  if (sort !== 'newest') query.set('sort', sort);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const res = await apiFetch(`/api/memory/summaries${suffix}`);
+  const data = await parseJsonSafely<Partial<MemorySummariesResponse> & {
+    detail?: string | { message?: string };
+  }>(res);
+  if (!res.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not load memory summaries'), res),
+      res.status,
+      data,
+    );
+  }
+  if (!data) throw new Error(withRequestId('Empty memory summaries response', res));
+  return {
+    summaries: data.summaries || [],
+    total: data.total ?? data.summaries?.length ?? 0,
+    page: data.page ?? params.page ?? 1,
+    per_page: data.per_page ?? params.perPage ?? 20,
+    total_pages: data.total_pages ?? 0,
+    filters: {
+      category: data.filters?.category ?? null,
+      persona_id: data.filters?.persona_id ?? null,
+      search: data.filters?.search ?? (search || null),
+      from_date: data.filters?.from_date ?? (fromDate || null),
+      to_date: data.filters?.to_date ?? (toDate || null),
+      sort: data.filters?.sort ?? sort,
+    },
+  };
+}
+
+export async function getMemorySummary(
+  summaryId: number,
+  signal?: AbortSignal,
+): Promise<MemorySummary> {
+  const res = await apiFetch(`/api/memory/summaries/${encodeURIComponent(summaryId)}`, signal ? { signal } : {});
+  const data = await parseJsonSafely<MemorySummary & {
+    detail?: string | { message?: string };
+  }>(res);
+  if (!res.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not load memory summary'), res),
+      res.status,
+      data,
+    );
+  }
+  if (!data) throw new Error(withRequestId('Empty memory summary response', res));
+  return data;
+}
+
+export async function deleteMemorySummary(summaryId: number): Promise<void> {
+  const res = await apiFetch(`/api/memory/summaries/${encodeURIComponent(summaryId)}`, {
+    method: 'DELETE',
+  });
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
+  if (!res.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not delete memory summary'), res),
+      res.status,
+      data,
+    );
+  }
+}
+
+export type BulkDeleteMemorySummariesResult = {
+  status: 'deleted';
+  requested: number;
+  deleted: number;
+  ids: number[];
+};
+
+/** Keep the client-side contract aligned with the bounded server mutation. */
+export const MEMORY_BULK_DELETE_MAX = 50;
+
+export async function deleteMemorySummaries(
+  summaryIds: number[],
+): Promise<BulkDeleteMemorySummariesResult> {
+  const ids = [...new Set(summaryIds)];
+  if (ids.length === 0) {
+    throw new ApiError('Select at least one memory to forget', 400);
+  }
+  if (ids.length > MEMORY_BULK_DELETE_MAX) {
+    throw new ApiError(
+      `You can forget up to ${MEMORY_BULK_DELETE_MAX} memories at a time`,
+      400,
+    );
+  }
+  const res = await apiFetch('/api/memory/summaries/bulk', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  const data = await parseJsonSafely<Partial<BulkDeleteMemorySummariesResult> & {
+    detail?: string | { message?: string };
+  }>(res);
+  if (!res.ok || !data) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not forget selected memories'), res),
+      res.status,
+      data,
+    );
+  }
+  return {
+    status: 'deleted',
+    requested: typeof data.requested === 'number' ? data.requested : ids.length,
+    deleted: typeof data.deleted === 'number' ? data.deleted : 0,
+    ids: Array.isArray(data.ids)
+      ? data.ids.filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
+      : [],
+  };
+}
+
+export type MemorySummaryExportFormat = 'csv' | 'json' | 'md';
+
+export type MemorySummaryExport = {
+  blob: Blob;
+  filename: string;
+};
+
+/** Export all summaries matching the current Memory search, with the server's filename. */
+export async function exportMemorySummaries(
+  format: MemorySummaryExportFormat,
+  params: {
+    search?: string;
+    category?: string;
+    personaId?: string;
+    fromDate?: string;
+    toDate?: string;
+    sort?: MemorySummarySort;
+  } = {},
+): Promise<MemorySummaryExport> {
+  const query = new URLSearchParams();
+  const search = (params.search || '').trim();
+  if (search) query.set('search', search);
+  const category = (params.category || '').trim();
+  if (category) query.set('category', category);
+  const personaId = (params.personaId || '').trim();
+  if (personaId) query.set('persona_id', personaId);
+  const fromDate = (params.fromDate || '').trim();
+  if (fromDate) query.set('from_date', fromDate);
+  const toDate = (params.toDate || '').trim();
+  if (toDate) query.set('to_date', toDate);
+  const sort = params.sort || 'newest';
+  if (sort !== 'newest') query.set('sort', sort);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const res = await apiFetch(`/api/memory/summaries/export.${format}${suffix}`);
+  if (!res.ok) {
+    const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, `Could not export memory as ${format.toUpperCase()}`), res),
+      res.status,
+      data,
+    );
+  }
+  return {
+    blob: await res.blob(),
+    filename: contentDispositionFilename(res) ?? `arena-memory-summaries.${format}`,
+  };
 }
 
 export interface ApiPersona {
@@ -421,6 +707,38 @@ export async function deleteSavedResponse(id: number): Promise<void> {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
     throw new Error(withRequestId(getErrorMessage(err, 'Failed to delete saved response'), res));
   }
+}
+
+export type SavedBulkDeleteResult = {
+  status: 'deleted';
+  requested: number;
+  deleted: number;
+  ids: number[];
+};
+
+export async function deleteSavedResponses(
+  ids: number[],
+): Promise<SavedBulkDeleteResult> {
+  const res = await apiFetch('/api/saved/bulk', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to delete saved takes'), res));
+  }
+  const body = await parseJsonSafely<Partial<SavedBulkDeleteResult>>(res);
+  return {
+    status: 'deleted',
+    requested: typeof body?.requested === 'number' ? body.requested : ids.length,
+    deleted: typeof body?.deleted === 'number' ? body.deleted : 0,
+    ids: Array.isArray(body?.ids)
+      ? body.ids.filter(
+          (id): id is number => typeof id === 'number' && Number.isFinite(id),
+        )
+      : [],
+  };
 }
 
 export type SavedPinResult = {
@@ -763,6 +1081,185 @@ export async function streamDiscuss(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Saved discuss threads — the durable record behind the 1-on-1 chat. The
+// backend keeps these endpoints next to the stream so a conversation can
+// outlive the component that produced it.
+// ---------------------------------------------------------------------------
+
+export type DiscussThreadSummary = {
+  id: number;
+  agentId: string;
+  title: string;
+  lastMessageAt: string | null;
+  createdAt: string | null;
+  messageCount: number;
+};
+
+export type DiscussThreadDetail = DiscussThreadSummary & {
+  messages: DiscussChatMessage[];
+  originalPrompt: string;
+  originalVerdict: string;
+};
+
+type DiscussThreadRow = {
+  id?: unknown;
+  agent_id?: unknown;
+  title?: unknown;
+  last_message_at?: unknown;
+  created_at?: unknown;
+  message_count?: unknown;
+  messages?: unknown;
+  original_prompt?: unknown;
+  original_verdict?: unknown;
+};
+
+function normalizeDiscussThreadSummary(row: DiscussThreadRow): DiscussThreadSummary {
+  return {
+    id: typeof row.id === 'number' ? row.id : 0,
+    agentId: typeof row.agent_id === 'string' ? row.agent_id : '',
+    title: typeof row.title === 'string' ? row.title : '',
+    lastMessageAt: typeof row.last_message_at === 'string' ? row.last_message_at : null,
+    createdAt: typeof row.created_at === 'string' ? row.created_at : null,
+    messageCount: typeof row.message_count === 'number' ? row.message_count : 0,
+  };
+}
+
+function normalizeDiscussThreadDetail(row: DiscussThreadRow): DiscussThreadDetail {
+  const base = normalizeDiscussThreadSummary(row);
+  const rawMessages = Array.isArray(row.messages) ? row.messages : [];
+  const messages: DiscussChatMessage[] = [];
+  for (const m of rawMessages) {
+    if (!m || typeof m !== 'object') continue;
+    const rec = m as Record<string, unknown>;
+    messages.push({
+      role: rec.role === 'agent' ? 'agent' : 'user',
+      content: typeof rec.content === 'string' ? rec.content : '',
+      timestamp:
+        typeof rec.timestamp === 'string'
+          ? rec.timestamp
+          : (base.lastMessageAt ?? new Date(0).toISOString()),
+    });
+  }
+  return {
+    ...base,
+    messageCount: messages.length || base.messageCount,
+    messages,
+    originalPrompt: typeof row.original_prompt === 'string' ? row.original_prompt : '',
+    originalVerdict: typeof row.original_verdict === 'string' ? row.original_verdict : '',
+  };
+}
+
+export type SaveDiscussThreadInput = {
+  agentId: string;
+  title?: string;
+  messages: Array<{ role: 'user' | 'agent'; content: string; timestamp?: string }>;
+  originalPrompt?: string;
+  originalVerdict?: string;
+};
+
+export async function saveDiscussThread(input: SaveDiscussThreadInput): Promise<DiscussThreadDetail> {
+  if (!input.agentId.trim()) {
+    throw new RangeError('agentId must not be empty');
+  }
+  if (!Array.isArray(input.messages) || input.messages.length === 0) {
+    throw new RangeError('messages must contain at least one entry');
+  }
+  if (input.title && input.title.length > 255) {
+    throw new RangeError('title must be at most 255 characters');
+  }
+  const res = await apiFetch(`/api/discuss/threads`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      agent_id: input.agentId,
+      title: input.title ?? '',
+      messages: input.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        ...(m.timestamp !== undefined ? { timestamp: m.timestamp } : {}),
+      })),
+      original_prompt: input.originalPrompt ?? '',
+      original_verdict: input.originalVerdict ?? '',
+    }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to save the discussion'), res));
+  }
+  const data =
+    (await parseJsonSafely<{ thread?: DiscussThreadRow }>(res)) ||
+    (() => {
+      throw new Error('Saving the discussion returned no thread.');
+    })();
+  if (!data.thread || typeof data.thread !== 'object') {
+    throw new Error('Saving the discussion returned an unexpected shape.');
+  }
+  return normalizeDiscussThreadDetail(data.thread);
+}
+
+export async function listDiscussThreads(
+  params: { page?: number; perPage?: number; search?: string; agentId?: string } = {},
+): Promise<{ threads: DiscussThreadSummary[]; total: number; totalPages: number }> {
+  const query = new URLSearchParams();
+  if (params.page !== undefined) query.set('page', String(params.page));
+  if (params.perPage !== undefined) query.set('per_page', String(params.perPage));
+  if (params.search && params.search.trim()) query.set('search', params.search.trim());
+  if (params.agentId && params.agentId.trim()) query.set('agent_id', params.agentId.trim());
+  const qs = query.toString();
+  const res = await apiFetch(`/api/discuss/threads${qs ? `?${qs}` : ''}`, {});
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to load saved discussions'), res),
+    );
+  }
+  const data =
+    (await parseJsonSafely<{
+      threads?: DiscussThreadRow[];
+      total?: unknown;
+      total_pages?: unknown;
+    }>(res)) || {};
+  const threads = Array.isArray(data.threads)
+    ? data.threads.map(normalizeDiscussThreadSummary)
+    : [];
+  return {
+    threads,
+    total: typeof data.total === 'number' ? data.total : threads.length,
+    totalPages: typeof data.total_pages === 'number' ? data.total_pages : 0,
+  };
+}
+
+export async function getDiscussThread(threadId: number): Promise<DiscussThreadDetail> {
+  if (!Number.isInteger(threadId) || threadId < 1) {
+    throw new RangeError('threadId must be a positive integer');
+  }
+  const res = await apiFetch(`/api/discuss/threads/${encodeURIComponent(String(threadId))}`, {});
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to load the discussion'), res));
+  }
+  const data =
+    (await parseJsonSafely<DiscussThreadRow>(res)) ||
+    (() => {
+      throw new Error('Loading the discussion returned no thread.');
+    })();
+  return normalizeDiscussThreadDetail(data);
+}
+
+export async function deleteDiscussThread(threadId: number): Promise<void> {
+  if (!Number.isInteger(threadId) || threadId < 1) {
+    throw new RangeError('threadId must be a positive integer');
+  }
+  const res = await apiFetch(`/api/discuss/threads/${encodeURIComponent(String(threadId))}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to delete the discussion'), res));
+  }
+}
+
 // Shared SSE consumer — handles AbortSignal-driven cancellation so
 // navigating away mid-stream cleans up the open connection instead
 // of leaving it hanging until the server closes.
@@ -836,6 +1333,215 @@ export async function getSession(sessionId: string): Promise<SessionData | null>
     return parseJsonSafely<SessionData>(response);
   } catch {
     return null;
+  }
+}
+
+export interface SessionSummary {
+  session_id: string;
+  title?: string | null;
+  topics: string[];
+  primary_topic: string | null;
+  last_prompt: string | null;
+  turn_count: number;
+  /** Whether the user pinned this chat to the top of the sidebar. */
+  pinned?: boolean;
+  last_active: string | null;
+}
+
+export async function listSessions(limit = 50): Promise<SessionSummary[]> {
+  try {
+    const response = await apiFetch(
+      `/api/sessions?limit=${encodeURIComponent(String(limit))}`,
+    );
+    if (!response.ok) {
+      return [];
+    }
+    const data = await parseJsonSafely<{ sessions: SessionSummary[] }>(response);
+    return data?.sessions ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteSession(sessionId: string): Promise<boolean> {
+  try {
+    const response = await apiFetch(`/api/session/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearAllSessions(): Promise<number | null> {
+  try {
+    const response = await apiFetch('/api/sessions', {
+      method: 'DELETE',
+    });
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<{ deleted?: number }>(response);
+    return typeof data?.deleted === 'number' ? data.deleted : 0;
+  } catch {
+    return null;
+  }
+}
+
+export type BulkDeleteSessionsResult = {
+  deleted: number;
+  deleted_ids: string[];
+};
+
+export type BulkPinSessionsResult = {
+  updated: number;
+  updated_ids: string[];
+};
+
+export type BulkDuplicateSessionsResult = {
+  duplicated: number;
+  sessions: SessionSummary[];
+};
+
+export type BulkImportChatsResult = {
+  imported: number;
+  sessions: SessionSummary[];
+};
+
+export async function deleteSessionsBulk(
+  sessionIds: string[],
+): Promise<BulkDeleteSessionsResult | null> {
+  try {
+    const response = await apiFetch('/api/sessions/bulk', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_ids: sessionIds }),
+    });
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<Partial<BulkDeleteSessionsResult>>(response);
+    if (!Array.isArray(data?.deleted_ids) || typeof data?.deleted !== 'number') {
+      return null;
+    }
+    return {
+      deleted: data.deleted,
+      deleted_ids: data.deleted_ids,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function setSessionsPinBulk(
+  sessionIds: string[],
+  pinned: boolean,
+): Promise<BulkPinSessionsResult | null> {
+  try {
+    const response = await apiFetch('/api/sessions/bulk/pin', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_ids: sessionIds, pinned }),
+    });
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<Partial<BulkPinSessionsResult>>(response);
+    if (!Array.isArray(data?.updated_ids) || typeof data?.updated !== 'number') {
+      return null;
+    }
+    return {
+      updated: data.updated,
+      updated_ids: data.updated_ids,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function duplicateSessionsBulk(
+  sessionIds: string[],
+): Promise<BulkDuplicateSessionsResult | null> {
+  try {
+    const response = await apiFetch('/api/sessions/bulk/duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_ids: sessionIds }),
+    });
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<Partial<BulkDuplicateSessionsResult>>(response);
+    if (!Array.isArray(data?.sessions) || typeof data?.duplicated !== 'number') {
+      return null;
+    }
+    return {
+      duplicated: data.duplicated,
+      sessions: data.sessions,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function importChatsBulk(
+  chats: ImportedChat[],
+): Promise<BulkImportChatsResult | null> {
+  try {
+    const response = await apiFetch('/api/sessions/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chats }),
+    });
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<Partial<BulkImportChatsResult>>(response);
+    if (!Array.isArray(data?.sessions) || typeof data?.imported !== 'number') {
+      return null;
+    }
+    return {
+      imported: data.imported,
+      sessions: data.sessions,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function renameSession(sessionId: string, title: string): Promise<boolean> {
+  try {
+    const response = await apiFetch(`/api/session/${encodeURIComponent(sessionId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function duplicateSession(
+  sessionId: string,
+): Promise<SessionSummary | null> {
+  try {
+    const response = await apiFetch(
+      `/api/session/${encodeURIComponent(sessionId)}/duplicate`,
+      { method: 'POST' },
+    );
+    if (!response.ok) return null;
+    const data = await parseJsonSafely<{ session?: SessionSummary }>(response);
+    return data?.session ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setSessionPin(sessionId: string, pinned: boolean): Promise<boolean> {
+  try {
+    const response = await apiFetch(
+      `/api/session/${encodeURIComponent(sessionId)}/pin`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned }),
+      },
+    );
+    return response.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -952,11 +1658,40 @@ export type RecentFeedbackItem = {
   task_text: string | null;
 };
 
-export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedbackItem[]> {
+export type AgentFeedbackVerdictCounts = {
+  correct: number;
+  partial: number;
+  wrong: number;
+};
+
+export type AgentFeedbackTrendPoint = {
+  date: string;
+  count: number;
+  verdicts: AgentFeedbackVerdictCounts;
+};
+
+export type AgentFeedbackSummary = {
+  total: number;
+  verdicts: {
+    correct: number;
+    partial: number;
+    wrong: number;
+  };
+  rate: number;
+  window_days: number;
+  daily_trend: AgentFeedbackTrendPoint[];
+};
+
+export async function getRecentAgentFeedback(
+  limit = 10,
+  verdict?: AgentFeedbackVerdict,
+): Promise<RecentFeedbackItem[]> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (verdict) query.set('verdict', verdict);
   const response = await apiFetch(
-    `/api/agent/feedback/recent?limit=${encodeURIComponent(String(limit))}`,
+    `/api/agent/feedback/recent?${query.toString()}`,
   );
-  const raw = parseJsonSafely<unknown>(response);
+  const raw = await parseJsonSafely<unknown>(response);
   const data = raw as { items?: RecentFeedbackItem[] } | null;
   if (!response.ok) {
     throw new ApiError(
@@ -966,6 +1701,255 @@ export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedback
     );
   }
   return data?.items ?? [];
+}
+
+function isAgentFeedbackTrendPoint(value: unknown): value is AgentFeedbackTrendPoint {
+  if (!value || typeof value !== 'object') return false;
+  const point = value as Record<string, unknown>;
+  const verdicts = point.verdicts;
+  if (!verdicts || typeof verdicts !== 'object') return false;
+  const counts = verdicts as Record<string, unknown>;
+  const count = point.count;
+  const verdictTotal = [counts.correct, counts.partial, counts.wrong].reduce<number>(
+    (sum, count) => sum + (typeof count === 'number' ? count : 0),
+    0,
+  );
+  return (
+    isIsoDateString(point.date) &&
+    isNonNegativeInteger(count) &&
+    isNonNegativeInteger(counts.correct) &&
+    isNonNegativeInteger(counts.partial) &&
+    isNonNegativeInteger(counts.wrong) &&
+    verdictTotal <= count
+  );
+}
+
+function isAgentFeedbackSummary(value: unknown): value is AgentFeedbackSummary {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Record<string, unknown>;
+  const verdicts = data.verdicts;
+  if (!verdicts || typeof verdicts !== 'object') return false;
+  const counts = verdicts as Record<string, unknown>;
+  return (
+    isNonNegativeInteger(data.total) &&
+    isNonNegativeInteger(counts.correct) &&
+    isNonNegativeInteger(counts.partial) &&
+    isNonNegativeInteger(counts.wrong) &&
+    // Keep legacy/non-canonical verdict rows in the lifetime total. The
+    // dashboard renders those rows as "Other" rather than dropping them.
+    counts.correct + counts.partial + counts.wrong <= data.total &&
+    typeof data.rate === 'number' &&
+    Number.isFinite(data.rate) &&
+    data.rate >= 0 &&
+    data.rate <= 1 &&
+    isPositiveInteger(data.window_days) &&
+    data.window_days <= 90 &&
+    Array.isArray(data.daily_trend) &&
+    data.daily_trend.length === data.window_days &&
+    data.daily_trend.every(isAgentFeedbackTrendPoint)
+  );
+}
+
+export async function getAgentFeedbackSummary(
+  windowDays: number = 30,
+): Promise<AgentFeedbackSummary> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(
+    `/api/agent/feedback/summary?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load feedback activity'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<AgentFeedbackSummary>(response);
+  if (!data) throw new Error(withRequestId('Empty feedback activity response', response));
+  if (!isAgentFeedbackSummary(data)) {
+    throw new ApiError(
+      withRequestId('Malformed feedback activity response', response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
+export type AgentFeedbackActivityExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export type AgentFeedbackActivityCsvExport = AgentFeedbackActivityExport;
+
+export async function exportAgentFeedbackSummaryCsv(
+  windowDays: number = 30,
+): Promise<AgentFeedbackActivityExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(
+    `/api/agent/feedback/summary/export.csv?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export feedback activity CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ?? `arena-feedback-activity-${windowDays}d.csv`,
+  };
+}
+
+export async function exportAgentFeedbackSummaryJson(
+  windowDays: number = 30,
+): Promise<AgentFeedbackActivityExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(
+    `/api/agent/feedback/summary/export.json?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export feedback activity JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ?? `arena-feedback-activity-${windowDays}d.json`,
+  };
+}
+
+export async function exportAgentFeedbackSummaryMarkdown(
+  windowDays: number = 30,
+): Promise<AgentFeedbackActivityExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(
+    `/api/agent/feedback/summary/export.md?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export feedback activity Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ?? `arena-feedback-activity-${windowDays}d.md`,
+  };
+}
+
+export type AgentFeedbackCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export type AgentFeedbackVerdict = 'correct' | 'partial' | 'wrong';
+
+export type AgentFeedbackExportDateRange = {
+  fromDate?: string;
+  toDate?: string;
+};
+
+function agentFeedbackExportPath(
+  format: 'csv' | 'json' | 'md',
+  verdict?: AgentFeedbackVerdict,
+  dateRange: AgentFeedbackExportDateRange = {},
+): string {
+  const query = new URLSearchParams();
+  if (verdict) query.set('verdict', verdict);
+  const fromDate = (dateRange.fromDate || '').trim();
+  if (fromDate) query.set('from_date', fromDate);
+  const toDate = (dateRange.toDate || '').trim();
+  if (toDate) query.set('to_date', toDate);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return `/api/agent/feedback/export.${format}${suffix}`;
+}
+
+export async function exportAgentFeedbackCsv(
+  verdict?: AgentFeedbackVerdict,
+  dateRange: AgentFeedbackExportDateRange = {},
+): Promise<AgentFeedbackCsvExport> {
+  const response = await apiFetch(agentFeedbackExportPath('csv', verdict, dateRange));
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export answer feedback CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-feedback.csv',
+  };
+}
+
+export type AgentFeedbackJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAgentFeedbackJson(
+  verdict?: AgentFeedbackVerdict,
+  dateRange: AgentFeedbackExportDateRange = {},
+): Promise<AgentFeedbackJsonExport> {
+  const response = await apiFetch(agentFeedbackExportPath('json', verdict, dateRange));
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export answer feedback JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-feedback.json',
+  };
+}
+
+export type AgentFeedbackMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAgentFeedbackMarkdown(
+  verdict?: AgentFeedbackVerdict,
+  dateRange: AgentFeedbackExportDateRange = {},
+): Promise<AgentFeedbackMarkdownExport> {
+  const response = await apiFetch(agentFeedbackExportPath('md', verdict, dateRange));
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export answer feedback Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-feedback.md',
+  };
 }
 
 export type AgentStartResponse = {
@@ -1245,6 +2229,118 @@ export async function getAgentTaskDetail(taskId: string): Promise<AgentTaskDetai
   };
 }
 
+/** Result of publishing a completed Agent report as a public link. */
+export type AgentTaskShareResponse = {
+  shareToken: string;
+  shareUrl: string;
+};
+
+export async function createAgentTaskShare(taskId: string): Promise<AgentTaskShareResponse> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/share`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<
+    {
+      share_token?: unknown;
+      share_url?: unknown;
+      detail?: string | { message?: string };
+    }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Share request failed'), response),
+      response.status,
+      data,
+    );
+  }
+  const token = typeof data?.share_token === 'string' ? data.share_token : '';
+  const url = typeof data?.share_url === 'string' ? data.share_url : '';
+  if (!token || !url.startsWith('/share/agent/')) {
+    throw new Error(withRequestId('Invalid share response', response));
+  }
+  return { shareToken: token, shareUrl: url };
+}
+
+export async function revokeAgentTaskShare(taskId: string): Promise<{ revoked: boolean }> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/share`,
+    { method: 'DELETE' },
+  );
+  const data = await parseJsonSafely<
+    { revoked?: unknown; detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Revoke request failed'), response),
+      response.status,
+      data,
+    );
+  }
+  if (!data || data.revoked !== true) {
+    throw new Error(withRequestId('Invalid revoke response', response));
+  }
+  return { revoked: true };
+}
+
+/** Sanitized public snapshot of a shared Agent Mode report. */
+export type PublicAgentReport = {
+  token: string;
+  title: string | null;
+  question: string;
+  answer: string;
+  finalScore: number | null;
+  finalConfidence: number | null;
+  createdAt: string | null;
+  sharedAt: string | null;
+};
+
+export async function getPublicAgentReport(token: string): Promise<PublicAgentReport> {
+  const response = await apiFetch(`/api/public/agent/${encodeURIComponent(token)}`);
+  const data = await parseJsonSafely<
+    {
+      token?: unknown;
+      title?: unknown;
+      question?: unknown;
+      answer?: unknown;
+      final_score?: unknown;
+      final_confidence?: unknown;
+      created_at?: unknown;
+      shared_at?: unknown;
+      detail?: string | { message?: string };
+    }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Report request failed'), response),
+      response.status,
+      data,
+    );
+  }
+  if (
+    !data ||
+    typeof data.token !== 'string' ||
+    typeof data.question !== 'string' ||
+    typeof data.answer !== 'string'
+  ) {
+    throw new Error(withRequestId('Invalid public report response', response));
+  }
+  const nullableNumber = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null;
+  const nullableString = (v: unknown): string | null =>
+    typeof v === 'string' ? v : null;
+  return {
+    token: data.token,
+    title: nullableString(data.title),
+    question: data.question,
+    answer: data.answer,
+    finalScore: nullableNumber(data.final_score),
+    finalConfidence: nullableNumber(data.final_confidence),
+    createdAt: nullableString(data.created_at),
+    sharedAt: nullableString(data.shared_at),
+  };
+}
+
 export async function exportAgentTaskPdf(taskId: string): Promise<Blob> {
   const response = await apiFetch(`/api/agent/tasks/${encodeURIComponent(taskId)}/export/pdf`);
   if (!response.ok) {
@@ -1256,6 +2352,110 @@ export async function exportAgentTaskPdf(taskId: string): Promise<Blob> {
     );
   }
   return response.blob();
+}
+
+async function fetchAgentTaskMarkdownResponse(taskId: string): Promise<Response> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/export.md`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Export failed'), response),
+      response.status,
+      err,
+    );
+  }
+  return response;
+}
+
+export async function exportAgentTaskMarkdown(taskId: string): Promise<Blob> {
+  const response = await fetchAgentTaskMarkdownResponse(taskId);
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty report returned by the server', response));
+  }
+  return new Blob([text], {
+    type: response.headers.get('content-type') || 'text/markdown;charset=utf-8',
+  });
+}
+
+export async function fetchAgentTaskMarkdownText(taskId: string): Promise<string> {
+  const response = await fetchAgentTaskMarkdownResponse(taskId);
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty report returned by the server', response));
+  }
+  return text;
+}
+
+async function fetchAgentTaskCsvResponse(taskId: string): Promise<Response> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/export.csv`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Export failed'), response),
+      response.status,
+      err,
+    );
+  }
+  return response;
+}
+
+export async function exportAgentTaskCsv(taskId: string): Promise<Blob> {
+  const response = await fetchAgentTaskCsvResponse(taskId);
+  // Validate through a clone so the original byte stream (including the UTF-8
+  // BOM Excel needs for Unicode detection) is preserved in the returned Blob.
+  const text = await response.clone().text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty report returned by the server', response));
+  }
+  return response.blob();
+}
+
+export async function fetchAgentTaskCsvText(taskId: string): Promise<string> {
+  const response = await fetchAgentTaskCsvResponse(taskId);
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty report returned by the server', response));
+  }
+  return text;
+}
+
+async function fetchAgentTaskJsonResponse(taskId: string): Promise<Response> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/export.json`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Export failed'), response),
+      response.status,
+      err,
+    );
+  }
+  return response;
+}
+
+export async function exportAgentTaskJson(taskId: string): Promise<Blob> {
+  const response = await fetchAgentTaskJsonResponse(taskId);
+  return response.blob();
+}
+
+export async function fetchAgentTaskJsonText(taskId: string): Promise<string> {
+  const response = await fetchAgentTaskJsonResponse(taskId);
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty report returned by the server', response));
+  }
+  try {
+    JSON.parse(text);
+  } catch {
+    throw new Error(withRequestId('Invalid JSON report returned by the server', response));
+  }
+  return text;
 }
 
 export async function postAgentOrchestrate(body: {
@@ -1437,7 +2637,11 @@ export type AgentWatchlistItem = {
     task_id: string;
     title: string;
     created_at: string;
+    final_answer: string | null;
     final_score: number | null;
+    is_complete: boolean;
+    is_shared: boolean;
+    share_url: string | null;
   } | null;
 };
 
@@ -1445,12 +2649,14 @@ export async function getAgentWatchlist(): Promise<{
   items: AgentWatchlistItem[];
   active_count: number;
   active_cap: number;
+  total: number;
 }> {
   const response = await apiFetch(`/api/agent/watchlist`);
   const data = await parseJsonSafely<{
     items?: AgentWatchlistItem[];
     active_count?: number;
     active_cap?: number;
+    total?: number;
     detail?: string | { message?: string };
   }>(response);
   if (!response.ok) {
@@ -1465,7 +2671,39 @@ export async function getAgentWatchlist(): Promise<{
     items: data.items || [],
     active_count: data.active_count ?? 0,
     active_cap: data.active_cap ?? 10,
+    total: data.total ?? data.items?.length ?? 0,
   };
+}
+
+export type WatchlistBulkResult = {
+  success: boolean;
+  action: 'pause_all' | 'resume_all';
+  applied: number;
+  skipped: number;
+  active_count: number;
+  paused_count: number;
+  active_cap: number;
+};
+
+export async function patchAgentWatchlistBulk(
+  action: 'pause_all' | 'resume_all',
+): Promise<WatchlistBulkResult> {
+  const response = await apiFetch(`/api/agent/watchlist/bulk`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action }),
+  });
+  const data = await parseJsonSafely<WatchlistBulkResult & { detail?: string | { message?: string } }>(
+    response,
+  );
+  if (!data || !response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Watchlist bulk update failed'), response),
+      response.status,
+      data,
+    );
+  }
+  return data;
 }
 
 export async function postAgentWatchlist(body: {
@@ -1490,9 +2728,31 @@ export async function postAgentWatchlist(body: {
   return data as AgentWatchlistItem;
 }
 
+export async function postAgentWatchlistDuplicate(itemId: string): Promise<AgentWatchlistItem> {
+  const response = await apiFetch(
+    `/api/agent/watchlist/${encodeURIComponent(itemId)}/duplicate`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<AgentWatchlistItem & { detail?: string | { message?: string } }>(response);
+  if (!data || !response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not duplicate watch'), response),
+      response.status,
+      data,
+    );
+  }
+  return data as AgentWatchlistItem;
+}
+
 export async function patchAgentWatchlist(
   itemId: string,
-  body: { interval_hours?: number; is_active?: boolean },
+  body: {
+    interval_hours?: number;
+    is_active?: boolean;
+    question?: string;
+    expertise_level?: string;
+    expertise_domain?: string;
+  },
 ): Promise<AgentWatchlistItem> {
   const response = await apiFetch(`/api/agent/watchlist/${encodeURIComponent(itemId)}`, {
     method: 'PATCH',
@@ -1510,6 +2770,40 @@ export async function patchAgentWatchlist(
   return data as AgentWatchlistItem;
 }
 
+export async function postAgentWatchlistRun(itemId: string): Promise<{
+  success: boolean;
+  task_id: string;
+  message: string;
+  item: AgentWatchlistItem;
+}> {
+  const response = await apiFetch(
+    `/api/agent/watchlist/${encodeURIComponent(itemId)}/run`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<
+    {
+      success?: boolean;
+      task_id?: string;
+      message?: string;
+      item?: AgentWatchlistItem;
+      detail?: string | { message?: string };
+    }
+  >(response);
+  if (!response.ok || !data || !data.task_id || !data.item) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not run this watch now'), response),
+      response.status,
+      data,
+    );
+  }
+  return {
+    success: data.success ?? true,
+    task_id: data.task_id,
+    message: data.message || 'Watch re-check started',
+    item: data.item,
+  };
+}
+
 export async function deleteAgentWatchlist(itemId: string): Promise<void> {
   const response = await apiFetch(`/api/agent/watchlist/${encodeURIComponent(itemId)}`, {
     method: 'DELETE',
@@ -1524,9 +2818,43 @@ export async function deleteAgentWatchlist(itemId: string): Promise<void> {
   }
 }
 
+export type AgentWatchlistBulkDeleteResult = {
+  success: boolean;
+  requested: number;
+  deleted: number;
+  deleted_ids: string[];
+  skipped_ids: string[];
+  active_count?: number;
+  total?: number;
+};
+
+export async function deleteAgentWatchlistBulk(
+  ids: string[],
+): Promise<AgentWatchlistBulkDeleteResult> {
+  const response = await apiFetch(`/api/agent/watchlist/bulk`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  const data = await parseJsonSafely<
+    AgentWatchlistBulkDeleteResult & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok || !data) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not remove selected watches'), response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
 export type AgentWatchlistHistoryRun = {
   task_id: string;
   title: string | null;
+  status?: string | null;
+  intelligence_score?: number | null;
+  final_answer?: string | null;
   final_score: number | null;
   final_confidence: number | null;
   user_feedback: string | null;
@@ -1544,16 +2872,28 @@ export type AgentWatchlistHistoryStats = {
 export type AgentWatchlistHistoryResponse = {
   items: AgentWatchlistHistoryRun[];
   stats: AgentWatchlistHistoryStats;
+  total: number;
+  has_more: boolean;
 };
 
-/** Run history for one watch (newest first) + aggregate score stats. */
+/** Run history for one watch (newest first, paged) + aggregate score stats. */
 export async function getAgentWatchlistHistory(
   itemId: string,
   limit = 50,
+  offset = 0,
+  beforeTaskId?: string,
 ): Promise<AgentWatchlistHistoryResponse> {
   const cap = Math.max(1, Math.min(200, Math.floor(limit)));
+  const off = Math.max(0, Math.floor(offset));
+  const query = new URLSearchParams({
+    limit: String(cap),
+    offset: String(off),
+  });
+  if (beforeTaskId) {
+    query.set('before_task_id', beforeTaskId);
+  }
   const response = await apiFetch(
-    `/api/agent/watchlist/${encodeURIComponent(itemId)}/history?limit=${encodeURIComponent(String(cap))}`,
+    `/api/agent/watchlist/${encodeURIComponent(itemId)}/history?${query.toString()}`,
   );
   const data = await parseJsonSafely<
     AgentWatchlistHistoryResponse & {
@@ -1578,6 +2918,13 @@ export async function getAgentWatchlistHistory(
       min_score: null,
       max_score: null,
     },
+    total:
+      typeof data.total === 'number'
+        ? Math.max(0, Math.floor(data.total))
+        : Array.isArray(data.items)
+          ? data.items.length
+          : 0,
+    has_more: data.has_more === true,
   };
 }
 
@@ -1590,6 +2937,88 @@ export async function exportAgentWatchlistHistoryCsv(itemId: string, limit = 100
     const err = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(
       withRequestId(getErrorMessage(err, 'Failed to export watch history CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return response.blob();
+}
+
+export async function exportAgentWatchlistHistoryJson(itemId: string, limit = 100): Promise<Blob> {
+  const cap = Math.max(1, Math.min(500, Math.floor(limit)));
+  const response = await apiFetch(
+    `/api/agent/watchlist/${encodeURIComponent(itemId)}/history/export.json?limit=${encodeURIComponent(String(cap))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export watch history JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return response.blob();
+}
+
+export type AgentWatchlistStatistics = {
+  success?: boolean;
+  total_items: number;
+  active_items: number;
+  total_runs: number;
+  scored_runs: number;
+  avg_score: number | null;
+  min_score: number | null;
+  max_score: number | null;
+  success_rate: number;
+  per_item_stats: Record<
+    string,
+    {
+      question: string;
+      run_count: number;
+      scored_run_count: number;
+      avg_score: number | null;
+      last_run_at: string | null;
+      is_active: boolean;
+      interval_hours: number;
+    }
+  >;
+};
+
+/** Aggregate health of the whole watchlist (items, runs, score summary). */
+export async function getAgentWatchlistStatistics(): Promise<AgentWatchlistStatistics> {
+  const response = await apiFetch(`/api/agent/watchlist/statistics`);
+  const data = await parseJsonSafely<
+    AgentWatchlistStatistics & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not load watchlist statistics'), response),
+      response.status,
+      data,
+    );
+  }
+  if (!data) throw new Error(withRequestId('Empty watchlist statistics response', response));
+  return {
+    success: data.success,
+    total_items: data.total_items ?? 0,
+    active_items: data.active_items ?? 0,
+    total_runs: data.total_runs ?? 0,
+    scored_runs: data.scored_runs ?? 0,
+    avg_score: data.avg_score ?? null,
+    min_score: data.min_score ?? null,
+    max_score: data.max_score ?? null,
+    success_rate: data.success_rate ?? 0,
+    per_item_stats: data.per_item_stats || {},
+  };
+}
+
+/** Download the backend watchlist statistics CSV (summary + per-item rows). */
+export async function exportAgentWatchlistStatisticsCsv(): Promise<Blob> {
+  const response = await apiFetch(`/api/agent/watchlist/statistics/export.csv`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export watchlist statistics CSV'), response),
       response.status,
       err,
     );
@@ -1714,6 +3143,131 @@ export async function getCalibrationStats(): Promise<unknown> {
   }
   if (!data) throw new Error(withRequestId('Empty calibration stats', response));
   return data;
+}
+
+export type CalibrationHistoryRating = {
+  id: number;
+  task_id: string;
+  user_rating: number;
+  system_score: number;
+  delta: number;
+  verdict: string;
+  created_at: string | null;
+};
+
+export type CalibrationHistorySort = 'newest' | 'oldest' | 'delta_asc' | 'delta_desc';
+
+export type CalibrationHistoryResponse = {
+  ratings: CalibrationHistoryRating[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  filters: {
+    min_delta: number | null;
+    max_delta: number | null;
+    sort: string;
+  };
+};
+
+export async function getCalibrationHistory(
+  params: {
+    page?: number;
+    perPage?: number;
+    sort?: CalibrationHistorySort;
+  } = {},
+): Promise<CalibrationHistoryResponse> {
+  const query = new URLSearchParams();
+  query.set('page', String(Math.max(1, params.page ?? 1)));
+  query.set('per_page', String(Math.min(100, Math.max(1, params.perPage ?? 5))));
+  if (params.sort && params.sort !== 'newest') query.set('sort', params.sort);
+  const response = await apiFetch(`/api/calibration/history?${query.toString()}`);
+  const data = await parseJsonSafely<Partial<CalibrationHistoryResponse> & {
+    detail?: string | { message?: string };
+  }>(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Calibration history failed'), response),
+      response.status,
+      data,
+    );
+  }
+  if (!data) throw new Error(withRequestId('Empty calibration history', response));
+  return {
+    ratings: data.ratings ?? [],
+    total: data.total ?? data.ratings?.length ?? 0,
+    page: data.page ?? params.page ?? 1,
+    per_page: data.per_page ?? params.perPage ?? 5,
+    total_pages: data.total_pages ?? 0,
+    filters: {
+      min_delta: data.filters?.min_delta ?? null,
+      max_delta: data.filters?.max_delta ?? null,
+      sort: data.filters?.sort ?? params.sort ?? 'newest',
+    },
+  };
+}
+
+export type CalibrationHistoryCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportCalibrationHistoryCsv(): Promise<CalibrationHistoryCsvExport> {
+  const response = await apiFetch(`/api/calibration/history/export.csv`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export calibration CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-calibration-history.csv',
+  };
+}
+
+export type CalibrationHistoryJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportCalibrationHistoryJson(): Promise<CalibrationHistoryJsonExport> {
+  const response = await apiFetch(`/api/calibration/history/export.json`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export calibration JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-calibration.json',
+  };
+}
+
+export type CalibrationHistoryMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportCalibrationHistoryMarkdown(): Promise<CalibrationHistoryMarkdownExport> {
+  const response = await apiFetch(`/api/calibration/history/export.md`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export calibration Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-calibration.md',
+  };
 }
 
 export async function getCalibrationRatingForTask(taskId: string): Promise<unknown> {
@@ -2259,6 +3813,17 @@ export async function joinRoom(slug: string): Promise<any> {
   return data;
 }
 
+export async function leaveRoom(slug: string): Promise<{ status: string; slug: string }> {
+  const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}/leave`, {
+    method: 'POST',
+  });
+  const data = await parseJsonSafely<{ status?: string; slug?: string; detail?: string }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data || {}, 'Could not leave room'), response.status, data);
+  }
+  return { status: data?.status ?? 'left', slug: data?.slug ?? slug };
+}
+
 export async function addRoomTask(slug: string, taskId: string): Promise<any> {
   const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}/add-task`, {
     method: 'POST',
@@ -2311,6 +3876,50 @@ export async function getMyRooms(): Promise<{ rooms: any[] }> {
   return { rooms: data?.rooms ?? [] };
 }
 
+export async function getDiscoverRooms(
+  search = '',
+  page = 1,
+  perPage = 20,
+): Promise<{
+  rooms: Array<Record<string, unknown>>;
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  filters: { search: string | null };
+}> {
+  const qs = new URLSearchParams();
+  const trimmed = search.trim();
+  if (trimmed) qs.set('search', trimmed);
+  qs.set('page', String(page));
+  qs.set('per_page', String(perPage));
+  const response = await apiFetch(`/api/rooms/discover?${qs.toString()}`);
+  const data = await parseJsonSafely<{
+    detail?: string;
+    rooms?: Array<Record<string, unknown>>;
+    total?: number;
+    page?: number;
+    per_page?: number;
+    total_pages?: number;
+    filters?: { search?: string | null };
+  }>(response);
+  if (!response.ok) {
+    throw new ApiError(
+      getErrorMessage(data || {}, 'Could not load discoverable rooms'),
+      response.status,
+      data,
+    );
+  }
+  return {
+    rooms: data?.rooms ?? [],
+    total: data?.total ?? 0,
+    page: data?.page ?? page,
+    per_page: data?.per_page ?? perPage,
+    total_pages: data?.total_pages ?? 0,
+    filters: { search: data?.filters?.search ?? null },
+  };
+}
+
 export async function deleteRoom(slug: string): Promise<void> {
   const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}`, { method: 'DELETE' });
   if (!response.ok) {
@@ -2320,61 +3929,1193 @@ export async function deleteRoom(slug: string): Promise<void> {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Analytics CSV Exports
+// Analytics data + CSV exports
 // ──────────────────────────────────────────────────────────────
 
+export type AnalyticsPersonaWinRateRow = {
+  persona_id: string;
+  name: string;
+  color: string;
+  appearances: number;
+  wins: number;
+  win_rate: number;
+  low_confidence: boolean;
+  trend: AnalyticsPersonaWinRateTrendPoint[];
+  trend_omitted_appearances: number;
+  trend_omitted_wins: number;
+};
+
+export type AnalyticsPersonaWinRateTrendPoint = {
+  bucket_start: string;
+  bucket_end: string;
+  appearances: number;
+  wins: number;
+  win_rate: number | null;
+};
+
+export type AnalyticsPersonaWinRateResponse = {
+  window_days: number;
+  window_start: string;
+  window_end: string;
+  min_appearances: number;
+  include_fallback: boolean;
+  low_confidence_threshold: number;
+  scored_exchanges: number;
+  unattributed_exchanges: number;
+  fallback_exchanges: number;
+  personas: AnalyticsPersonaWinRateRow[];
+  best_persona_id: string | null;
+  best_win_rate: number | null;
+};
+
+export type AnalyticsCategoryStatsRow = {
+  category: string;
+  is_known_category: boolean;
+  is_uncategorized: boolean;
+  appearances: number;
+  wins: number;
+  win_rate: number;
+  avg_winning_score: number | null;
+  last_exchange_at: string | null;
+  best_persona_id: string | null;
+};
+
+export type AnalyticsCategoryStatsResponse = {
+  window_days: number;
+  window_start: string;
+  window_end: string;
+  total_appearances: number;
+  total_wins: number;
+  most_active_category: string | null;
+  categories: AnalyticsCategoryStatsRow[];
+};
+
+export type AnalyticsPersonaStatsTimelinePoint = {
+  date: string;
+  appearances: number;
+  wins: number;
+  win_rate: number;
+};
+
+export type AnalyticsPersonaStatsTimelineResponse = {
+  persona_id: string;
+  name: string;
+  days: number;
+  window_start: string;
+  window_end: string;
+  total_appearances: number;
+  total_wins: number;
+  best_day: string | null;
+  best_day_wins: number;
+  best_day_appearances: number;
+  best_day_win_rate: number;
+  timeline: AnalyticsPersonaStatsTimelinePoint[];
+};
+
+function isAnalyticsPersonaWinRateRow(value: unknown): value is AnalyticsPersonaWinRateRow {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Record<string, unknown>;
+  if (!Array.isArray(row.trend) || row.trend.length < 1 || row.trend.length > 26) {
+    return false;
+  }
+  return (
+    typeof row.persona_id === 'string' &&
+    row.persona_id.length > 0 &&
+    typeof row.name === 'string' &&
+    typeof row.color === 'string' &&
+    isNonNegativeInteger(row.appearances) &&
+    isNonNegativeInteger(row.wins) &&
+    row.wins <= row.appearances &&
+    typeof row.win_rate === 'number' &&
+    Number.isFinite(row.win_rate) &&
+    row.win_rate >= 0 &&
+    row.win_rate <= 1 &&
+    typeof row.low_confidence === 'boolean' &&
+    row.trend.every(isAnalyticsPersonaWinRateTrendPoint) &&
+    isSortedAscendingTrend(row.trend) &&
+    isNonNegativeInteger(row.trend_omitted_appearances) &&
+    isNonNegativeInteger(row.trend_omitted_wins) &&
+    row.trend_omitted_wins <= row.trend_omitted_appearances &&
+    row.trend.reduce((sum, point) => sum + point.appearances, 0) +
+      row.trend_omitted_appearances ===
+      row.appearances &&
+    row.trend.reduce((sum, point) => sum + point.wins, 0) + row.trend_omitted_wins ===
+      row.wins
+  );
+}
+
+function isAnalyticsCategoryStatsRow(value: unknown): value is AnalyticsCategoryStatsRow {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.category === 'string' &&
+    row.category.length > 0 &&
+    typeof row.is_known_category === 'boolean' &&
+    typeof row.is_uncategorized === 'boolean' &&
+    isNonNegativeInteger(row.appearances) &&
+    isNonNegativeInteger(row.wins) &&
+    row.wins <= row.appearances &&
+    typeof row.win_rate === 'number' &&
+    Number.isFinite(row.win_rate) &&
+    row.win_rate >= 0 &&
+    row.win_rate <= 1 &&
+    (row.avg_winning_score === null ||
+      (typeof row.avg_winning_score === 'number' &&
+        Number.isFinite(row.avg_winning_score) &&
+        row.avg_winning_score >= 0 &&
+        row.avg_winning_score <= 100)) &&
+    (row.last_exchange_at === null || typeof row.last_exchange_at === 'string') &&
+    (row.best_persona_id === null ||
+      (typeof row.best_persona_id === 'string' && row.best_persona_id.length > 0))
+  );
+}
+
+function isAnalyticsPersonaStatsTimelinePoint(
+  value: unknown,
+): value is AnalyticsPersonaStatsTimelinePoint {
+  if (!value || typeof value !== 'object') return false;
+  const point = value as Record<string, unknown>;
+  return (
+    isIsoDateString(point.date) &&
+    isNonNegativeInteger(point.appearances) &&
+    isNonNegativeInteger(point.wins) &&
+    point.wins <= point.appearances &&
+    typeof point.win_rate === 'number' &&
+    Number.isFinite(point.win_rate) &&
+    point.win_rate >= 0 &&
+    point.win_rate <= 1 &&
+    isRoundedWinRate(point.wins, point.appearances, point.win_rate)
+  );
+}
+
+function isRoundedWinRate(wins: unknown, appearances: unknown, winRate: unknown): boolean {
+  if (
+    typeof wins !== 'number' ||
+    typeof appearances !== 'number' ||
+    typeof winRate !== 'number'
+  ) {
+    return false;
+  }
+  const expected = appearances > 0 ? wins / appearances : 0;
+  // The backend publishes rates rounded to four decimal places. Allow the
+  // half-unit of that precision so valid ratios cannot fail due to JSON
+  // floating-point representation while contradictory values are rejected.
+  return Math.abs(winRate - expected) <= 0.00005 + Number.EPSILON;
+}
+
+function isAnalyticsPersonaStatsTimelineResponse(
+  value: unknown,
+): value is AnalyticsPersonaStatsTimelineResponse {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Record<string, unknown>;
+  if (
+    typeof data.persona_id !== 'string' ||
+    data.persona_id.length === 0 ||
+    typeof data.name !== 'string' ||
+    data.name.length === 0 ||
+    !isPositiveInteger(data.days) ||
+    data.days > 90 ||
+    !isIsoDateString(data.window_start) ||
+    !isIsoDateString(data.window_end) ||
+    !isNonNegativeInteger(data.total_appearances) ||
+    !isNonNegativeInteger(data.total_wins) ||
+    data.total_wins > data.total_appearances ||
+    (data.best_day !== null && !isIsoDateString(data.best_day)) ||
+    !isNonNegativeInteger(data.best_day_wins) ||
+    !isNonNegativeInteger(data.best_day_appearances) ||
+    data.best_day_wins > data.best_day_appearances ||
+    typeof data.best_day_win_rate !== 'number' ||
+    !Number.isFinite(data.best_day_win_rate) ||
+    data.best_day_win_rate < 0 ||
+    data.best_day_win_rate > 1 ||
+    !Array.isArray(data.timeline) ||
+    data.timeline.length !== data.days ||
+    !data.timeline.every(isAnalyticsPersonaStatsTimelinePoint)
+  ) {
+    return false;
+  }
+
+  const timeline = data.timeline as AnalyticsPersonaStatsTimelinePoint[];
+  if (
+    timeline[0]?.date !== data.window_start ||
+    timeline[timeline.length - 1]?.date !== data.window_end ||
+    timeline.some(
+      (point, index) =>
+        index > 0 &&
+        Date.parse(`${point.date}T00:00:00Z`) -
+          Date.parse(`${timeline[index - 1].date}T00:00:00Z`) !==
+          24 * 60 * 60 * 1000,
+    ) ||
+    timeline.reduce((sum, point) => sum + point.appearances, 0) !== data.total_appearances ||
+    timeline.reduce((sum, point) => sum + point.wins, 0) !== data.total_wins
+  ) {
+    return false;
+  }
+
+  if (data.best_day === null) {
+    return (
+      data.best_day_wins === 0 &&
+      data.best_day_appearances === 0 &&
+      data.best_day_win_rate === 0 &&
+      timeline.every((point) => point.wins === 0)
+    );
+  }
+
+  const bestDay = timeline.find((point) => point.date === data.best_day);
+  const maxWins = Math.max(...timeline.map((point) => point.wins));
+  const expectedBestDay = timeline.find((point) => point.wins === maxWins);
+  return (
+    !!bestDay &&
+    !!expectedBestDay &&
+    maxWins > 0 &&
+    bestDay.date === expectedBestDay.date &&
+    bestDay.wins === data.best_day_wins &&
+    bestDay.appearances === data.best_day_appearances &&
+    bestDay.win_rate === data.best_day_win_rate
+  );
+}
+
+function isIsoDateString(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function isAnalyticsPersonaWinRateTrendPoint(
+  value: unknown,
+): value is AnalyticsPersonaWinRateTrendPoint {
+  if (!value || typeof value !== 'object') return false;
+  const point = value as Record<string, unknown>;
+  return (
+    isIsoDateString(point.bucket_start) &&
+    isIsoDateString(point.bucket_end) &&
+    point.bucket_end >= point.bucket_start &&
+    isNonNegativeInteger(point.appearances) &&
+    isNonNegativeInteger(point.wins) &&
+    point.wins <= point.appearances &&
+    (point.win_rate === null
+      ? point.appearances === 0
+      : typeof point.win_rate === 'number' &&
+        Number.isFinite(point.win_rate) &&
+        point.win_rate >= 0 &&
+        point.win_rate <= 1 &&
+        point.appearances > 0)
+  );
+}
+
+function isSortedAscendingTrend(trend: AnalyticsPersonaWinRateTrendPoint[]): boolean {
+  for (let i = 1; i < trend.length; i += 1) {
+    if (trend[i].bucket_start <= trend[i - 1].bucket_end) return false;
+  }
+  return true;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+function isAnalyticsPersonaWinRateResponse(
+  value: unknown,
+): value is AnalyticsPersonaWinRateResponse {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Record<string, unknown>;
+  if (
+    !isPositiveInteger(data.window_days) ||
+    typeof data.window_start !== 'string' ||
+    typeof data.window_end !== 'string' ||
+    !isPositiveInteger(data.min_appearances) ||
+    typeof data.include_fallback !== 'boolean' ||
+    !isPositiveInteger(data.low_confidence_threshold) ||
+    !isNonNegativeInteger(data.scored_exchanges) ||
+    !isNonNegativeInteger(data.unattributed_exchanges) ||
+    !isNonNegativeInteger(data.fallback_exchanges) ||
+    !Array.isArray(data.personas) ||
+    !data.personas.every(isAnalyticsPersonaWinRateRow) ||
+    (data.best_persona_id !== null &&
+      (typeof data.best_persona_id !== 'string' || data.best_persona_id.length === 0)) ||
+    (data.best_win_rate !== null &&
+      (typeof data.best_win_rate !== 'number' || !Number.isFinite(data.best_win_rate)))
+  ) {
+    return false;
+  }
+
+  const personaIds = new Set<string>();
+  for (const row of data.personas) {
+    if (personaIds.has(row.persona_id)) return false;
+    personaIds.add(row.persona_id);
+  }
+
+  if (data.best_persona_id !== null) {
+    const best = data.personas.find((row) => row.persona_id === data.best_persona_id);
+    if (!best || data.best_win_rate === null || best.win_rate !== data.best_win_rate) {
+      return false;
+    }
+  } else if (data.best_win_rate !== null) {
+    return false;
+  }
+
+  return true;
+}
+
+function isAnalyticsCategoryStatsResponse(
+  value: unknown,
+): value is AnalyticsCategoryStatsResponse {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Record<string, unknown>;
+  if (
+    !isPositiveInteger(data.window_days) ||
+    typeof data.window_start !== 'string' ||
+    typeof data.window_end !== 'string' ||
+    !isNonNegativeInteger(data.total_appearances) ||
+    !isNonNegativeInteger(data.total_wins) ||
+    data.total_wins > data.total_appearances ||
+    (data.most_active_category !== null &&
+      (typeof data.most_active_category !== 'string' || data.most_active_category.length === 0)) ||
+    !Array.isArray(data.categories) ||
+    !data.categories.every(isAnalyticsCategoryStatsRow)
+  ) {
+    return false;
+  }
+
+  const categories = data.categories as AnalyticsCategoryStatsRow[];
+  if (
+    new Set(categories.map((row) => row.category)).size !== categories.length ||
+    categories.reduce((sum, row) => sum + row.appearances, 0) !== data.total_appearances ||
+    categories.reduce((sum, row) => sum + row.wins, 0) !== data.total_wins
+  ) {
+    return false;
+  }
+
+  return data.most_active_category === null ||
+    categories.some((row) => row.category === data.most_active_category);
+}
+
+export async function getAnalyticsPersonaWinRate(
+  windowDays: number = 30,
+  minAppearances: number = 1,
+  includeFallback: boolean = false,
+): Promise<AnalyticsPersonaWinRateResponse> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  if (!Number.isInteger(minAppearances) || minAppearances < 1 || minAppearances > 200) {
+    throw new RangeError('minAppearances must be an integer between 1 and 200');
+  }
+  const fallbackQuery = includeFallback ? '&include_fallback=true' : '';
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate?window_days=${encodeURIComponent(String(windowDays))}&min_appearances=${encodeURIComponent(String(minAppearances))}${fallbackQuery}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load persona win rates'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<AnalyticsPersonaWinRateResponse>(response);
+  if (!data) throw new Error(withRequestId('Empty persona win rate response', response));
+  if (!isAnalyticsPersonaWinRateResponse(data)) {
+    throw new ApiError(
+      withRequestId('Malformed persona win rate response', response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
+export async function getAnalyticsPersonaStatsTimeline(
+  personaId: string,
+  days: number = 30,
+): Promise<AnalyticsPersonaStatsTimelineResponse> {
+  const normalizedPersonaId = personaId.trim();
+  if (!normalizedPersonaId) {
+    throw new RangeError('personaId must not be empty');
+  }
+  if (!Number.isInteger(days) || days < 1 || days > 90) {
+    throw new RangeError('days must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(
+    `/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/timeline?days=${encodeURIComponent(String(days))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load persona activity timeline'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<AnalyticsPersonaStatsTimelineResponse>(response);
+  if (!data) throw new Error(withRequestId('Empty persona activity timeline response', response));
+  if (!isAnalyticsPersonaStatsTimelineResponse(data)) {
+    throw new ApiError(
+      withRequestId('Malformed persona activity timeline response', response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
+export async function getAnalyticsCategoryStats(
+  windowDays: number = 30,
+): Promise<AnalyticsCategoryStatsResponse> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/category-stats?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load category stats'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<AnalyticsCategoryStatsResponse>(response);
+  if (!data) throw new Error(withRequestId('Empty category stats response', response));
+  if (!isAnalyticsCategoryStatsResponse(data)) {
+    throw new ApiError(
+      withRequestId('Malformed category stats response', response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
 export async function exportAnalyticsSummaryCsv(windowDays: number = 30): Promise<Blob> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
   const response = await apiFetch(`/api/analytics/summary/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export analytics summary CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export analytics summary CSV'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }
 
-export async function exportAnalyticsPersonaWinRateCsv(windowDays: number = 30): Promise<Blob> {
-  const response = await apiFetch(`/api/analytics/persona-win-rate/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+export type AnalyticsSummaryJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsSummaryJson(windowDays: number = 30): Promise<AnalyticsSummaryJsonExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(`/api/analytics/summary/export.json?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export persona win rate CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export analytics summary JSON'), response),
+      response.status,
+      err,
+    );
   }
-  return response.blob();
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-summary-${windowDays}d.json`,
+  };
+}
+
+export type AnalyticsSummaryMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsSummaryMarkdown(windowDays: number = 30): Promise<AnalyticsSummaryMarkdownExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(`/api/analytics/summary/export.md?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export analytics summary Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-summary-${windowDays}d.md`,
+  };
+}
+
+export type AnalyticsPersonaWinRateCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+function personaWinRateExportQuery(
+  windowDays: number,
+  minAppearances: number,
+  includeFallback: boolean = false,
+): string {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  if (!Number.isInteger(minAppearances) || minAppearances < 1 || minAppearances > 200) {
+    throw new RangeError('minAppearances must be an integer between 1 and 200');
+  }
+  const fallbackQuery = includeFallback ? '&include_fallback=true' : '';
+  return `window_days=${encodeURIComponent(String(windowDays))}&min_appearances=${encodeURIComponent(String(minAppearances))}${fallbackQuery}`;
+}
+
+export async function exportAnalyticsPersonaWinRateCsv(
+  windowDays: number = 30,
+  minAppearances: number = 1,
+  includeFallback: boolean = false,
+): Promise<AnalyticsPersonaWinRateCsvExport> {
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate/export.csv?${personaWinRateExportQuery(windowDays, minAppearances, includeFallback)}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona win rate CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-persona-win-rates-${windowDays}d.csv`,
+  };
+}
+
+export type AnalyticsPersonaWinRateTrendCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaWinRateTrendCsv(
+  windowDays: number = 30,
+  minAppearances: number = 1,
+  includeFallback: boolean = false,
+): Promise<AnalyticsPersonaWinRateTrendCsvExport> {
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate/export-trend.csv?${personaWinRateExportQuery(windowDays, minAppearances, includeFallback)}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona win-rate trend CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-persona-win-rate-trend-${windowDays}d.csv`,
+  };
+}
+
+export type AnalyticsPersonaWinRateTrendJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaWinRateTrendJson(
+  windowDays: number = 30,
+  minAppearances: number = 1,
+  includeFallback: boolean = false,
+): Promise<AnalyticsPersonaWinRateTrendJsonExport> {
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate/export-trend.json?${personaWinRateExportQuery(windowDays, minAppearances, includeFallback)}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona win-rate trend JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-persona-win-rate-trend-${windowDays}d.json`,
+  };
+}
+
+export type AnalyticsPersonaWinRateTrendMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaWinRateTrendMarkdown(
+  windowDays: number = 30,
+  minAppearances: number = 1,
+  includeFallback: boolean = false,
+): Promise<AnalyticsPersonaWinRateTrendMarkdownExport> {
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate/export-trend.md?${personaWinRateExportQuery(windowDays, minAppearances, includeFallback)}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona win-rate trend Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-persona-win-rate-trend-${windowDays}d.md`,
+  };
+}
+
+export type AnalyticsPersonaWinRateJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaWinRateJson(
+  windowDays: number = 30,
+  minAppearances: number = 1,
+  includeFallback: boolean = false,
+): Promise<AnalyticsPersonaWinRateJsonExport> {
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate/export.json?${personaWinRateExportQuery(windowDays, minAppearances, includeFallback)}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona win rate JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-persona-win-rates-${windowDays}d.json`,
+  };
+}
+
+export type AnalyticsPersonaWinRateMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaWinRateMarkdown(
+  windowDays: number = 30,
+  minAppearances: number = 1,
+  includeFallback: boolean = false,
+): Promise<AnalyticsPersonaWinRateMarkdownExport> {
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate/export.md?${personaWinRateExportQuery(windowDays, minAppearances, includeFallback)}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona win rate Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-persona-win-rates-${windowDays}d.md`,
+  };
 }
 
 export async function exportAnalyticsCategoryStatsCsv(windowDays: number = 30): Promise<Blob> {
   const response = await apiFetch(`/api/analytics/category-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export category stats CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export category stats CSV'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }
 
-export async function exportAnalyticsPersonaStatsOverviewCsv(windowDays: number = 30): Promise<Blob> {
-  const response = await apiFetch(`/api/analytics/persona-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+export type AnalyticsCategoryStatsJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsCategoryStatsJson(
+  windowDays: number = 30,
+): Promise<AnalyticsCategoryStatsJsonExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/category-stats/export.json?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export persona stats overview CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export category stats JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-category-stats-${windowDays}d.json`,
+  };
+}
+
+export type AnalyticsCategoryStatsMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsCategoryStatsMarkdown(
+  windowDays: number = 30,
+): Promise<AnalyticsCategoryStatsMarkdownExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/category-stats/export.md?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export category stats Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-category-stats-${windowDays}d.md`,
+  };
+}
+
+export type AnalyticsActivityDay = {
+  date: string;
+  prompts: number;
+  debates: number;
+  discusses: number;
+  agent_runs: number;
+};
+
+export type AnalyticsActivityResponse = {
+  window_days: number;
+  start_date: string;
+  end_date: string;
+  activity: AnalyticsActivityDay[];
+  totals: {
+    prompts: number;
+    debates: number;
+    discusses: number;
+    agent_runs: number;
+  };
+  active_days: number;
+  current_streak: number;
+  longest_streak: number;
+  busiest_day: string | null;
+  busiest_day_count: number;
+};
+
+function isAnalyticsActivityDay(value: unknown): value is AnalyticsActivityDay {
+  if (!value || typeof value !== 'object') return false;
+  const day = value as Record<string, unknown>;
+  return (
+    typeof day.date === 'string' &&
+    typeof day.prompts === 'number' &&
+    Number.isFinite(day.prompts) &&
+    typeof day.debates === 'number' &&
+    Number.isFinite(day.debates) &&
+    typeof day.discusses === 'number' &&
+    Number.isFinite(day.discusses) &&
+    typeof day.agent_runs === 'number' &&
+    Number.isFinite(day.agent_runs)
+  );
+}
+
+function isAnalyticsActivityResponse(value: unknown): value is AnalyticsActivityResponse {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Record<string, unknown>;
+  if (
+    typeof data.window_days !== 'number' ||
+    !Number.isFinite(data.window_days) ||
+    typeof data.start_date !== 'string' ||
+    typeof data.end_date !== 'string' ||
+    !Array.isArray(data.activity) ||
+    !data.activity.every(isAnalyticsActivityDay) ||
+    !data.totals ||
+    typeof data.totals !== 'object' ||
+    typeof data.active_days !== 'number' ||
+    !Number.isFinite(data.active_days) ||
+    typeof data.current_streak !== 'number' ||
+    !Number.isFinite(data.current_streak) ||
+    typeof data.longest_streak !== 'number' ||
+    !Number.isFinite(data.longest_streak) ||
+    (data.busiest_day !== null && typeof data.busiest_day !== 'string') ||
+    typeof data.busiest_day_count !== 'number' ||
+    !Number.isFinite(data.busiest_day_count)
+  ) {
+    return false;
+  }
+  const totals = data.totals as Record<string, unknown>;
+  return (
+    typeof totals.prompts === 'number' &&
+    Number.isFinite(totals.prompts) &&
+    typeof totals.debates === 'number' &&
+    Number.isFinite(totals.debates) &&
+    typeof totals.discusses === 'number' &&
+    Number.isFinite(totals.discusses) &&
+    typeof totals.agent_runs === 'number' &&
+    Number.isFinite(totals.agent_runs)
+  );
+}
+
+export async function getAnalyticsActivity(days: number = 30): Promise<AnalyticsActivityResponse> {
+  const response = await apiFetch(`/api/analytics/activity?days=${encodeURIComponent(String(days))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load activity timeline'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<AnalyticsActivityResponse>(response);
+  if (!data) throw new Error(withRequestId('Empty activity response', response));
+  if (!isAnalyticsActivityResponse(data)) {
+    throw new ApiError(
+      withRequestId('Malformed activity timeline response', response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
+export async function exportAnalyticsActivityCsv(days: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/activity/export.csv?days=${encodeURIComponent(String(days))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export activity CSV'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }
 
-export async function exportAnalyticsPersonaStatsTimelineCsv(personaId: string, windowDays: number = 30): Promise<Blob> {
-  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(personaId)}/timeline/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+export type AnalyticsActivityJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsActivityJson(days: number = 30): Promise<AnalyticsActivityJsonExport> {
+  const response = await apiFetch(`/api/analytics/activity/export.json?days=${encodeURIComponent(String(days))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export persona timeline CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export activity JSON'), response),
+      response.status,
+      err,
+    );
   }
-  return response.blob();
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-activity-${days}d.json`,
+  };
 }
 
-export async function exportAnalyticsPersonaStatsByCategoryCsv(personaId: string, windowDays: number = 30): Promise<Blob> {
-  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(personaId)}/by-category/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+export type AnalyticsActivityMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsActivityMarkdown(days: number = 30): Promise<AnalyticsActivityMarkdownExport> {
+  const response = await apiFetch(`/api/analytics/activity/export.md?days=${encodeURIComponent(String(days))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export persona category stats CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export activity Markdown'), response),
+      response.status,
+      err,
+    );
   }
-  return response.blob();
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-activity-${days}d.md`,
+  };
+}
+
+export type AnalyticsPersonaStatsOverviewCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsOverviewCsv(
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsOverviewCsvExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/persona-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona stats overview CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-stats-overview-${windowDays}d.csv`,
+  };
+}
+
+export type AnalyticsPersonaStatsOverviewJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsOverviewJson(
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsOverviewJsonExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/persona-stats/export.json?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona stats overview JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-stats-overview-${windowDays}d.json`,
+  };
+}
+
+export type AnalyticsPersonaStatsOverviewMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsOverviewMarkdown(
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsOverviewMarkdownExport> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/persona-stats/export.md?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona stats overview Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-stats-overview-${windowDays}d.md`,
+  };
+}
+
+export type AnalyticsPersonaStatsTimelineCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsTimelineCsv(
+  personaId: string,
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsTimelineCsvExport> {
+  const normalizedPersonaId = personaId.trim();
+  if (!normalizedPersonaId) {
+    throw new RangeError('personaId must not be empty');
+  }
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/timeline/export.csv?days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona timeline CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  const safePersonaId = normalizedPersonaId.replace(/[^a-zA-Z0-9_-]/g, '-');
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-timeline-${safePersonaId}-${windowDays}d.csv`,
+  };
+}
+
+export type AnalyticsPersonaStatsTimelineJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsTimelineJson(
+  personaId: string,
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsTimelineJsonExport> {
+  const normalizedPersonaId = personaId.trim();
+  if (!normalizedPersonaId) {
+    throw new RangeError('personaId must not be empty');
+  }
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/timeline/export.json?days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona timeline JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  const safePersonaId = normalizedPersonaId.replace(/[^a-zA-Z0-9_-]/g, '-');
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-timeline-${safePersonaId}-${windowDays}d.json`,
+  };
+}
+
+export type AnalyticsPersonaStatsTimelineMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsTimelineMarkdown(
+  personaId: string,
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsTimelineMarkdownExport> {
+  const normalizedPersonaId = personaId.trim();
+  if (!normalizedPersonaId) {
+    throw new RangeError('personaId must not be empty');
+  }
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90) {
+    throw new RangeError('windowDays must be an integer between 1 and 90');
+  }
+  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/timeline/export.md?days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona timeline Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  const safePersonaId = normalizedPersonaId.replace(/[^a-zA-Z0-9_-]/g, '-');
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-timeline-${safePersonaId}-${windowDays}d.md`,
+  };
+}
+
+export type AnalyticsPersonaStatsByCategoryCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaStatsByCategoryCsv(
+  personaId: string,
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsByCategoryCsvExport> {
+  const normalizedPersonaId = personaId.trim();
+  if (!normalizedPersonaId) {
+    throw new RangeError('personaId must not be empty');
+  }
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/by-category/export.csv?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona category stats CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-category-${normalizedPersonaId.replace(/[^a-zA-Z0-9_-]/g, '-')}-${windowDays}d.csv`,
+  };
+}
+
+export async function exportAnalyticsPersonaStatsByCategoryMarkdown(
+  personaId: string,
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaStatsByCategoryCsvExport> {
+  const normalizedPersonaId = personaId.trim();
+  if (!normalizedPersonaId) {
+    throw new RangeError('personaId must not be empty');
+  }
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  const response = await apiFetch(
+    `/api/analytics/persona-stats/${encodeURIComponent(normalizedPersonaId)}/by-category/export.md?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(
+        getErrorMessage(err, 'Failed to export persona category stats Markdown'),
+        response,
+      ),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-persona-category-${normalizedPersonaId.replace(/[^a-zA-Z0-9_-]/g, '-')}-${windowDays}d.md`,
+  };
 }
 
 export async function exportScoringAuditCsv(
@@ -2393,4 +5134,564 @@ export async function exportScoringAuditCsv(
     );
   }
   return response.blob();
+}
+
+// ─── Export presets ─────────────────────────────────────────────────────────
+// Saved-response export configurations the backend persists per user
+// (routes/export_presets.py): reusable filter+format bundles with a dry-run
+// preview and a use endpoint that 307-redirects into /api/saved/export.
+
+export type ExportPreset = {
+  id: number;
+  name: string;
+  description: string | null;
+  preset_type: string;
+  format: string;
+  search: string | null;
+  persona_id: string | null;
+  min_score: number | null;
+  max_score: number | null;
+  sort: string | null;
+  position: number;
+  is_default: boolean;
+  last_used_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ExportPresetTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  preset_type: string;
+  format: string;
+  search: string | null;
+  persona_id: string | null;
+  min_score: number | null;
+  max_score: number | null;
+  sort: string | null;
+};
+
+function normalizeExportPreset(raw: Record<string, unknown>): ExportPreset {
+  return {
+    id: Number(raw.id),
+    name: String(raw.name || ''),
+    description: raw.description ? String(raw.description) : null,
+    preset_type: String(raw.preset_type || ''),
+    format: String(raw.format || ''),
+    search: raw.search ? String(raw.search) : null,
+    persona_id: raw.persona_id ? String(raw.persona_id) : null,
+    min_score: typeof raw.min_score === 'number' ? raw.min_score : null,
+    max_score: typeof raw.max_score === 'number' ? raw.max_score : null,
+    sort: raw.sort ? String(raw.sort) : null,
+    position: typeof raw.position === 'number' ? raw.position : 0,
+    is_default: raw.is_default === true,
+    last_used_at: raw.last_used_at ? String(raw.last_used_at) : null,
+    created_at: raw.created_at ? String(raw.created_at) : null,
+    updated_at: raw.updated_at ? String(raw.updated_at) : null,
+  };
+}
+
+export async function listExportPresets(): Promise<ExportPreset[]> {
+  const res = await apiFetch(`/api/export-presets`);
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to load export presets'), res));
+  }
+  // Tolerant of a bare array for resilience against old cached responses.
+  const data = await parseJsonSafely<
+    Array<Record<string, unknown>> | { presets?: Array<Record<string, unknown>> }
+  >(res);
+  const rawItems = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.presets)
+      ? data.presets
+      : [];
+  return rawItems.map(normalizeExportPreset);
+}
+
+export async function listExportPresetTemplates(): Promise<ExportPresetTemplate[]> {
+  const res = await apiFetch(`/api/export-presets/templates`);
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to load export preset templates'), res),
+    );
+  }
+  const data = (await parseJsonSafely<{ templates?: Array<Record<string, unknown>> }>(res)) || {};
+  return (Array.isArray(data.templates) ? data.templates : []).map((raw) => ({
+    id: String(raw.id || ''),
+    name: String(raw.name || ''),
+    description: String(raw.description || ''),
+    preset_type: String(raw.preset_type || ''),
+    format: String(raw.format || ''),
+    search: raw.search ? String(raw.search) : null,
+    persona_id: raw.persona_id ? String(raw.persona_id) : null,
+    min_score: typeof raw.min_score === 'number' ? raw.min_score : null,
+    max_score: typeof raw.max_score === 'number' ? raw.max_score : null,
+    sort: raw.sort ? String(raw.sort) : null,
+  }));
+}
+
+export async function createExportPresetFromTemplate(
+  templateId: string,
+  name?: string,
+): Promise<ExportPreset> {
+  const normalizedTemplateId = templateId.trim();
+  if (!normalizedTemplateId) {
+    throw new RangeError('templateId must not be empty');
+  }
+  const params = new URLSearchParams({ template_id: normalizedTemplateId });
+  const trimmedName = name?.trim();
+  if (trimmedName) {
+    params.set('name', trimmedName);
+  }
+  const res = await apiFetch(`/api/export-presets/from-template?${params.toString()}`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to create export preset from template'), res),
+    );
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Export preset creation returned no preset.');
+    })();
+  return normalizeExportPreset(data);
+}
+
+export async function renameExportPreset(
+  presetId: number,
+  name: string,
+): Promise<ExportPreset> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  const trimmedName = name.trim();
+  if (!trimmedName || trimmedName.length > 100) {
+    throw new RangeError('name must be between 1 and 100 characters');
+  }
+  const res = await apiFetch(`/api/export-presets/${encodeURIComponent(String(presetId))}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: trimmedName }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to rename export preset'), res));
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Export preset rename returned no preset.');
+    })();
+  return normalizeExportPreset(data);
+}
+
+export async function setDefaultExportPreset(presetId: number): Promise<ExportPreset> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  // The backend keeps exactly one default per user: setting this flag
+  // clears every other preset's default in the same transaction.
+  const res = await apiFetch(`/api/export-presets/${encodeURIComponent(String(presetId))}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_default: true }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to set the default export preset'), res),
+    );
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Setting the default export preset returned no preset.');
+    })();
+  return normalizeExportPreset(data);
+}
+
+export type ExportPresetReorderResult = {
+  status: string;
+  updatedCount: number;
+};
+
+export async function reorderExportPresets(
+  orderedIds: number[],
+): Promise<ExportPresetReorderResult> {
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    throw new RangeError('orderedIds must contain at least one preset id');
+  }
+  if (!orderedIds.every((id) => Number.isInteger(id) && id >= 1)) {
+    throw new RangeError('every preset id must be a positive integer');
+  }
+  // The backend assigns each item's list index as its new position; ids
+  // that do not belong to the caller are silently skipped (no existence
+  // oracle), so the response only reports how many rows moved.
+  const res = await apiFetch(`/api/export-presets/reorder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: orderedIds.map((id) => ({ id })) }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to reorder export presets'), res));
+  }
+  const data =
+    (await parseJsonSafely<{ status?: string; updated_count?: number }>(res)) || {};
+  return {
+    status: String(data.status || 'reordered'),
+    updatedCount: typeof data.updated_count === 'number' ? data.updated_count : 0,
+  };
+}
+
+export type ExportPresetFilterPatch = {
+  /** Empty string clears the stored term; null is rejected client-side. */
+  search?: string;
+  minScore?: number | null;
+  maxScore?: number | null;
+  sort?: string;
+};
+
+export async function updateExportPresetFilters(
+  presetId: number,
+  patch: ExportPresetFilterPatch,
+): Promise<ExportPreset> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  const body: Record<string, unknown> = {};
+  if (patch.search !== undefined) {
+    if (patch.search.length > 100) {
+      throw new RangeError('search must be at most 100 characters');
+    }
+    // Blank means "clear" — that's the convention the backend update
+    // route honors for optional terms.
+    body.search = patch.search.trim();
+  }
+  for (const key of ['minScore', 'maxScore'] as const) {
+    const value = patch[key];
+    if (value === undefined) continue;
+    if (value !== null && (!Number.isInteger(value) || value < 0 || value > 100)) {
+      throw new RangeError(`${key} must be null or an integer between 0 and 100`);
+    }
+    body[key === 'minScore' ? 'min_score' : 'max_score'] = value;
+  }
+  if (
+    typeof patch.minScore === 'number' &&
+    typeof patch.maxScore === 'number' &&
+    patch.minScore > patch.maxScore
+  ) {
+    throw new RangeError('minScore must be less than or equal to maxScore');
+  }
+  if (patch.sort !== undefined) {
+    if (!patch.sort.trim()) {
+      throw new RangeError('sort must not be empty');
+    }
+    body.sort = patch.sort.trim();
+  }
+  if (Object.keys(body).length === 0) {
+    throw new RangeError('patch must set at least one filter');
+  }
+  const res = await apiFetch(`/api/export-presets/${encodeURIComponent(String(presetId))}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to update export preset filters'), res),
+    );
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Export preset filter update returned no preset.');
+    })();
+  return normalizeExportPreset(data);
+}
+
+export type ExportPresetDuplicateResult = {
+  newId: number;
+  name: string;
+  position: number;
+};
+
+export async function duplicateExportPreset(
+  presetId: number,
+): Promise<ExportPresetDuplicateResult> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  // The backend names the copy "<original> (Copy <timestamp>)" and slots
+  // it after the original; the response is a stub (id/name/position), not
+  // a full row, so callers refetch to see the copy's real fields.
+  const res = await apiFetch(
+    `/api/export-presets/${encodeURIComponent(String(presetId))}/duplicate`,
+    { method: 'POST' },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to duplicate export preset'), res));
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Duplicating the export preset returned no result.');
+    })();
+  if (typeof data.new_id !== 'number' || typeof data.name !== 'string') {
+    throw new Error('Duplicating the export preset returned an unexpected shape.');
+  }
+  return {
+    newId: data.new_id,
+    name: data.name,
+    position: typeof data.position === 'number' ? data.position : 0,
+  };
+}
+
+export type ExportPresetBackupEntry = {
+  name: string;
+  description: string | null;
+  preset_type: string;
+  format: string;
+  search: string | null;
+  persona_id: string | null;
+  min_score: number | null;
+  max_score: number | null;
+  sort: string | null;
+};
+
+export type ExportPresetBackup = {
+  version: string;
+  exportedAt: string | null;
+  totalPresets: number;
+  presets: ExportPresetBackupEntry[];
+};
+
+export async function exportPresetsBackup(): Promise<ExportPresetBackup> {
+  const res = await apiFetch(`/api/export-presets/export`);
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to create a preset backup'), res));
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Preset backup returned no data.');
+    })();
+  const rawPresets = Array.isArray(data.presets)
+    ? (data.presets as Array<Record<string, unknown>>)
+    : [];
+  return {
+    version: typeof data.version === 'string' || typeof data.version === 'number'
+      ? String(data.version)
+      : '',
+    exportedAt: typeof data.exported_at === 'string' ? data.exported_at : null,
+    totalPresets:
+      typeof data.total_presets === 'number' ? data.total_presets : rawPresets.length,
+    presets: rawPresets.map((raw) => ({
+      name: String(raw.name || ''),
+      description: raw.description ? String(raw.description) : null,
+      preset_type: String(raw.preset_type || 'saved'),
+      format: String(raw.format || ''),
+      search: raw.search ? String(raw.search) : null,
+      persona_id: raw.persona_id ? String(raw.persona_id) : null,
+      min_score: typeof raw.min_score === 'number' ? raw.min_score : null,
+      max_score: typeof raw.max_score === 'number' ? raw.max_score : null,
+      sort: raw.sort ? String(raw.sort) : null,
+    })),
+  };
+}
+
+export type ExportPresetImportResult = {
+  importedCount: number;
+  skippedCount: number;
+  duplicatedNames: string[];
+};
+
+export async function importPresetsBackup(
+  presets: Array<Record<string, unknown>>,
+): Promise<ExportPresetImportResult> {
+  if (!Array.isArray(presets) || presets.length === 0) {
+    throw new RangeError('presets must contain at least one entry');
+  }
+  const res = await apiFetch(`/api/export-presets/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ presets }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to restore presets'), res));
+  }
+  const data =
+    (await parseJsonSafely<{
+      imported_count?: number;
+      skipped_count?: number;
+      duplicated_names?: string[];
+    }>(res)) || {};
+  return {
+    importedCount:
+      typeof data.imported_count === 'number' ? data.imported_count : 0,
+    skippedCount:
+      typeof data.skipped_count === 'number' ? data.skipped_count : 0,
+    duplicatedNames: Array.isArray(data.duplicated_names)
+      ? data.duplicated_names.map(String)
+      : [],
+  };
+}
+
+export type ExportPresetBulkDeleteResult = {
+  status: string;
+  deletedCount: number;
+};
+
+export async function bulkDeleteExportPresets(
+  ids: number[],
+  force = false,
+): Promise<ExportPresetBulkDeleteResult> {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new RangeError('ids must contain at least one preset id');
+  }
+  if (!ids.every((id) => Number.isInteger(id) && id >= 1)) {
+    throw new RangeError('every preset id must be a positive integer');
+  }
+  const res = await apiFetch(`/api/export-presets/bulk-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, force }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{
+      detail?: { message?: string; error?: string } | string;
+    }>(res);
+    const message = getErrorMessage(err, 'Failed to delete export presets');
+    // The backend refuses to delete your default preset unless force is
+    // set; surface that as ApiError so callers can distinguish "retry
+    // with force" from every other failure.
+    if (
+      err &&
+      typeof err === 'object' &&
+      err.detail !== null &&
+      typeof err.detail === 'object' &&
+      err.detail.error === 'default_preset_protected'
+    ) {
+      throw new ApiError(message, res.status, err.detail);
+    }
+    throw new Error(withRequestId(message, res));
+  }
+  const data =
+    (await parseJsonSafely<{ status?: string; deleted_count?: number }>(res)) || {};
+  return {
+    status: String(data.status || 'bulk_deleted'),
+    deletedCount: typeof data.deleted_count === 'number' ? data.deleted_count : 0,
+  };
+}
+
+export async function deleteExportPreset(presetId: number): Promise<void> {  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  const res = await apiFetch(`/api/export-presets/${encodeURIComponent(String(presetId))}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to delete export preset'), res));
+  }
+}
+
+export type ExportPresetDownload = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function applyExportPreset(
+  presetId: number,
+  fallbackExtension: string = 'csv',
+): Promise<ExportPresetDownload> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  const safeExtension = fallbackExtension.replace(/[^a-zA-Z0-9]/g, '') || 'csv';
+  // The backend answers with a 307 into /api/saved/export; fetch follows it
+  // transparently so this resolves to the actual file.
+  const response = await apiFetch(
+    `/api/export-presets/${encodeURIComponent(String(presetId))}/use`,
+    { method: 'POST' },
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to run export preset'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename:
+      contentDispositionFilename(response) ??
+      `arena-preset-${presetId}-export.${safeExtension}`,
+  };
+}
+
+export type ExportPresetPreviewRow = {
+  id: number;
+  persona_name: string | null;
+  score: number | null;
+  one_liner: string;
+  saved_at: string | null;
+};
+
+export type ExportPresetPreview = {
+  matchCount: number;
+  sample: ExportPresetPreviewRow[];
+  truncated: boolean;
+  // Effective filters the dry run actually applied (server-normalized),
+  // so the panel can describe the export it previews.
+  sort: string | null;
+  search: string | null;
+};
+
+export async function previewExportPreset(presetId: number): Promise<ExportPresetPreview> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  // Read-only dry run: counts the exact rows a real export would return
+  // without touching last_used_at.
+  const res = await apiFetch(
+    `/api/export-presets/${encodeURIComponent(String(presetId))}/preview`,
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to preview export preset'), res));
+  }
+  const data = (await parseJsonSafely<Record<string, unknown>>(res)) || {};
+  const rawSample = Array.isArray(data.preview) ? data.preview : [];
+  const filters =
+    data.filters && typeof data.filters === 'object'
+      ? (data.filters as Record<string, unknown>)
+      : {};
+  return {
+    matchCount: typeof data.match_count === 'number' ? data.match_count : 0,
+    truncated: data.truncated === true,
+    sort: filters.sort ? String(filters.sort) : null,
+    search: filters.search ? String(filters.search) : null,
+    sample: rawSample.map((row) => {
+      const record = row as Record<string, unknown>;
+      return {
+        id: Number(record.id),
+        persona_name: record.persona_name ? String(record.persona_name) : null,
+        score: typeof record.score === 'number' ? record.score : null,
+        one_liner: String(record.one_liner || ''),
+        saved_at: record.saved_at ? String(record.saved_at) : null,
+      };
+    }),
+  };
 }

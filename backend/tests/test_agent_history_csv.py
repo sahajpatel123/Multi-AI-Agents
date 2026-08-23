@@ -35,7 +35,7 @@ async def test_agent_history_csv_export(app_client, make_user, db_session):
     """Test CSV export of agent history."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_task(db_session, user.id, "1", score=90, title="Bitcoin Analysis", task_text="Analyze Bitcoin trends")
     _seed_task(db_session, user.id, "2", score=85, title="Ethereum Analysis", task_text="Analyze Ethereum trends")
     _seed_task(db_session, user.id, "3", score=75, title="Market Overview", task_text="Overview of crypto market")
@@ -61,7 +61,7 @@ async def test_agent_history_csv_with_search(app_client, make_user, db_session):
     """Test CSV export with search filter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_task(db_session, user.id, "1", score=90, title="Bitcoin Analysis", task_text="Analyze Bitcoin trends")
     _seed_task(db_session, user.id, "2", score=85, title="Ethereum Analysis", task_text="Analyze Ethereum trends")
     _seed_task(db_session, user.id, "3", score=75, title="Bitcoin Price", task_text="Bitcoin price analysis")
@@ -84,7 +84,7 @@ async def test_agent_history_csv_formula_injection_defense(app_client, make_user
     """Test CSV export defends against formula injection."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_task(db_session, user.id, "1", task_text="=cmd|'/c calc'!A1")
     db_session.commit()
 
@@ -119,7 +119,7 @@ async def test_agent_history_json_export(app_client, make_user, db_session):
     """Test JSON export of agent history."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_task(db_session, user.id, "1", score=90, title="Bitcoin Analysis", task_text="Analyze Bitcoin trends")
     _seed_task(db_session, user.id, "2", score=85, title="Ethereum Analysis", task_text="Analyze Ethereum trends")
     db_session.commit()
@@ -143,7 +143,7 @@ async def test_agent_history_json_with_search(app_client, make_user, db_session)
     """Test JSON export with search filter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_task(db_session, user.id, "1", score=90, title="Bitcoin Analysis")
     _seed_task(db_session, user.id, "2", score=85, title="Ethereum Analysis")
     _seed_task(db_session, user.id, "3", score=75, title="Bitcoin Price")

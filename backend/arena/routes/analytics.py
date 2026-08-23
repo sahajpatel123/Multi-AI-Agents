@@ -21,7 +21,7 @@ from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
 from arena.core.datetime_utils import utcnow_naive
 from arena.db_models import (
-    PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UserPreference, UXEvent, UserTier,
+    PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UXEvent, UserTier,
 )
 from arena.models.schemas import UserResponse
 
@@ -237,7 +237,40 @@ async def analytics_summary(
 ) -> dict:
     """Per-user analytics summary over a configurable window.
 
-    Adds three things over the previous shape:
+    The dashboard endpoint owns the dashboard rate-limit budget. Export
+    routes call the shared aggregation helper directly so downloading a
+    report does not unexpectedly consume dashboard refresh capacity.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_summary",
+        limit=60,
+        window_seconds=3600,
+        message="Too many analytics summary requests. Limit is 60 per hour.",
+    )
+    return _analytics_summary_payload(
+        user=user,
+        db=db,
+        window_days=window_days,
+        topic_limit=topic_limit,
+    )
+
+
+def _analytics_summary_payload(
+    *,
+    user: UserResponse,
+    db: Session,
+    window_days: int,
+    topic_limit: int,
+) -> dict:
+    """Build the summary payload without applying a route-level throttle.
+
+    ``analytics_summary`` and each export have separate user-scoped budgets,
+    but all of them must return the same aggregation. Keeping the database
+    work here prevents an export from calling the route handler and charging
+    two rate-limit scopes for one request.
+
+    The payload adds three things over the previous shape:
 
     - ?window_days=N (default 30, max 365): caps heavy full-history scans
       so a user with years of activity doesn't trigger a multi-second
@@ -255,16 +288,9 @@ async def analytics_summary(
       bounds the streak computation — a 365-day window can't return a
       streak longer than 365.
 
-    Bound call volume so a single account cannot use this as a cheap
-    DB-amplification DoS.
+    The route-level rate limiter above bounds call volume so a single account
+    cannot use this as a cheap DB-amplification DoS.
     """
-    enforce_user_rate_limit(
-        user.id,
-        scope="analytics_summary",
-        limit=60,
-        window_seconds=3600,
-        message="Too many analytics summary requests. Limit is 60 per hour.",
-    )
     user_id = user.id
 
     # Anchor the window in UTC to match the naive-UTC timestamps written
@@ -274,7 +300,6 @@ async def analytics_summary(
     window_start = now_utc - timedelta(days=window_days - 1)
     window_start_day = window_start.date()
 
-    preference = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()
     scoring_rows = (
         db.query(ScoringAudit)
         .filter(
@@ -450,6 +475,61 @@ async def analytics_summary(
     }
 
 
+@router.get("/analytics/summary/export.json")
+async def analytics_summary_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        30,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Must match the JSON endpoint.",
+    ),
+    topic_limit: int = Query(
+        10,
+        ge=1,
+        le=50,
+        description="Max number of topics in the topic_distribution section.",
+    ),
+) -> Response:
+    """Download the exact analytics summary payload as JSON.
+
+    Reuses the summary aggregation so an archive or BI script receives the
+    same metrics as /analytics/summary without scraping the UI. The export
+    has its own user-scoped budget and no-store download headers.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_summary_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many summary JSON exports. Please wait.",
+    )
+
+    payload = _analytics_summary_payload(
+        window_days=window_days,
+        topic_limit=topic_limit,
+        user=user,
+        db=db,
+    )
+
+    import json
+
+    filename = (
+        f"arena-summary-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/summary/export.csv")
 async def analytics_summary_csv(
     user: UserResponse = Depends(get_current_user_required),
@@ -469,9 +549,9 @@ async def analytics_summary_csv(
 ) -> Response:
     """CSV export of the analytics summary.
 
-    Reuses the JSON route so the CSV and the API response
-    cannot drift. Each metric becomes a row (metric, value)
-    with persona_wins and topic_distribution as sub-rows.
+    Reuses the shared summary aggregation so the CSV and the API response
+    cannot drift. Each metric becomes a row (metric, value) with
+    persona_wins and topic_distribution as sub-rows.
 
     Follows the same defenses as the other CSV exports:
     rate-limit scoped, security headers, RFC 4180 quoting,
@@ -485,7 +565,7 @@ async def analytics_summary_csv(
         message="Too many summary CSV exports. Limit is 60 per hour.",
     )
 
-    payload = await analytics_summary(
+    payload = _analytics_summary_payload(
         window_days=window_days,
         topic_limit=topic_limit,
         user=user,
@@ -550,6 +630,142 @@ async def analytics_summary_csv(
     return Response(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/summary/export.md")
+async def analytics_summary_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        30,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Must match the JSON endpoint.",
+    ),
+    topic_limit: int = Query(
+        10,
+        ge=1,
+        le=50,
+        description="Max number of topics in the topic_distribution section.",
+    ),
+) -> Response:
+    """Download the analytics summary as a portable Markdown report.
+
+    The report is intended for notes, reviews, and issue trackers rather
+    than spreadsheets. It reuses the shared summary aggregation so every
+    scalar and breakdown stays aligned with the JSON and CSV exports.
+    Markdown-controlled cells are escaped before being placed in tables, and
+    the download has its own user-scoped rate-limit budget.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_summary_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many summary Markdown exports. Please wait.",
+    )
+
+    payload = _analytics_summary_payload(
+        window_days=window_days,
+        topic_limit=topic_limit,
+        user=user,
+        db=db,
+    )
+
+    engagement_rate = payload["engagement_rate"]
+    drift_rate = payload["drift_rate"]
+    lines = [
+        "# Arena — analytics summary",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Total prompts:** {payload['total_prompts']}",
+        f"- **Total debates:** {payload['total_debates']}",
+        f"- **Total discusses:** {payload['total_discusses']}",
+        f"- **Total saved:** {payload['total_saved']}",
+        f"- **Top persona by wins:** {_markdown_cell(payload['top_persona_by_wins'] or 'none')}",
+        f"- **Most used event:** {_markdown_cell(payload['most_used_event'] or 'none')}",
+        f"- **Engagement rate:** {round(engagement_rate * 100, 1)}% ({engagement_rate})",
+        f"- **Current streak:** {payload['current_streak']} days",
+        f"- **Longest streak:** {payload['longest_streak']} days",
+        f"- **Average prompts per session:** {payload['avg_session_prompts']}",
+        f"- **Average winning score:** {payload['avg_winning_score']}",
+        f"- **Drift rate:** {round(drift_rate * 100, 1)}% ({drift_rate})",
+        "",
+        "## Persona wins",
+        "",
+        "| Persona | Wins |",
+        "| --- | ---: |",
+    ]
+    if payload["persona_wins"]:
+        for persona_id, wins in sorted(payload["persona_wins"].items()):
+            lines.append(
+                f"| {_markdown_cell(persona_id)} | {_markdown_cell(wins)} |"
+            )
+    else:
+        lines.append("| _None recorded_ | 0 |")
+
+    lines.extend(
+        [
+            "",
+            "## Topic distribution",
+            "",
+            "| Topic | Count |",
+            "| --- | ---: |",
+        ]
+    )
+    if payload["topic_distribution"]:
+        for topic in payload["topic_distribution"]:
+            lines.append(
+                f"| {_markdown_cell(topic['topic'])} | {_markdown_cell(topic['count'])} |"
+            )
+    else:
+        lines.append("| _None recorded_ | 0 |")
+
+    lines.extend(
+        [
+            "",
+            "## Persona engagement",
+            "",
+            "| Persona | Deeper opened | Liked | Saved | Debated |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    if payload["persona_engagement"]:
+        for persona_id, counts in sorted(payload["persona_engagement"].items()):
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        _markdown_cell(persona_id),
+                        _markdown_cell(counts["deeper_opened"]),
+                        _markdown_cell(counts["liked"]),
+                        _markdown_cell(counts["saved"]),
+                        _markdown_cell(counts["debated"]),
+                    ]
+                )
+                + " |"
+            )
+    else:
+        lines.append("| _None recorded_ | 0 | 0 | 0 | 0 |")
+
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+    filename = (
+        f"arena-summary-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-store",
@@ -684,31 +900,23 @@ async def analytics_engagement(
     }
 
 
-@router.get("/analytics/activity")
-async def analytics_activity(
-    user: UserResponse = Depends(get_current_user_required),
-    db: Session = Depends(get_db),
-    days: int = Query(30, ge=1, le=366, description="Window length in days, ending today (UTC)."),
-) -> dict:
-    """GitHub-style activity timeline with streak metrics.
+def _activity_timeline(db: Session, user_id: int, days: int) -> dict:
+    """Compute the GitHub-style activity timeline for one user.
 
     Returns one bucket per UTC calendar day for the trailing ``days`` window
     (inclusive of today), plus aggregate counters split by arena mode and the
     user's current/longest consecutive-day streak.
 
+    This is deliberately a plain helper rather than a callable route: the
+    JSON and CSV endpoints share one aggregation so they cannot drift, while
+    each route keeps its own user-scoped rate limit. The CSV export must not
+    consume the JSON endpoint's hourly budget (and vice versa).
+
     Bounded the same way as :func:`analytics_summary` so this can't be used as
     a DB-amplification surface: window length is capped, the row scan is
-    restricted to two indexed columns, and the user-scoped rate limit is
-    shared across analytics endpoints.
+    restricted to two indexed columns, and call volume is capped by the
+    calling route's rate limit.
     """
-    enforce_user_rate_limit(
-        user.id,
-        scope="analytics_activity",
-        limit=60,
-        window_seconds=3600,
-        message="Too many analytics activity requests. Limit is 60 per hour.",
-    )
-
     # _now() in db_models stores naive UTC, so we anchor the window in UTC
     # too — using local time here would mis-bucket events near day boundaries
     # for any user not on UTC.
@@ -723,7 +931,7 @@ async def analytics_activity(
     rows = (
         db.query(UsageRecord.timestamp, UsageRecord.mode)
         .filter(
-            UsageRecord.user_id == user.id,
+            UsageRecord.user_id == user_id,
             UsageRecord.timestamp >= start_dt,
             UsageRecord.timestamp < end_dt,
         )
@@ -826,6 +1034,437 @@ async def analytics_activity(
     }
 
 
+@router.get("/analytics/activity")
+async def analytics_activity(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(30, ge=1, le=366, description="Window length in days, ending today (UTC)."),
+) -> dict:
+    """GitHub-style activity timeline with streak metrics.
+
+    Returns one bucket per UTC calendar day for the trailing ``days`` window
+    (inclusive of today), plus aggregate counters split by arena mode and the
+    user's current/longest consecutive-day streak.
+
+    Bounded the same way as :func:`analytics_summary` so this can't be used as
+    a DB-amplification surface: window length is capped, the row scan is
+    restricted to two indexed columns, and call volume is capped by this
+    route's user-scoped rate limit.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_activity",
+        limit=60,
+        window_seconds=3600,
+        message="Too many analytics activity requests. Limit is 60 per hour.",
+    )
+
+    return _activity_timeline(db, user.id, days)
+
+
+@router.get("/analytics/activity/export.csv")
+async def analytics_activity_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=366,
+        description="Window length in days, ending today (UTC). Must match the JSON endpoint.",
+    ),
+) -> Response:
+    """CSV export of the GitHub-style activity timeline.
+
+    Shares the JSON endpoint's aggregation helper so the spreadsheet and
+    the dashboard cannot drift. One row per UTC calendar day with the same
+    per-mode counters as the JSON endpoint, plus a footer rollup with the
+    totals, streaks, and busiest-day summary so the file is self-describing
+    when opened in isolation.
+
+    Follows the same defenses as the other analytics exports: user-scoped
+    rate limit, RFC 4180 quoting, no-store caching, nosniff, and
+    formula-injection defense via _csv_safe.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_activity_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many activity CSV exports. Limit is 60 per hour.",
+    )
+
+    payload = _activity_timeline(db, user.id, days)
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(["date", "prompts", "debates", "discusses", "agent_runs"])
+    for row in payload["activity"]:
+        # All values are server-computed, but route them through _csv_safe
+        # anyway for defense-in-depth.
+        writer.writerow(
+            [
+                _csv_safe(row["date"]),
+                row["prompts"],
+                row["debates"],
+                row["discusses"],
+                row["agent_runs"],
+            ]
+        )
+    # Footer rollup so the file is self-describing when opened in
+    # isolation. '#' prefix matches the de-facto CSV comment convention
+    # (Excel, Sheets, and most BI tools skip these rows).
+    writer.writerow(
+        [
+            f"# total_prompts={payload['totals']['prompts']}",
+            f"total_debates={payload['totals']['debates']}",
+            f"total_discusses={payload['totals']['discusses']}",
+            f"total_agent_runs={payload['totals']['agent_runs']}",
+            f"active_days={payload['active_days']}",
+            f"current_streak={payload['current_streak']}",
+            f"longest_streak={payload['longest_streak']}",
+            f"busiest_day={payload['busiest_day'] or ''}",
+            f"busiest_day_count={payload['busiest_day_count']}",
+        ]
+    )
+
+    filename = (
+        f"arena-activity-"
+        f"{payload['start_date']}-to-{payload['end_date']}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/activity/export.json")
+async def analytics_activity_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=366,
+        description="Window length in days, ending today (UTC).",
+    ),
+) -> Response:
+    """JSON export of the GitHub-style activity timeline.
+
+    Downloads the exact payload served by ``/analytics/activity`` so a BI
+    pipeline or archival script gets the same per-day counters, totals,
+    streaks, and busiest-day summary without reimplementing the aggregation.
+    Keeps its own user-scoped rate limit so exporting JSON does not consume
+    the dashboard or CSV export budgets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_activity_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many activity JSON exports. Limit is 60 per hour.",
+    )
+
+    payload = _activity_timeline(db, user.id, days)
+
+    import json
+
+    filename = (
+        f"arena-activity-"
+        f"{payload['start_date']}-to-{payload['end_date']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+def _markdown_cell(value) -> str:
+    """Return ``value`` as a string safe to embed in a Markdown table cell.
+
+    Defense-in-depth for the human-readable activity report. The current
+    cells are server-generated ISO dates and integers, but a future user-
+    or model-controlled field must not be able to break the table layout or
+    smuggle Markdown into a downloaded report.
+    """
+    s = str(value)
+    return s.replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+
+@router.get("/analytics/activity/export.md")
+async def analytics_activity_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=366,
+        description="Window length in days, ending today (UTC).",
+    ),
+) -> Response:
+    """Markdown export of the GitHub-style activity timeline.
+
+    Renders the same JSON aggregation as a human-readable report: summary
+    metrics, streak/busiest-day facts, and a per-day table, so users can
+    drop the timeline into notes, docs, or a changelog without opening a
+    spreadsheet. Shares the aggregation helper with the CSV/JSON exports
+    and keeps its own user-scoped rate limit so Markdown exports do not
+    consume the dashboard or other export budgets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_activity_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many activity Markdown exports. Limit is 60 per hour.",
+    )
+
+    payload = _activity_timeline(db, user.id, days)
+    totals = payload["totals"]
+
+    lines = [
+        "# Arena — activity timeline",
+        "",
+        f"**Window:** {payload['start_date']} → {payload['end_date']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Prompts:** {totals['prompts']}",
+        f"- **Debates:** {totals['debates']}",
+        f"- **Discusses:** {totals['discusses']}",
+        f"- **Agent runs:** {totals['agent_runs']}",
+        f"- **Active days:** {payload['active_days']}",
+        f"- **Current streak:** {payload['current_streak']}",
+        f"- **Longest streak:** {payload['longest_streak']}",
+        (
+            f"- **Busiest day:** {payload['busiest_day'] or 'none'}"
+            f" ({payload['busiest_day_count']} actions)"
+        ),
+        "",
+        "## Daily activity",
+        "",
+        "| Date | Prompts | Debates | Discusses | Agent runs |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for row in payload["activity"]:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    _markdown_cell(row["date"]),
+                    _markdown_cell(row["prompts"]),
+                    _markdown_cell(row["debates"]),
+                    _markdown_cell(row["discusses"]),
+                    _markdown_cell(row["agent_runs"]),
+                ]
+            )
+            + " |"
+        )
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+
+    filename = (
+        f"arena-activity-"
+        f"{payload['start_date']}-to-{payload['end_date']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+def _persona_win_rate_report(
+    db: Session,
+    user_id: int,
+    *,
+    window_days: int,
+    min_appearances: int,
+    include_fallback: bool,
+) -> dict:
+    """Aggregate the per-persona win-rate payload for one user.
+
+    This is the single computation shared by the JSON dashboard route and
+    the CSV/Markdown exports. Keeping it outside the route decorator means
+    an export only consumes its own rate-limit scope — a Markdown export
+    does not silently eat into the dashboard's hourly budget as a side
+    effect of calling the JSON route.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    LOW_CONFIDENCE_APPEARANCES = 5
+
+    now_utc = utcnow_naive()
+    window_start_day = (now_utc - timedelta(days=window_days - 1)).date()
+    window_start = datetime.combine(window_start_day, time.min)
+
+    # Project only the three columns the math needs. Pulling whole ORM rows
+    # here would load prompt snippets and score blobs for every exchange in a
+    # year-long window purely to throw them away.
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.persona_ids_used,
+            ScoringAudit.fallback_used,
+            ScoringAudit.created_at,
+        )
+        .filter(
+            ScoringAudit.user_id == user_id,
+            ScoringAudit.created_at >= window_start,
+            # The report window ends at the current UTC instant. A future-
+            # dated row (from clock skew or corrupted data) must not land in
+            # the latest trend bucket and inflate the current win rates.
+            ScoringAudit.created_at <= now_utc,
+        )
+        .all()
+    )
+
+    # Weekly buckets share one time axis and sum exactly to the row-level
+    # totals. Windows up to 26 weeks are fully plotted; longer windows keep
+    # the most recent 26 weeks and carry the older exchanges as omitted
+    # counters so the last bucket never silently absorbs months of history.
+    # Empty buckets carry ``win_rate: null`` — an absent week is "no data",
+    # not a 0% week.
+    MAX_TREND_BUCKETS = 26
+    bucket_count = min(MAX_TREND_BUCKETS, (window_days + 6) // 7)
+    trend_start_day = max(
+        window_start_day,
+        now_utc.date() - timedelta(days=7 * bucket_count - 1),
+    )
+    bucket_starts = [
+        trend_start_day + timedelta(days=7 * i) for i in range(bucket_count)
+    ]
+    bucket_ends = [
+        min(start + timedelta(days=6), now_utc.date()) for start in bucket_starts
+    ]
+
+    appearances: Counter = Counter()
+    wins: Counter = Counter()
+    bucket_appearances: list[Counter] = [Counter() for _ in range(bucket_count)]
+    bucket_wins: list[Counter] = [Counter() for _ in range(bucket_count)]
+    omitted_appearances: Counter = Counter()
+    omitted_wins: Counter = Counter()
+    scored_exchanges = 0
+    unattributed_exchanges = 0
+    fallback_exchanges = 0
+
+    for winner_persona_id, persona_ids_used, fallback_used, created_at in rows:
+        if fallback_used:
+            fallback_exchanges += 1
+            if not include_fallback:
+                continue
+
+        panel = _coerce_persona_panel(persona_ids_used)
+        if not panel:
+            # No denominator available — see the docstring. Count it so the
+            # caller can see the gap instead of wondering why the totals
+            # don't reconcile.
+            unattributed_exchanges += 1
+            continue
+
+        scored_exchanges += 1
+        # De-duplicate within a panel: a persona seated twice in one exchange
+        # still only had one chance to win it.
+        panel_ids = set(panel)
+        if created_at.date() < trend_start_day:
+            for persona_id in panel_ids:
+                appearances[persona_id] += 1
+                omitted_appearances[persona_id] += 1
+            if winner_persona_id and winner_persona_id in panel_ids:
+                wins[winner_persona_id] += 1
+                omitted_wins[winner_persona_id] += 1
+        else:
+            days_since_trend_start = max(
+                (created_at.date() - trend_start_day).days, 0
+            )
+            bucket_index = min(days_since_trend_start // 7, bucket_count - 1)
+            for persona_id in panel_ids:
+                appearances[persona_id] += 1
+                bucket_appearances[bucket_index][persona_id] += 1
+            if winner_persona_id and winner_persona_id in panel_ids:
+                wins[winner_persona_id] += 1
+                bucket_wins[bucket_index][winner_persona_id] += 1
+
+    personas = []
+    for persona_id, appearance_count in appearances.items():
+        if appearance_count < min_appearances:
+            continue
+        win_count = wins.get(persona_id, 0)
+        metadata = PERSONA_METADATA.get(persona_id) or {}
+        trend = []
+        for i in range(bucket_count):
+            bucket_appearance_count = bucket_appearances[i].get(persona_id, 0)
+            bucket_win_count = bucket_wins[i].get(persona_id, 0)
+            trend.append(
+                {
+                    "bucket_start": bucket_starts[i].isoformat(),
+                    "bucket_end": bucket_ends[i].isoformat(),
+                    "appearances": bucket_appearance_count,
+                    "wins": bucket_win_count,
+                    "win_rate": (
+                        round(bucket_win_count / bucket_appearance_count, 3)
+                        if bucket_appearance_count
+                        else None
+                    ),
+                }
+            )
+        personas.append(
+            {
+                "persona_id": persona_id,
+                "name": str(metadata.get("name") or persona_id),
+                "color": str(metadata.get("color") or ""),
+                "appearances": appearance_count,
+                "wins": win_count,
+                "win_rate": round(win_count / appearance_count, 3),
+                "low_confidence": appearance_count < LOW_CONFIDENCE_APPEARANCES,
+                "trend": trend,
+                "trend_omitted_appearances": omitted_appearances[persona_id],
+                "trend_omitted_wins": omitted_wins[persona_id],
+            }
+        )
+
+    # Deterministic ordering: strongest first, then the better-evidenced of two
+    # equal rates, then persona_id so the list never shuffles between refreshes
+    # for a tie the data can't break.
+    personas.sort(key=lambda row: (-row["win_rate"], -row["appearances"], row["persona_id"]))
+
+    # "Best" deliberately ignores low-confidence rows — surfacing a 1-of-1
+    # persona as the user's strongest mind would be a lie dressed as a stat.
+    confident = [row for row in personas if not row["low_confidence"]]
+    best = confident[0] if confident else None
+
+    return {
+        "window_days": window_days,
+        "window_start": window_start_day.isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "min_appearances": min_appearances,
+        "include_fallback": include_fallback,
+        "low_confidence_threshold": LOW_CONFIDENCE_APPEARANCES,
+        "scored_exchanges": scored_exchanges,
+        "unattributed_exchanges": unattributed_exchanges,
+        "fallback_exchanges": fallback_exchanges,
+        "personas": personas,
+        "best_persona_id": best["persona_id"] if best else None,
+        "best_win_rate": best["win_rate"] if best else None,
+    }
+
+
 @router.get("/analytics/persona-win-rate")
 async def analytics_persona_win_rate(
     user: UserResponse = Depends(get_current_user_required),
@@ -886,6 +1525,19 @@ async def analytics_persona_win_rate(
       ``low_confidence`` (fewer than ``LOW_CONFIDENCE_APPEARANCES``
       appearances) so a dashboard can grey it out instead of celebrating noise.
 
+    - **Trends are bucketed by week, not smoothed.** Each row carries a
+      ``trend`` array of weekly buckets covering the window (capped at 26
+      weeks) so a dashboard can show whether a persona is improving or
+      fading. Empty weeks report ``win_rate: null`` — absence is not a 0%
+      week. Bucket totals plus the omitted counters sum exactly to the row
+      totals.
+
+    - **Rows older than the plotted window are counted, not folded in.** For
+      windows beyond 26 weeks the sparkline plots the most recent 26 weeks
+      and reports the remainder in ``trend_omitted_appearances`` /
+      ``trend_omitted_wins``. Folding those older exchanges into the final
+      bucket would make the newest point look like a spike it is not.
+
     Scoped to the caller — this is "which minds win for *me*", not a global
     leaderboard. Bounded like the sibling analytics endpoints: capped window,
     two-column projection, and a per-user hourly limit.
@@ -898,100 +1550,13 @@ async def analytics_persona_win_rate(
         message="Too many persona win-rate requests. Limit is 60 per hour.",
     )
 
-    from arena.core.agents import PERSONA_METADATA
-
-    LOW_CONFIDENCE_APPEARANCES = 5
-
-    now_utc = utcnow_naive()
-    window_start_day = (now_utc - timedelta(days=window_days - 1)).date()
-    window_start = datetime.combine(window_start_day, time.min)
-
-    # Project only the three columns the math needs. Pulling whole ORM rows
-    # here would load prompt snippets and score blobs for every exchange in a
-    # year-long window purely to throw them away.
-    rows = (
-        db.query(
-            ScoringAudit.winner_persona_id,
-            ScoringAudit.persona_ids_used,
-            ScoringAudit.fallback_used,
-        )
-        .filter(
-            ScoringAudit.user_id == user.id,
-            ScoringAudit.created_at >= window_start,
-        )
-        .all()
+    return _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=include_fallback,
     )
-
-    appearances: Counter = Counter()
-    wins: Counter = Counter()
-    scored_exchanges = 0
-    unattributed_exchanges = 0
-    fallback_exchanges = 0
-
-    for winner_persona_id, persona_ids_used, fallback_used in rows:
-        if fallback_used:
-            fallback_exchanges += 1
-            if not include_fallback:
-                continue
-
-        panel = _coerce_persona_panel(persona_ids_used)
-        if not panel:
-            # No denominator available — see the docstring. Count it so the
-            # caller can see the gap instead of wondering why the totals
-            # don't reconcile.
-            unattributed_exchanges += 1
-            continue
-
-        scored_exchanges += 1
-        # De-duplicate within a panel: a persona seated twice in one exchange
-        # still only had one chance to win it.
-        for persona_id in set(panel):
-            appearances[persona_id] += 1
-        if winner_persona_id and winner_persona_id in panel:
-            wins[winner_persona_id] += 1
-
-    personas = []
-    for persona_id, appearance_count in appearances.items():
-        if appearance_count < min_appearances:
-            continue
-        win_count = wins.get(persona_id, 0)
-        metadata = PERSONA_METADATA.get(persona_id) or {}
-        personas.append(
-            {
-                "persona_id": persona_id,
-                "name": str(metadata.get("name") or persona_id),
-                "color": str(metadata.get("color") or ""),
-                "appearances": appearance_count,
-                "wins": win_count,
-                "win_rate": round(win_count / appearance_count, 3),
-                "low_confidence": appearance_count < LOW_CONFIDENCE_APPEARANCES,
-            }
-        )
-
-    # Deterministic ordering: strongest first, then the better-evidenced of two
-    # equal rates, then persona_id so the list never shuffles between refreshes
-    # for a tie the data can't break.
-    personas.sort(key=lambda row: (-row["win_rate"], -row["appearances"], row["persona_id"]))
-
-    # "Best" deliberately ignores low-confidence rows — surfacing a 1-of-1
-    # persona as the user's strongest mind would be a lie dressed as a stat.
-    confident = [row for row in personas if not row["low_confidence"]]
-    best = confident[0] if confident else None
-
-    return {
-        "window_days": window_days,
-        "window_start": window_start_day.isoformat(),
-        "window_end": now_utc.date().isoformat(),
-        "min_appearances": min_appearances,
-        "include_fallback": include_fallback,
-        "low_confidence_threshold": LOW_CONFIDENCE_APPEARANCES,
-        "scored_exchanges": scored_exchanges,
-        "unattributed_exchanges": unattributed_exchanges,
-        "fallback_exchanges": fallback_exchanges,
-        "personas": personas,
-        "best_persona_id": best["persona_id"] if best else None,
-        "best_win_rate": best["win_rate"] if best else None,
-    }
 
 
 # Characters that, when they appear as the first character of a CSV cell,
@@ -1039,14 +1604,22 @@ async def analytics_persona_win_rate_csv(
         le=200,
         description="Drop personas that appeared on fewer than N panels.",
     ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
 ) -> Response:
     """CSV export of the persona win-rate table.
 
-    Same computation as /analytics/persona-win-rate — reuses the route's
-    shape rather than reimplementing it, so the export and the JSON
-    response can never drift. CSV is the format dashboards + spreadsheets
-    consume directly; the JSON endpoint remains the canonical shape for
-    the web UI.
+    Same computation as /analytics/persona-win-rate — shares
+    ``_persona_win_rate_report`` with the JSON route and the Markdown export,
+    so the formats can never drift. CSV is the format dashboards +
+    spreadsheets consume directly; the JSON endpoint remains the canonical
+    shape for the web UI. Each export is rate-limited under its own scope, so
+    downloading files never consumes the dashboard's hourly budget.
 
     Columns mirror the JSON personas[] rows in the same order:
       persona_id, name, appearances, wins, win_rate, low_confidence
@@ -1065,11 +1638,12 @@ async def analytics_persona_win_rate_csv(
         message="Too many persona win-rate export requests. Limit is 60 per hour.",
     )
 
-    payload = await analytics_persona_win_rate(
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
         window_days=window_days,
         min_appearances=min_appearances,
-        user=user,
-        db=db,
+        include_fallback=include_fallback,
     )
 
     import csv
@@ -1119,17 +1693,567 @@ async def analytics_persona_win_rate_csv(
     )
 
 
-@router.get("/analytics/category-stats")
-async def analytics_category_stats(
+@router.get("/analytics/persona-win-rate/export.json")
+async def analytics_persona_win_rate_json(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
     window_days: int = Query(
         90,
         ge=1,
         le=365,
-        description="Window length in days, ending today (UTC). Caps the row scan.",
+        description="Window length in days, ending today (UTC).",
     ),
-) -> dict:
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
+) -> Response:
+    """JSON download of the canonical persona win-rate report.
+
+    This intentionally returns the same envelope as the dashboard endpoint,
+    including honesty counters and weekly trend data. Keeping the export on
+    the shared aggregation helper means scripts and the UI cannot drift apart
+    as the report evolves. Its own rate-limit scope keeps a file download from
+    consuming the interactive dashboard budget.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate JSON exports. Please slow down.",
+    )
+
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=include_fallback,
+    )
+
+    import json
+
+    filename = (
+        f"arena-persona-win-rate-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n",
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-win-rate/export-trend.csv")
+async def analytics_persona_win_rate_trend_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
+) -> Response:
+    """CSV export of the weekly persona win-rate trend.
+
+    The aggregate CSV is intentionally compact, while the dashboard's
+    sparkline data lives in each JSON row's ``trend`` array. This export
+    flattens that array into one row per persona/week so spreadsheets and
+    charting tools can consume the time series without parsing nested JSON.
+    Empty weeks keep their row with a blank ``win_rate`` — no activity is
+    different from a measured 0% week. Omitted older buckets are repeated on
+    each row as report metadata so a filtered spreadsheet row remains
+    self-describing.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_trend_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate trend exports. Please slow down.",
+    )
+
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=include_fallback,
+    )
+
+    import csv
+    import io
+
+    trend_rows = _flatten_persona_win_rate_trend(payload)
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(
+        [
+            "persona_id",
+            "name",
+            "color",
+            "bucket_start",
+            "bucket_end",
+            "appearances",
+            "wins",
+            "win_rate",
+            "low_confidence",
+            "trend_omitted_appearances",
+            "trend_omitted_wins",
+        ]
+    )
+    for row in trend_rows:
+        writer.writerow(
+            [
+                _csv_safe(row["persona_id"]),
+                _csv_safe(row["name"]),
+                _csv_safe(row["color"]),
+                _csv_safe(row["bucket_start"]),
+                _csv_safe(row["bucket_end"]),
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+                "true" if row["low_confidence"] else "false",
+                row["trend_omitted_appearances"],
+                row["trend_omitted_wins"],
+            ]
+        )
+
+    filename = (
+        f"arena-persona-win-rate-trend-"
+        f"{payload['window_start']}-to-{payload['window_end']}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+def _flatten_persona_win_rate_trend(payload: dict) -> list[dict]:
+    """Flatten the canonical nested trend into one self-describing row/week.
+
+    The dashboard keeps each persona's weekly points nested so sparklines can
+    render cheaply. Exports need the opposite shape: one row per persona/week
+    that can be loaded directly by a charting tool without first joining
+    summary metadata back onto each point. Keeping this helper shared by the
+    CSV and JSON routes prevents the two machine-readable formats from
+    drifting.
+    """
+    rows = []
+    for persona in payload["personas"]:
+        for point in persona["trend"]:
+            rows.append(
+                {
+                    "persona_id": persona["persona_id"],
+                    "name": persona["name"],
+                    "color": persona["color"],
+                    "bucket_start": point["bucket_start"],
+                    "bucket_end": point["bucket_end"],
+                    "appearances": point["appearances"],
+                    "wins": point["wins"],
+                    "win_rate": point["win_rate"],
+                    "low_confidence": persona["low_confidence"],
+                    "trend_omitted_appearances": persona["trend_omitted_appearances"],
+                    "trend_omitted_wins": persona["trend_omitted_wins"],
+                }
+            )
+    return rows
+
+
+@router.get("/analytics/persona-win-rate/export-trend.json")
+async def analytics_persona_win_rate_trend_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
+) -> Response:
+    """JSON export of the flattened weekly persona win-rate trend.
+
+    The response keeps the report-level honesty counters and filter metadata
+    beside a ``rows`` array with one object per persona/week. This is the
+    machine-readable counterpart to the flattened CSV export: consumers can
+    chart the series directly while still knowing which rows are provisional
+    or omit older buckets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_trend_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate trend JSON exports. Please slow down.",
+    )
+
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=include_fallback,
+    )
+
+    import json
+
+    rows = _flatten_persona_win_rate_trend(payload)
+    export = {
+        "window_days": payload["window_days"],
+        "window_start": payload["window_start"],
+        "window_end": payload["window_end"],
+        "min_appearances": payload["min_appearances"],
+        "include_fallback": payload["include_fallback"],
+        "low_confidence_threshold": payload["low_confidence_threshold"],
+        "scored_exchanges": payload["scored_exchanges"],
+        "unattributed_exchanges": payload["unattributed_exchanges"],
+        "fallback_exchanges": payload["fallback_exchanges"],
+        "row_count": len(rows),
+        "rows": rows,
+    }
+    filename = (
+        f"arena-persona-win-rate-trend-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(export, indent=2, ensure_ascii=False, default=str) + "\n",
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-win-rate/export-trend.md")
+async def analytics_persona_win_rate_trend_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
+) -> Response:
+    """Markdown export of the flattened weekly persona win-rate trend.
+
+    The report is deliberately one row per persona/week so it can be pasted
+    into notes or docs without asking the reader to interpret nested JSON.
+    It shares the canonical aggregation with the JSON and CSV routes; empty
+    weeks remain ``no data`` rather than being rewritten as 0%, and older
+    buckets outside the sparkline cap are called out explicitly.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_trend_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate trend Markdown exports. Please slow down.",
+    )
+
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=include_fallback,
+    )
+
+    lines = [
+        "# Arena — persona win-rate weekly trend",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        f"**Minimum appearances:** {payload['min_appearances']}",
+        f"**Low-confidence threshold:** fewer than "
+        f"{payload['low_confidence_threshold']} appearances",
+        f"**Fallback scorings included:** {'yes' if payload['include_fallback'] else 'no'}",
+        "",
+        "## Summary",
+        "",
+        f"- **Scored exchanges:** {payload['scored_exchanges']}",
+        f"- **Unattributed exchanges:** {payload['unattributed_exchanges']}",
+        f"- **Fallback exchanges:** {payload['fallback_exchanges']}",
+    ]
+
+    if payload["personas"]:
+        lines.extend(
+            [
+                "",
+                "## Weekly trend",
+                "",
+                "| Persona | Week (UTC) | Appearances | Wins | Win rate | Sample |",
+                "| --- | --- | ---: | ---: | ---: | --- |",
+            ]
+        )
+        omitted_notes = []
+        for row in payload["personas"]:
+            sample = "low sample" if row["low_confidence"] else ""
+            for point in row["trend"]:
+                rate = (
+                    "no data"
+                    if point["win_rate"] is None
+                    else f"{round(point['win_rate'] * 100)}%"
+                )
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            _markdown_cell(row["name"]),
+                            _markdown_cell(
+                                f"{point['bucket_start']} → {point['bucket_end']}"
+                            ),
+                            _markdown_cell(point["appearances"]),
+                            _markdown_cell(point["wins"]),
+                            _markdown_cell(rate),
+                            sample,
+                        ]
+                    )
+                    + " |"
+                )
+            if row["trend_omitted_appearances"] or row["trend_omitted_wins"]:
+                omitted_notes.append(
+                    f"- **{_markdown_cell(row['name'])}:** "
+                    f"{row['trend_omitted_appearances']} older appearances and "
+                    f"{row['trend_omitted_wins']} older wins were not plotted."
+                )
+        if omitted_notes:
+            lines.extend(["", "### Trend notes", "", *omitted_notes])
+    else:
+        lines.extend(
+            [
+                "",
+                "_No scored panels meet the minimum appearance threshold in this window._",
+            ]
+        )
+
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+    filename = (
+        f"arena-persona-win-rate-trend-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-win-rate/export.md")
+async def analytics_persona_win_rate_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned."
+        ),
+    ),
+) -> Response:
+    """Markdown export of the persona win-rate report.
+
+    Renders the same computation as ``/analytics/persona-win-rate`` as a
+    human-readable report: window facts, scored-exchange honesty counters,
+    the best (confident) persona, and a per-persona table with trend
+    sparkline data spelled out as weekly win rates. Shares the JSON route's
+    aggregation helper so the export and the dashboard can never drift, and
+    keeps its own user-scoped rate limit so Markdown exports do not consume
+    the dashboard or CSV export budgets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate export requests. Limit is 60 per hour.",
+    )
+
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=include_fallback,
+    )
+
+    best_row = None
+    if payload.get("best_persona_id"):
+        best_row = next(
+            (
+                row
+                for row in payload["personas"]
+                if row["persona_id"] == payload["best_persona_id"]
+            ),
+            None,
+        )
+
+    lines = [
+        "# Arena — persona win rates",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Scored exchanges:** {payload['scored_exchanges']}",
+        f"- **Unattributed exchanges:** {payload['unattributed_exchanges']}",
+        f"- **Fallback exchanges:** {payload['fallback_exchanges']}",
+        f"- **Minimum appearances:** {payload['min_appearances']}",
+    ]
+    if best_row:
+        lines.extend(
+            [
+                "",
+                f"**Best (confident):** {_markdown_cell(best_row['name'])} — "
+                f"{round(best_row['win_rate'] * 100)}% across "
+                f"{best_row['appearances']} panels",
+            ]
+        )
+
+    lines.append("")
+    if payload["personas"]:
+        lines.extend(
+            [
+                "## Personas",
+                "",
+                "| Persona | Appearances | Wins | Win rate | Sample | Weekly trend |",
+                "| --- | ---: | ---: | ---: | --- | --- |",
+            ]
+        )
+        for row in payload["personas"]:
+            trend = ", ".join(
+                (
+                    "no data"
+                    if bucket["win_rate"] is None
+                    else f"{round(bucket['win_rate'] * 100)}%"
+                )
+                for bucket in row["trend"]
+            )
+            omitted = ""
+            if row.get("trend_omitted_appearances"):
+                omitted = (
+                    f" ({row['trend_omitted_appearances']} older "
+                    "appearance"
+                    + ("s" if row["trend_omitted_appearances"] != 1 else "")
+                    + " not plotted)"
+                )
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        _markdown_cell(row["name"]),
+                        _markdown_cell(row["appearances"]),
+                        _markdown_cell(row["wins"]),
+                        _markdown_cell(f"{round(row['win_rate'] * 100)}%"),
+                        "low sample" if row["low_confidence"] else "",
+                        _markdown_cell(trend + omitted),
+                    ]
+                )
+                + " |"
+            )
+    else:
+        lines.append(
+            "_No scored panels meet the minimum appearance threshold in this "
+            "window._"
+        )
+
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+
+    filename = (
+        f"arena-persona-win-rate-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+def _category_stats_payload(*, user_id: int, db: Session, window_days: int) -> dict:
     """All-categories aggregate: how the caller's exchanges distribute
     across prompt categories.
 
@@ -1146,17 +2270,11 @@ async def analytics_category_stats(
     PromptCategory values in enum order, unknown categories
     alphabetically, uncategorized bucket last.
 
-    Scoped to the caller, bounded like the sibling endpoints.
+    Scoped to the caller, bounded like the sibling endpoints. The route
+    handlers apply their own user-scoped rate limits before calling this
+    helper so dashboard reads and downloads do not share a bucket.
     """
     from arena.models.schemas import PromptCategory
-
-    enforce_user_rate_limit(
-        user.id,
-        scope="analytics_category_stats",
-        limit=60,
-        window_seconds=3600,
-        message="Too many category-stats requests. Limit is 60 per hour.",
-    )
 
     now_utc = utcnow_naive()
     window_start = now_utc - timedelta(days=window_days - 1)
@@ -1170,7 +2288,7 @@ async def analytics_category_stats(
             ScoringAudit.fallback_used,
         )
         .filter(
-            ScoringAudit.user_id == user.id,
+            ScoringAudit.user_id == user_id,
             ScoringAudit.created_at >= window_start,
         )
         .all()
@@ -1283,10 +2401,17 @@ async def analytics_category_stats(
     most_active_apps = 0
     for row in category_rows:
         if (
-            row["appearances"] > most_active_apps
+            most_active is None
+            or row["appearances"] > most_active_apps
             or (
                 row["appearances"] == most_active_apps
-                and row["wins"] > (most_active["wins"] if most_active else -1)
+                and (
+                    row["wins"] > most_active["wins"]
+                    or (
+                        row["wins"] == most_active["wins"]
+                        and row["category"] < most_active["category"]
+                    )
+                )
             )
         ):
             most_active = row
@@ -1303,6 +2428,32 @@ async def analytics_category_stats(
     }
 
 
+@router.get("/analytics/category-stats")
+async def analytics_category_stats(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+) -> dict:
+    """All-categories aggregate for the authenticated dashboard caller."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_category_stats",
+        limit=60,
+        window_seconds=3600,
+        message="Too many category-stats requests. Limit is 60 per hour.",
+    )
+    return _category_stats_payload(
+        user_id=user.id,
+        db=db,
+        window_days=window_days,
+    )
+
+
 @router.get("/analytics/category-stats/export.csv")
 async def analytics_category_stats_csv(
     user: UserResponse = Depends(get_current_user_required),
@@ -1317,7 +2468,8 @@ async def analytics_category_stats_csv(
     """CSV export of the all-categories aggregate.
 
     Same computation as /api/analytics/category-stats — reuses the
-    JSON route so the CSV and the API response can never drift.
+    private aggregation helper so the CSV and the API response can never
+    drift without consuming the dashboard rate-limit bucket.
 
     Columns mirror the JSON categories[] rows in the same order:
       category, is_known_category, is_uncategorized, appearances,
@@ -1338,11 +2490,10 @@ async def analytics_category_stats_csv(
         message="Too many category-stats CSV exports. Limit is 60 per hour.",
     )
 
-    # Reuse the JSON route so the math cannot drift.
-    payload = await analytics_category_stats(
-        window_days=window_days,
-        user=user,
+    payload = _category_stats_payload(
+        user_id=user.id,
         db=db,
+        window_days=window_days,
     )
 
     import csv
@@ -1401,24 +2552,164 @@ async def analytics_category_stats_csv(
     )
 
 
-@router.get("/analytics/persona-stats")
-async def analytics_persona_stats_all(
+@router.get("/analytics/category-stats/export.json")
+async def analytics_category_stats_json(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
     window_days: int = Query(
         90,
         ge=1,
         le=365,
-        description="Window length in days, ending today (UTC). Caps the row scan.",
+        description="Window length in days, ending today (UTC).",
     ),
-    min_appearances: int = Query(
-        1,
+) -> Response:
+    """Download the exact category-stats payload as JSON.
+
+    The dashboard response is already a compact, stable analytics contract;
+    exposing that same envelope lets users archive or analyze category
+    performance without scraping the UI. Keep this on its own rate-limit
+    scope so a download cannot consume the interactive dashboard budget.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_category_stats_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many category-stats JSON exports. Please wait.",
+    )
+
+    payload = _category_stats_payload(
+        user_id=user.id,
+        db=db,
+        window_days=window_days,
+    )
+
+    import json
+
+    filename = (
+        f"arena-category-stats-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/category-stats/export.md")
+async def analytics_category_stats_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
         ge=1,
-        le=200,
-        description="Hide personas that appeared on fewer than N panels (noise floor).",
+        le=365,
+        description="Window length in days, ending today (UTC).",
     ),
+) -> Response:
+    """Download category performance as a human-readable Markdown report.
+
+    The report intentionally reuses the dashboard aggregation so its
+    summary and category table remain aligned with the JSON and CSV
+    siblings. It has an independent budget because downloading a report
+    should not make the interactive category dashboard feel rate-limited.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_category_stats_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many category-stats Markdown exports. Please wait.",
+    )
+
+    payload = _category_stats_payload(
+        user_id=user.id,
+        db=db,
+        window_days=window_days,
+    )
+
+    lines = [
+        "# Arena — category stats",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Total appearances:** {payload['total_appearances']}",
+        f"- **Total wins:** {payload['total_wins']}",
+        (
+            f"- **Most active category:** "
+            f"{_markdown_cell(payload['most_active_category']) if payload['most_active_category'] else 'none'}"
+        ),
+        "",
+    ]
+
+    if payload["categories"]:
+        lines.extend(
+            [
+                "## Categories",
+                "",
+                "| Category | Appearances | Wins | Win rate | Avg winning score | Last exchange | Best persona |",
+                "| --- | ---: | ---: | ---: | ---: | --- | --- |",
+            ]
+        )
+        for row in payload["categories"]:
+            avg_score = (
+                row["avg_winning_score"]
+                if row["avg_winning_score"] is not None
+                else "—"
+            )
+            last_exchange = row["last_exchange_at"] or "—"
+            best_persona = row["best_persona_id"] or "—"
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        _markdown_cell(row["category"]),
+                        _markdown_cell(row["appearances"]),
+                        _markdown_cell(row["wins"]),
+                        _markdown_cell(f"{row['win_rate'] * 100:.1f}%"),
+                        _markdown_cell(avg_score),
+                        _markdown_cell(last_exchange),
+                        _markdown_cell(best_persona),
+                    ]
+                )
+                + " |"
+            )
+    else:
+        lines.append("_No categories recorded in this window._")
+
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+
+    filename = (
+        f"arena-category-stats-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+def _analytics_persona_stats_all_payload(
+    *,
+    user: UserResponse,
+    db: Session,
+    window_days: int,
+    min_appearances: int,
 ) -> dict:
-    """All-personas summary: the deep-dive data for every catalog persona.
+    """Build the canonical all-personas summary without applying a route limit.
 
     Lets a dashboard render a 16-persona grid in one call instead of
     16 separate /persona-stats/{id} requests. Same per-persona shape
@@ -1434,14 +2725,6 @@ async def analytics_persona_stats_all(
     ties, then by persona_id alphabetically for stable ordering.
     """
     from arena.core.agents import PERSONA_METADATA
-
-    enforce_user_rate_limit(
-        user.id,
-        scope="analytics_persona_stats_all",
-        limit=60,
-        window_seconds=3600,
-        message="Too many all-personas stats requests. Limit is 60 per hour.",
-    )
 
     now_utc = utcnow_naive()
     window_start = now_utc - timedelta(days=window_days - 1)
@@ -1555,6 +2838,39 @@ async def analytics_persona_stats_all(
     }
 
 
+@router.get("/analytics/persona-stats")
+async def analytics_persona_stats_all(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Hide personas that appeared on fewer than N panels (noise floor).",
+    ),
+) -> dict:
+    """Return all-personas stats using the dashboard refresh budget."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_all",
+        limit=60,
+        window_seconds=3600,
+        message="Too many all-personas stats requests. Limit is 60 per hour.",
+    )
+    return _analytics_persona_stats_all_payload(
+        user=user,
+        db=db,
+        window_days=window_days,
+        min_appearances=min_appearances,
+    )
+
+
 @router.get("/analytics/persona-stats/export.csv")
 async def analytics_persona_stats_all_csv(
     user: UserResponse = Depends(get_current_user_required),
@@ -1574,9 +2890,9 @@ async def analytics_persona_stats_all_csv(
 ) -> Response:
     """CSV export of the all-personas summary catalog.
 
-    Reuses the JSON route ``analytics_persona_stats_all`` so the math and
-    sorting order (win_rate desc, appearances desc, persona_id asc) stay
-    identical and cannot drift between CSV and API.
+    Reuses the canonical payload builder so the math and sorting order
+    (win_rate desc, appearances desc, persona_id asc) stay identical and
+    cannot drift between CSV and API.
 
     Columns: persona_id, name, appearances, wins, win_rate, avg_winning_score,
              last_appearance_at, last_win_at, below_min_appearances.
@@ -1592,7 +2908,7 @@ async def analytics_persona_stats_all_csv(
         message="Too many persona-stats CSV exports. Limit is 60 per hour.",
     )
 
-    payload = await analytics_persona_stats_all(
+    payload = _analytics_persona_stats_all_payload(
         window_days=window_days,
         min_appearances=min_appearances,
         user=user,
@@ -1645,6 +2961,189 @@ async def analytics_persona_stats_all_csv(
     return Response(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-stats/export.json")
+async def analytics_persona_stats_all_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Hide personas that appeared on fewer than N panels (noise floor).",
+    ),
+) -> Response:
+    """JSON download of the all-personas summary catalog.
+
+    The payload is the same envelope returned by the dashboard endpoint,
+    including the full catalog, rollup totals, and filter metadata. Keeping
+    the export on that canonical computation means notebooks and scripts see
+    exactly what the Profile analytics view shows.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_all_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona-stats JSON exports. Limit is 60 per hour.",
+    )
+
+    payload = _analytics_persona_stats_all_payload(
+        window_days=window_days,
+        min_appearances=min_appearances,
+        user=user,
+        db=db,
+    )
+
+    import json
+
+    filename = (
+        f"arena-persona-stats-overview-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n",
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-stats/export.md")
+async def analytics_persona_stats_all_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Hide personas that appeared on fewer than N panels (noise floor).",
+    ),
+) -> Response:
+    """Markdown download of the all-personas summary catalog.
+
+    Uses the same canonical payload as the dashboard, CSV, and JSON routes
+    so a human-readable report cannot drift from the machine-readable views.
+    The report keeps every catalog persona visible, marks rows below the
+    appearance floor, and spells out the fallback-win accounting note.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_all_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona-stats Markdown exports. Limit is 60 per hour.",
+    )
+
+    payload = _analytics_persona_stats_all_payload(
+        window_days=window_days,
+        min_appearances=min_appearances,
+        user=user,
+        db=db,
+    )
+
+    best_persona = next(
+        (
+            row
+            for row in payload["personas"]
+            if row["persona_id"] == payload["best_persona_id"]
+        ),
+        None,
+    )
+    best_label = (
+        f"{_markdown_cell(best_persona['name'])}"
+        f" ({_markdown_cell(best_persona['persona_id'])})"
+        if best_persona
+        else "none"
+    )
+
+    lines = [
+        "# Arena — persona stats overview",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Personas in catalog:** {payload['total_personas']}",
+        f"- **Rows returned:** {payload['returned_personas']}",
+        f"- **Total appearances:** {payload['total_appearances']}",
+        f"- **Total wins:** {payload['total_wins']}",
+        f"- **Minimum appearances:** {payload['min_appearances']}",
+        f"- **Best-ranked persona:** {best_label}",
+        "",
+        "## Personas",
+        "",
+        "| Persona | ID | Appearances | Wins | Win rate | Avg winning score | Last appearance | Last win | Sample |",
+        "| --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |",
+    ]
+
+    for row in payload["personas"]:
+        avg_score = (
+            f"{row['avg_winning_score']:.1f}"
+            if row["avg_winning_score"] is not None
+            else "—"
+        )
+        sample = "below floor" if row["below_min_appearances"] else "meets floor"
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    _markdown_cell(row["name"]),
+                    _markdown_cell(row["persona_id"]),
+                    str(row["appearances"]),
+                    str(row["wins"]),
+                    f"{row['win_rate']:.1%}",
+                    _markdown_cell(avg_score),
+                    _markdown_cell(row["last_appearance_at"] or "—"),
+                    _markdown_cell(row["last_win_at"] or "—"),
+                    _markdown_cell(sample),
+                ]
+            )
+            + " |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "_Wins exclude fallback scorer results; appearances include every panel seat. "
+            "Rows below the minimum appearance floor remain visible for catalog completeness._",
+            "",
+            "---",
+            "_Exported from Arena_",
+            "",
+        ]
+    )
+
+    filename = (
+        f"arena-persona-stats-overview-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-store",
@@ -1972,6 +3471,32 @@ async def analytics_persona_stats_timeline(
         message="Too many persona-stats-timeline requests. Limit is 120 per hour.",
     )
 
+    return _persona_stats_timeline_payload(
+        db=db,
+        user_id=user.id,
+        persona_id=pid,
+        days=days,
+    )
+
+
+def _persona_stats_timeline_payload(
+    *,
+    db: Session,
+    user_id: int,
+    persona_id: str,
+    days: int,
+) -> dict:
+    """Build the timeline payload without applying a route throttle.
+
+    The dashboard and its CSV/JSON exports have separate user-scoped rate
+    budgets. Keeping the aggregation here means an export can reuse the
+    dashboard's exact math without charging the dashboard budget as a side
+    effect of calling the route handler.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id
+
     now_utc = utcnow_naive()
     end_day = now_utc.date()
     start_day = end_day - timedelta(days=days - 1)
@@ -1988,7 +3513,7 @@ async def analytics_persona_stats_timeline(
             ScoringAudit.fallback_used,
         )
         .filter(
-            ScoringAudit.user_id == user.id,
+            ScoringAudit.user_id == user_id,
             ScoringAudit.created_at >= start_dt,
             ScoringAudit.created_at < end_dt,
         )
@@ -2096,10 +3621,11 @@ async def analytics_persona_stats_timeline_csv(
     comment row (# total_appearances, # total_wins, # best_day) so
     the CSV is self-describing when opened in isolation.
 
-    Same bounds as the JSON endpoint: days 1-90, persona_id must
-    be a known persona, 120/hr/user rate limit. The persona_id
-    filename suffix lets multiple downloads sit in the same
-    directory without overwriting each other.
+    Same bounds as the JSON endpoint: days 1-90 and persona_id must
+    be a known persona. The export has its own 60/hr/user budget,
+    separate from the 120/hr dashboard budget. The persona_id filename
+    suffix lets multiple downloads sit in the same directory without
+    overwriting each other.
     """
     from arena.core.agents import PERSONA_METADATA
 
@@ -2118,11 +3644,12 @@ async def analytics_persona_stats_timeline_csv(
         message="Too many timeline CSV exports. Limit is 60 per hour.",
     )
 
-    # Reuse the JSON route so the math cannot drift.
-    payload = await analytics_persona_stats_timeline(
-        persona_id=pid,
-        user=user,
+    # Reuse the shared aggregation so the export cannot consume the
+    # dashboard's rate-limit budget as a side effect.
+    payload = _persona_stats_timeline_payload(
         db=db,
+        user_id=user.id,
+        persona_id=pid,
         days=days,
     )
 
@@ -2163,6 +3690,163 @@ async def analytics_persona_stats_timeline_csv(
     return Response(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-stats/{persona_id}/timeline/export.json")
+async def analytics_persona_stats_timeline_json(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=90,
+        description="Window length in days, ending today (UTC). Capped at 90 to keep the timeline compact.",
+    ),
+) -> Response:
+    """JSON export of the per-persona daily timeline.
+
+    Downloads the exact payload served by the timeline dashboard endpoint so
+    scripts and notebooks can consume the daily rows and rollup fields
+    without recreating the aggregation. JSON has its own export budget and
+    does not replace the existing CSV download.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_timeline_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many timeline JSON exports. Limit is 60 per hour.",
+    )
+
+    # Reuse the shared aggregation so the structured export cannot consume
+    # the dashboard's rate-limit budget as a side effect.
+    payload = _persona_stats_timeline_payload(
+        db=db,
+        user_id=user.id,
+        persona_id=pid,
+        days=days,
+    )
+
+    import json
+
+    filename = (
+        f"arena-timeline-{pid}-"
+        f"{payload['window_start']}-to-{payload['window_end']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-stats/{persona_id}/timeline/export.md")
+async def analytics_persona_stats_timeline_markdown(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=90,
+        description="Window length in days, ending today (UTC). Capped at 90 to keep the timeline compact.",
+    ),
+) -> Response:
+    """Markdown export of the per-persona daily timeline.
+
+    Renders the same shared payload as the dashboard and CSV/JSON exports in
+    a compact report that can be pasted into notes, issue trackers, or a
+    research log. Markdown has its own user-scoped export budget so a report
+    download cannot consume dashboard, CSV, or JSON capacity.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_timeline_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many timeline Markdown exports. Limit is 60 per hour.",
+    )
+
+    payload = _persona_stats_timeline_payload(
+        db=db,
+        user_id=user.id,
+        persona_id=pid,
+        days=days,
+    )
+    name = _markdown_cell(payload["name"])
+    best_day = _markdown_cell(payload["best_day"] or "none")
+    lines = [
+        f"# Arena — {name} persona timeline",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Appearances:** {payload['total_appearances']}",
+        f"- **Wins:** {payload['total_wins']}",
+        f"- **Peak day:** {best_day}",
+        f"- **Peak day wins:** {payload['best_day_wins']}",
+        f"- **Peak day appearances:** {payload['best_day_appearances']}",
+        f"- **Peak day win rate:** {payload['best_day_win_rate']:.1%}",
+        "",
+        "## Daily activity",
+        "",
+        "| Date | Appearances | Wins | Win rate |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for row in payload["timeline"]:
+        lines.append(
+            f"| {_markdown_cell(row['date'])} | {row['appearances']} | "
+            f"{row['wins']} | {row['win_rate']:.1%} |"
+        )
+    lines.extend(
+        [
+            "",
+            "_Wins exclude fallback scorings; appearances include every panel appearance._",
+            "",
+            "---",
+            "_Exported from Arena_",
+            "",
+        ]
+    )
+
+    filename = (
+        f"arena-timeline-{pid}-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-store",
@@ -2257,6 +3941,113 @@ async def analytics_persona_stats_by_category_csv(
     return Response(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-stats/{persona_id}/by-category/export.md")
+async def analytics_persona_stats_by_category_markdown(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+) -> Response:
+    """Markdown export of the per-persona per-category breakdown.
+
+    Completes the by-category family (CSV + JSON + Markdown), mirroring
+    the timeline export trio. Reuses the JSON by-category route's
+    computation so the report cannot drift from the dashboard's view,
+    and carries its own user-scoped rate-limit scope so a report download
+    cannot consume dashboard, CSV, or JSON capacity.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_by_category_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many by-category Markdown exports. Limit is 60 per hour.",
+    )
+
+    # Reuse the JSON route so the math cannot drift.
+    payload = await analytics_persona_stats_by_category(
+        persona_id=pid,
+        user=user,
+        db=db,
+        window_days=window_days,
+    )
+
+    name = _markdown_cell(payload["name"])
+    overall_rate = (
+        payload["total_wins"] / payload["total_appearances"]
+        if payload["total_appearances"]
+        else 0.0
+    )
+    lines = [
+        f"# Arena — {name} category breakdown",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Appearances:** {payload['total_appearances']}",
+        f"- **Wins:** {payload['total_wins']}",
+        f"- **Overall win rate:** {overall_rate:.1%}",
+        f"- **Categories engaged:** {len(payload['categories'])}",
+        f"- **Uncategorized appearances:** {payload['uncategorized_appearances']}",
+        f"- **Uncategorized wins:** {payload['uncategorized_wins']}",
+        "",
+        "## Categories",
+        "",
+        "| Category | Appearances | Wins | Win rate |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for row in payload["categories"]:
+        label = (
+            f"{row['category']} *(uncategorized)*"
+            if row["is_uncategorized"]
+            else _markdown_cell(row["category"])
+        )
+        lines.append(
+            f"| {label} | {row['appearances']} | "
+            f"{row['wins']} | {row['win_rate']:.1%} |"
+        )
+    lines.extend(
+        [
+            "",
+            "_Wins exclude fallback scorings; appearances include every panel appearance._",
+            "",
+            "---",
+            "_Exported from Arena_",
+            "",
+        ]
+    )
+
+    filename = (
+        f"arena-by-category-{pid}-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-store",

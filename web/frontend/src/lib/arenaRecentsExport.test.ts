@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   formatArenaRecentItemCopy,
   formatArenaRecentPromptCopy,
+  formatArenaRecentsCsvExport,
   formatArenaRecentsExport,
+  formatArenaRecentsJsonExport,
 } from './arenaRecentsExport';
 
 describe('formatArenaRecentsExport', () => {
@@ -73,6 +75,138 @@ describe('formatArenaRecentItemCopy', () => {
 
   it('returns empty when both title and prompt blank', () => {
     expect(formatArenaRecentItemCopy({ title: '  ', prompt: '' })).toBe('');
+  });
+});
+
+describe('formatArenaRecentsJsonExport', () => {
+  it('exports filtered recents with structured metadata', () => {
+    const json = formatArenaRecentsJsonExport({
+      totalCount: 3,
+      filterNote: 'category Question',
+      items: [
+        {
+          title: 'Ship plan',
+          prompt: 'Should we ship today?',
+          category: 'question',
+          winnerName: 'The Analyst',
+          timestamp: '2026-07-01T12:00:00Z',
+          turnId: 'turn-1',
+        },
+        {
+          prompt: 'List risks of launching without QA',
+          category: 'task',
+          winnerName: 'The Skeptic',
+        },
+      ],
+    });
+
+    const parsed = JSON.parse(json) as {
+      exported_from: string;
+      total_recents: number;
+      filter_note: string;
+      count: number;
+      items: Array<Record<string, unknown>>;
+    };
+    expect(parsed.exported_from).toBe('arena');
+    expect(parsed.total_recents).toBe(3);
+    expect(parsed.filter_note).toBe('category Question');
+    expect(parsed.count).toBe(2);
+    expect(parsed.items[0]).toEqual({
+      title: 'Ship plan',
+      prompt: 'Should we ship today?',
+      category: 'Question',
+      winnerName: 'The Analyst',
+      timestamp: '2026-07-01T12:00:00Z',
+      turnId: 'turn-1',
+    });
+    expect(parsed.items[1]).toMatchObject({
+      title: 'List risks of launching without QA',
+      category: 'Task',
+    });
+  });
+
+  it('handles an empty filtered view honestly', () => {
+    const parsed = JSON.parse(
+      formatArenaRecentsJsonExport({
+        totalCount: 4,
+        filterNote: 'search “quantum”',
+        items: [],
+      }),
+    ) as { total_recents: number; filter_note: string; count: number };
+    expect(parsed.total_recents).toBe(4);
+    expect(parsed.filter_note).toBe('search “quantum”');
+    expect(parsed.count).toBe(0);
+  });
+});
+
+describe('formatArenaRecentsCsvExport', () => {
+  it('quotes headers and values so prompts cannot break columns', () => {
+    const csv = formatArenaRecentsCsvExport({
+      items: [
+        {
+          title: 'Ship, plan',
+          prompt: 'Should we "ship"?\nToday',
+          category: 'question',
+          winnerName: 'The Analyst',
+          timestamp: '2026-07-01T12:00:00Z',
+          turnId: 'turn-1',
+        },
+      ],
+    });
+
+    expect(csv.split('\n')[0]).toBe(
+      '"title","prompt","category","winnerName","timestamp","turnId"',
+    );
+    expect(csv).toContain('"Ship, plan"');
+    expect(csv).toContain('"Should we ""ship""?\nToday"');
+    expect(csv.trimEnd().endsWith('"turn-1"')).toBe(true);
+  });
+
+  it('neutralizes spreadsheet formula injection, including hidden leading whitespace', () => {
+    const csv = formatArenaRecentsCsvExport({
+      items: [
+        {
+          title: '=HYPERLINK("https://evil.example")',
+          prompt: '=SUM(A1:A9)',
+          category: '+1+1',
+          winnerName: '@cmd|/c calc',
+          timestamp: ' =NOW()',
+          turnId: '+EVAL("x")',
+        },
+      ],
+    });
+
+    expect(csv).toContain(`"'=HYPERLINK(""https://evil.example"")"`);
+    expect(csv).toContain(`"'=SUM(A1:A9)"`);
+    expect(csv).toContain(`"'+1+1"`);
+    expect(csv).toContain(`"'@cmd|/c calc"`);
+    expect(csv).toContain(`"' =NOW()"`);
+    expect(csv).toContain(`"'+EVAL(""x"")"`);
+  });
+
+  it('leaves ordinary text unchanged', () => {
+    const csv = formatArenaRecentsCsvExport({
+      items: [
+        {
+          title: 'Ship plan',
+          prompt: 'Should we ship today?',
+          category: 'question',
+          winnerName: 'The Analyst',
+          timestamp: '2026-07-01T12:00:00Z',
+          turnId: 'turn-1',
+        },
+      ],
+    });
+    expect(csv).toContain('"Ship plan"');
+    expect(csv).toContain('"Should we ship today?"');
+    expect(csv).toContain('"Question"');
+    expect(csv).toContain('"The Analyst"');
+  });
+
+  it('emits only the header row for an empty export', () => {
+    expect(formatArenaRecentsCsvExport({ items: [] })).toBe(
+      '"title","prompt","category","winnerName","timestamp","turnId"\n',
+    );
   });
 });
 

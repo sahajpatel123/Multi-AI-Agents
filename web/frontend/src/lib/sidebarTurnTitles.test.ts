@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SIDEBAR_TURN_TITLE_MAX,
+  cleanSidebarTurnTitle,
   clearSidebarTurnTitles,
   loadSidebarTurnTitles,
   saveSidebarTurnTitle,
@@ -27,6 +28,14 @@ describe('sidebarTurnTitles', () => {
     const next = saveSidebarTurnTitle('turn_1', '  Pricing rethink  ');
     expect(next.turn_1).toBe('Pricing rethink');
     expect(loadSidebarTurnTitles().turn_1).toBe('Pricing rethink');
+  });
+
+  it('cleans whitespace and caps length like persisted titles', () => {
+    expect(cleanSidebarTurnTitle('  Launch \n  plan\treview ')).toBe('Launch plan review');
+    expect(cleanSidebarTurnTitle('  ')).toBe('');
+    expect(cleanSidebarTurnTitle(`x ${'y '.repeat(SIDEBAR_TURN_TITLE_MAX)}`)).toHaveLength(
+      SIDEBAR_TURN_TITLE_MAX,
+    );
   });
 
   it('removes a title when saved empty', () => {

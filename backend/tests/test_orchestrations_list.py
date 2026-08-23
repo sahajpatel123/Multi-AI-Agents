@@ -51,7 +51,7 @@ async def test_list_orchestrations_single(app_client, make_user, db_session):
     """Test listing orchestrations with one orchestration."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_orchestration(db_session, user.id, "orch-1", status="complete", task_ids=["task-1", "task-2"])
     db_session.commit()
 
@@ -74,7 +74,7 @@ async def test_list_orchestrations_multiple(app_client, make_user, db_session):
     """Test listing orchestrations with multiple orchestrations."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_orchestration(db_session, user.id, "orch-1", status="complete")
     _seed_orchestration(db_session, user.id, "orch-2", status="running")
     _seed_orchestration(db_session, user.id, "orch-3", status="failed")
@@ -96,7 +96,7 @@ async def test_list_orchestrations_filter_by_status(app_client, make_user, db_se
     """Test filtering orchestrations by status."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_orchestration(db_session, user.id, "orch-1", status="complete")
     _seed_orchestration(db_session, user.id, "orch-2", status="running")
     _seed_orchestration(db_session, user.id, "orch-3", status="failed")
@@ -112,7 +112,7 @@ async def test_list_orchestrations_filter_by_status(app_client, make_user, db_se
     assert data["success"] is True
     assert len(data["orchestrations"]) == 1
     assert data["orchestrations"][0]["status"] == "complete"
-    
+
     # Filter by running
     res = await app_client.get(
         "/api/agent/orchestrations?status=running",
@@ -129,7 +129,7 @@ async def test_list_orchestrations_pagination(app_client, make_user, db_session)
     """Test pagination of orchestrations."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     # Create 5 orchestrations
     for i in range(5):
         _seed_orchestration(db_session, user.id, f"orch-{i}", status="complete")
@@ -148,7 +148,7 @@ async def test_list_orchestrations_pagination(app_client, make_user, db_session)
     assert data["per_page"] == 2
     assert data["total"] == 5
     assert data["total_pages"] == 3
-    
+
     # Get second page
     res = await app_client.get(
         "/api/agent/orchestrations?page=2&per_page=2",
@@ -165,7 +165,7 @@ async def test_export_orchestrations_csv(app_client, make_user, db_session):
     """Test CSV export of orchestrations."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_orchestration(db_session, user.id, "orch-1", status="complete", task_ids=["task-1", "task-2"])
     _seed_orchestration(db_session, user.id, "orch-2", status="running", task_ids=["task-3"])
     db_session.commit()
@@ -192,7 +192,7 @@ async def test_export_orchestrations_csv_with_status_filter(app_client, make_use
     """Test CSV export with status filter."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     _seed_orchestration(db_session, user.id, "orch-1", status="complete")
     _seed_orchestration(db_session, user.id, "orch-2", status="running")
     _seed_orchestration(db_session, user.id, "orch-3", status="complete")
@@ -214,7 +214,7 @@ async def test_export_orchestrations_csv_formula_injection_defense(app_client, m
     """Test CSV export defends against formula injection."""
     user = _make_pro(make_user)
     db_session.commit()
-    
+
     # Create an orchestration with formula-like ID
     from arena.db_models import Orchestration
     from arena.core.datetime_utils import utcnow_naive

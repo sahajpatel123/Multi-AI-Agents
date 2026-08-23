@@ -3,19 +3,79 @@
 import asyncio
 import json
 import logging
+import re
 import time
+from dataclasses import dataclass
 from typing import Any
 
-logger = logging.getLogger(__name__)
 
 import anthropic
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
-from arena.core.agents import get_persona_id_for_agent
+from arena.core.agents import get_all_agents, get_persona_id_for_agent
 from arena.core.model_router import get_route_for_prompt
 from arena.core.observability import log_scoring_result
 from arena.models.schemas import AgentResponse, ScoredAgent, IntegrityReport
+
+logger = logging.getLogger(__name__)
+
+
+# The judge is asked for a "brief explanation" of the winner, so this bound is
+# generous without letting a misbehaving scorer bloat every round payload.
+MAX_REASONING_LENGTH = 600
+
+# Slot tokens the scorer sees (``agent_1``..``agent_4`` and small variants).
+# Rewritten to persona display names before the rationale reaches users so the
+# surfaced explanation matches the names shown on the cards.
+_SLOT_TOKEN_RE = re.compile(r"\bagent[\s_-]*([1-4])\b", re.IGNORECASE)
+
+
+@dataclass
+class ScoringResult:
+    """Outcome of a scoring run: ranked takes plus the judge's rationale.
+
+    ``reasoning`` is the scorer's own plain-text explanation of why the winner
+    was chosen and is safe to surface to users. It is ``None`` when the scorer
+    produced no rationale or fell back to default scores.
+    """
+
+    scored_responses: list[ScoredAgent]
+    reasoning: str | None = None
+    fallback_used: bool = False
+
+
+def _normalize_scorer_reasoning(
+    raw: Any,
+    agent_names: dict[str, str] | None = None,
+) -> str | None:
+    """Trim the judge's rationale to a compact, single-paragraph string.
+
+    Collapses stray whitespace, drops empty/non-string values, rewrites
+    ``agent_1``-style slot tokens into persona display names when a mapping is
+    supplied, and caps the result at a word boundary so a verbose scorer
+    cannot inflate the payload.
+    """
+    if not isinstance(raw, str):
+        return None
+    text = " ".join(raw.split())
+    if not text:
+        return None
+    if agent_names:
+
+        def _replace_slot(match: re.Match[str]) -> str:
+            return agent_names.get(
+                f"agent_{match.group(1)}",
+                match.group(0),
+            )
+
+        text = _SLOT_TOKEN_RE.sub(_replace_slot, text)
+    if len(text) > MAX_REASONING_LENGTH:
+        cut = text[:MAX_REASONING_LENGTH].rsplit(" ", 1)[0]
+        if not cut:
+            cut = text[:MAX_REASONING_LENGTH]
+        text = f"{cut}…"
+    return text
 
 
 SCORER_SYSTEM_PROMPT = """You are an impartial judge evaluating multiple AI responses to a user's prompt.
@@ -43,12 +103,12 @@ Be fair and objective. Different perspectives have value — don't penalize unco
 
 class Scorer:
     """Evaluates and scores agent responses"""
-    
+
     def __init__(self):
         settings = get_settings()
         self.max_tokens = 512
         self.timeout = settings.timeout_seconds
-    
+
     def _format_responses_for_scoring(
         self,
         prompt: str,
@@ -58,22 +118,22 @@ class Scorer:
         """Format all responses into a single prompt for the scorer"""
         formatted = f"USER'S ORIGINAL PROMPT:\n{prompt}\n\n"
         formatted += "AGENT RESPONSES TO EVALUATE:\n\n"
-        
+
         for resp in responses:
             formatted += f"--- {resp.agent_id.upper()} ---\n"
             formatted += f"Response: {resp.verdict}\n"
             formatted += f"Confidence: {resp.confidence}%\n"
             formatted += f"Key Assumption: {resp.key_assumption}\n\n"
-        
+
         # Include integrity flags so scorer can penalize
         if integrity and integrity.flags:
             formatted += "INTEGRITY WARNINGS (penalize these agents):\n"
             for flag in integrity.flags:
                 formatted += f"- {flag}\n"
             formatted += "\n"
-        
+
         return formatted
-    
+
     async def score_responses(
         self,
         prompt: str,
@@ -85,15 +145,20 @@ class Scorer:
         persona_ids: list[str] | None = None,
         db: Session | None = None,
         scoring_duration_ms: int | None = None,
-    ) -> list[ScoredAgent]:
-        """Score all responses and determine winner"""
-        
+    ) -> ScoringResult:
+        """Score all responses and determine winner.
+
+        Returns the ranked takes together with the judge's winner rationale
+        so callers can surface it without a second scoring pass.
+        """
+
         scoring_prompt = self._format_responses_for_scoring(prompt, responses, integrity)
         started = time.monotonic()
         fallback_used = False
+        reasoning: str | None = None
         criteria_breakdown: dict[str, Any] | None = None
         route = get_route_for_prompt(prompt=prompt, task="scoring", category=prompt_category)
-        
+
         try:
             result = await asyncio.wait_for(
                 route["client"].messages.create(
@@ -105,20 +170,33 @@ class Scorer:
                 ),
                 timeout=self.timeout,
             )
-            
+
             content = result.content[0].text.strip()
-            
+
             # Handle potential markdown code blocks
             if content.startswith("```"):
                 lines = content.split("\n")
                 content = "\n".join(lines[1:-1]) if lines[-1] == "```" else "\n".join(lines[1:])
                 content = content.strip()
-            
+
             data = json.loads(content)
             scores = data.get("scores", {})
             winner_id = data.get("winner", "agent_1")
+            try:
+                agent_names = {
+                    agent.agent_id: str(agent.name)
+                    for agent in get_all_agents(persona_ids)
+                }
+            except ValueError:
+                # Invalid persona selections are rejected upstream; never let a
+                # cosmetic rewrite fail the whole scoring pass.
+                agent_names = None
+            reasoning = _normalize_scorer_reasoning(
+                data.get("reasoning"),
+                agent_names,
+            )
             criteria_breakdown = data.get("criteria_breakdown")
-            
+
             # Build scored responses
             scored: list[ScoredAgent] = []
             for resp in responses:
@@ -130,9 +208,9 @@ class Scorer:
                         is_winner=(resp.agent_id == winner_id),
                     )
                 )
-            
+
             result_scored = scored
-            
+
         except Exception as e:
             # Fallback: return responses with default scores
             logger.warning("Scorer LLM call failed, using fallback scores: %s", e, exc_info=True)
@@ -169,8 +247,12 @@ class Scorer:
                 except Exception:
                     logger.warning("Failed to log scoring audit", exc_info=True)
 
-        return result_scored
-    
+        return ScoringResult(
+            scored_responses=result_scored,
+            reasoning=reasoning,
+            fallback_used=fallback_used,
+        )
+
     def get_winner(self, scored_responses: list[ScoredAgent]) -> ScoredAgent | None:
         """Get the winning response from scored list"""
         for scored in scored_responses:

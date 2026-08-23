@@ -32,6 +32,7 @@ def _seed_task(db_session, user_id, watch_item_id, score=85, answer="Bitcoin rem
         task_id=f"t-{watch_item_id[:8]}-{score}",
         task_text="Is Bitcoin trending up?",
         intelligence_score=score,
+        final_score=score,
         final_answer=answer,
         watchlist_item_id=watch_item_id,
         created_at=utcnow_naive(),
@@ -54,9 +55,34 @@ async def test_watchlist_history_csv_success(app_client, make_user, db_session):
     assert res.status_code == 200
     assert "text/csv" in res.headers["content-type"]
     text = res.text
-    assert "task_id,question,status,created_at,intelligence_score,final_answer_snippet" in text
+    assert "task_id,question,status,created_at,final_score,final_answer_snippet" in text
     assert "Is Bitcoin trending up?" in text
     assert "Line 1 Line 2" in text
+
+
+@pytest.mark.asyncio
+async def test_watchlist_history_csv_exports_final_score_not_intelligence_payload(
+    app_client, make_user, db_session
+):
+    """CSV must carry the numeric final_score shown in the UI, not the
+    intelligence_score JSON payload persisted alongside pipeline reports."""
+    user = _make_pro(make_user)
+    item = _seed_watch(db_session, user.id)
+    task = _seed_task(db_session, user.id, item.id, score=88, answer="Still bullish")
+    task.intelligence_score = {
+        "total_score": 42,
+        "breakdown": {"clarity": 40, "insight": 44},
+    }
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history/export.csv",
+        headers=_auth_headers(user),
+    )
+    assert res.status_code == 200
+    assert "intelligence_score" not in res.text
+    assert ",88," in res.text
+    assert "42" not in res.text
 
 @pytest.mark.asyncio
 async def test_watchlist_history_csv_formula_injection_defense(app_client, make_user, db_session):

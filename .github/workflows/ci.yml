@@ -6,8 +6,26 @@ permissions:
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'design/**'
+      - 'arena-video/**'
+      - 'app/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'design/**'
+      - 'arena-video/**'
+      - 'app/**'
+  # Catch-up verdicts. Runs keep getting cancelled mid-flight by an actor
+  # outside this repo's config (every new push coincides with the previous
+  # run dying, while cancel-in-progress is false everywhere), so individual
+  # commits often never reach a completed red/green. The scheduled run on
+  # latest main guarantees a trustworthy full-suite result at least this
+  # often, regardless of push storms.
+  schedule:
+    - cron: "23 */4 * * *"
   workflow_dispatch:
 
 # Keep in-flight runs running when a new commit lands. Cancelling on every
@@ -47,6 +65,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           # Gitleaks below scans `git log <prev_sha>^..HEAD`; the
           # default fetch-depth: 1 leaves <prev_sha>^ unresolved so
           # the diff is empty AND the action exits non-zero. fetch-depth: 2
@@ -106,149 +125,13 @@ jobs:
           pip-audit -r requirements.txt
 
       - name: Pin floor guard (security-required versions)
-        run: |
-          # Defense-in-depth: even if a future pip-audit database update
-          # silently drops a vulnerable-package match, the package FLOOR
-          # below must stay. A regression to any older pin fails the build.
-          python -c "
-          import re, sys
-          REQUIRED = {
-              'fastapi':       '0.139.2',
-              'pyasn1':        '0.6.4',
-              'PyJWT':         '2.13.0',
-              'python-multipart': '0.0.32',
-              'cryptography':  '50.0.0',
-              'Pillow':        '12.3.0',
-              'python-dotenv': '1.2.2',
-              'markdown':      '3.8.1',
-              'weasyprint':    '69.0',
-              'pytest':        '9.0.3',
-          }
-          text = open('requirements.txt').read()
-          failures = []
-          for pkg, min_ver in REQUIRED.items():
-              pattern = rf'^{re.escape(pkg)}(?:\[.*?\])?==(\d+(?:\.\d+)+)'
-              match = re.search(pattern, text, re.MULTILINE)
-              if not match:
-                  failures.append(f'MISSING: {pkg}=={min_ver}')
-                  continue
-              current = tuple(int(x) for x in match.group(1).split('.'))
-              floor   = tuple(int(x) for x in min_ver.split('.'))
-              if current < floor:
-                  failures.append(f'REGRESSED: {pkg}=={match.group(1)} (require >= {min_ver})')
-          # Negative-pin guard: packages that MUST NOT appear in
-          # requirements.txt. python-jose pulls ecdsa 0.19.2 (PYSEC-2026-1325,
-          # Minerva timing attack) and was eliminated in cycle 1 in favor of
-          # PyJWT. Reintroducing it would silently re-expose the vuln that
-          # pip-audit catches via the broader scan above — but this guard
-          # fails faster and produces a clearer message.
-          FORBIDDEN = {
-              'python-jose': 'pulls ecdsa 0.19.2 (PYSEC-2026-1325); use PyJWT',
-              'ecdsa':       'transitive of python-jose; eliminated via PyJWT in cycle 1',
-          }
-          forbidden_hits = []
-          for pkg, why in FORBIDDEN.items():
-              pattern = rf'^{re.escape(pkg)}(?:\[.*?\])?(?:==|>=|~=|@)'
-              if re.search(pattern, text, re.MULTILINE):
-                  forbidden_hits.append(f'FORBIDDEN (direct): {pkg} — {why}')
-          # Resolved-tree guard: a future transitive reintroducer (someone
-          # adds a library that pulls python-jose, or someone forgets to
-          # uninstall an old jose after migrating) would slip past the
-          # file-text grep above. pip-audit also covers this in the broader
-          # scan, but pip-audit's vulnerability DB depends on PyPI metadata
-          # being current; this guard does not. We resolve the full tree via
-          # `pip show` on each forbidden name and fail if any are installed.
-          # The why-message distinguishes 'direct vs transitive' so the
-          # committer knows whether to remove a direct pin or chase a
-          # transitive reintroducer.
-          import subprocess
-          resolved_hits = []
-          for pkg, why in FORBIDDEN.items():
-              probe = subprocess.run(
-                  ['python', '-m', 'pip', 'show', pkg],
-                  capture_output=True, text=True
-              )
-              if probe.returncode == 0:
-                  # Pip emits "Name: <pkg>\nVersion: <v>\n...\nRequired-by: ...".
-                  # Surface the version + who requires it (if known) so the
-                  # offending reintroducer is named in the failure message.
-                  version_line = next(
-                      (l for l in probe.stdout.splitlines() if l.startswith('Version:')),
-                      'Version: ?'
-                  )
-                  required_by = next(
-                      (l for l in probe.stdout.splitlines() if l.startswith('Required-by:')),
-                      'Required-by: (unknown)'
-                  )
-                  resolved_hits.append(
-                      f'FORBIDDEN (resolved): {pkg} {version_line.strip()} | '
-                      f'{required_by.strip()} — {why}'
-                  )
-          # adds a library that pulls python-jose, or a developer forgets to
-          # uninstall an old jose after migrating to PyJWT) would slip past
-          # the file-text grep above. pip-audit covers this in the broader
-          # scan, but pip-audit's vulnerability DB depends on PyPI metadata
-          # being current; this guard does not. After pip install -r
-          # requirements.txt, probe 'pip show <pkg>' for every name in
-          # FORBIDDEN and fail if any are installed. The why-message
-          # distinguishes 'direct vs resolved' so the committer knows whether
-          # to remove a direct pin or chase a transitive reintroducer.
-          #
-          # Use 'importlib.metadata' to inspect the live venv: a subprocess
-          # call to 'python' is not on the CI PATH in some runners and the
-          # guard must not pretend a transient PATH issue is a Security
-          # floor violation.
-          import importlib.metadata as _md
-          resolved_hits = []
-          for pkg, why in FORBIDDEN.items():
-              try:
-                  dist = _md.distribution(pkg)
-              except _md.PackageNotFoundError:
-                  continue
-              metadata = dist.metadata
-              version = str(metadata.get('Version') or '?')
-              # Walk every distribution in the live venv and collect the
-              # names of those that list 'pkg' in their Requires-Dist
-              # metadata. importlib.metadata has no 'reverse deps' API,
-              # so we iterate distributions() and filter in Python. The
-              # iteration is bounded — only a few hundred entries on a
-              # typical venv — and runs once per forbidden name.
-              def _dep_name(raw: str) -> str:
-                  # Requires-Dist strings look like 'name[extras] ==version'
-                  # or 'name>=version,...' — strip extras and version
-                  # specifiers to get the bare distribution name we need.
-                  # Use single quotes here because the surrounding bash
-                  # heredoc uses double quotes; an inner double quote
-                  # would prematurely close the python -c argument and
-                  # bash would parse the rest as a subshell.
-                  head = raw.split('[', 1)[0]
-                  for sep in (' ', '<', '>', '=', '!', '~', ';'):
-                      head = head.split(sep, 1)[0]
-                  return head.strip()
-
-              required_by = ','.join(
-                  sorted(
-                      d.metadata['Name']
-                      for d in _md.distributions()
-                      for r in (d.requires or [])
-                      if r and _dep_name(r) == pkg
-                  )
-              ) or '(unknown)'
-              resolved_hits.append(
-                  f'FORBIDDEN (resolved): {pkg} {version} | '
-                  f'Required-by: {required_by} — {why}'
-              )
-          if failures or forbidden_hits or resolved_hits:
-              print('Security floor violations:')
-              for f in failures:
-                  print(f'  - {f}')
-              for f in forbidden_hits:
-                  print(f'  - {f}')
-              for f in resolved_hits:
-                  print(f'  - {f}')
-              sys.exit(1)
-          print('Security floor OK')
-          "
+        # Enforces security-version floors plus a ban on python-jose/ecdsa
+        # (direct pins AND transitive reintroductions). Lives in a real
+        # script instead of inline python-in-bash: the previous heredoc broke
+        # every run because backticks inside its comment block triggered bash
+        # command substitution.
+        working-directory: ${{ github.workspace }}
+        run: python scripts/check_security_floors.py
 
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@v2
@@ -273,6 +156,8 @@ jobs:
         working-directory: web/frontend
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -325,43 +210,8 @@ jobs:
           exit 1
 
       - name: Pin floor guard (security-required versions)
-        run: |
-          # Defense-in-depth for packages with a security history in this
-          # repo. A downgrade below the floor fails the build, matching
-          # the backend's pin guard at ci.yml:69.
-          node -e "
-          const fs = require('fs');
-          const REQUIRED = {
-            'react-router-dom': '7.14.2',
-            'postcss':         '8.5.23',  // GHSA-fxqj-rqcc-2cmp fixed in 8.5.23+
-            'vitest':          '4.1.10',
-          };
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          const merged = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
-          const failures = [];
-          for (const [name, minVer] of Object.entries(REQUIRED)) {
-            const raw = merged[name];
-            if (raw === undefined) { failures.push('MISSING: ' + name + '>=' + minVer); continue; }
-            // strip leading ^ or ~ to compare on the floor
-            const m = raw.match(/^[\^~]?(\d+(?:\.\d+)+)/);
-            if (!m) { failures.push('UNPARSED: ' + name + ' = ' + raw); continue; }
-            const cur = m[1].split('.').map(Number);
-            const floor = minVer.split('.').map(Number);
-            const pad = (a, n) => a.concat(Array(Math.max(0, n - a.length)).fill(0));
-            for (let i = 0; i < Math.max(cur.length, floor.length); i++) {
-              const c = pad(cur, floor.length)[i];
-              const f = pad(floor, cur.length)[i];
-              if (c > f) break;
-              if (c < f) { failures.push('REGRESSED: ' + name + '@' + m[1] + ' (require >= ' + minVer + ')'); break; }
-            }
-          }
-          if (failures.length) {
-            console.error('Security floor violations:');
-            failures.forEach(f => console.error('  - ' + f));
-            process.exit(1);
-          }
-          console.log('Security floor OK');
-          "
+        working-directory: ${{ github.workspace }}
+        run: python scripts/check_security_floors.py
 
       - name: Type check (tsc)
         run: npx tsc --noEmit
@@ -390,6 +240,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Dependency Review
         uses: actions/dependency-review-action@v5
@@ -411,6 +263,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Fail on stray bare 'main' tokens
         # A past bad paste inserted bare `main` lines across Python/TS/TSX
@@ -427,6 +281,32 @@ jobs:
           fi
           echo "Source integrity OK"
 
+  workflow-security:
+    name: Workflow security invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install PyYAML
+        run: python -m pip install pyyaml
+
+      - name: Run workflow security gate
+        # Enforces least-privilege permissions, no dangerous triggers, job
+        # timeouts, no secrets: inherit, and persist-credentials: false on
+        # every checkout. See scripts/check_workflow_security.py for the
+        # full invariant list.
+        run: python scripts/check_workflow_security.py
+
   style:
     name: Style (whitespace / conflict check)
     runs-on: ubuntu-latest
@@ -436,6 +316,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Whitespace / conflict check
@@ -459,6 +340,41 @@ jobs:
           fi
           git diff --check "$base" "$head"
           echo "Whitespace/conflict check OK"
+
+  pre-commit:
+    name: Pre-commit hooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # The eslint hook is a local system hook that runs web/frontend's own
+      # eslint (the mirrors-eslint remote hook is broken upstream), so this
+      # job needs Node and the frontend dependency tree.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix web/frontend
+
+      - name: Install pre-commit
+        run: python -m pip install pre-commit
+
+      - name: Run pre-commit on all files
+        run: pre-commit run --all-files --show-diff-on-failure
 
   e2e:
     name: E2E (Playwright smoke)
@@ -485,6 +401,8 @@ jobs:
       RAZORPAY_WEBHOOK_SECRET: dummy_webhook
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6

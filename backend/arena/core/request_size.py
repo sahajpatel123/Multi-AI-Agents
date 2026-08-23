@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_BODY_BYTES = 10 * 1024
 UPLOAD_MAX_BODY_BYTES = 11 * 1024 * 1024  # 10MB file + multipart overhead
+SESSION_IMPORT_MAX_BODY_BYTES = 2 * 1024 * 1024  # 2MB transcript archive
 # Razorpay webhook entities can exceed the default 10KB API cap, but must
 # still be bounded — unbounded bodies are a memory DoS vector.
 WEBHOOK_MAX_BODY_BYTES = 1024 * 1024  # 1 MB
@@ -26,6 +27,8 @@ def max_request_body_bytes(path: str, default_max: int = DEFAULT_MAX_BODY_BYTES)
     p = (path or "").rstrip("/")
     if p.endswith("/api/agent/upload"):
         return UPLOAD_MAX_BODY_BYTES
+    if p.endswith("/api/sessions/import"):
+        return SESSION_IMPORT_MAX_BODY_BYTES
     if p.endswith("/api/payments/webhook"):
         return WEBHOOK_MAX_BODY_BYTES
     return default_max
@@ -35,6 +38,8 @@ def payload_too_large_message(path: str) -> str:
     p = (path or "").rstrip("/")
     if p.endswith("/api/agent/upload"):
         return "File too large (max 10MB)"
+    if p.endswith("/api/sessions/import"):
+        return "Import archive too large (max 2MB)"
     if p.endswith("/api/payments/webhook"):
         return "Webhook payload too large (max 1MB)"
     return "Request too large. Maximum 10KB allowed."

@@ -3,8 +3,6 @@ import json
 import logging
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
-
 from arena.core.assumption_surfacer import surface_assumptions
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard
 from arena.core.dissent_engine import generate_dissent_report
@@ -19,6 +17,8 @@ from arena.core.stages.synthesizer import run_synthesizer
 from arena.core.stages.verifier import run_verifier
 from arena.core.datetime_utils import utcnow_naive
 
+# One logger, declared after all imports (an earlier revision assigned it
+# before the import block AND again after it — the second silently won).
 logger = logging.getLogger("arena.agent_pipeline")
 
 
@@ -291,7 +291,7 @@ async def run_agent_pipeline_on_blackboard(
 
             async def safe_dissent(bb):
                 try:
-                    return await wait_for(
+                    return await asyncio.wait_for(
                         generate_dissent_report(
                             question=bb.task,
                             final_answer=bb.final_answer,
@@ -303,7 +303,7 @@ async def run_agent_pipeline_on_blackboard(
 
             async def safe_temporal(bb):
                 try:
-                    return await wait_for(
+                    return await asyncio.wait_for(
                         classify_temporal(
                             question=bb.task,
                             final_answer=bb.final_answer

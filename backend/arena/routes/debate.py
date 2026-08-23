@@ -365,7 +365,7 @@ async def stream_debate_round(
                     persona_id = get_persona_id_for_agent(agent_id, request.persona_ids)
                     model_type = get_model_for_persona(persona_id)
                     route = get_route_for_persona(persona_id)
-                    
+
                     if model_type != "claude":
                         # Grok doesn't support streaming - get full response
                         content, _, _ = await call_persona(

@@ -9,6 +9,9 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['src/**/*.e2e.test.{ts,tsx}', 'node_modules', 'dist'],
+    // The suite is large; a modest global timeout keeps slow CI/dev
+    // machines from turning healthy tests into false failures.
+    testTimeout: 10_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

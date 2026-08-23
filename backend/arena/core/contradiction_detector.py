@@ -7,14 +7,15 @@ from typing import Optional
 
 from arena.core.model_router import get_route_for_task
 
-logger = logging.getLogger(__name__)
 from arena.models.schemas import AgentResponse
 from arena.core.memory import get_memory_manager
+
+logger = logging.getLogger(__name__)
 
 
 class ContradictionReport:
     """Report of a detected contradiction"""
-    
+
     def __init__(
         self,
         contradiction_detected: bool,
@@ -35,21 +36,21 @@ class ContradictionDetector:
     Detects contradictions in agent responses.
     Uses lightweight similarity checks first, LLM fallback for borderline cases.
     """
-    
+
     def __init__(self):
         route = get_route_for_task("contradiction_detection")
         self.client = route["client"]
         self.model = route["model_id"]
-    
+
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """Calculate similarity between two texts using SequenceMatcher."""
         return SequenceMatcher(None, text1.lower(), text2.lower()).ratio()
-    
+
     def _extract_core_claim(self, text: str) -> str:
         """Extract the core claim from a response (first 2 sentences)."""
         sentences = text.split(". ")
         return ". ".join(sentences[:2]) + "." if len(sentences) > 1 else text
-    
+
     async def _llm_check_contradiction(
         self,
         previous: str,
@@ -87,23 +88,23 @@ Respond with ONLY valid JSON:
                 ),
                 timeout=10.0,
             )
-            
+
             import json
             text = result.content[0].text.strip()
-            
+
             # Handle code blocks
             if text.startswith("```"):
                 lines = text.split("\n")
                 text = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
                 text = text.strip()
-            
+
             data = json.loads(text)
             return data.get("contradicts", False), data.get("severity", "low")
-            
+
         except Exception:
             logger.warning("Failed to parse LLM contradiction response", exc_info=True)
             return False, "low"
-    
+
     async def check_agent_consistency(
         self,
         agent_id: str,
@@ -116,38 +117,38 @@ Respond with ONLY valid JSON:
         """
         memory = get_memory_manager()
         previous_responses = memory.short_term.get_agent_memory(session_id, agent_id)
-        
+
         if not previous_responses:
             # No previous responses to compare against
             return None
-        
+
         current_claim = self._extract_core_claim(current_response.verdict)
-        
+
         # Check against each previous response
         for prev_response in previous_responses:
             prev_claim = self._extract_core_claim(prev_response)
-            
+
             # Quick similarity check
             similarity = self._calculate_similarity(current_claim, prev_claim)
-            
+
             # If very similar (>0.6), likely not a contradiction
             if similarity > 0.6:
                 continue
-            
+
             # If very different (<0.4), likely not related
             if similarity < 0.4:
                 continue
-            
+
             # Borderline case (0.4-0.6) — use LLM to check
             from arena.core.agents import AGENTS
             agent_name = AGENTS[agent_id].name
-            
+
             is_contradiction, severity = await self._llm_check_contradiction(
                 prev_claim,
                 current_claim,
                 agent_name,
             )
-            
+
             if is_contradiction:
                 return ContradictionReport(
                     contradiction_detected=True,
@@ -156,9 +157,9 @@ Respond with ONLY valid JSON:
                     current_statement=current_claim,
                     severity=severity,
                 )
-        
+
         return None
-    
+
     async def check_winner_consistency(
         self,
         winner_id: str,
@@ -171,13 +172,13 @@ Respond with ONLY valid JSON:
         """
         memory = get_memory_manager()
         session = memory.short_term.get_session(session_id)
-        
+
         if not session or len(session.turns) < 2:
             # Need at least 2 turns to compare
             return None
-        
+
         current_claim = self._extract_core_claim(winner_response.verdict)
-        
+
         # Check against previous winners
         for turn in session.turns[:-1]:  # Exclude current turn
             if turn.winner_id == winner_id:
@@ -186,18 +187,18 @@ Respond with ONLY valid JSON:
                 if prev_winner_response:
                     prev_claim = self._extract_core_claim(prev_winner_response.verdict)
                     similarity = self._calculate_similarity(current_claim, prev_claim)
-                    
+
                     # Only check borderline cases
                     if 0.4 <= similarity <= 0.6:
                         from arena.core.agents import AGENTS
                         agent_name = AGENTS[winner_id].name
-                        
+
                         is_contradiction, severity = await self._llm_check_contradiction(
                             prev_claim,
                             current_claim,
                             agent_name,
                         )
-                        
+
                         if is_contradiction:
                             return ContradictionReport(
                                 contradiction_detected=True,
@@ -206,9 +207,9 @@ Respond with ONLY valid JSON:
                                 current_statement=current_claim,
                                 severity=severity,
                             )
-        
+
         return None
-    
+
     async def check_all_agents(
         self,
         responses: list[AgentResponse],
@@ -222,9 +223,9 @@ Respond with ONLY valid JSON:
             self.check_agent_consistency(resp.agent_id, resp, session_id)
             for resp in responses
         ]
-        
+
         results = await asyncio.gather(*tasks)
-        
+
         return {
             resp.agent_id: report
             for resp, report in zip(responses, results)

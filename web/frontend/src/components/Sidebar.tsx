@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { Button } from './Button';
 import { Icons } from './Icons';
+import { SessionCard } from './SessionCard';
 import {
   Ellipsis,
   Trophy,
@@ -27,22 +28,40 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
+import type {
+  BulkDuplicateSessionsResult,
+  BulkPinSessionsResult,
+  SessionSummary,
+} from '../api';
 import { AgentDot } from './AgentDot';
+import { ExportPresetsPanel } from './ExportPresetsPanel';
 import { HighlightQuery } from './HighlightQuery';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { useAuth } from '../hooks/useAuth';
 import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
-import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSearch';
+import {
+  filterBySearchQuery,
+  filterSessionsBySearchQuery,
+  filterTurnsBySearchQuery,
+  findTopicOnlyMatch,
+} from '../lib/sidebarSearch';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from '../lib/downloadTextFile';
 import { formatRelativePast } from '../lib/relativeTime';
 import {
+  formatArenaRecentsCsvExport,
   formatArenaRecentItemCopy,
   formatArenaRecentPromptCopy,
   formatArenaRecentsExport,
+  formatArenaRecentsJsonExport,
 } from '../lib/arenaRecentsExport';
+import {
+  formatArenaChatsCsvExport,
+  formatArenaChatsExport,
+  formatArenaChatsJsonExport,
+} from '../lib/arenaChatsExport';
 import {
   formatSavedTakesCsvExport,
   formatSavedTakeExport,
@@ -60,6 +79,21 @@ import {
   type SidebarRecentsSort,
   type SidebarSavedSort,
 } from '../lib/sidebarListSort';
+import {
+  SIDEBAR_CHATS_SORT_OPTIONS,
+  sidebarChatsSortLabel,
+  sortSidebarChats,
+  type SidebarChatsSort,
+} from '../lib/sidebarChatsSort';
+import {
+  SIDEBAR_CHATS_PIN_ALL,
+  SIDEBAR_CHATS_PIN_FILTER_OPTIONS,
+  SIDEBAR_CHATS_PIN_ONLY,
+  filterChatsByPin,
+  normalizeSidebarChatsPinFilter,
+  sidebarChatsPinFilterLabel,
+  type SidebarChatsPinFilter,
+} from '../lib/sidebarChatsPinFilter';
 import {
   SIDEBAR_SAVED_MIND_ALL,
   collectSavedMindFilterOptions,
@@ -96,6 +130,7 @@ import {
 } from '../lib/agentHistoryRecencyFilter';
 import {
   SIDEBAR_TURN_TITLE_MAX,
+  cleanSidebarTurnTitle,
   loadSidebarTurnTitles,
   saveSidebarTurnTitle,
   sidebarTurnTitleIssueMessage,
@@ -126,6 +161,51 @@ interface SidebarProps {
     ids: number[],
     pinned: boolean,
   ) => Promise<{ applied: number; pin_limit_reached: boolean }> | void;
+  onDeleteSaved?: (item: SavedResponseItem) => Promise<void> | void;
+  onBulkDeleteSaved?: (ids: number[]) => Promise<number> | void;
+  /** Live in-memory chats (resumable) surfaced above Recents. */
+  recentSessions?: SessionSummary[];
+  activeSessionId?: string | null;
+  onSessionSelect?: (sessionId: string) => void;
+  onDeleteSession?: (sessionId: string) => Promise<void> | void;
+  onBulkDeleteSessions?: (
+    sessionIds: string[],
+  ) => Promise<number | null> | number | null | void;
+  onBulkPinSessions?: (
+    sessionIds: string[],
+    pinned: boolean,
+  ) => Promise<BulkPinSessionsResult | null> | BulkPinSessionsResult | null | void;
+  onBulkDuplicateSessions?: (
+    sessionIds: string[],
+  ) => Promise<BulkDuplicateSessionsResult | null> | BulkDuplicateSessionsResult | null | void;
+  /** Restore exported Arena transcript JSON archives as new resumable chats. */
+  onImportChats?: (
+    file: File,
+  ) => Promise<number | null> | number | null | void;
+  /** Export full transcripts for a user-selected subset of live chats. */
+  onBulkExportTranscripts?: (
+    sessionIds: string[],
+  ) => Promise<number | null> | number | null | void;
+  /** Export full transcripts for a user-selected subset of live chats as JSON. */
+  onBulkExportTranscriptsJson?: (
+    sessionIds: string[],
+  ) => Promise<number | null> | number | null | void;
+  /** Copy full transcripts for a user-selected subset of live chats. */
+  onBulkCopyTranscripts?: (
+    sessionIds: string[],
+  ) => Promise<number | null> | number | null | void;
+  onClearSessions?: () => Promise<number | null> | void;
+  onRenameSession?: (
+    sessionId: string,
+    title: string,
+  ) => Promise<boolean> | boolean | void;
+  onToggleSessionPin?: (
+    sessionId: string,
+    pinned: boolean,
+  ) => Promise<boolean> | boolean | void;
+  onDuplicateSession?: (
+    sessionId: string,
+  ) => Promise<boolean> | boolean | void;
 }
 
 type FilterValue = 'all' | PromptCategory;
@@ -151,18 +231,39 @@ export function Sidebar({
   onToggleSavedPin,
   onReuseSavedPrompt,
   onBulkPinSaved,
+  onDeleteSaved,
+  onBulkDeleteSaved,
+  recentSessions = [],
+  activeSessionId = null,
+  onSessionSelect,
+  onDeleteSession,
+  onBulkDeleteSessions,
+  onBulkPinSessions,
+  onBulkDuplicateSessions,
+  onImportChats,
+  onBulkExportTranscripts,
+  onBulkExportTranscriptsJson,
+  onBulkCopyTranscripts,
+  onClearSessions,
+  onRenameSession,
+  onToggleSessionPin,
+  onDuplicateSession,
 }: SidebarProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { openModal } = useProfileModal();
   const { isDefaultPanel, resetPanel, panel } = usePanel();
-  const { messagesRemaining, dailyLimit, tier, isFree } = useTier();
+  const { messagesRemaining, dailyLimit, tier, isFree, canUseFeature } = useTier();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
   /** Tick every 60s so relative timestamps stay accurate without a full reload. */
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [searchQuery, setSearchQuery] = useState('');
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [savedSearchQuery, setSavedSearchQuery] = useState('');
   const [recentsSort, setRecentsSort] = useState<SidebarRecentsSort>('newest');
+  const [chatsSort, setChatsSort] = useState<SidebarChatsSort>('newest');
+  const [chatsPinFilter, setChatsPinFilter] =
+    useState<SidebarChatsPinFilter>(SIDEBAR_CHATS_PIN_ALL);
   const [savedSort, setSavedSort] = useState<SidebarSavedSort>('newest');
   const [savedMindFilter, setSavedMindFilter] =
     useState<SidebarSavedMindFilter>(SIDEBAR_SAVED_MIND_ALL);
@@ -183,27 +284,113 @@ export function Sidebar({
   const [downloadJsonSavedStatus, setDownloadJsonSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [downloadCsvSavedStatus, setDownloadCsvSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [bulkPinStatus, setBulkPinStatus] = useState<'idle' | 'busy' | 'done' | 'failed' | 'partial'>('idle');
+  const [bulkDeleteStatus, setBulkDeleteStatus] = useState<'idle' | 'busy' | 'done' | 'failed'>('idle');
+  const [confirmBulkDeleteSaved, setConfirmBulkDeleteSaved] = useState(false);
+  const [pendingDeleteSavedId, setPendingDeleteSavedId] = useState<number | string | null>(null);
+  const [deleteSavedFailed, setDeleteSavedFailed] = useState(false);
   const [copyRecentsStatus, setCopyRecentsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadRecentsStatus, setDownloadRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadJsonRecentsStatus, setDownloadJsonRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadCsvRecentsStatus, setDownloadCsvRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [copyChatsStatus, setCopyChatsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadChatsStatus, setDownloadChatsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadJsonChatsStatus, setDownloadJsonChatsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadCsvChatsStatus, setDownloadCsvChatsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Per-recent row copy feedback: turn_id + kind. */
   const [recentItemCopyId, setRecentItemCopyId] = useState<string | null>(null);
   const [recentItemCopyKind, setRecentItemCopyKind] = useState<'turn' | 'prompt' | null>(null);
   const [recentItemCopyStatus, setRecentItemCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
+  const [confirmClearSessions, setConfirmClearSessions] = useState(false);
+  const [clearSessionsStatus, setClearSessionsStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed'
+  >('idle');
+  const [selectedChatIds, setSelectedChatIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [confirmBulkDeleteChats, setConfirmBulkDeleteChats] = useState(false);
+  const [bulkDeleteChatsStatus, setBulkDeleteChatsStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed' | 'partial'
+  >('idle');
+  const [bulkPinChatsStatus, setBulkPinChatsStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed' | 'partial'
+  >('idle');
+  const [bulkDuplicateChatsStatus, setBulkDuplicateChatsStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed' | 'partial'
+  >('idle');
+  const [bulkExportChatsStatus, setBulkExportChatsStatus] = useState<
+    'idle' | 'done' | 'failed'
+  >('idle');
+  const [bulkExportChatsJsonStatus, setBulkExportChatsJsonStatus] = useState<
+    'idle' | 'done' | 'failed'
+  >('idle');
+  const [bulkExportChatsCsvStatus, setBulkExportChatsCsvStatus] = useState<
+    'idle' | 'done' | 'failed'
+  >('idle');
+  const [bulkExportedChatsCount, setBulkExportedChatsCount] = useState<number | null>(
+    null,
+  );
+  const [bulkCopyChatsStatus, setBulkCopyChatsStatus] = useState<
+    'idle' | 'busy' | 'copied' | 'failed'
+  >('idle');
+  const [bulkCopiedChatsCount, setBulkCopiedChatsCount] = useState<number | null>(
+    null,
+  );
+  const [bulkTranscriptExportStatus, setBulkTranscriptExportStatus] = useState<
+    'idle' | 'busy' | 'done' | 'partial' | 'failed'
+  >('idle');
+  const [bulkTranscriptExportedCount, setBulkTranscriptExportedCount] = useState<
+    number | null
+  >(null);
+  const [bulkTranscriptJsonExportStatus, setBulkTranscriptJsonExportStatus] =
+    useState<'idle' | 'busy' | 'done' | 'partial' | 'failed'>('idle');
+  const [bulkTranscriptJsonExportedCount, setBulkTranscriptJsonExportedCount] =
+    useState<number | null>(null);
+  const [bulkTranscriptCopyStatus, setBulkTranscriptCopyStatus] = useState<
+    'idle' | 'busy' | 'done' | 'partial' | 'failed'
+  >('idle');
+  const [bulkTranscriptCopiedCount, setBulkTranscriptCopiedCount] = useState<
+    number | null
+  >(null);
+  const [importChatsStatus, setImportChatsStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed'
+  >('idle');
+  const [importedChatsCount, setImportedChatsCount] = useState<number | null>(
+    null,
+  );
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingSessionValue, setEditingSessionValue] = useState('');
+  const [sessionRenameError, setSessionRenameError] = useState<string | null>(null);
+  const [sessionRenameBusyId, setSessionRenameBusyId] = useState<string | null>(null);
+  const [sessionPinBusyId, setSessionPinBusyId] = useState<string | null>(null);
+  const [sessionPinFailedId, setSessionPinFailedId] = useState<string | null>(null);
+  const [sessionDuplicateBusyId, setSessionDuplicateBusyId] = useState<string | null>(null);
+  const [sessionDuplicateFailedId, setSessionDuplicateFailedId] = useState<string | null>(null);
   const [customTitles, setCustomTitles] = useState<Record<string, string>>(() =>
     loadSidebarTurnTitles(),
   );
+  const [showAllChats, setShowAllChats] = useState(false);
   const [deletedTurnIds, setDeletedTurnIds] = useState<Set<string>>(new Set());
   const renameCancelledRef = useRef(false);
+  const sessionRenameCancelledRef = useRef(false);
+  const sessionRenameEditingIdRef = useRef<string | null>(null);
+  const sessionRenameSavingIdsRef = useRef<Set<string>>(new Set());
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const sessionRenameInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const chatSearchInputRef = useRef<HTMLInputElement>(null);
+  const importChatsInputRef = useRef<HTMLInputElement>(null);
   const savedSearchInputRef = useRef<HTMLInputElement>(null);
+  const bulkPinUnpinActionRef = useRef<boolean | null>(null);
+  const bulkCopyChatsInFlightRef = useRef(false);
+  const bulkTranscriptCopyInFlightRef = useRef(false);
+  const chatSelectionAnchorRef = useRef<string | null>(null);
 
   const winnerNameByAgentId = useMemo(() => {
     const map: Record<string, string> = {};
@@ -218,6 +405,61 @@ export function Sidebar({
     () => [...turns].reverse().filter((turn) => !deletedTurnIds.has(turn.turn_id)),
     [turns, deletedTurnIds],
   );
+
+  const chatPinFilterUseful = useMemo(
+    () => recentSessions.some((session) => session.pinned === true),
+    [recentSessions],
+  );
+  const activeChatsPinFilter = chatPinFilterUseful
+    ? normalizeSidebarChatsPinFilter(chatsPinFilter)
+    : SIDEBAR_CHATS_PIN_ALL;
+  const filteredByPinChats = useMemo(
+    () => filterChatsByPin(recentSessions, activeChatsPinFilter),
+    [recentSessions, activeChatsPinFilter],
+  );
+  const sortedChats = useMemo(
+    () => sortSidebarChats(filteredByPinChats, chatsSort),
+    [filteredByPinChats, chatsSort],
+  );
+  const filteredChats = useMemo(
+    () => filterSessionsBySearchQuery(sortedChats, chatSearchQuery),
+    [sortedChats, chatSearchQuery],
+  );
+  const isChatSearchActive = chatSearchQuery.trim().length > 0;
+  const isChatFilterActive =
+    isChatSearchActive || activeChatsPinFilter !== SIDEBAR_CHATS_PIN_ALL;
+  const visibleChats = isChatSearchActive
+    ? filteredChats
+    : isChatFilterActive
+      ? filteredChats
+      : showAllChats
+        ? sortedChats
+        : sortedChats.slice(0, 5);
+  // "Select all" targets the full filtered list, not just the first five
+  // preview rows, so one click can stage every matching chat for a bulk
+  // action (export, copy, pin, duplicate, delete) without expanding first.
+  const allFilteredChatsSelected =
+    filteredChats.length > 0 &&
+    filteredChats.every((session) => selectedChatIds.has(session.session_id));
+  const allSelectedChatsPinned =
+    selectedChatIds.size > 0 &&
+    [...selectedChatIds].every((id) =>
+      recentSessions.some((session) => session.session_id === id && session.pinned === true),
+    );
+  const canBulkManageChats = recentSessions.length > 0;
+  const bulkChatsBusy =
+    bulkDeleteChatsStatus === 'busy' ||
+    bulkPinChatsStatus === 'busy' ||
+    bulkDuplicateChatsStatus === 'busy' ||
+    bulkCopyChatsStatus === 'busy' ||
+    bulkTranscriptExportStatus === 'busy' ||
+    bulkTranscriptJsonExportStatus === 'busy' ||
+    bulkTranscriptCopyStatus === 'busy' ||
+    importChatsStatus === 'busy';
+  const bulkPinBusyTarget =
+    bulkPinChatsStatus === 'busy' && bulkPinUnpinActionRef.current !== null
+      ? bulkPinUnpinActionRef.current
+      : allSelectedChatsPinned;
 
   const filteredTurns = useMemo(() => {
     const byCategory = reversedTurns.filter(
@@ -405,6 +647,20 @@ export function Sidebar({
   }, [bulkPinStatus]);
 
   useEffect(() => {
+    if (bulkDeleteStatus === 'idle' || bulkDeleteStatus === 'busy') return;
+    const hold = motionDuration(bulkDeleteStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setBulkDeleteStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [bulkDeleteStatus]);
+
+  useEffect(() => {
+    if (!deleteSavedFailed) return;
+    const hold = motionDuration(2800);
+    const t = window.setTimeout(() => setDeleteSavedFailed(false), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [deleteSavedFailed]);
+
+  useEffect(() => {
     if (copyRecentsStatus === 'idle') return;
     const hold = motionDuration(copyRecentsStatus === 'failed' ? 2800 : 2000);
     const t = window.setTimeout(() => setCopyRecentsStatus('idle'), hold > 0 ? hold : 0);
@@ -417,6 +673,263 @@ export function Sidebar({
     const t = window.setTimeout(() => setDownloadRecentsStatus('idle'), hold > 0 ? hold : 0);
     return () => window.clearTimeout(t);
   }, [downloadRecentsStatus]);
+
+  useEffect(() => {
+    if (downloadJsonRecentsStatus === 'idle') return;
+    const hold = motionDuration(downloadJsonRecentsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadJsonRecentsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadJsonRecentsStatus]);
+
+  useEffect(() => {
+    if (downloadCsvRecentsStatus === 'idle') return;
+    const hold = motionDuration(downloadCsvRecentsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadCsvRecentsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadCsvRecentsStatus]);
+
+  useEffect(() => {
+    if (copyChatsStatus === 'idle') return;
+    const hold = motionDuration(copyChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setCopyChatsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [copyChatsStatus]);
+
+  useEffect(() => {
+    if (downloadChatsStatus === 'idle') return;
+    const hold = motionDuration(downloadChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadChatsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadChatsStatus]);
+
+  useEffect(() => {
+    if (downloadJsonChatsStatus === 'idle') return;
+    const hold = motionDuration(downloadJsonChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadJsonChatsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadJsonChatsStatus]);
+
+  useEffect(() => {
+    if (downloadCsvChatsStatus === 'idle') return;
+    const hold = motionDuration(downloadCsvChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadCsvChatsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadCsvChatsStatus]);
+
+  useEffect(() => {
+    if (clearSessionsStatus === 'idle' || clearSessionsStatus === 'busy') return;
+    const hold = motionDuration(clearSessionsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(
+      () => setClearSessionsStatus('idle'),
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [clearSessionsStatus]);
+
+  useEffect(() => {
+    if (!sessionPinFailedId) return;
+    const hold = motionDuration(2800);
+    const t = window.setTimeout(
+      () => setSessionPinFailedId(null),
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [sessionPinFailedId]);
+
+  useEffect(() => {
+    if (!sessionDuplicateFailedId) return;
+    const hold = motionDuration(2800);
+    const t = window.setTimeout(
+      () => setSessionDuplicateFailedId(null),
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [sessionDuplicateFailedId]);
+
+  useEffect(() => {
+    if (recentSessions.length === 0) setConfirmClearSessions(false);
+  }, [recentSessions.length]);
+
+  useEffect(() => {
+    if (recentSessions.length === 0) {
+      setConfirmBulkDeleteChats(false);
+    }
+    const liveIds = new Set(recentSessions.map((session) => session.session_id));
+    if (
+      chatSelectionAnchorRef.current !== null &&
+      !liveIds.has(chatSelectionAnchorRef.current)
+    ) {
+      chatSelectionAnchorRef.current = null;
+    }
+    setSelectedChatIds((prev) => {
+      const next = new Set([...prev].filter((id) => liveIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [recentSessions]);
+
+  useEffect(() => {
+    if (bulkDeleteChatsStatus === 'idle' || bulkDeleteChatsStatus === 'busy') return;
+    const hold = motionDuration(
+      bulkDeleteChatsStatus === 'failed' || bulkDeleteChatsStatus === 'partial'
+        ? 2800
+        : 2000,
+    );
+    const t = window.setTimeout(
+      () => setBulkDeleteChatsStatus('idle'),
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [bulkDeleteChatsStatus]);
+
+  useEffect(() => {
+    if (bulkPinChatsStatus === 'idle' || bulkPinChatsStatus === 'busy') return;
+    const hold = motionDuration(
+      bulkPinChatsStatus === 'failed' || bulkPinChatsStatus === 'partial'
+        ? 2800
+        : 2000,
+    );
+    const t = window.setTimeout(
+      () => setBulkPinChatsStatus('idle'),
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [bulkPinChatsStatus]);
+
+  useEffect(() => {
+    if (bulkExportChatsStatus === 'idle') return;
+    const hold = motionDuration(bulkExportChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(
+      () => {
+        setBulkExportChatsStatus('idle');
+      },
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [bulkExportChatsStatus]);
+
+  useEffect(() => {
+    if (bulkExportChatsJsonStatus === 'idle' && bulkExportChatsCsvStatus === 'idle') {
+      return;
+    }
+    const hold = motionDuration(
+      bulkExportChatsJsonStatus === 'failed' || bulkExportChatsCsvStatus === 'failed'
+        ? 2800
+        : 2000,
+    );
+    const t = window.setTimeout(
+      () => {
+        setBulkExportChatsJsonStatus('idle');
+        setBulkExportChatsCsvStatus('idle');
+        setBulkExportedChatsCount(null);
+      },
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [bulkExportChatsJsonStatus, bulkExportChatsCsvStatus]);
+
+  useEffect(() => {
+    if (bulkCopyChatsStatus === 'idle' || bulkCopyChatsStatus === 'busy') return;
+    const hold = motionDuration(bulkCopyChatsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => {
+      setBulkCopyChatsStatus('idle');
+      setBulkCopiedChatsCount(null);
+    }, hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [bulkCopyChatsStatus]);
+
+  useEffect(() => {
+    if (
+      bulkTranscriptExportStatus === 'idle' ||
+      bulkTranscriptExportStatus === 'busy'
+    ) {
+      return;
+    }
+    const hold = motionDuration(
+      bulkTranscriptExportStatus === 'failed' ||
+        bulkTranscriptExportStatus === 'partial'
+        ? 2800
+        : 2000,
+    );
+    const t = window.setTimeout(
+      () => {
+        setBulkTranscriptExportStatus('idle');
+        setBulkTranscriptExportedCount(null);
+      },
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [bulkTranscriptExportStatus]);
+
+  useEffect(() => {
+    if (
+      bulkTranscriptJsonExportStatus === 'idle' ||
+      bulkTranscriptJsonExportStatus === 'busy'
+    ) {
+      return;
+    }
+    const hold = motionDuration(
+      bulkTranscriptJsonExportStatus === 'failed' ||
+        bulkTranscriptJsonExportStatus === 'partial'
+        ? 2800
+        : 2000,
+    );
+    const t = window.setTimeout(
+      () => {
+        setBulkTranscriptJsonExportStatus('idle');
+        setBulkTranscriptJsonExportedCount(null);
+      },
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [bulkTranscriptJsonExportStatus]);
+
+  useEffect(() => {
+    if (
+      bulkTranscriptCopyStatus === 'idle' ||
+      bulkTranscriptCopyStatus === 'busy'
+    ) {
+      return;
+    }
+    const hold = motionDuration(
+      bulkTranscriptCopyStatus === 'failed' ||
+        bulkTranscriptCopyStatus === 'partial'
+        ? 2800
+        : 2000,
+    );
+    const t = window.setTimeout(
+      () => {
+        setBulkTranscriptCopyStatus('idle');
+        setBulkTranscriptCopiedCount(null);
+      },
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [bulkTranscriptCopyStatus]);
+
+  useEffect(() => {
+    if (importChatsStatus === 'idle' || importChatsStatus === 'busy') return;
+    const hold = motionDuration(importChatsStatus === 'failed' ? 2800 : 2400);
+    const t = window.setTimeout(
+      () => {
+        setImportChatsStatus('idle');
+        setImportedChatsCount(null);
+      },
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [importChatsStatus]);
+
+  // Keep the stored filter in sync with reality: drop the pinned-only view
+  // when the last pinned chat is unpinned and normalize any stale value.
+  // Rendering uses `activeChatsPinFilter`, so this effect is only cleanup.
+  useEffect(() => {
+    const next = chatPinFilterUseful
+      ? normalizeSidebarChatsPinFilter(chatsPinFilter)
+      : SIDEBAR_CHATS_PIN_ALL;
+    if (next !== chatsPinFilter) {
+      setChatsPinFilter(next);
+    }
+  }, [chatsPinFilter, chatPinFilterUseful]);
 
   useEffect(() => {
     if (recentItemCopyStatus === 'idle') return;
@@ -556,7 +1069,34 @@ export function Sidebar({
     }
   };
 
-  const buildRecentsMarkdown = () => {
+  const handleDeleteSaved = async (item: SavedResponseItem) => {
+    if (!onDeleteSaved) return;
+    setPendingDeleteSavedId(null);
+    setDeleteSavedFailed(false);
+    try {
+      await onDeleteSaved(item);
+    } catch {
+      setDeleteSavedFailed(true);
+    }
+  };
+
+  const handleBulkDeleteSaved = async () => {
+    if (!onBulkDeleteSaved) return;
+    const ids = filteredSaved
+      .map((item) => Number(item.id))
+      .filter((id) => Number.isFinite(id));
+    if (ids.length === 0) return;
+    setConfirmBulkDeleteSaved(false);
+    setBulkDeleteStatus('busy');
+    try {
+      await onBulkDeleteSaved(ids);
+      setBulkDeleteStatus('done');
+    } catch {
+      setBulkDeleteStatus('failed');
+    }
+  };
+
+  const buildRecentsFilterNote = () => {
     const parts: string[] = [];
     if (activeFilter !== 'all') {
       parts.push(`category ${activeFilter.charAt(0).toUpperCase()}${activeFilter.slice(1)}`);
@@ -572,18 +1112,25 @@ export function Sidebar({
     const q = searchQuery.trim();
     if (q) parts.push(`search “${q}”`);
     if (recentsSort !== 'newest') parts.push(`sort: ${sidebarRecentsSortLabel(recentsSort)}`);
+    return parts.length > 0 ? parts.join(' · ') : undefined;
+  };
+
+  const buildRecentsItems = () =>
+    filteredTurns.map((turn) => ({
+      title: customTitles[turn.turn_id] || undefined,
+      prompt: turn.prompt,
+      category: turn.prompt_category,
+      winnerName:
+        turn.winnerName || AGENTS[turn.winner_id]?.name || turn.winner_id || undefined,
+      timestamp: turn.timestamp,
+      turnId: turn.turn_id,
+    }));
+
+  const buildRecentsMarkdown = () => {
     return formatArenaRecentsExport({
       totalCount: reversedTurns.length,
-      filterNote: parts.length > 0 ? parts.join(' · ') : undefined,
-      items: filteredTurns.map((turn) => ({
-        title: customTitles[turn.turn_id] || undefined,
-        prompt: turn.prompt,
-        category: turn.prompt_category,
-        winnerName:
-          turn.winnerName || AGENTS[turn.winner_id]?.name || turn.winner_id || undefined,
-        timestamp: turn.timestamp,
-        turnId: turn.turn_id,
-      })),
+      filterNote: buildRecentsFilterNote(),
+      items: buildRecentsItems(),
     });
   };
 
@@ -599,6 +1146,378 @@ export function Sidebar({
     const ok = downloadMarkdownFile(md, 'arena-recents');
     setDownloadRecentsStatus(ok ? 'done' : 'failed');
     if (ok) void track('arena_recents_downloaded');
+  };
+
+  const handleDownloadRecentsJson = () => {
+    const json = formatArenaRecentsJsonExport({
+      totalCount: reversedTurns.length,
+      filterNote: buildRecentsFilterNote(),
+      items: buildRecentsItems(),
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('arena-recents')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    setDownloadJsonRecentsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_recents_json_downloaded');
+  };
+
+  const handleDownloadRecentsCsv = () => {
+    const csv = formatArenaRecentsCsvExport({
+      items: buildRecentsItems(),
+    });
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('arena-recents')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    setDownloadCsvRecentsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_recents_csv_downloaded');
+  };
+
+  const buildChatsFilterNote = () => {
+    const q = chatSearchQuery.trim();
+    const bits: string[] = [];
+    if (activeChatsPinFilter === SIDEBAR_CHATS_PIN_ONLY) {
+      bits.push(
+        sidebarChatsPinFilterLabel(activeChatsPinFilter).toLowerCase(),
+      );
+    }
+    if (q) bits.push(`search “${q}”`);
+    if (chatsSort !== 'newest') bits.push(`sort: ${sidebarChatsSortLabel(chatsSort)}`);
+    return bits.length > 0 ? bits.join(' · ') : undefined;
+  };
+
+  const toArenaChatExportItem = (session: SessionSummary) => ({
+    sessionId: session.session_id,
+    title: session.title || null,
+    prompt: session.last_prompt || null,
+    topics: session.topics || [],
+    primaryTopic: session.primary_topic || null,
+    turnCount: session.turn_count,
+    pinned: session.pinned === true,
+    timestamp: session.last_active || null,
+  });
+
+  const buildChatsItems = () => filteredChats.map(toArenaChatExportItem);
+  const buildSelectedChatsItems = () =>
+    recentSessions
+      .filter((session) => selectedChatIds.has(session.session_id))
+      .map(toArenaChatExportItem);
+
+  const handleBulkCopyChats = async () => {
+    if (bulkCopyChatsInFlightRef.current) return;
+    const items = buildSelectedChatsItems();
+    setBulkExportChatsStatus('idle');
+    setBulkExportChatsJsonStatus('idle');
+    setBulkExportChatsCsvStatus('idle');
+    setBulkTranscriptExportStatus('idle');
+    setBulkTranscriptExportedCount(null);
+    setBulkTranscriptJsonExportStatus('idle');
+    setBulkTranscriptJsonExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
+    if (items.length === 0) {
+      setBulkCopiedChatsCount(null);
+      setBulkCopyChatsStatus('failed');
+      return;
+    }
+    bulkCopyChatsInFlightRef.current = true;
+    setBulkCopyChatsStatus('busy');
+    try {
+      const md = formatArenaChatsExport({
+        totalCount: items.length,
+        items,
+      });
+      const ok = await copyToClipboard(md);
+      setBulkCopiedChatsCount(ok ? items.length : null);
+      setBulkCopyChatsStatus(ok ? 'copied' : 'failed');
+      if (ok) {
+        void track('arena_selected_chats_copied', undefined, undefined, {
+          count: items.length,
+        });
+      }
+    } catch {
+      setBulkCopiedChatsCount(null);
+      setBulkCopyChatsStatus('failed');
+    } finally {
+      bulkCopyChatsInFlightRef.current = false;
+    }
+  };
+
+  const handleCopyChats = async () => {
+    const md = formatArenaChatsExport({
+      totalCount: recentSessions.length,
+      filterNote: buildChatsFilterNote(),
+      items: buildChatsItems(),
+    });
+    const ok = await copyToClipboard(md);
+    setCopyChatsStatus(ok ? 'copied' : 'failed');
+    if (ok) void track('arena_chats_copied');
+  };
+
+  const handleDownloadChats = () => {
+    const md = formatArenaChatsExport({
+      totalCount: recentSessions.length,
+      filterNote: buildChatsFilterNote(),
+      items: buildChatsItems(),
+    });
+    const ok = downloadMarkdownFile(md, 'arena-chats');
+    setDownloadChatsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_chats_downloaded');
+  };
+
+  const handleDownloadChatsJson = () => {
+    const json = formatArenaChatsJsonExport({
+      totalCount: recentSessions.length,
+      filterNote: buildChatsFilterNote(),
+      items: buildChatsItems(),
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('arena-chats')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    setDownloadJsonChatsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_chats_json_downloaded');
+  };
+
+  const handleDownloadChatsCsv = () => {
+    const csv = formatArenaChatsCsvExport({
+      items: buildChatsItems(),
+    });
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('arena-chats')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    setDownloadCsvChatsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_chats_csv_downloaded');
+  };
+
+  const handleBulkExportChats = () => {
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
+    const items = buildSelectedChatsItems();
+    if (items.length === 0) {
+      // The selection toolbar may still reference chats that no longer
+      // resolve (removed from another surface). Surface an honest failure
+      // instead of letting the click silently do nothing.
+      setBulkExportedChatsCount(null);
+      setBulkExportChatsJsonStatus('idle');
+      setBulkExportChatsCsvStatus('idle');
+      setBulkTranscriptExportStatus('idle');
+      setBulkTranscriptExportedCount(null);
+      setBulkTranscriptJsonExportStatus('idle');
+      setBulkTranscriptJsonExportedCount(null);
+      setBulkTranscriptCopyStatus('idle');
+      setBulkTranscriptCopiedCount(null);
+      setBulkExportChatsStatus('failed');
+      return;
+    }
+    setBulkExportChatsJsonStatus('idle');
+    setBulkExportChatsCsvStatus('idle');
+    setBulkTranscriptExportStatus('idle');
+    setBulkTranscriptExportedCount(null);
+    setBulkTranscriptJsonExportStatus('idle');
+    setBulkTranscriptJsonExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
+    const md = formatArenaChatsExport({
+      totalCount: items.length,
+      items,
+    });
+    const ok = downloadMarkdownFile(md, 'arena-selected-chats');
+    setBulkExportedChatsCount(ok ? items.length : null);
+    setBulkExportChatsStatus(ok ? 'done' : 'failed');
+    if (ok) {
+      void track('arena_selected_chats_exported', undefined, undefined, {
+        count: items.length,
+      });
+    }
+  };
+
+  const handleBulkExportChatsJson = () => {
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
+    const items = buildSelectedChatsItems();
+    if (items.length === 0) {
+      setBulkExportedChatsCount(null);
+      setBulkExportChatsStatus('idle');
+      setBulkExportChatsCsvStatus('idle');
+      setBulkTranscriptExportStatus('idle');
+      setBulkTranscriptExportedCount(null);
+      setBulkTranscriptJsonExportStatus('idle');
+      setBulkTranscriptJsonExportedCount(null);
+      setBulkTranscriptCopyStatus('idle');
+      setBulkTranscriptCopiedCount(null);
+      setBulkExportChatsJsonStatus('failed');
+      return;
+    }
+    setBulkExportChatsStatus('idle');
+    setBulkExportChatsCsvStatus('idle');
+    setBulkTranscriptExportStatus('idle');
+    setBulkTranscriptExportedCount(null);
+    setBulkTranscriptJsonExportStatus('idle');
+    setBulkTranscriptJsonExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
+    const json = formatArenaChatsJsonExport({
+      totalCount: items.length,
+      items,
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('arena-selected-chats')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    setBulkExportedChatsCount(ok ? items.length : null);
+    setBulkExportChatsJsonStatus(ok ? 'done' : 'failed');
+    if (ok) {
+      void track('arena_selected_chats_json_exported', undefined, undefined, {
+        count: items.length,
+      });
+    }
+  };
+
+  const handleBulkExportChatsCsv = () => {
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
+    const items = buildSelectedChatsItems();
+    if (items.length === 0) {
+      setBulkExportedChatsCount(null);
+      setBulkExportChatsStatus('idle');
+      setBulkExportChatsJsonStatus('idle');
+      setBulkTranscriptExportStatus('idle');
+      setBulkTranscriptExportedCount(null);
+      setBulkTranscriptJsonExportStatus('idle');
+      setBulkTranscriptJsonExportedCount(null);
+      setBulkTranscriptCopyStatus('idle');
+      setBulkTranscriptCopiedCount(null);
+      setBulkExportChatsCsvStatus('failed');
+      return;
+    }
+    setBulkExportChatsStatus('idle');
+    setBulkExportChatsJsonStatus('idle');
+    setBulkTranscriptExportStatus('idle');
+    setBulkTranscriptExportedCount(null);
+    setBulkTranscriptJsonExportStatus('idle');
+    setBulkTranscriptJsonExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
+    const csv = formatArenaChatsCsvExport({
+      items,
+    });
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('arena-selected-chats')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    setBulkExportedChatsCount(ok ? items.length : null);
+    setBulkExportChatsCsvStatus(ok ? 'done' : 'failed');
+    if (ok) {
+      void track('arena_selected_chats_csv_exported', undefined, undefined, {
+        count: items.length,
+      });
+    }
+  };
+
+  const handleBulkExportChatTranscripts = async () => {
+    if (!onBulkExportTranscripts || bulkTranscriptExportStatus === 'busy') return;
+    const ids = [...selectedChatIds];
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
+    setBulkExportChatsStatus('idle');
+    setBulkExportChatsJsonStatus('idle');
+    setBulkExportChatsCsvStatus('idle');
+    setBulkExportedChatsCount(null);
+    setBulkTranscriptExportedCount(null);
+    setBulkTranscriptJsonExportStatus('idle');
+    setBulkTranscriptJsonExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
+    if (ids.length === 0) {
+      setBulkTranscriptExportStatus('failed');
+      return;
+    }
+    setBulkTranscriptExportStatus('busy');
+    try {
+      const exported = await onBulkExportTranscripts(ids);
+      if (exported === null || exported === undefined) {
+        setBulkTranscriptExportStatus('failed');
+        return;
+      }
+      setBulkTranscriptExportedCount(exported);
+      setBulkTranscriptExportStatus(exported < ids.length ? 'partial' : 'done');
+    } catch {
+      setBulkTranscriptExportStatus('failed');
+    }
+  };
+
+  const handleBulkExportChatTranscriptsJson = async () => {
+    if (!onBulkExportTranscriptsJson || bulkTranscriptJsonExportStatus === 'busy') {
+      return;
+    }
+    const ids = [...selectedChatIds];
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
+    setBulkExportChatsStatus('idle');
+    setBulkExportChatsJsonStatus('idle');
+    setBulkExportChatsCsvStatus('idle');
+    setBulkExportedChatsCount(null);
+    setBulkTranscriptExportStatus('idle');
+    setBulkTranscriptExportedCount(null);
+    setBulkTranscriptJsonExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
+    if (ids.length === 0) {
+      setBulkTranscriptJsonExportStatus('failed');
+      return;
+    }
+    setBulkTranscriptJsonExportStatus('busy');
+    try {
+      const exported = await onBulkExportTranscriptsJson(ids);
+      if (exported === null || exported === undefined) {
+        setBulkTranscriptJsonExportStatus('failed');
+        return;
+      }
+      setBulkTranscriptJsonExportedCount(exported);
+      setBulkTranscriptJsonExportStatus(
+        exported < ids.length ? 'partial' : 'done',
+      );
+    } catch {
+      setBulkTranscriptJsonExportStatus('failed');
+    }
+  };
+
+  const handleBulkCopyChatTranscripts = async () => {
+    if (!onBulkCopyTranscripts || bulkTranscriptCopyInFlightRef.current) return;
+    const ids = [...selectedChatIds];
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
+    setBulkExportChatsStatus('idle');
+    setBulkExportChatsJsonStatus('idle');
+    setBulkExportChatsCsvStatus('idle');
+    setBulkExportedChatsCount(null);
+    setBulkTranscriptExportStatus('idle');
+    setBulkTranscriptExportedCount(null);
+    setBulkTranscriptJsonExportStatus('idle');
+    setBulkTranscriptJsonExportedCount(null);
+    setBulkTranscriptCopiedCount(null);
+    if (ids.length === 0) {
+      setBulkTranscriptCopyStatus('failed');
+      return;
+    }
+    bulkTranscriptCopyInFlightRef.current = true;
+    setBulkTranscriptCopyStatus('busy');
+    try {
+      const copied = await onBulkCopyTranscripts(ids);
+      if (copied === null || copied === undefined) {
+        setBulkTranscriptCopyStatus('failed');
+        return;
+      }
+      setBulkTranscriptCopiedCount(copied);
+      setBulkTranscriptCopyStatus(copied < ids.length ? 'partial' : 'done');
+    } catch {
+      setBulkTranscriptCopyStatus('failed');
+    } finally {
+      bulkTranscriptCopyInFlightRef.current = false;
+    }
   };
 
   const handleCopyRecentItem = async (
@@ -661,11 +1580,41 @@ export function Sidebar({
     editInputRef.current?.select();
   }, [editingTurnId]);
 
+  useEffect(() => {
+    if (!editingSessionId) return;
+    sessionRenameInputRef.current?.focus();
+    sessionRenameInputRef.current?.select();
+  }, [editingSessionId]);
+
+  const resetBulkChatExportStatuses = () => {
+    setBulkExportChatsStatus('idle');
+    setBulkExportChatsJsonStatus('idle');
+    setBulkExportChatsCsvStatus('idle');
+    setBulkExportedChatsCount(null);
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
+    setBulkTranscriptExportStatus('idle');
+    setBulkTranscriptExportedCount(null);
+    setBulkTranscriptJsonExportStatus('idle');
+    setBulkTranscriptJsonExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
+  };
+
   const handleNewChatClick = () => {
     scrollAreaRef.current?.scrollTo({ top: 0, behavior: 'auto' });
     setOpenMenuTurnId(null);
     setConfirmDeleteTurnId(null);
     setEditingTurnId(null);
+    setSelectedChatIds(new Set());
+    chatSelectionAnchorRef.current = null;
+    setConfirmBulkDeleteChats(false);
+    resetBulkChatExportStatuses();
+    sessionRenameCancelledRef.current = true;
+    sessionRenameEditingIdRef.current = null;
+    setEditingSessionId(null);
+    setEditingSessionValue('');
+    setSessionRenameError(null);
     onNewChat();
   };
 
@@ -701,12 +1650,342 @@ export function Sidebar({
     setRenameError(null);
   };
 
+  const startSessionRename = (session: SessionSummary) => {
+    sessionRenameCancelledRef.current = false;
+    sessionRenameEditingIdRef.current = session.session_id;
+    setEditingSessionId(session.session_id);
+    setEditingSessionValue(
+      session.title || session.last_prompt || session.primary_topic || '',
+    );
+    setSessionRenameError(null);
+  };
+
+  const cancelSessionRename = () => {
+    sessionRenameCancelledRef.current = true;
+    sessionRenameEditingIdRef.current = null;
+    setEditingSessionId(null);
+    setEditingSessionValue('');
+    setSessionRenameError(null);
+  };
+
+  const saveSessionRename = async (sessionId: string) => {
+    if (sessionRenameCancelledRef.current || sessionRenameSavingIdsRef.current.has(sessionId)) {
+      return;
+    }
+    const issue = validateSidebarTurnTitle(editingSessionValue);
+    if (issue) {
+      setSessionRenameError(sidebarTurnTitleIssueMessage(issue));
+      sessionRenameInputRef.current?.focus();
+      return;
+    }
+    const nextValue = cleanSidebarTurnTitle(editingSessionValue);
+    sessionRenameSavingIdsRef.current.add(sessionId);
+    setSessionRenameBusyId(sessionId);
+    let ok: boolean;
+    try {
+      ok = (await onRenameSession?.(sessionId, nextValue)) !== false;
+    } catch {
+      ok = false;
+    } finally {
+      sessionRenameSavingIdsRef.current.delete(sessionId);
+      setSessionRenameBusyId((current) => (current === sessionId ? null : current));
+    }
+    if (!ok) {
+      if (sessionRenameEditingIdRef.current === sessionId) {
+        setSessionRenameError('Could not rename this chat. Please try again.');
+        sessionRenameInputRef.current?.focus();
+      }
+      return;
+    }
+    if (sessionRenameEditingIdRef.current === sessionId) {
+      sessionRenameCancelledRef.current = true;
+      sessionRenameEditingIdRef.current = null;
+      setEditingSessionId(null);
+      setEditingSessionValue('');
+      setSessionRenameError(null);
+    }
+  };
+
   const deleteTurn = (turnId: string) => {
     setDeletedTurnIds((prev) => new Set(prev).add(turnId));
     setOpenMenuTurnId(null);
     setConfirmDeleteTurnId(null);
     if (activeTurnId === turnId) {
       onNewChat();
+    }
+  };
+
+  const toggleChatSelected = (sessionId: string, range = false) => {
+    if (bulkChatsBusy) return;
+    setConfirmBulkDeleteChats(false);
+    setBulkPinChatsStatus('idle');
+    setBulkDuplicateChatsStatus('idle');
+    resetBulkChatExportStatuses();
+    bulkPinUnpinActionRef.current = null;
+    const visibleIds = visibleChats.map((session) => session.session_id);
+    const anchorId = chatSelectionAnchorRef.current;
+    const anchorIndex = anchorId ? visibleIds.indexOf(anchorId) : -1;
+    const currentIndex = visibleIds.indexOf(sessionId);
+    if (range && anchorIndex !== -1 && currentIndex !== -1) {
+      const start = Math.min(anchorIndex, currentIndex);
+      const end = Math.max(anchorIndex, currentIndex);
+      setSelectedChatIds((prev) => {
+        const next = new Set(prev);
+        for (let i = start; i <= end; i += 1) {
+          next.add(visibleIds[i]);
+        }
+        return next;
+      });
+      return;
+    }
+    // No usable anchor (or a plain click): toggle the row and make it the new
+    // anchor. A stale anchor id that is no longer visible falls through here
+    // instead of silently selecting an out-of-date range.
+    chatSelectionAnchorRef.current = sessionId;
+    setSelectedChatIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        next.add(sessionId);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllFilteredChats = () => {
+    if (bulkChatsBusy) return;
+    // Once every chat in the current filter is staged, "Clear" must empty the
+    // whole selection - including chats selected under a previous filter that
+    // are no longer visible - instead of silently stranding hidden picks.
+    if (allFilteredChatsSelected) {
+      clearChatSelection();
+      return;
+    }
+    chatSelectionAnchorRef.current = null;
+    setConfirmBulkDeleteChats(false);
+    setBulkPinChatsStatus('idle');
+    setBulkDuplicateChatsStatus('idle');
+    resetBulkChatExportStatuses();
+    bulkPinUnpinActionRef.current = null;
+    setSelectedChatIds((prev) => {
+      const next = new Set(prev);
+      for (const session of filteredChats) {
+        next.add(session.session_id);
+      }
+      return next;
+    });
+  };
+
+  const clearChatSelection = () => {
+    if (bulkChatsBusy) return;
+    chatSelectionAnchorRef.current = null;
+    setConfirmBulkDeleteChats(false);
+    setBulkPinChatsStatus('idle');
+    setBulkDuplicateChatsStatus('idle');
+    resetBulkChatExportStatuses();
+    bulkPinUnpinActionRef.current = null;
+    setSelectedChatIds(new Set());
+  };
+
+  const handleImportChatsFile = async (file: File | null) => {
+    if (!file || !onImportChats || importChatsStatus === 'busy') return;
+    setImportChatsStatus('busy');
+    setImportedChatsCount(null);
+    try {
+      const count = await onImportChats(file);
+      if (typeof count === 'number' && count > 0) {
+        setImportedChatsCount(count);
+        setImportChatsStatus('done');
+        // Imported chats are unpinned and brand new; clear active search/filter
+        // so the restored chats are actually visible in the list.
+        setChatSearchQuery('');
+        setChatsPinFilter(SIDEBAR_CHATS_PIN_ALL);
+      } else {
+        setImportChatsStatus('failed');
+      }
+    } catch {
+      setImportChatsStatus('failed');
+    } finally {
+      if (importChatsInputRef.current) {
+        importChatsInputRef.current.value = '';
+      }
+    }
+  };
+
+  const importChatsControl = onImportChats ? (
+    <div
+      style={{
+        display: 'flex',
+        gap: 6,
+        marginBottom: recentSessions.length > 0 ? 8 : 0,
+        flexWrap: 'wrap',
+      }}
+    >
+      <button
+        type="button"
+        title="Import chats from a JSON transcript archive"
+        aria-label={
+          importChatsStatus === 'busy'
+            ? 'Importing chats'
+            : importChatsStatus === 'done'
+              ? 'Chats imported'
+              : importChatsStatus === 'failed'
+                ? 'Import failed'
+                : 'Import chats from JSON archive'
+        }
+        disabled={bulkChatsBusy}
+        onClick={() => importChatsInputRef.current?.click()}
+        style={{
+          background: 'none',
+          border: '0.5px solid #E0D8D0',
+          borderRadius: 6,
+          cursor: bulkChatsBusy ? 'default' : 'pointer',
+          color:
+            importChatsStatus === 'failed'
+              ? '#D85A30'
+              : importChatsStatus === 'done'
+                ? '#5A8C6A'
+                : '#F0B84E',
+          padding: '3px 8px',
+          fontSize: 10,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          fontFamily: 'var(--vp-font-sans)',
+        }}
+      >
+        {importChatsStatus === 'busy'
+          ? 'Importing'
+          : importChatsStatus === 'done'
+            ? `Imported ${importedChatsCount ?? 0}`
+            : importChatsStatus === 'failed'
+              ? 'Failed'
+              : 'Import'}
+      </button>
+      <input
+        ref={importChatsInputRef}
+        type="file"
+        accept=".json,application/json"
+        aria-label="Choose transcript archive file"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0] ?? null;
+          if (file) void handleImportChatsFile(file);
+        }}
+      />
+    </div>
+  ) : null;
+
+  const handleBulkDeleteChats = async () => {
+    if (!onBulkDeleteSessions || bulkDeleteChatsStatus === 'busy') return;
+    const ids = [...selectedChatIds];
+    if (ids.length === 0) return;
+    setConfirmBulkDeleteChats(false);
+    setBulkDeleteChatsStatus('busy');
+    try {
+      const deleted = await onBulkDeleteSessions(ids);
+      if (deleted === null) {
+        setBulkDeleteChatsStatus('failed');
+        return;
+      }
+      if (typeof deleted === 'number' && deleted < ids.length) {
+        setBulkDeleteChatsStatus('partial');
+        return;
+      }
+      setBulkDeleteChatsStatus('done');
+      setSelectedChatIds(new Set());
+      chatSelectionAnchorRef.current = null;
+    } catch {
+      setBulkDeleteChatsStatus('failed');
+    }
+  };
+
+  const handleBulkPinChats = async () => {
+    if (!onBulkPinSessions || bulkPinChatsStatus === 'busy') return;
+    const ids = [...selectedChatIds];
+    if (ids.length === 0) return;
+    const pinned = !allSelectedChatsPinned;
+    bulkPinUnpinActionRef.current = allSelectedChatsPinned;
+    setBulkPinChatsStatus('busy');
+    try {
+      const result = await onBulkPinSessions(ids, pinned);
+      if (!result) {
+        setBulkPinChatsStatus('failed');
+        return;
+      }
+      if (result.updated < ids.length) {
+        setBulkPinChatsStatus('partial');
+        return;
+      }
+      setBulkPinChatsStatus('done');
+    } catch {
+      setBulkPinChatsStatus('failed');
+    } finally {
+      bulkPinUnpinActionRef.current = null;
+    }
+  };
+
+  const handleBulkDuplicateChats = async () => {
+    if (!onBulkDuplicateSessions || bulkDuplicateChatsStatus === 'busy') return;
+    const ids = [...selectedChatIds];
+    if (ids.length === 0) return;
+    setBulkDuplicateChatsStatus('busy');
+    try {
+      const result = await onBulkDuplicateSessions(ids);
+      if (!result) {
+        setBulkDuplicateChatsStatus('failed');
+        return;
+      }
+      setBulkDuplicateChatsStatus(
+        result.duplicated < ids.length ? 'partial' : 'done',
+      );
+      setSelectedChatIds(new Set());
+      chatSelectionAnchorRef.current = null;
+    } catch {
+      setBulkDuplicateChatsStatus('failed');
+    }
+  };
+
+  const handleClearSessions = async () => {
+    if (!onClearSessions || clearSessionsStatus === 'busy') return;
+    setClearSessionsStatus('busy');
+    setSelectedChatIds(new Set());
+    chatSelectionAnchorRef.current = null;
+    setConfirmBulkDeleteChats(false);
+    try {
+      const cleared = await onClearSessions();
+      setClearSessionsStatus(cleared === null ? 'failed' : 'done');
+    } catch {
+      setClearSessionsStatus('failed');
+    }
+    setConfirmClearSessions(false);
+  };
+
+  const handleToggleSessionPin = async (sessionId: string, pinned: boolean) => {
+    if (!onToggleSessionPin || sessionPinBusyId) return;
+    setSessionPinBusyId(sessionId);
+    setSessionPinFailedId((current) => (current === sessionId ? null : current));
+    try {
+      const ok = await onToggleSessionPin(sessionId, pinned);
+      if (ok === false) setSessionPinFailedId(sessionId);
+    } catch {
+      setSessionPinFailedId(sessionId);
+    } finally {
+      setSessionPinBusyId((current) => (current === sessionId ? null : current));
+    }
+  };
+
+  const handleDuplicateSession = async (sessionId: string) => {
+    if (!onDuplicateSession || sessionDuplicateBusyId) return;
+    setSessionDuplicateBusyId(sessionId);
+    setSessionDuplicateFailedId((current) => (current === sessionId ? null : current));
+    try {
+      const ok = await onDuplicateSession(sessionId);
+      if (ok === false) setSessionDuplicateFailedId(sessionId);
+    } catch {
+      setSessionDuplicateFailedId(sessionId);
+    } finally {
+      setSessionDuplicateBusyId((current) => (current === sessionId ? null : current));
     }
   };
 
@@ -731,7 +2010,15 @@ export function Sidebar({
       >
         <div className="flex flex-col h-full px-4 py-6">
           <div className="mb-2">
-            <Button type="button" variant="primary" size="sm" fullWidth icon={Icons.plus(14)} onClick={handleNewChatClick}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              fullWidth
+              icon={Icons.plus(14)}
+              onClick={handleNewChatClick}
+              aria-keyshortcuts="Shift+N"
+            >
               New task
             </Button>
           </div>
@@ -762,6 +2049,17 @@ export function Sidebar({
                 navigate('/agent/watchlist');
               }}
             />
+            {canUseFeature('memory') ? (
+              <MenuAction
+                icon={<Sparkles style={{ width: '14px', height: '14px', color: '#6E8FA3' }} />}
+                label="Memory"
+                onClick={() => {
+                  void track('memory_nav_from_sidebar');
+                  onClose();
+                  navigate('/memory');
+                }}
+              />
+            ) : null}
             <MenuAction
               icon={<LayoutGrid style={{ width: '14px', height: '14px', color: '#A98CF8' }} />}
               label="Personas"
@@ -780,6 +2078,1344 @@ export function Sidebar({
               </div>
             )}
           </div>
+
+          {onImportChats && recentSessions.length === 0 ? (
+            <div style={{ margin: '1.2rem 0 0.6rem' }}>
+              <p
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.12em',
+                  color: '#A0A39A',
+                  margin: '0 0 8px',
+                }}
+              >
+                Restore chats
+              </p>
+              {importChatsControl}
+            </div>
+          ) : null}
+
+          {recentSessions.length > 0 ? (
+            <div style={{ margin: '1.2rem 0 0.6rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.12em',
+                    color: '#A0A39A',
+                    margin: 0,
+                  }}
+                >
+                  Chats
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 10, color: '#A0A39A' }}>
+                    {isChatFilterActive
+                      ? `${filteredChats.length} / ${recentSessions.length}`
+                      : recentSessions.length}
+                  </span>
+                  {canBulkManageChats && visibleChats.length > 0 ? (
+                    <button
+                      type="button"
+                      aria-label={
+                        allFilteredChatsSelected
+                          ? 'Clear chat selection'
+                          : `Select all ${filteredChats.length} ${filteredChats.length === 1 ? 'chat' : 'chats'}`
+                      }
+                      title={
+                        allFilteredChatsSelected
+                          ? 'Clear chat selection'
+                          : `Select all ${filteredChats.length} ${filteredChats.length === 1 ? 'chat' : 'chats'}`
+                      }
+                      onClick={toggleAllFilteredChats}
+                      disabled={bulkChatsBusy}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 5,
+                        cursor: bulkChatsBusy ? 'default' : 'pointer',
+                        color: allFilteredChatsSelected ? '#5A8C6A' : '#A0A39A',
+                        padding: '3px 6px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {allFilteredChatsSelected
+                        ? 'Clear'
+                        : filteredChats.length === 1
+                          ? 'Select all'
+                          : `Select all ${filteredChats.length}`}
+                    </button>
+                  ) : null}
+                  {onClearSessions && recentSessions.length > 0 ? (
+                    <button
+                      type="button"
+                      title="Clear all resumable chats"
+                      aria-label={
+                        clearSessionsStatus === 'busy'
+                          ? 'Clearing all chats'
+                          : confirmClearSessions
+                            ? 'Confirm clear all chats'
+                            : `Clear ${recentSessions.length} chats`
+                      }
+                      disabled={clearSessionsStatus === 'busy'}
+                      onClick={() => {
+                        if (confirmClearSessions) {
+                          void handleClearSessions();
+                        } else {
+                          setConfirmClearSessions(true);
+                        }
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: confirmClearSessions ? '#FEF2F2' : 'none',
+                        border: confirmClearSessions
+                          ? '0.5px solid #C0392B'
+                          : '0.5px solid #E0D8D0',
+                        borderRadius: 5,
+                        cursor: clearSessionsStatus === 'busy' ? 'default' : 'pointer',
+                        color:
+                          clearSessionsStatus === 'failed'
+                            ? '#D85A30'
+                            : confirmClearSessions
+                              ? '#C0392B'
+                              : '#A0A39A',
+                        padding: 3,
+                        lineHeight: 0,
+                      }}
+                    >
+                      <Trash2 style={{ width: 11, height: 11 }} aria-hidden />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <div style={{ position: 'relative', marginBottom: 8 }}>
+                <input
+                  id="sidebar-chats-search"
+                  ref={chatSearchInputRef}
+                  type="search"
+                  value={chatSearchQuery}
+                  onChange={(e) => setChatSearchQuery(e.target.value)}
+                  placeholder="Search chats…"
+                  aria-label="Search chats"
+                  autoComplete="off"
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: 12,
+                    fontFamily: 'var(--vp-font-sans)',
+                    color: '#1A1714',
+                    background: '#0B0C0A',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 8,
+                    padding: '7px 28px 7px 10px',
+                    outline: 'none',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(196,149,106,0.55)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#E0D8D0';
+                  }}
+                />
+                {chatSearchQuery ? (
+                  <button
+                    type="button"
+                    aria-label="Clear chat search"
+                    onClick={() => {
+                      setChatSearchQuery('');
+                      chatSearchInputRef.current?.focus();
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: 6,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      color: '#A0A39A',
+                      lineHeight: 1,
+                      padding: 4,
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+              <select
+                value={chatsSort}
+                onChange={(e) => setChatsSort(e.target.value as SidebarChatsSort)}
+                aria-label="Sort chats"
+                title="Sort chats"
+                style={{
+                  width: '100%',
+                  fontSize: 11,
+                  fontFamily: 'var(--vp-font-sans)',
+                  color: '#4A3728',
+                  background: '#0B0C0A',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: 6,
+                  padding: '5px 8px',
+                  cursor: 'pointer',
+                  marginBottom: 8,
+                }}
+              >
+                {SIDEBAR_CHATS_SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              {chatPinFilterUseful ? (
+                <select
+                  value={activeChatsPinFilter}
+                  onChange={(e) => {
+                    setChatsPinFilter(
+                      normalizeSidebarChatsPinFilter(e.target.value),
+                    );
+                  }}
+                  aria-label="Filter chats"
+                  title="Filter chats"
+                  style={{
+                    width: '100%',
+                    fontSize: 11,
+                    fontFamily: 'var(--vp-font-sans)',
+                    color: '#4A3728',
+                    background: '#0B0C0A',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 6,
+                    padding: '5px 8px',
+                    cursor: 'pointer',
+                    marginBottom: 8,
+                  }}
+                >
+                  {SIDEBAR_CHATS_PIN_FILTER_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              {recentSessions.length > 0 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 6,
+                    marginBottom: 8,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  {importChatsControl}
+                  <button
+                    type="button"
+                    title="Copy chats as markdown"
+                    aria-label={
+                      copyChatsStatus === 'copied'
+                        ? 'Chats copied'
+                        : copyChatsStatus === 'failed'
+                          ? 'Copy failed'
+                          : 'Copy chats as markdown'
+                    }
+                    onClick={() => void handleCopyChats()}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color:
+                        copyChatsStatus === 'failed'
+                          ? '#D85A30'
+                          : copyChatsStatus === 'copied'
+                            ? '#5A8C6A'
+                            : '#F0B84E',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    {copyChatsStatus === 'copied'
+                      ? 'Copied'
+                      : copyChatsStatus === 'failed'
+                        ? 'Failed'
+                        : 'Copy'}
+                  </button>
+                  <button
+                    type="button"
+                    title="Download chats as markdown"
+                    aria-label={
+                      downloadChatsStatus === 'done'
+                        ? 'Chats downloaded'
+                        : downloadChatsStatus === 'failed'
+                          ? 'Download failed'
+                          : 'Download chats as markdown'
+                    }
+                    onClick={() => handleDownloadChats()}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color:
+                        downloadChatsStatus === 'failed'
+                          ? '#D85A30'
+                          : downloadChatsStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#F0B84E',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    {downloadChatsStatus === 'done'
+                      ? 'Downloaded'
+                      : downloadChatsStatus === 'failed'
+                        ? 'Failed'
+                        : 'Download'}
+                  </button>
+                  <button
+                    type="button"
+                    title="Download chats as JSON"
+                    aria-label={
+                      downloadJsonChatsStatus === 'done'
+                        ? 'Chats JSON downloaded'
+                        : downloadJsonChatsStatus === 'failed'
+                          ? 'JSON download failed'
+                          : 'Download chats as JSON'
+                    }
+                    onClick={() => handleDownloadChatsJson()}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color:
+                        downloadJsonChatsStatus === 'failed'
+                          ? '#D85A30'
+                          : downloadJsonChatsStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#F0B84E',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    {downloadJsonChatsStatus === 'done'
+                      ? 'Saved JSON'
+                      : downloadJsonChatsStatus === 'failed'
+                        ? 'Failed'
+                        : 'JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    title="Download chats as CSV"
+                    aria-label={
+                      downloadCsvChatsStatus === 'done'
+                        ? 'Chats CSV downloaded'
+                        : downloadCsvChatsStatus === 'failed'
+                          ? 'CSV download failed'
+                          : 'Download chats as CSV'
+                    }
+                    onClick={() => handleDownloadChatsCsv()}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color:
+                        downloadCsvChatsStatus === 'failed'
+                          ? '#D85A30'
+                          : downloadCsvChatsStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#F0B84E',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    {downloadCsvChatsStatus === 'done'
+                      ? 'Saved CSV'
+                      : downloadCsvChatsStatus === 'failed'
+                        ? 'Failed'
+                        : 'CSV'}
+                  </button>
+                </div>
+              ) : null}
+              {selectedChatIds.size > 0 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    marginBottom: 8,
+                    padding: '6px 8px',
+                    background: '#F5F0EA',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                      minWidth: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: '#4A3728',
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {selectedChatIds.size}{' '}
+                      {selectedChatIds.size === 1 ? 'chat' : 'chats'} selected
+                    </span>
+                    {visibleChats.length > 1 ? (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: '#8A8278',
+                          lineHeight: 1.25,
+                        }}
+                      >
+                        Tip: shift-click a checkbox to select a range
+                      </span>
+                    ) : null}
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 6,
+                      flexWrap: 'wrap',
+                      justifyContent: 'flex-end',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Cancel chat selection"
+                      onClick={clearChatSelection}
+                      disabled={bulkChatsBusy}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 10,
+                        borderRadius: 6,
+                        color: '#A0A39A',
+                        background: '#F0EBE3',
+                        cursor: bulkChatsBusy ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    {onBulkPinSessions ? (
+                      <button
+                        type="button"
+                        aria-label={
+                          bulkPinBusyTarget
+                            ? `Unpin ${selectedChatIds.size} selected chats`
+                            : `Pin ${selectedChatIds.size} selected chats`
+                        }
+                        onClick={() => void handleBulkPinChats()}
+                        disabled={bulkChatsBusy}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          borderRadius: 6,
+                          color: '#FFFFFF',
+                          background: '#4A6FA5',
+                          cursor: bulkChatsBusy ? 'default' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        {bulkPinChatsStatus === 'busy'
+                          ? bulkPinBusyTarget
+                            ? 'Unpinning…'
+                            : 'Pinning…'
+                          : bulkPinBusyTarget
+                            ? 'Unpin'
+                            : 'Pin'}
+                      </button>
+                    ) : null}
+                    {onBulkDuplicateSessions ? (
+                      <button
+                        type="button"
+                        aria-label={`Duplicate ${selectedChatIds.size} selected chats`}
+                        onClick={() => void handleBulkDuplicateChats()}
+                        disabled={bulkChatsBusy}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          borderRadius: 6,
+                          color: '#FFFFFF',
+                          background: '#5A8C6A',
+                          cursor: bulkChatsBusy ? 'default' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        {bulkDuplicateChatsStatus === 'busy'
+                          ? 'Duplicating…'
+                          : 'Duplicate'}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      aria-label={
+                        bulkCopyChatsStatus === 'copied'
+                          ? `Copied ${bulkCopiedChatsCount ?? selectedChatIds.size} selected chat${(bulkCopiedChatsCount ?? selectedChatIds.size) === 1 ? '' : 's'}`
+                          : bulkCopyChatsStatus === 'busy'
+                            ? `Copying ${selectedChatIds.size} selected chat${selectedChatIds.size === 1 ? '' : 's'}…`
+                            : bulkCopyChatsStatus === 'failed'
+                              ? 'Selected chat copy failed'
+                              : `Copy ${selectedChatIds.size} selected chat${selectedChatIds.size === 1 ? '' : 's'} as markdown`
+                      }
+                      title="Copy selected chats as markdown"
+                      onClick={() => void handleBulkCopyChats()}
+                      disabled={bulkChatsBusy}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 10,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background:
+                          bulkCopyChatsStatus === 'failed'
+                            ? '#D85A30'
+                            : bulkCopyChatsStatus === 'copied'
+                              ? '#5A8C6A'
+                              : '#8C7355',
+                        cursor: bulkChatsBusy ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {bulkCopyChatsStatus === 'copied'
+                        ? 'Copied'
+                        : bulkCopyChatsStatus === 'busy'
+                          ? 'Copying…'
+                          : bulkCopyChatsStatus === 'failed'
+                            ? 'Failed'
+                            : 'Copy'}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={
+                        bulkExportChatsStatus === 'done'
+                          ? `Exported ${bulkExportedChatsCount ?? selectedChatIds.size} selected chats`
+                          : bulkExportChatsStatus === 'failed'
+                            ? 'Selected chat export failed'
+                            : `Export ${selectedChatIds.size} selected chats as markdown`
+                      }
+                      title="Export selected chats as markdown"
+                      onClick={handleBulkExportChats}
+                      disabled={bulkChatsBusy}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 10,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background:
+                          bulkExportChatsStatus === 'failed'
+                            ? '#D85A30'
+                            : bulkExportChatsStatus === 'done'
+                              ? '#5A8C6A'
+                              : '#8C7355',
+                        cursor: bulkChatsBusy ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {bulkExportChatsStatus === 'done'
+                        ? 'Exported'
+                        : bulkExportChatsStatus === 'failed'
+                          ? 'Failed'
+                          : 'Export'}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={
+                        bulkExportChatsJsonStatus === 'done'
+                          ? `Exported ${bulkExportedChatsCount ?? selectedChatIds.size} selected chats as JSON`
+                          : bulkExportChatsJsonStatus === 'failed'
+                            ? 'Selected chat JSON export failed'
+                            : `Export ${selectedChatIds.size} selected chats as JSON`
+                      }
+                      title="Export selected chats as JSON"
+                      onClick={handleBulkExportChatsJson}
+                      disabled={bulkChatsBusy}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 10,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background:
+                          bulkExportChatsJsonStatus === 'failed'
+                            ? '#D85A30'
+                            : bulkExportChatsJsonStatus === 'done'
+                              ? '#5A8C6A'
+                              : '#8C7355',
+                        cursor: bulkChatsBusy ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {bulkExportChatsJsonStatus === 'done'
+                        ? 'Saved JSON'
+                        : bulkExportChatsJsonStatus === 'failed'
+                          ? 'Failed'
+                          : 'JSON'}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={
+                        bulkExportChatsCsvStatus === 'done'
+                          ? `Exported ${bulkExportedChatsCount ?? selectedChatIds.size} selected chats as CSV`
+                          : bulkExportChatsCsvStatus === 'failed'
+                            ? 'Selected chat CSV export failed'
+                            : `Export ${selectedChatIds.size} selected chats as CSV`
+                      }
+                      title="Export selected chats as CSV"
+                      onClick={handleBulkExportChatsCsv}
+                      disabled={bulkChatsBusy}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 10,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background:
+                          bulkExportChatsCsvStatus === 'failed'
+                            ? '#D85A30'
+                            : bulkExportChatsCsvStatus === 'done'
+                              ? '#5A8C6A'
+                              : '#8C7355',
+                        cursor: bulkChatsBusy ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {bulkExportChatsCsvStatus === 'done'
+                        ? 'Saved CSV'
+                        : bulkExportChatsCsvStatus === 'failed'
+                          ? 'Failed'
+                        : 'CSV'}
+                    </button>
+                    {onBulkExportTranscripts ? (
+                      <button
+                        type="button"
+                        aria-label={
+                          bulkTranscriptExportStatus === 'done'
+                            ? `Exported ${bulkTranscriptExportedCount ?? selectedChatIds.size} selected chat${(bulkTranscriptExportedCount ?? selectedChatIds.size) === 1 ? '' : 's'} as transcripts`
+                            : bulkTranscriptExportStatus === 'partial'
+                              ? `Exported ${bulkTranscriptExportedCount ?? 0} of ${selectedChatIds.size} selected chats as transcripts`
+                              : bulkTranscriptExportStatus === 'busy'
+                                ? `Exporting ${selectedChatIds.size} selected chat transcript${selectedChatIds.size === 1 ? '' : 's'}…`
+                                : bulkTranscriptExportStatus === 'failed'
+                                  ? 'Selected chat transcript export failed'
+                                  : `Export ${selectedChatIds.size} selected chat${selectedChatIds.size === 1 ? '' : 's'} as transcripts`
+                        }
+                        title="Export selected chats as full transcripts"
+                        onClick={() => void handleBulkExportChatTranscripts()}
+                        disabled={bulkChatsBusy}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          borderRadius: 6,
+                          color: '#FFFFFF',
+                          background:
+                            bulkTranscriptExportStatus === 'failed'
+                              ? '#D85A30'
+                              : bulkTranscriptExportStatus === 'done'
+                                ? '#5A8C6A'
+                                : '#8C7355',
+                          cursor: bulkChatsBusy ? 'default' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        {bulkTranscriptExportStatus === 'busy'
+                          ? 'Transcripts…'
+                          : bulkTranscriptExportStatus === 'done'
+                            ? 'Saved'
+                            : bulkTranscriptExportStatus === 'partial'
+                              ? 'Partial'
+                          : bulkTranscriptExportStatus === 'failed'
+                            ? 'Failed'
+                            : 'Transcripts'}
+                      </button>
+                    ) : null}
+                    {onBulkExportTranscriptsJson ? (
+                      <button
+                        type="button"
+                        aria-label={
+                          bulkTranscriptJsonExportStatus === 'done'
+                            ? `Exported ${bulkTranscriptJsonExportedCount ?? selectedChatIds.size} selected chat${(bulkTranscriptJsonExportedCount ?? selectedChatIds.size) === 1 ? '' : 's'} as JSON transcripts`
+                            : bulkTranscriptJsonExportStatus === 'partial'
+                              ? `Exported ${bulkTranscriptJsonExportedCount ?? 0} of ${selectedChatIds.size} selected chats as JSON transcripts`
+                              : bulkTranscriptJsonExportStatus === 'busy'
+                                ? `Exporting ${selectedChatIds.size} selected chat transcript${selectedChatIds.size === 1 ? '' : 's'} as JSON…`
+                                : bulkTranscriptJsonExportStatus === 'failed'
+                                  ? 'Selected chat transcript JSON export failed'
+                                  : `Export ${selectedChatIds.size} selected chat${selectedChatIds.size === 1 ? '' : 's'} as JSON transcripts`
+                        }
+                        title="Export selected chats as JSON transcripts"
+                        onClick={() => void handleBulkExportChatTranscriptsJson()}
+                        disabled={bulkChatsBusy}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          borderRadius: 6,
+                          color: '#FFFFFF',
+                          background:
+                            bulkTranscriptJsonExportStatus === 'failed'
+                              ? '#D85A30'
+                              : bulkTranscriptJsonExportStatus === 'done'
+                                ? '#5A8C6A'
+                                : '#8C7355',
+                          cursor: bulkChatsBusy ? 'default' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        {bulkTranscriptJsonExportStatus === 'busy'
+                          ? 'JSON…'
+                          : bulkTranscriptJsonExportStatus === 'done'
+                            ? 'Saved'
+                            : bulkTranscriptJsonExportStatus === 'partial'
+                              ? 'Partial'
+                              : bulkTranscriptJsonExportStatus === 'failed'
+                                ? 'Failed'
+                                : 'JSON transcripts'}
+                      </button>
+                    ) : null}
+                    {onBulkCopyTranscripts ? (
+                      <button
+                        type="button"
+                        aria-label={
+                          bulkTranscriptCopyStatus === 'done'
+                            ? `Copied ${bulkTranscriptCopiedCount ?? selectedChatIds.size} selected chat${(bulkTranscriptCopiedCount ?? selectedChatIds.size) === 1 ? '' : 's'} as transcripts`
+                            : bulkTranscriptCopyStatus === 'partial'
+                              ? `Copied ${bulkTranscriptCopiedCount ?? 0} of ${selectedChatIds.size} selected chats as transcripts`
+                              : bulkTranscriptCopyStatus === 'busy'
+                                ? `Copying ${selectedChatIds.size} selected chat transcript${selectedChatIds.size === 1 ? '' : 's'}…`
+                                : bulkTranscriptCopyStatus === 'failed'
+                                  ? 'Selected chat transcript copy failed'
+                                  : `Copy ${selectedChatIds.size} selected chat${selectedChatIds.size === 1 ? '' : 's'} as transcripts`
+                        }
+                        title="Copy selected chats as full transcripts"
+                        onClick={() => void handleBulkCopyChatTranscripts()}
+                        disabled={bulkChatsBusy}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          borderRadius: 6,
+                          color: '#FFFFFF',
+                          background:
+                            bulkTranscriptCopyStatus === 'failed'
+                              ? '#D85A30'
+                              : bulkTranscriptCopyStatus === 'done'
+                                ? '#5A8C6A'
+                                : '#8C7355',
+                          cursor: bulkChatsBusy ? 'default' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        {bulkTranscriptCopyStatus === 'busy'
+                          ? 'Copying…'
+                          : bulkTranscriptCopyStatus === 'done'
+                            ? 'Copied'
+                            : bulkTranscriptCopyStatus === 'partial'
+                              ? 'Partial'
+                              : bulkTranscriptCopyStatus === 'failed'
+                                ? 'Failed'
+                                : 'Copy transcripts'}
+                      </button>
+                    ) : null}
+                    {onBulkDeleteSessions ? (
+                      <button
+                        type="button"
+                        aria-label={`Delete ${selectedChatIds.size} selected chats`}
+                        onClick={() => setConfirmBulkDeleteChats(true)}
+                        disabled={bulkChatsBusy}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          borderRadius: 6,
+                          color: '#FFFFFF',
+                          background: '#C0392B',
+                          cursor: bulkChatsBusy ? 'default' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        {bulkDeleteChatsStatus === 'busy' ? 'Deleting…' : 'Delete'}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              {confirmBulkDeleteChats ? (
+                <div
+                  role="dialog"
+                  aria-label="Delete selected chats"
+                  style={{
+                    marginBottom: 8,
+                    padding: '8px 10px',
+                    background: '#FFF7F5',
+                    border: '0.5px solid #E3B7A7',
+                    borderRadius: 8,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: '0 0 8px',
+                      fontSize: 12,
+                      color: '#1A1714',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Delete {selectedChatIds.size}{' '}
+                    {selectedChatIds.size === 1 ? 'selected chat' : 'selected chats'}?
+                    This cannot be undone.
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmBulkDeleteChats(false)}
+                      disabled={bulkDeleteChatsStatus === 'busy'}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 11,
+                        borderRadius: 6,
+                        color: '#A0A39A',
+                        background: '#F0EBE3',
+                        cursor:
+                          bulkDeleteChatsStatus === 'busy' ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleBulkDeleteChats()}
+                      disabled={bulkDeleteChatsStatus === 'busy'}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 11,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background: '#C0392B',
+                        cursor:
+                          bulkDeleteChatsStatus === 'busy' ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {bulkDeleteChatsStatus === 'busy'
+                        ? 'Deleting…'
+                        : 'Delete selected'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {bulkDeleteChatsStatus === 'failed' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Could not delete selected chats. Please try again.
+                </p>
+              ) : bulkDeleteChatsStatus === 'partial' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Some selected chats could not be deleted and are still
+                  selected.
+                </p>
+              ) : null}
+              {bulkPinChatsStatus === 'failed' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Could not update selected chats. Please try again.
+                </p>
+              ) : bulkPinChatsStatus === 'partial' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Some selected chats could not be updated.
+                </p>
+              ) : null}
+              {bulkDuplicateChatsStatus === 'failed' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Could not duplicate selected chats. Please try again.
+                </p>
+              ) : bulkDuplicateChatsStatus === 'partial' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Some selected chats could not be duplicated.
+                </p>
+              ) : null}
+              {confirmClearSessions ? (
+                <div
+                  role="dialog"
+                  aria-label="Clear all chats"
+                  style={{
+                    marginBottom: 8,
+                    padding: '8px 10px',
+                    background: '#FFF7F5',
+                    border: '0.5px solid #E3B7A7',
+                    borderRadius: 8,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: '0 0 8px',
+                      fontSize: 12,
+                      color: '#1A1714',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Clear all {recentSessions.length} resumable{' '}
+                    {recentSessions.length === 1 ? 'chat' : 'chats'}? This cannot
+                    be undone.
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClearSessions(false)}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 11,
+                        borderRadius: 6,
+                        color: '#A0A39A',
+                        background: '#F0EBE3',
+                        cursor: 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleClearSessions()}
+                      disabled={clearSessionsStatus === 'busy'}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 11,
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        background: '#C0392B',
+                        cursor: clearSessionsStatus === 'busy' ? 'default' : 'pointer',
+                        border: 'none',
+                      }}
+                    >
+                      {clearSessionsStatus === 'busy' ? 'Clearing…' : 'Clear all'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {clearSessionsStatus === 'failed' ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Could not clear chats. Please try again.
+                </p>
+              ) : null}
+              {sessionPinFailedId ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Couldn't update pin. Please try again.
+                </p>
+              ) : null}
+              {sessionDuplicateFailedId ? (
+                <p
+                  role="alert"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#D85A30',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Couldn't duplicate this chat. Please try again.
+                </p>
+              ) : null}
+              {(bulkDeleteChatsStatus !== 'idle' &&
+                bulkDeleteChatsStatus !== 'busy') ||
+              (bulkPinChatsStatus !== 'idle' &&
+                bulkPinChatsStatus !== 'busy') ||
+              (bulkDuplicateChatsStatus !== 'idle' &&
+                bulkDuplicateChatsStatus !== 'busy') ||
+              bulkCopyChatsStatus !== 'idle' ||
+              bulkTranscriptCopyStatus !== 'idle' ||
+              bulkTranscriptExportStatus !== 'idle' ||
+              bulkTranscriptJsonExportStatus !== 'idle' ||
+              bulkExportChatsStatus !== 'idle' ||
+              bulkExportChatsJsonStatus !== 'idle' ||
+              bulkExportChatsCsvStatus !== 'idle' ||
+              copyChatsStatus !== 'idle' ||
+              downloadChatsStatus !== 'idle' ||
+              downloadJsonChatsStatus !== 'idle' ||
+              downloadCsvChatsStatus !== 'idle' ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    position: 'absolute',
+                    width: 1,
+                    height: 1,
+                    padding: 0,
+                    margin: -1,
+                    overflow: 'hidden',
+                    clip: 'rect(0, 0, 0, 0)',
+                    whiteSpace: 'nowrap',
+                    border: 0,
+                  }}
+                >
+                  {bulkTranscriptCopyStatus === 'busy'
+                    ? `Copying ${selectedChatIds.size} selected chat transcript${selectedChatIds.size === 1 ? '' : 's'}…`
+                    : bulkTranscriptCopyStatus === 'done'
+                      ? `${bulkTranscriptCopiedCount ?? selectedChatIds.size} ${(bulkTranscriptCopiedCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} copied as transcripts`
+                      : bulkTranscriptCopyStatus === 'partial'
+                        ? 'Some selected chat transcripts could not be copied'
+                        : bulkTranscriptCopyStatus === 'failed'
+                          ? 'Could not copy selected chat transcripts'
+                          : bulkTranscriptExportStatus === 'busy'
+                    ? `Exporting ${selectedChatIds.size} selected chat transcript${selectedChatIds.size === 1 ? '' : 's'}…`
+                    : bulkTranscriptExportStatus === 'done'
+                      ? `${bulkTranscriptExportedCount ?? selectedChatIds.size} ${(bulkTranscriptExportedCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} exported as transcripts`
+                      : bulkTranscriptExportStatus === 'partial'
+                        ? 'Some selected chat transcripts could not be exported'
+                        : bulkTranscriptExportStatus === 'failed'
+                          ? 'Could not export selected chat transcripts'
+                          : bulkTranscriptJsonExportStatus === 'busy'
+                    ? `Exporting ${selectedChatIds.size} selected chat transcript${selectedChatIds.size === 1 ? '' : 's'} as JSON…`
+                    : bulkTranscriptJsonExportStatus === 'done'
+                      ? `${bulkTranscriptJsonExportedCount ?? selectedChatIds.size} ${(bulkTranscriptJsonExportedCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} exported as JSON transcripts`
+                      : bulkTranscriptJsonExportStatus === 'partial'
+                        ? 'Some selected chat transcripts could not be exported as JSON'
+                        : bulkTranscriptJsonExportStatus === 'failed'
+                          ? 'Could not export selected chat transcripts as JSON'
+                          : bulkCopyChatsStatus === 'busy'
+                    ? 'Copying selected chats to clipboard…'
+                    : bulkCopyChatsStatus === 'copied'
+                      ? `${bulkCopiedChatsCount ?? selectedChatIds.size} ${(bulkCopiedChatsCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} copied to clipboard`
+                      : bulkCopyChatsStatus === 'failed'
+                        ? 'Could not copy selected chats'
+                      : copyChatsStatus === 'copied'
+                        ? 'Arena chats copied to clipboard'
+                        : copyChatsStatus === 'failed'
+                          ? 'Could not copy Arena chats'
+                          : bulkPinChatsStatus === 'partial'
+                        ? 'Some selected chats could not be updated'
+                        : bulkPinChatsStatus === 'done'
+                          ? 'Selected chats updated'
+                          : bulkPinChatsStatus === 'failed'
+                            ? 'Could not update selected chats'
+                            : bulkDuplicateChatsStatus === 'partial'
+                              ? 'Some selected chats could not be duplicated'
+                              : bulkDuplicateChatsStatus === 'done'
+                                ? 'Selected chats duplicated'
+                                : bulkDuplicateChatsStatus === 'failed'
+                                  ? 'Could not duplicate selected chats'
+                                  : bulkDeleteChatsStatus === 'partial'
+                                    ? 'Some selected chats could not be deleted'
+                                    : bulkDeleteChatsStatus === 'done'
+                                      ? 'Selected chats deleted'
+                                  : bulkDeleteChatsStatus === 'failed'
+                                    ? 'Could not delete selected chats'
+                                    : bulkExportChatsStatus === 'done'
+                                      ? `${bulkExportedChatsCount ?? selectedChatIds.size} ${(bulkExportedChatsCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} exported`
+                                      : bulkExportChatsStatus === 'failed'
+                                        ? 'Could not export selected chats'
+                                        : bulkExportChatsJsonStatus === 'done'
+                                          ? `${bulkExportedChatsCount ?? selectedChatIds.size} ${(bulkExportedChatsCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} exported as JSON`
+                                          : bulkExportChatsJsonStatus === 'failed'
+                                            ? 'Could not export selected chats as JSON'
+                                            : bulkExportChatsCsvStatus === 'done'
+                                              ? `${bulkExportedChatsCount ?? selectedChatIds.size} ${(bulkExportedChatsCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} exported as CSV`
+                                              : bulkExportChatsCsvStatus === 'failed'
+                                                ? 'Could not export selected chats as CSV'
+                                      : downloadChatsStatus === 'done'
+                                        ? 'Arena chats downloaded'
+                                        : downloadChatsStatus === 'failed'
+                                          ? 'Could not download Arena chats'
+                                          : downloadJsonChatsStatus === 'done'
+                                            ? 'Arena chats JSON downloaded'
+                                            : downloadJsonChatsStatus === 'failed'
+                                              ? 'Could not download Arena chats JSON'
+                                              : downloadCsvChatsStatus === 'done'
+                                                ? 'Arena chats CSV downloaded'
+                                                : downloadCsvChatsStatus === 'failed'
+                                                  ? 'Could not download Arena chats CSV'
+                                                  : ''}
+                </div>
+              ) : null}
+              {isChatSearchActive && filteredChats.length === 0 ? (
+                <p
+                  role="status"
+                  style={{
+                    margin: '4px 2px 0',
+                    fontSize: 11,
+                    color: '#A0A39A',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  No chats match “{chatSearchQuery.trim()}”.{' '}
+                  <button
+                    type="button"
+                    className="sidebar-text-link"
+                    style={{ fontSize: 11 }}
+                    onClick={() => {
+                      setChatSearchQuery('');
+                      chatSearchInputRef.current?.focus();
+                    }}
+                  >
+                    Clear search
+                  </button>
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {visibleChats.map((session) => {
+                    const displayTitle =
+                      session.title ||
+                      session.last_prompt ||
+                      session.primary_topic ||
+                      'Untitled chat';
+                    const topicOnlyMatch = isChatSearchActive
+                      ? findTopicOnlyMatch(session, chatSearchQuery)
+                      : null;
+                    if (editingSessionId === session.session_id) {
+                      return (
+                        <div
+                          key={session.session_id}
+                          className="session-card session-card--editing"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            ref={sessionRenameInputRef}
+                            value={editingSessionValue}
+                            maxLength={SIDEBAR_TURN_TITLE_MAX + 20}
+                            aria-invalid={Boolean(sessionRenameError)}
+                            aria-label="Rename chat"
+                            onChange={(e) => {
+                              setEditingSessionValue(e.target.value);
+                              if (sessionRenameError) setSessionRenameError(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void saveSessionRename(session.session_id);
+                              }
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                cancelSessionRename();
+                              }
+                            }}
+                            onBlur={() => {
+                              if (!sessionRenameCancelledRef.current) {
+                                void saveSessionRename(session.session_id);
+                              }
+                            }}
+                            className="w-full bg-white border border-border rounded-md px-2 py-1 text-[13px] text-text-primary outline-none"
+                            style={{
+                              borderColor: sessionRenameError ? '#D85A30' : undefined,
+                            }}
+                          />
+                          {sessionRenameError ? (
+                            <p
+                              role="alert"
+                              style={{
+                                margin: '4px 8px 0',
+                                fontSize: 11,
+                                color: '#D85A30',
+                                lineHeight: 1.35,
+                              }}
+                            >
+                              {sessionRenameError}
+                            </p>
+                          ) : null}
+                          {sessionRenameBusyId === session.session_id ? (
+                            <p
+                              style={{
+                                margin: '4px 8px 0',
+                                fontSize: 11,
+                                color: '#A0A39A',
+                              }}
+                            >
+                              Saving…
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div
+                        key={session.session_id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        {canBulkManageChats ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`Select chat: ${displayTitle}`}
+                            checked={selectedChatIds.has(session.session_id)}
+                            disabled={bulkChatsBusy}
+                            title={
+                              visibleChats.length > 1
+                                ? 'Select chat (shift-click to select a range)'
+                                : undefined
+                            }
+                            onChange={(event) =>
+                              toggleChatSelected(
+                                session.session_id,
+                                (event.nativeEvent as MouseEvent).shiftKey,
+                              )
+                            }
+                            style={{ flexShrink: 0, cursor: 'pointer' }}
+                          />
+                        ) : null}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <SessionCard
+                            prompt={displayTitle}
+                            promptNode={
+                              isChatSearchActive ? (
+                                <HighlightQuery text={displayTitle} query={chatSearchQuery} />
+                              ) : undefined
+                            }
+                            matchTopic={topicOnlyMatch}
+                            winnerAgentId=""
+                            timestamp={session.last_active || ''}
+                            isActive={session.session_id === activeSessionId}
+                            onClick={() => onSessionSelect?.(session.session_id)}
+                            onRename={
+                              onRenameSession
+                                ? () => startSessionRename(session)
+                                : undefined
+                            }
+                            onDelete={
+                              onDeleteSession
+                                ? () => {
+                                    void onDeleteSession(session.session_id);
+                                  }
+                                : undefined
+                            }
+                            onPin={
+                              onToggleSessionPin
+                                ? () => {
+                                    void handleToggleSessionPin(
+                                      session.session_id,
+                                      !(session.pinned === true),
+                                    );
+                                  }
+                                : undefined
+                            }
+                            onDuplicate={
+                              onDuplicateSession && session.turn_count > 0
+                                ? () => {
+                                    void handleDuplicateSession(session.session_id);
+                                  }
+                                : undefined
+                            }
+                            pinned={session.pinned === true}
+                            busy={sessionPinBusyId !== null}
+                            duplicateBusy={
+                              sessionDuplicateBusyId === session.session_id
+                            }
+                            messageCount={session.turn_count}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {!isChatFilterActive && recentSessions.length > 5 ? (
+                <button
+                  type="button"
+                  className="sidebar-text-link"
+                  style={{ marginTop: 6, fontSize: 11 }}
+                  onClick={() => setShowAllChats((prev) => !prev)}
+                  aria-expanded={showAllChats}
+                >
+                  {showAllChats ? 'Show fewer chats' : `Show all ${recentSessions.length} chats`}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
           <div style={{ margin: '1.2rem 0 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -868,10 +3504,83 @@ export function Sidebar({
                       ? 'Failed'
                       : 'Download'}
                 </button>
+                <button
+                  type="button"
+                  title="Download recents as JSON"
+                  aria-label={
+                    downloadJsonRecentsStatus === 'done'
+                      ? 'Recents JSON downloaded'
+                      : downloadJsonRecentsStatus === 'failed'
+                        ? 'JSON download failed'
+                        : 'Download recents as JSON'
+                  }
+                  onClick={() => handleDownloadRecentsJson()}
+                  style={{
+                    background: 'none',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    color:
+                      downloadJsonRecentsStatus === 'failed'
+                        ? '#D85A30'
+                        : downloadJsonRecentsStatus === 'done'
+                          ? '#5A8C6A'
+                          : '#F0B84E',
+                    padding: '3px 8px',
+                    fontSize: 10,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--vp-font-sans)',
+                  }}
+                >
+                  {downloadJsonRecentsStatus === 'done'
+                    ? 'Saved JSON'
+                    : downloadJsonRecentsStatus === 'failed'
+                      ? 'Failed'
+                      : 'JSON'}
+                </button>
+                <button
+                  type="button"
+                  title="Download recents as CSV"
+                  aria-label={
+                    downloadCsvRecentsStatus === 'done'
+                      ? 'Recents CSV downloaded'
+                      : downloadCsvRecentsStatus === 'failed'
+                        ? 'CSV download failed'
+                        : 'Download recents as CSV'
+                  }
+                  onClick={() => handleDownloadRecentsCsv()}
+                  style={{
+                    background: 'none',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    color:
+                      downloadCsvRecentsStatus === 'failed'
+                        ? '#D85A30'
+                        : downloadCsvRecentsStatus === 'done'
+                          ? '#5A8C6A'
+                          : '#F0B84E',
+                    padding: '3px 8px',
+                    fontSize: 10,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--vp-font-sans)',
+                  }}
+                >
+                  {downloadCsvRecentsStatus === 'done'
+                    ? 'Saved CSV'
+                    : downloadCsvRecentsStatus === 'failed'
+                      ? 'Failed'
+                      : 'CSV'}
+                </button>
               </div>
             ) : null}
           </div>
-          {copyRecentsStatus !== 'idle' || downloadRecentsStatus !== 'idle' ? (
+          {copyRecentsStatus !== 'idle' ||
+          downloadRecentsStatus !== 'idle' ||
+          downloadJsonRecentsStatus !== 'idle' ||
+          downloadCsvRecentsStatus !== 'idle' ? (
             <div
               role="status"
               aria-live="polite"
@@ -895,7 +3604,15 @@ export function Sidebar({
                     ? 'Arena recents downloaded'
                     : downloadRecentsStatus === 'failed'
                       ? 'Could not download Arena recents'
-                      : ''}
+                      : downloadJsonRecentsStatus === 'done'
+                        ? 'Arena recents JSON downloaded'
+                        : downloadJsonRecentsStatus === 'failed'
+                          ? 'Could not download Arena recents JSON'
+                          : downloadCsvRecentsStatus === 'done'
+                            ? 'Arena recents CSV downloaded'
+                            : downloadCsvRecentsStatus === 'failed'
+                              ? 'Could not download Arena recents CSV'
+                              : ''}
             </div>
           ) : null}
           <div className="flex items-center gap-2 mb-2">
@@ -1468,6 +4185,58 @@ export function Sidebar({
                     <button
                       type="button"
                       disabled={
+                        bulkDeleteStatus === 'busy' ||
+                        filteredSaved.length === 0
+                      }
+                      title="Delete all shown saved takes"
+                      aria-label={
+                        confirmBulkDeleteSaved
+                          ? 'Confirm deleting shown saved takes'
+                          : bulkDeleteStatus === 'busy'
+                            ? 'Deleting shown saved takes'
+                            : `Delete ${filteredSaved.length} shown saved takes`
+                      }
+                      onClick={() => {
+                        setPendingDeleteSavedId(null);
+                        setConfirmBulkDeleteSaved((prev) => !prev);
+                      }}
+                      style={{
+                        background: confirmBulkDeleteSaved
+                          ? '#FEF2F2'
+                          : 'none',
+                        border: confirmBulkDeleteSaved
+                          ? '0.5px solid #C0392B'
+                          : '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: bulkDeleteStatus === 'busy' ? 'default' : 'pointer',
+                        color:
+                          bulkDeleteStatus === 'failed'
+                            ? '#D85A30'
+                            : bulkDeleteStatus === 'done'
+                              ? '#5A8C6A'
+                              : confirmBulkDeleteSaved
+                                ? '#C0392B'
+                                : '#F0B84E',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {bulkDeleteStatus === 'busy'
+                        ? 'Deleting…'
+                        : bulkDeleteStatus === 'done'
+                          ? 'Deleted'
+                          : bulkDeleteStatus === 'failed'
+                            ? 'Failed'
+                            : confirmBulkDeleteSaved
+                              ? 'Confirm?'
+                              : 'Delete shown'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
                         bulkPinStatus === 'busy' ||
                         filteredSaved.length === 0 ||
                         (savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
@@ -1666,12 +4435,75 @@ export function Sidebar({
                           : 'CSV'}
                     </button>
                   </div>
+                  {confirmBulkDeleteSaved ? (
+                    <div
+                      role="dialog"
+                      aria-label="Delete shown saved takes"
+                      style={{
+                        marginTop: 8,
+                        padding: '8px 10px',
+                        background: '#FFF7F5',
+                        border: '0.5px solid #E3B7A7',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: '0 0 8px',
+                          fontSize: 12,
+                          color: '#1A1714',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Delete {filteredSaved.length} shown saved {filteredSaved.length === 1 ? 'take' : 'takes'}?
+                      </p>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                          gap: 8,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setConfirmBulkDeleteSaved(false)}
+                          style={{
+                            padding: '5px 10px',
+                            fontSize: 11,
+                            borderRadius: 6,
+                            color: '#A0A39A',
+                            background: '#F0EBE3',
+                            cursor: 'pointer',
+                            border: 'none',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleBulkDeleteSaved()}
+                          style={{
+                            padding: '5px 10px',
+                            fontSize: 11,
+                            borderRadius: 6,
+                            color: '#FFFFFF',
+                            background: '#C0392B',
+                            cursor: 'pointer',
+                            border: 'none',
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 {copyAllSavedStatus !== 'idle' ||
                 downloadAllSavedStatus !== 'idle' ||
                 downloadJsonSavedStatus !== 'idle' ||
                 downloadCsvSavedStatus !== 'idle' ||
-                (bulkPinStatus !== 'idle' && bulkPinStatus !== 'busy') ? (
+                (bulkPinStatus !== 'idle' && bulkPinStatus !== 'busy') ||
+                (bulkDeleteStatus !== 'idle' && bulkDeleteStatus !== 'busy') ? (
                   <div
                     role="status"
                     aria-live="polite"
@@ -1711,9 +4543,14 @@ export function Sidebar({
                               ? 'Pin limit reached — some shown takes were not pinned'
                               : bulkPinStatus === 'failed'
                                 ? 'Could not update saved takes'
+                                : bulkDeleteStatus === 'done'
+                                  ? 'Shown saved takes deleted'
+                                  : bulkDeleteStatus === 'failed'
+                                    ? 'Could not delete shown saved takes'
                                 : ''}
                   </div>
                 ) : null}
+                <ExportPresetsPanel />
                 <div style={{ marginBottom: 8 }}>
                   {savedMindOptions.length > 2 ? (
                     <div
@@ -2040,7 +4877,10 @@ export function Sidebar({
                         <div key={item.id} className="sidebar-list-row sidebar-list-row--saved">
                           <button
                             type="button"
-                            onClick={() => onSavedItemClick(item)}
+                            onClick={() => {
+                              setPendingDeleteSavedId(null);
+                              onSavedItemClick(item);
+                            }}
                             style={{
                               flex: 1,
                               minWidth: 0,
@@ -2164,6 +5004,87 @@ export function Sidebar({
                               <Copy style={{ width: 13, height: 13 }} />
                             )}
                           </button>
+                          {pendingDeleteSavedId === item.id ? (
+                            <>
+                              <button
+                                type="button"
+                                aria-label={`Cancel delete ${displayName} take`}
+                                title="Cancel delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPendingDeleteSavedId(null);
+                                }}
+                                style={{
+                                  flexShrink: 0,
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 6,
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: '#A0A39A',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 0,
+                                }}
+                              >
+                                <span style={{ fontSize: 14, lineHeight: 1 }}>×</span>
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Confirm delete ${displayName} take`}
+                                title="Delete take"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleDeleteSaved(item);
+                                }}
+                                style={{
+                                  flexShrink: 0,
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 6,
+                                  border: 'none',
+                                  background: '#FEF2F2',
+                                  color: '#C0392B',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 0,
+                                }}
+                              >
+                                <Trash2 style={{ width: 13, height: 13 }} />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              aria-label={`Delete ${displayName} take`}
+                              title="Delete take"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmBulkDeleteSaved(false);
+                                setPendingDeleteSavedId(item.id);
+                              }}
+                              style={{
+                                flexShrink: 0,
+                                width: 28,
+                                height: 28,
+                                borderRadius: 6,
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#A0A39A',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                              }}
+                            >
+                              <Trash2 style={{ width: 13, height: 13 }} />
+                            </button>
+                          )}
                           <button
                             type="button"
                             aria-label={
@@ -2219,6 +5140,19 @@ export function Sidebar({
                     }}
                   >
                     Could not copy — try again.
+                  </p>
+                ) : null}
+                {deleteSavedFailed ? (
+                  <p
+                    role="alert"
+                    style={{
+                      fontSize: 11,
+                      color: '#993C1D',
+                      margin: '8px 0 0',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Could not delete — try again.
                   </p>
                 ) : null}
               </div>

@@ -5,10 +5,11 @@ import time
 
 from arena.core.blackboard import Blackboard, StageStatus
 
-logger = logging.getLogger(__name__)
 from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
+
+logger = logging.getLogger(__name__)
 
 AGENT_MAX_TOKENS = 4096
 
@@ -219,4 +220,3 @@ Remove unverifiable claims.
             logger.warning("Failed to assign model_used for synthesis", exc_info=True)
 
     return bb
-

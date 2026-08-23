@@ -109,7 +109,7 @@ async def test_watchlist_statistics_multiple_items(app_client, make_user, db_ses
     item1 = _seed_watch(db_session, user.id, question="Bitcoin question")
     item2 = _seed_watch(db_session, user.id, question="Ethereum question")
     item3 = _seed_watch(db_session, user.id, question="Inactive question", is_active=False)
-    
+
     _seed_task(db_session, user.id, item1.id, score=90)
     _seed_task(db_session, user.id, item1.id, score=85)
     _seed_task(db_session, user.id, item2.id, score=75)
@@ -197,6 +197,9 @@ async def test_watchlist_statistics_csv_export(app_client, make_user, db_session
     assert res.status_code == 200
     assert "text/csv" in res.headers["content-type"]
     text = res.text
+    # UTF-8 BOM so Excel detects Unicode question text; CRLF per RFC 4180.
+    assert text.startswith("\ufeff")
+    assert "\r\n" in text
     # Check summary section
     assert "Watchlist Statistics Summary" in text
     assert "Total Watchlist Items" in text
@@ -214,7 +217,7 @@ async def test_watchlist_statistics_csv_formula_injection_defense(app_client, ma
     """Test CSV export defends against formula injection."""
     user = _make_pro(make_user)
     db_session.commit()
-    item = _seed_watch(db_session, user.id, question="=cmd|'/c calc'!A1")
+    item = _seed_watch(db_session, user.id, question="  =cmd|'/c calc'!A1")
     _seed_task(db_session, user.id, item.id, score=90)
     db_session.commit()
 
@@ -224,5 +227,6 @@ async def test_watchlist_statistics_csv_formula_injection_defense(app_client, ma
     )
     assert res.status_code == 200
     text = res.text
-    # Formula should be quoted/escaped
-    assert "'=cmd|'/c calc'!A1" in text or "=cmd" not in text
+    # The formula trigger hidden behind leading whitespace must be neutralized.
+    assert "'  =cmd|'/c calc'!A1" in text
+    assert '"  =cmd|' not in text

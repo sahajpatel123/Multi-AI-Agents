@@ -425,7 +425,7 @@ export function AgentCard({
                   >
                     Why?
                   </button>
-                  
+
                   {/* Tooltip */}
                   {showContradictionTooltip && (
                     <div
@@ -464,7 +464,7 @@ export function AgentCard({
                   )}
                 </div>
               )}
-              
+
               {showFullTake && canExpandFullTake ? (
                 <div>
                   <div className="agent-response-text" style={{ fontStyle: 'normal' }}>
@@ -633,8 +633,9 @@ export function AgentCard({
                 title={
                   verifyInAgentDisabled
                     ? 'Pro feature — upgrade to verify answers in Agent Mode'
-                    : undefined
+                    : 'Verify the winning take in Agent Mode (Shift+V)'
                 }
+                aria-keyshortcuts="Shift+V"
                 disabled={verifyInAgentDisabled || verifyInAgentLoading}
                 onClick={(e) => {
                   e.stopPropagation();

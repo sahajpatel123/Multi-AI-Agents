@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { filterBySearchQuery, filterTurnsBySearchQuery } from './sidebarSearch';
+import {
+  filterBySearchQuery,
+  filterSessionsBySearchQuery,
+  filterTurnsBySearchQuery,
+  findTopicOnlyMatch,
+} from './sidebarSearch';
 
 const turns = [
   { turn_id: '1', prompt: 'Should I ship today?', title: 'Ship check' },
@@ -48,5 +53,81 @@ describe('filterBySearchQuery', () => {
     expect(
       filterBySearchQuery(saved, 'enough', (s) => [s.one_liner, s.prompt]).map((s) => s.id),
     ).toEqual([2]);
+  });
+});
+
+describe('filterSessionsBySearchQuery', () => {
+  const sessions = [
+    {
+      session_id: 'chat-1',
+      title: 'Launch plan review',
+      topics: ['launch', 'marketing'],
+      primary_topic: 'launch',
+      last_prompt: 'Should we ship today?',
+    },
+    {
+      session_id: 'chat-2',
+      title: null,
+      topics: [],
+      primary_topic: null,
+      last_prompt: 'Rewrite this email',
+    },
+  ];
+
+  it('returns all sessions when query is empty', () => {
+    expect(filterSessionsBySearchQuery(sessions, '')).toHaveLength(2);
+    expect(filterSessionsBySearchQuery(sessions, '   ')).toHaveLength(2);
+  });
+
+  it('matches title, last prompt, primary topic, and topic list case-insensitively', () => {
+    expect(filterSessionsBySearchQuery(sessions, 'PLAN').map((s) => s.session_id)).toEqual([
+      'chat-1',
+    ]);
+    expect(filterSessionsBySearchQuery(sessions, 'email').map((s) => s.session_id)).toEqual([
+      'chat-2',
+    ]);
+    expect(filterSessionsBySearchQuery(sessions, 'marketing').map((s) => s.session_id)).toEqual([
+      'chat-1',
+    ]);
+    expect(filterSessionsBySearchQuery(sessions, 'launch').map((s) => s.session_id)).toEqual([
+      'chat-1',
+    ]);
+  });
+
+  it('returns empty when nothing matches', () => {
+    expect(filterSessionsBySearchQuery(sessions, 'quantum')).toEqual([]);
+  });
+});
+
+describe('findTopicOnlyMatch', () => {
+  const session = {
+    session_id: 'chat-1',
+    title: 'Launch plan review',
+    topics: ['launch', 'marketing'],
+    primary_topic: 'launch',
+    last_prompt: 'Should we ship today?',
+  };
+
+  it('returns null for an empty query', () => {
+    expect(findTopicOnlyMatch(session, '')).toBeNull();
+    expect(findTopicOnlyMatch(session, '   ')).toBeNull();
+  });
+
+  it('returns null when the displayed fields already contain the query', () => {
+    expect(findTopicOnlyMatch(session, 'plan')).toBeNull();
+    expect(findTopicOnlyMatch(session, 'ship')).toBeNull();
+    expect(findTopicOnlyMatch(session, 'LAUNCH')).toBeNull();
+  });
+
+  it('returns the first topic that matches when only the topic list matches', () => {
+    expect(findTopicOnlyMatch(session, 'marketing')).toBe('marketing');
+  });
+
+  it('matches topic case-insensitively and handles missing topic arrays', () => {
+    expect(findTopicOnlyMatch({ ...session, topics: ['SEO', 'Ads'] }, 'seo')).toBe('SEO');
+    expect(
+      findTopicOnlyMatch({ ...session, topics: undefined }, 'marketing'),
+    ).toBeNull();
+    expect(findTopicOnlyMatch({ ...session, topics: [] }, 'marketing')).toBeNull();
   });
 });

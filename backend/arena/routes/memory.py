@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import Text, cast, or_
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
+from arena.core.datetime_utils import utcnow_naive
 from arena.core.input_validation import sanitize_model_text, sanitize_model_optional_text
 from arena.core.memory import get_memory_manager
 from arena.core.preferences import infer_preferences_from_session
@@ -30,6 +32,105 @@ memory_router = APIRouter(tags=["memory"])
 # can't pull the whole table in one request. The UI paginates; this is
 # the upper bound per page.
 MAX_SUMMARIES_PER_PAGE = 100
+MEMORY_BULK_DELETE_MAX = 50
+MemorySummarySort = Literal["newest", "oldest", "most_exchanges", "fewest_exchanges"]
+
+
+def _apply_summary_search(query, search: Optional[str]):
+    """Apply the Memory search consistently across list and export routes.
+
+    ``main_topics`` is a JSON column on PostgreSQL, so cast it to text before
+    using ``ILIKE``. Escaping the LIKE wildcards keeps a literal search such
+    as ``100%`` from turning into a broad query.
+    """
+    if not search:
+        return query
+
+    safe = sanitize_model_optional_text(search, max_length=100, field_name="search")
+    if not safe:
+        return query
+
+    escaped = safe.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f"%{escaped}%"
+    return query.filter(
+        or_(
+            SessionSummary.session_summary.ilike(pattern, escape="\\"),
+            cast(SessionSummary.main_topics, Text).ilike(pattern, escape="\\"),
+        )
+    )
+
+
+def _apply_summary_date_range(query, from_date: date | None, to_date: date | None):
+    """Limit summaries to inclusive UTC calendar dates when requested.
+
+    ``compressed_at`` is stored as a timezone-naive UTC timestamp. Using a
+    half-open interval for the end date keeps the filter inclusive without
+    losing records created in the final microsecond of that day.
+    """
+    if from_date:
+        query = query.filter(
+            SessionSummary.compressed_at >= datetime.combine(from_date, time.min)
+        )
+    if to_date:
+        if to_date == date.max:
+            return query.filter(SessionSummary.compressed_at <= datetime.max)
+        end_exclusive = datetime.combine(to_date + timedelta(days=1), time.min)
+        query = query.filter(SessionSummary.compressed_at < end_exclusive)
+    return query
+
+
+def _apply_summary_filters(
+    query,
+    *,
+    category: Optional[str],
+    persona_id: Optional[str],
+    search: Optional[str],
+    from_date: date | None,
+    to_date: date | None,
+):
+    """Apply the caller-visible Memory filters consistently to every view."""
+    if category:
+        query = query.filter(SessionSummary.dominant_category == category)
+    if persona_id:
+        # Exact match — persona_id is a closed enum string.
+        query = query.filter(SessionSummary.trusted_persona == persona_id)
+    query = _apply_summary_search(query, search)
+    return _apply_summary_date_range(query, from_date, to_date)
+
+
+def _order_summary_query(query, sort: MemorySummarySort):
+    """Apply a safe, deterministic order to a filtered summary query.
+
+    The id tie-breaker keeps pagination stable when two summaries were
+    compressed in the same second (common in tests and quick sessions).
+    """
+    if sort == "oldest":
+        return query.order_by(SessionSummary.compressed_at.asc(), SessionSummary.id.asc())
+    if sort == "most_exchanges":
+        return query.order_by(
+            SessionSummary.exchange_count.desc(),
+            SessionSummary.compressed_at.desc(),
+            SessionSummary.id.desc(),
+        )
+    if sort == "fewest_exchanges":
+        return query.order_by(
+            SessionSummary.exchange_count.asc(),
+            SessionSummary.compressed_at.desc(),
+            SessionSummary.id.desc(),
+        )
+    return query.order_by(SessionSummary.compressed_at.desc(), SessionSummary.id.desc())
+
+
+def _validate_summary_date_range(from_date: date | None, to_date: date | None) -> None:
+    """Reject reversed date ranges before querying or exporting data."""
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_date_range",
+                "message": "From date must be on or before to date.",
+            },
+        )
 
 
 def _decode_json_column(value, default):
@@ -48,6 +149,31 @@ def _decode_json_column(value, default):
         except (json.JSONDecodeError, TypeError):
             return default
     return default
+
+
+def _markdown_inline(value) -> str:
+    """Keep exported metadata on one safe Markdown line.
+
+    Summary metadata can contain model-derived values, and legacy rows may
+    contain arbitrary JSON. Escaping backslashes/backticks and flattening all
+    line separators prevents one malformed value from changing the structure
+    of the rest of the portable document. The summary body is deliberately
+    left untouched by the Markdown exporter so users can keep its formatting.
+    """
+    if value is None:
+        return ""
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("`", "\\`")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\n", " ")
+        .replace("\u2028", " ")
+        .replace("\u2029", " ")
+        .replace("\t", " ")
+        .strip()
+    )
 
 
 def _serialize_summary(row: SessionSummary, *, include_body: bool) -> dict:
@@ -83,6 +209,17 @@ class MemorySaveRequest(BaseModel):
     @classmethod
     def validate_session_id(cls, v: str) -> str:
         return sanitize_model_text(v, max_length=64, field_name="session_id")
+
+
+class MemoryBulkDeleteRequest(BaseModel):
+    """Ids selected for a bounded, ownership-scoped memory cleanup."""
+
+    ids: list[int] = Field(
+        ...,
+        min_length=1,
+        max_length=MEMORY_BULK_DELETE_MAX,
+        description="Summary ids to forget, capped to keep one request bounded.",
+    )
 
 
 @memory_router.post("/save")
@@ -253,6 +390,9 @@ async def list_summaries(
     category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+    from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
+    to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
+    sort: MemorySummarySort = Query("newest", description="Summary order."),
 ) -> dict:
     """Paginated list of the caller's compressed session summaries.
 
@@ -276,32 +416,30 @@ async def list_summaries(
             "page": 1,
             "per_page": per_page,
             "total_pages": 0,
-            "filters": {"category": None, "persona_id": None, "search": None},
+            "filters": {
+                "category": None,
+                "persona_id": None,
+                "search": None,
+                "from_date": None,
+                "to_date": None,
+                "sort": sort,
+            },
         }
 
-    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
-
-    if category:
-        q = q.filter(SessionSummary.dominant_category == category)
-
-    if persona_id:
-        # Exact match — persona_id is a closed enum string.
-        q = q.filter(SessionSummary.trusted_persona == persona_id)
-
-    if search:
-        # ILIKE on the long-form text. We could index a tsvector for
-        # production scale, but the column is small enough per-row that
-        # SQLite ILIKE + an n=20 page cap keeps the scan tolerable.
-        safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        q = q.filter(SessionSummary.session_summary.ilike(f"%{safe}%", escape="\\"))
+    _validate_summary_date_range(from_date, to_date)
+    # Filters are shared by list and export routes so users can export the
+    # exact Memory view they are browsing.
+    q = _apply_summary_filters(
+        db.query(SessionSummary).filter(SessionSummary.user_id == user.id),
+        category=category,
+        persona_id=persona_id,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+    )
 
     total = q.count()
-    rows = (
-        q.order_by(SessionSummary.compressed_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
+    rows = _order_summary_query(q, sort).offset((page - 1) * per_page).limit(per_page).all()
 
     return {
         "summaries": [_serialize_summary(r, include_body=False) for r in rows],
@@ -313,6 +451,9 @@ async def list_summaries(
             "category": category,
             "persona_id": persona_id,
             "search": search,
+            "from_date": from_date.isoformat() if from_date else None,
+            "to_date": to_date.isoformat() if to_date else None,
+            "sort": sort,
         },
     }
 
@@ -324,6 +465,9 @@ async def export_summaries_csv(
     category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+    from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
+    to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
+    sort: MemorySummarySort = Query("newest", description="Summary order."),
 ):
     """CSV export of all session summaries for a user.
 
@@ -337,13 +481,13 @@ async def export_summaries_csv(
         window_seconds=60,
         message="Too many CSV exports. Please wait.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
         raise HTTPException(
             status_code=403,
             detail={"error": "feature_not_allowed", "message": "Memory export requires Plus or Pro."},
         )
-    
+
     def _csv_safe(value) -> str:
         """Escape value for CSV to prevent formula injection."""
         if value is None:
@@ -352,36 +496,27 @@ async def export_summaries_csv(
         if s.startswith(("=", "+", "-", "@")):
             return "'" + s
         return s
-    
-    # Get all summaries (not paginated for CSV)
-    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
-    
-    if category:
-        q = q.filter(SessionSummary.dominant_category == category)
-    
-    if persona_id:
-        q = q.filter(SessionSummary.trusted_persona == persona_id)
-    
-    if search:
-        from sqlalchemy import or_
-        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
-        if safe_search:
-            q = q.filter(
-                or_(
-                    SessionSummary.session_summary.ilike(f"%{safe_search}%", escape="\\"),
-                    SessionSummary.main_topics.ilike(f"%{safe_search}%", escape="\\"),
-                )
-            )
-    
-    summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
-    
+
+    _validate_summary_date_range(from_date, to_date)
+    # Get all matching summaries (not paginated for CSV).
+    q = _apply_summary_filters(
+        db.query(SessionSummary).filter(SessionSummary.user_id == user.id),
+        category=category,
+        persona_id=persona_id,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+    summaries = _order_summary_query(q, sort).all()
+
     import csv
     import io
     from arena.core.datetime_utils import utcnow_naive
-    
+
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    
+
     # Write header
     writer.writerow([
         "id",
@@ -394,7 +529,7 @@ async def export_summaries_csv(
         "main_topics",
         "compressed_at",
     ])
-    
+
     # Write rows
     for row in summaries:
         writer.writerow([
@@ -408,11 +543,11 @@ async def export_summaries_csv(
             _csv_safe(";".join(row.main_topics or [])),
             _csv_safe(row.compressed_at.isoformat() if row.compressed_at else ""),
         ])
-    
+
     filename = f"arena-memory-summaries-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
     from fastapi.responses import Response
     from arena.core.http_headers import content_disposition_attachment
-    
+
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
         "X-Content-Type-Options": "nosniff",
@@ -432,6 +567,9 @@ async def export_summaries_json(
     category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+    from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
+    to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
+    sort: MemorySummarySort = Query("newest", description="Summary order."),
 ):
     """JSON export of all session summaries for a user.
 
@@ -445,38 +583,29 @@ async def export_summaries_json(
         window_seconds=60,
         message="Too many JSON exports. Please wait.",
     )
-    
+
     if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
         raise HTTPException(
             status_code=403,
             detail={"error": "feature_not_allowed", "message": "Memory export requires Plus or Pro."},
         )
-    
-    # Get all summaries (not paginated for export)
-    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
-    
-    if category:
-        q = q.filter(SessionSummary.dominant_category == category)
-    
-    if persona_id:
-        q = q.filter(SessionSummary.trusted_persona == persona_id)
-    
-    if search:
-        from sqlalchemy import or_
-        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
-        if safe_search:
-            q = q.filter(
-                or_(
-                    SessionSummary.session_summary.ilike(f"%{safe_search}%", escape="\\"),
-                    SessionSummary.main_topics.ilike(f"%{safe_search}%", escape="\\"),
-                )
-            )
-    
-    summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
-    
+
+    _validate_summary_date_range(from_date, to_date)
+    # Get all matching summaries (not paginated for export).
+    q = _apply_summary_filters(
+        db.query(SessionSummary).filter(SessionSummary.user_id == user.id),
+        category=category,
+        persona_id=persona_id,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+    summaries = _order_summary_query(q, sort).all()
+
     import json
     from arena.core.datetime_utils import utcnow_naive
-    
+
     # Format as JSON-serializable list
     items = []
     for row in summaries:
@@ -491,11 +620,11 @@ async def export_summaries_json(
             "main_topics": list(row.main_topics or []),
             "compressed_at": row.compressed_at.isoformat() if row.compressed_at else None,
         })
-    
+
     filename = f"arena-memory-summaries-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
     from fastapi.responses import Response
     from arena.core.http_headers import content_disposition_attachment
-    
+
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
         "X-Content-Type-Options": "nosniff",
@@ -504,6 +633,132 @@ async def export_summaries_json(
     return Response(
         content=json.dumps(items, indent=2, default=str),
         media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
+
+
+@memory_router.get("/summaries/export.md")
+async def export_summaries_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
+    persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
+    search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+    from_date: date | None = Query(None, description="Include summaries compressed on or after this UTC date."),
+    to_date: date | None = Query(None, description="Include summaries compressed on or before this UTC date."),
+    sort: MemorySummarySort = Query("newest", description="Summary order."),
+):
+    """Export all matching session summaries as a portable Markdown document."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="memory_summaries_markdown",
+        limit=30,
+        window_seconds=60,
+        message="Too many Markdown exports. Please wait.",
+    )
+
+    if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Memory export requires Plus or Pro."},
+        )
+
+    _validate_summary_date_range(from_date, to_date)
+    q = _apply_summary_filters(
+        db.query(SessionSummary).filter(SessionSummary.user_id == user.id),
+        category=category,
+        persona_id=persona_id,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    summaries = _order_summary_query(q, sort).all()
+
+    def _date(value) -> str:
+        return value.strftime("%Y-%m-%d") if value else "Unknown date"
+
+    lines = [
+        "# Arena Memory",
+        "",
+        f"Exported: {utcnow_naive().strftime('%Y-%m-%d')}",
+        f"Summaries: {len(summaries)}",
+    ]
+    filters = []
+    if search:
+        filters.append(f"Search: {_markdown_inline(search)}")
+    if category:
+        filters.append(f"Kind: {_markdown_inline(category)}")
+    if persona_id:
+        filters.append(f"Trusted mind: {_markdown_inline(persona_id)}")
+    if from_date:
+        filters.append(f"From: {from_date.isoformat()}")
+    if to_date:
+        filters.append(f"To: {to_date.isoformat()}")
+    if sort != "newest":
+        filters.append(f"Sort: {sort.replace('_', ' ')}")
+    if filters:
+        lines.extend(["", "Filters: " + " · ".join(filters)])
+
+    for row in summaries:
+        lines.extend(
+            [
+                "",
+                "---",
+                "",
+                f"## {_markdown_inline(row.dominant_category or 'Session')} · {_date(row.compressed_at)}",
+                "",
+                f"- Session ID: `{_markdown_inline(row.session_id)}`",
+                f"- Exchanges: {int(row.exchange_count or 0)}",
+            ]
+        )
+        if row.preferred_depth:
+            lines.append(f"- Depth: {_markdown_inline(row.preferred_depth)}")
+        if row.trusted_persona:
+            lines.append(f"- Trusted mind: {_markdown_inline(row.trusted_persona)}")
+
+        topics = _decode_json_column(row.main_topics, [])
+        if isinstance(topics, list) and topics:
+            lines.extend(["", "### Topics", ""])
+            lines.extend(
+                f"- {_markdown_inline(topic)}"
+                for topic in topics
+                if _markdown_inline(topic)
+            )
+
+        lines.extend(["", "### Summary", "", row.session_summary or "_No summary text was saved._"])
+
+        positions = _decode_json_column(row.key_positions_taken, [])
+        if isinstance(positions, list) and positions:
+            position_lines = []
+            for position in positions:
+                if not isinstance(position, dict):
+                    continue
+                parts = []
+                if position.get("persona_id"):
+                    parts.append(_markdown_inline(position["persona_id"]))
+                if position.get("topic"):
+                    parts.append(_markdown_inline(position["topic"]))
+                if position.get("stance"):
+                    parts.append(_markdown_inline(position["stance"]))
+                if position.get("confidence") is not None:
+                    parts.append(f"confidence {_markdown_inline(position['confidence'])}%")
+                if parts:
+                    position_lines.append("- " + " — ".join(parts))
+            if position_lines:
+                lines.extend(["", "### Positions", "", *position_lines])
+
+    from fastapi.responses import Response
+    from arena.core.http_headers import content_disposition_attachment
+
+    filename = f"arena-memory-summaries-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.md"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content="\n".join(lines).rstrip() + "\n",
+        media_type="text/markdown; charset=utf-8",
         headers=headers,
     )
 
@@ -546,6 +801,62 @@ async def get_summary(
     return _serialize_summary(row, include_body=True)
 
 
+@memory_router.delete("/summaries/bulk")
+async def delete_summaries_bulk(
+    body: MemoryBulkDeleteRequest,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Forget selected summaries without exposing foreign-row existence.
+
+    Missing and foreign ids are silently skipped. Returning the exact owned
+    ids removed lets the UI reconcile a stale selection without claiming that
+    every requested row was deleted.
+    """
+    if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Memory requires a Plus tier."},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="memory_summary_bulk_delete",
+        limit=15,
+        window_seconds=3600,
+        message="Too many bulk summary deletes. Limit is 15 per hour.",
+    )
+
+    unique_ids = list(dict.fromkeys(body.ids))
+    owned_ids = [
+        row_id
+        for (row_id,) in db.query(SessionSummary.id)
+        .filter(
+            SessionSummary.id.in_(unique_ids),
+            SessionSummary.user_id == user.id,
+        )
+        .all()
+    ]
+    deleted = 0
+    if owned_ids:
+        deleted = (
+            db.query(SessionSummary)
+            .filter(
+                SessionSummary.id.in_(owned_ids),
+                SessionSummary.user_id == user.id,
+            )
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+
+    return {
+        "status": "deleted",
+        "requested": len(unique_ids),
+        "deleted": int(deleted or 0),
+        "ids": [summary_id for summary_id in unique_ids if summary_id in owned_ids],
+    }
+
+
 @memory_router.delete("/summaries/{summary_id}")
 async def delete_summary(
     summary_id: int,
@@ -581,5 +892,3 @@ async def delete_summary(
     db.delete(row)
     db.commit()
     return {"status": "deleted", "id": summary_id}
-
-

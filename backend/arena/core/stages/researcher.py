@@ -9,8 +9,9 @@ from arena.core.llm_caller import call_llm
 from arena.core.mcp_runtime import fetch_mcp_context_for_task
 from arena.database import SessionLocal
 
-logger = logging.getLogger(__name__)
 from arena.core.model_router import MODEL_REGISTRY
+
+logger = logging.getLogger(__name__)
 
 AGENT_MAX_TOKENS = 4096
 

@@ -20,6 +20,7 @@ describe('ReRunRoundButton', () => {
     );
     const button = getByRole('button', { name: 'Re-run round' });
     expect(button).toHaveAttribute('title', 'Should I launch?');
+    expect(button).toHaveAttribute('aria-keyshortcuts', 'Shift+R');
   });
 
   it('fires onReRun when clicked', () => {

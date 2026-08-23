@@ -6,11 +6,12 @@ from collections import defaultdict
 from threading import Lock
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
 
 from arena.core.agents import get_persona_id_for_agent
 from arena.core.observability import log_drift_result
 from arena.models.schemas import AgentResponse, IntegrityReport
+
+logger = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────

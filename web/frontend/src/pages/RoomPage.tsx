@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { addRoomTask, getAgentHistory, getRoom, getRoomSynthesis, joinRoom, removeRoomTask } from '../api';
+import {
+  addRoomTask,
+  getAgentHistory,
+  getRoom,
+  getRoomSynthesis,
+  joinRoom,
+  leaveRoom,
+  removeRoomTask,
+} from '../api';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
@@ -11,6 +19,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getUserColor, getUserInitials } from '../utils/roomUtils';
 import { copyToClipboard } from '../lib/clipboard';
+import { clearRoomLeft, markRoomLeft, roomWasLeft } from '../lib/roomLeave';
 import {
   applyAbsoluteDocumentTitle,
   applyDocumentTitle,
@@ -136,6 +145,7 @@ export function RoomPage() {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [synthesisRefreshing, setSynthesisRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [membershipBusy, setMembershipBusy] = useState(false);
   const [boardQuery, setBoardQuery] = useState('');
   const [boardSort, setBoardSort] = useState<RoomBoardSort>('newest');
   const [boardMemberFilter, setBoardMemberFilter] = useState<string>('all');
@@ -199,6 +209,9 @@ export function RoomPage() {
 
   useEffect(() => {
     if (!slug || !user || authLoading) return;
+    // A deliberate leave is sticky: only an explicit Join click clears it.
+    // Without this, any reload of a room the user left silently re-adds them.
+    if (roomWasLeft(user.id, slug)) return;
     void joinRoom(slug).catch(() => {
       /* ignore */
     });
@@ -220,6 +233,10 @@ export function RoomPage() {
     if (!user) return false;
     return members.some((m: any) => m.user_id === user.id);
   }, [user, members]);
+
+  const canRefreshSynthesis = Boolean(
+    user && (isMember || room?.creator_id === user.id),
+  );
 
   const taskIdsInRoom = useMemo(() => new Set(tasks.map((t: any) => t.task_id)), [tasks]);
 
@@ -674,8 +691,52 @@ export function RoomPage() {
     }
   };
 
+  const handleJoinRoom = async () => {
+    if (!slug || !user || membershipBusy) return;
+    setMembershipBusy(true);
+    setActionError(null);
+    try {
+      const data = await joinRoom(slug);
+      clearRoomLeft(user.id, slug);
+      const memberList = Array.isArray(data?.members) ? data.members : [];
+      setRoom((prev: any) => (prev ? { ...prev, members: memberList } : prev));
+      setTaskActionToast('Joined this room.');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not join room');
+    } finally {
+      setMembershipBusy(false);
+    }
+  };
+
+  const handleLeaveRoom = async () => {
+    if (!slug || !user || membershipBusy) return;
+    if (!window.confirm('Leave this room? Your tasks stay on the board and you can rejoin anytime.')) {
+      return;
+    }
+    setMembershipBusy(true);
+    setActionError(null);
+    try {
+      await leaveRoom(slug);
+      markRoomLeft(user.id, slug);
+      setRoom((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              members: (prev.members ?? []).filter((m: any) => m.user_id !== user.id),
+            }
+          : prev,
+      );
+      setBoardMemberFilter((prev) => (prev === String(user.id) ? 'all' : prev));
+      setTaskActionToast('Left room — you can rejoin anytime.');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not leave room');
+    } finally {
+      setMembershipBusy(false);
+    }
+  };
+
   const handleRefreshSynthesis = async () => {
-    if (!slug || synthesisRefreshing) return;
+    if (!slug || synthesisRefreshing || !canRefreshSynthesis) return;
     setSynthesisRefreshing(true);
     setActionError(null);
     try {
@@ -793,6 +854,27 @@ export function RoomPage() {
       </div>
       <div style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', lineHeight: 1.5 }}>{room?.name}</div>
       <div style={{ height: 0.5, background: '#EDE4D8', margin: '12px 0' }} />
+      {user && !isMember ? (
+        <button
+          type="button"
+          onClick={() => void handleJoinRoom()}
+          disabled={membershipBusy}
+          style={{
+            width: '100%',
+            border: '0.5px dashed #35382F',
+            borderRadius: 8,
+            padding: '8px 12px',
+            fontSize: 12,
+            color: '#C4A882',
+            background: 'transparent',
+            cursor: membershipBusy ? 'default' : 'pointer',
+            opacity: membershipBusy ? 0.6 : 1,
+            textAlign: 'center',
+          }}
+        >
+          {membershipBusy ? 'Joining…' : 'Join this room'}
+        </button>
+      ) : null}
       {user && isMember ? (
         <button
           type="button"
@@ -810,6 +892,28 @@ export function RoomPage() {
           }}
         >
           Add your task
+        </button>
+      ) : null}
+      {user && isMember ? (
+        <button
+          type="button"
+          onClick={() => void handleLeaveRoom()}
+          disabled={membershipBusy}
+          style={{
+            width: '100%',
+            marginTop: 8,
+            border: '0.5px solid rgba(196,149,106,0.35)',
+            borderRadius: 8,
+            padding: '8px 12px',
+            fontSize: 12,
+            color: '#B0784F',
+            background: 'transparent',
+            cursor: membershipBusy ? 'default' : 'pointer',
+            opacity: membershipBusy ? 0.6 : 1,
+            textAlign: 'center',
+          }}
+        >
+          {membershipBusy ? 'Leaving…' : 'Leave room'}
         </button>
       ) : null}
     </>
@@ -923,28 +1027,30 @@ export function RoomPage() {
                     ? 'Failed'
                     : 'Download .md'}
               </button>
-              <button
-                type="button"
-                title="Refresh synthesis"
-                aria-label="Refresh synthesis"
-                onClick={() => void handleRefreshSynthesis()}
-                disabled={synthesisRefreshing}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: synthesisRefreshing ? 'default' : 'pointer',
-                  color: '#F0B84E',
-                  padding: 4,
-                  opacity: synthesisRefreshing ? 0.5 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden style={synthesisRefreshing ? { animation: 'spin 1s linear infinite' } : undefined}>
-                  <path d="M21 2v6h-6M3 22v-6h6" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M3 12a9 9 0 0115.36-6.36L21 8M21 12a9 9 0 01-15.36 6.36L3 16" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
+              {canRefreshSynthesis ? (
+                <button
+                  type="button"
+                  title="Refresh synthesis"
+                  aria-label="Refresh synthesis"
+                  onClick={() => void handleRefreshSynthesis()}
+                  disabled={synthesisRefreshing}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: synthesisRefreshing ? 'default' : 'pointer',
+                    color: '#F0B84E',
+                    padding: 4,
+                    opacity: synthesisRefreshing ? 0.5 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden style={synthesisRefreshing ? { animation: 'spin 1s linear infinite' } : undefined}>
+                    <path d="M21 2v6h-6M3 22v-6h6" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M3 12a9 9 0 0115.36-6.36L21 8M21 12a9 9 0 01-15.36 6.36L3 16" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              ) : null}
             </>
           ) : null}
         </div>

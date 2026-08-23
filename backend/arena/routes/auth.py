@@ -5,17 +5,18 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
-from sqlalchemy import Date, cast, func
+from sqlalchemy import func
 from sqlalchemy.exc import OperationalError, InterfaceError, IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.core.client_ip import get_request_client_ip
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.datetime_utils import utcnow_naive
+from arena.core.http_headers import content_disposition_attachment
 
 from arena.core.errors import ErrorCodes
 from arena.core.auth import (
@@ -748,26 +749,103 @@ async def user_answer_feedback_stats(
     return get_answer_feedback_distribution(user.id, db)
 
 
-@user_router.get("/usage")
-async def get_user_usage(
-    user: User = Depends(get_current_user_required_orm),
-    db: Session = Depends(get_db),
-) -> dict:
-    # 60/min/user — multi-aggregate usage dashboard; cap polling.
-    enforce_user_rate_limit(
-        user.id,
-        scope="user_usage",
-        limit=60,
-        window_seconds=60,
-        message="Too many usage stats reads. Please slow down.",
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value) -> str:
+    """Return ``value`` as a CSV cell safe against formula injection.
+
+    Defense-in-depth for the user usage CSV export (CWE-1236): the current
+    cells are server-computed dates and integers, but every CSV surface in
+    this codebase routes values through the same OWASP-recommended prefix
+    escape so a future column can't regress the file into a spreadsheet
+    formula-execution vector.
+    """
+    s = str(value) if value is not None else ""
+    if s and s[0] in _CSV_FORMULA_PREFIXES:
+        return "'" + s
+    return s
+
+
+def _markdown_cell(value: object) -> str:
+    """Keep computed usage values safe inside Markdown table cells."""
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("|", "\\|")
+        .replace("\r", " ")
+        .replace("\n", " ")
     )
+
+
+def _usage_day_start() -> datetime:
+    """Return the current UTC calendar-day boundary in canonical form."""
+    return utcnow_naive().replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _usage_history_rows(
+    user: User,
+    db: Session,
+    window_days: int = 14,
+    *,
+    today_start: Optional[datetime] = None,
+) -> list[tuple[date, int]]:
+    """Return daily token totals as (UTC date, tokens) pairs, oldest first.
+
+    Shared by the JSON usage endpoint and its CSV export so the dashboard
+    chart and the downloaded file cannot drift. Day boundaries use the
+    codebase's canonical naive-UTC form so SQLite and Postgres compare
+    ``usage_records.timestamp`` identically. Export callers bound
+    ``window_days`` with FastAPI's query validation before reaching here.
+    """
+    today_start = today_start or _usage_day_start()
+    chart_start = today_start - timedelta(days=window_days - 1)
+    token_sum = UsageRecord.input_tokens + UsageRecord.output_tokens
+    day_col = func.date(UsageRecord.timestamp).label("day")
+    rows = (
+        db.query(day_col, func.coalesce(func.sum(token_sum), 0).label("total"))
+        .filter(UsageRecord.user_id == user.id, UsageRecord.timestamp >= chart_start)
+        .group_by(day_col)
+        .all()
+    )
+    by_day: dict[date, int] = {}
+    for r in rows:
+        d = r.day
+        if isinstance(d, datetime):
+            dk = d.date()
+        elif isinstance(d, date):
+            dk = d
+        elif isinstance(d, str):
+            dk = date.fromisoformat(d[:10])
+        else:
+            dk = d
+        by_day[dk] = int(r.total or 0)
+
+    history: list[tuple[date, int]] = []
+    for i in range(window_days - 1, -1, -1):
+        day = (today_start - timedelta(days=i)).date()
+        history.append((day, by_day.get(day, 0)))
+    return history
+
+
+def _user_usage_payload(
+    user: User,
+    db: Session,
+    history: Optional[list[tuple[date, int]]] = None,
+    *,
+    today_start: Optional[datetime] = None,
+) -> dict:
+    """Compute the /api/user/usage response for one user.
+
+    ``history`` is optional so the CSV export can compute the 14-day rows
+    once and share them with the summary (instead of running the same
+    aggregation twice and risking a midnight-boundary mismatch).
+    """
     normalized = normalize_tier(get_tier_str(user))
     daily_limit = get_credit_budget(normalized)
     weekly_limit = daily_limit * 7
 
-    today_start = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    today_start = today_start or _usage_day_start()
     week_start = today_start - timedelta(days=7)
     month_start = today_start - timedelta(days=30)
 
@@ -797,31 +875,9 @@ async def get_user_usage(
     )
     total_tasks_month = int(total_tasks_month)
 
-    chart_start = today_start - timedelta(days=13)
-    day_col = cast(UsageRecord.timestamp, Date)
-    rows = (
-        db.query(day_col.label("day"), func.coalesce(func.sum(token_sum), 0).label("total"))
-        .filter(UsageRecord.user_id == user.id, UsageRecord.timestamp >= chart_start)
-        .group_by(day_col)
-        .all()
-    )
-    by_day: dict[date, int] = {}
-    for r in rows:
-        d = r.day
-        if isinstance(d, datetime):
-            dk = d.date()
-        elif isinstance(d, date):
-            dk = d
-        elif isinstance(d, str):
-            dk = date.fromisoformat(d[:10])
-        else:
-            dk = d
-        by_day[dk] = int(r.total or 0)
-
-    usage_history: list[int] = []
-    for i in range(13, -1, -1):
-        day = (today_start - timedelta(days=i)).date()
-        usage_history.append(by_day.get(day, 0))
+    if history is None:
+        history = _usage_history_rows(user, db, today_start=today_start)
+    usage_history = [tokens for _, tokens in history]
 
     return {
         "credits_used_today": credits_used_today,
@@ -833,6 +889,258 @@ async def get_user_usage(
         "total_tasks_month": total_tasks_month,
         "usage_history": usage_history,
     }
+
+
+def _usage_export_snapshot(
+    user: User,
+    db: Session,
+    window_days: int,
+) -> tuple[list[tuple[date, int]], dict]:
+    """Build history and its summary against one UTC-day snapshot.
+
+    Export generation can cross midnight while its database queries run. Keep
+    the history labels and quota boundaries anchored to the same day so a
+    report cannot combine yesterday's rows with today's summary.
+    """
+    today_start = _usage_day_start()
+    history = _usage_history_rows(
+        user,
+        db,
+        window_days=window_days,
+        today_start=today_start,
+    )
+    payload = _user_usage_payload(
+        user,
+        db,
+        history=history,
+        today_start=today_start,
+    )
+    return history, payload
+
+
+@user_router.get("/usage")
+async def get_user_usage(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> dict:
+    # 60/min/user — multi-aggregate usage dashboard; cap polling.
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_usage",
+        limit=60,
+        window_seconds=60,
+        message="Too many usage stats reads. Please slow down.",
+    )
+    return _user_usage_payload(user, db)
+
+
+@user_router.get("/usage/export.csv")
+async def export_user_usage_csv(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        14,
+        ge=1,
+        le=365,
+        description="Number of UTC calendar days to include, ending today.",
+    ),
+) -> Response:
+    """CSV export of the user's selected usage-history window.
+
+    Shares the JSON endpoint's aggregation helper so the downloaded file
+    and the Profile modal chart cannot drift. Uses its own rate-limit scope
+    so exporting doesn't consume the JSON endpoint's per-minute budget.
+
+    Follows the same defenses as the other CSV exports in this codebase:
+    RFC 4180 quoting, formula-injection escape, no-store, and nosniff.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_usage_csv",
+        limit=60,
+        window_seconds=60,
+        message="Too many usage CSV exports. Please slow down.",
+    )
+
+    history, payload = _usage_export_snapshot(user, db, window_days)
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(["date", "tokens"])
+    for day, tokens in history:
+        writer.writerow([_csv_safe(day.isoformat()), tokens])
+    writer.writerow(
+        [
+            f"# credits_used_today={payload['credits_used_today']}",
+            f"credits_remaining_today={payload['credits_remaining_today']}",
+            f"daily_limit={payload['daily_limit']}",
+            f"credits_used_week={payload['credits_used_week']}",
+            f"credits_remaining_week={payload['credits_remaining_week']}",
+            f"weekly_limit={payload['weekly_limit']}",
+            f"total_tasks_month={payload['total_tasks_month']}",
+        ]
+    )
+
+    filename = (
+        f"arena-usage-"
+        f"{history[0][0].isoformat()}-to-{history[-1][0].isoformat()}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@user_router.get("/usage/export.json")
+async def export_user_usage_json(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        14,
+        ge=1,
+        le=365,
+        description="Number of UTC calendar days to include, ending today.",
+    ),
+) -> Response:
+    """JSON export of the selected usage history and period summary.
+
+    Complements the CSV export for automation and machine-readable backups:
+    each daily row carries its date alongside the token total, and the
+    summary block mirrors /api/user/usage so the dashboard, CSV, and JSON
+    surfaces cannot drift. Uses its own rate-limit scope so exporting JSON
+    does not consume the dashboard or CSV export budgets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_usage_json",
+        limit=60,
+        window_seconds=60,
+        message="Too many usage JSON exports. Please slow down.",
+    )
+
+    history, payload = _usage_export_snapshot(user, db, window_days)
+    start_date, end_date = history[0][0], history[-1][0]
+    filename = (
+        f"arena-usage-{start_date.isoformat()}-to-{end_date.isoformat()}.json"
+    )
+
+    body = {
+        "exported_at": utcnow_naive().isoformat() + "Z",
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "summary": {
+            key: payload[key]
+            for key in (
+                "credits_used_today",
+                "credits_remaining_today",
+                "daily_limit",
+                "credits_used_week",
+                "credits_remaining_week",
+                "weekly_limit",
+                "total_tasks_month",
+            )
+        },
+        "history": [
+            {"date": day.isoformat(), "tokens": tokens}
+            for day, tokens in history
+        ],
+    }
+    return JSONResponse(
+        content=body,
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@user_router.get("/usage/export.md")
+async def export_user_usage_markdown(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        14,
+        ge=1,
+        le=365,
+        description="Number of UTC calendar days to include, ending today.",
+    ),
+) -> Response:
+    """Markdown export of the selected usage history and quota summary.
+
+    This is the shareable, human-readable sibling of the CSV and JSON
+    exports. It intentionally uses the same aggregation helper so a report
+    copied into notes or an issue tracker cannot disagree with the dashboard.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_usage_markdown",
+        limit=60,
+        window_seconds=60,
+        message="Too many usage Markdown exports. Please slow down.",
+    )
+
+    history, payload = _usage_export_snapshot(user, db, window_days)
+    start_date, end_date = history[0][0], history[-1][0]
+
+    summary_rows = [
+        ("Credits used today", payload["credits_used_today"]),
+        ("Credits remaining today", payload["credits_remaining_today"]),
+        ("Daily limit", payload["daily_limit"]),
+        ("Credits used this week", payload["credits_used_week"]),
+        ("Credits remaining this week", payload["credits_remaining_week"]),
+        ("Weekly limit", payload["weekly_limit"]),
+        ("Tasks this month", payload["total_tasks_month"]),
+    ]
+    lines = [
+        "# Arena — usage report",
+        "",
+        f"**Window:** {start_date.isoformat()} → {end_date.isoformat()} ({window_days} days, UTC)",
+        "",
+        "## Quota snapshot",
+        "",
+        "| Metric | Value |",
+        "| --- | ---: |",
+    ]
+    lines.extend(
+        f"| {_markdown_cell(label)} | {_markdown_cell(value)} |"
+        for label, value in summary_rows
+    )
+    lines.extend(
+        [
+            "",
+            "## Daily token history",
+            "",
+            "| Date | Tokens |",
+            "| --- | ---: |",
+        ]
+    )
+    lines.extend(
+        f"| {_markdown_cell(day.isoformat())} | {_markdown_cell(tokens)} |"
+        for day, tokens in history
+    )
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+
+    filename = (
+        f"arena-usage-{start_date.isoformat()}-to-{end_date.isoformat()}.md"
+    )
+    return Response(
+        content="\n".join(lines),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @user_router.get("/tier")

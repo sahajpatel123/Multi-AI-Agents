@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Loader2, Swords, ArrowUp, Sparkles } from 'lucide-react';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { improvePrompt } from '../api';
@@ -19,6 +19,13 @@ import {
   loadPromptDraft,
   savePromptDraft,
 } from '../lib/promptDraft';
+import {
+  createPromptHistoryState,
+  NO_HISTORY_ENTRY,
+  shouldCapturePromptHistoryKey,
+  stepPromptHistory,
+  type PromptHistoryState,
+} from '../lib/promptHistory';
 
 const CYCLING_PLACEHOLDERS = [
   'Ask something and watch four minds respond...',
@@ -63,6 +70,11 @@ interface PromptInputProps {
   polishEnabled?: boolean;
   /** Fired after a polish attempt completes (refined or not). */
   onPolished?: (prompt: string, note?: string) => void;
+  /**
+   * Most-recent-first prompt texts to replay with ArrowUp/ArrowDown in the
+   * compose box. When omitted, history cycling is disabled.
+   */
+  history?: readonly string[];
 }
 
 export function PromptInput({
@@ -82,6 +94,7 @@ export function PromptInput({
   clearDraftSignal,
   polishEnabled = false,
   onPolished,
+  history,
 }: PromptInputProps) {
   const [prompt, setPrompt] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -90,9 +103,25 @@ export function PromptInput({
   const [isPolishing, setIsPolishing] = useState(false);
   const [polishMessage, setPolishMessage] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const historyStateRef = useRef<PromptHistoryState | null>(null);
+  if (historyStateRef.current === null) {
+    historyStateRef.current = createPromptHistoryState();
+  }
+  const resetHistoryState = useCallback(() => {
+    historyStateRef.current = createPromptHistoryState();
+  }, []);
+  /** True once the preset effect has run, so a mount-time preset can beat a stale draft. */
+  const presetAppliedRef = useRef(false);
   const budgetId = useId();
 
   const activePlaceholder = placeholder ?? CYCLING_PLACEHOLDERS[placeholderIndex];
+  const historyKey = JSON.stringify(history ?? []);
+
+  // A changed history (e.g. a freshly submitted prompt) invalidates any
+  // in-progress history walk so the next ArrowUp starts from the new list.
+  useEffect(() => {
+    resetHistoryState();
+  }, [historyKey, resetHistoryState]);
 
   // Cycle placeholder text — skip timed fades when the user prefers reduced motion.
   useEffect(() => {
@@ -119,6 +148,8 @@ export function PromptInput({
 
   useEffect(() => {
     if (presetPromptNonce === undefined) return;
+    presetAppliedRef.current = true;
+    resetHistoryState();
     setPrompt(presetPrompt || '');
     requestAnimationFrame(() => {
       const el = textareaRef.current;
@@ -126,7 +157,7 @@ export function PromptInput({
       el.focus();
       autoResize(el);
     });
-  }, [presetPrompt, presetPromptNonce]);
+  }, [presetPrompt, presetPromptNonce, resetHistoryState]);
 
   // Restore the draft once on mount — runs before any presetPrompt injection
   // so templates still win, and is skipped entirely when no draftKey was given.
@@ -135,8 +166,14 @@ export function PromptInput({
     if (!draftKey) return;
     if (draftRestoreDoneRef.current) return;
     draftRestoreDoneRef.current = true;
+    if (presetAppliedRef.current && (presetPrompt || '').trim()) {
+      // A shared/preset question arrived before mount finished; it wins over
+      // a stale draft so deep-linked questions are never silently replaced.
+      return;
+    }
     const stored = loadPromptDraft(draftKey);
     if (!stored) return;
+    resetHistoryState();
     setPrompt(stored);
     requestAnimationFrame(() => {
       const el = textareaRef.current;
@@ -144,7 +181,7 @@ export function PromptInput({
       el.focus();
       autoResize(el);
     });
-  }, [draftKey]);
+  }, [draftKey, resetHistoryState]);
 
   // Debounced autosave — typing fast should not hammer localStorage.
   useEffect(() => {
@@ -172,6 +209,7 @@ export function PromptInput({
     }
     onSubmit(clampToMax(prompt.trim(), ARENA_PROMPT_MAX_CHARS));
     setPrompt('');
+    resetHistoryState();
     // Reset height after clear
     requestAnimationFrame(() => {
       if (textareaRef.current) {
@@ -189,6 +227,7 @@ export function PromptInput({
       const result = await improvePrompt(trimmed);
       if (result.refined && result.improved_prompt) {
         const polished = clampToMax(result.improved_prompt, ARENA_PROMPT_MAX_CHARS);
+        resetHistoryState();
         setPrompt(polished);
         requestAnimationFrame(() => {
           const el = textareaRef.current;
@@ -206,6 +245,24 @@ export function PromptInput({
     } finally {
       setIsPolishing(false);
     }
+  };
+
+  const handleHistoryKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!shouldCapturePromptHistoryKey(e.nativeEvent)) return;
+    const direction = e.key === 'ArrowUp' ? 'up' : 'down';
+    const el = e.currentTarget;
+    const currentState = historyStateRef.current ?? createPromptHistoryState();
+    if (direction === 'down' && currentState.index === NO_HISTORY_ENTRY) return;
+
+    const result = stepPromptHistory(direction, currentState, prompt, history ?? []);
+    if (!result.changed) return;
+    e.preventDefault();
+    setPrompt(result.value);
+    historyStateRef.current = result.state;
+    requestAnimationFrame(() => {
+      el.setSelectionRange(el.value.length, el.value.length);
+      autoResize(el);
+    });
   };
 
   const hasContent = Boolean(prompt.trim());
@@ -304,6 +361,8 @@ export function PromptInput({
               maxLength={ARENA_PROMPT_MAX_CHARS}
               onChange={(e) => {
                 setPrompt(clampToMax(e.target.value, ARENA_PROMPT_MAX_CHARS));
+                // Any manual edit leaves the history walk and starts a new draft.
+                resetHistoryState();
                 autoResize(e.target);
               }}
               placeholder={
@@ -323,12 +382,13 @@ export function PromptInput({
               title={
                 submitBlocked
                   ? submitBlockedTitle
-                  : 'Press / anywhere to focus · Enter to send'
+                  : 'Press / anywhere to focus · Enter to send · ↑/↓ recent prompts'
               }
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               disabled={isLoading}
               onKeyDown={(e) => {
+                handleHistoryKeyDown(e);
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleSubmit(e);

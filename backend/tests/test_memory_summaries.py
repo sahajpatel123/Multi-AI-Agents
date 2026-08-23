@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import pytest
 
@@ -90,6 +91,14 @@ async def test_list_empty_envelope_for_free_tier(app_client, make_user):
     body = res.json()
     assert body["summaries"] == []
     assert body["total"] == 0
+    assert body["filters"] == {
+        "category": None,
+        "persona_id": None,
+        "search": None,
+        "from_date": None,
+        "to_date": None,
+        "sort": "newest",
+    }
 
 
 @pytest.mark.asyncio
@@ -110,6 +119,55 @@ async def test_list_orders_newest_first(app_client, make_user, db_session):
     body = res.json()
     sids = [s["session_id"] for s in body["summaries"]]
     assert sids[0] == "s-new"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("sort", "expected"),
+    [
+        ("oldest", ["s-old", "s-mid", "s-new"]),
+        ("most_exchanges", ["s-mid", "s-new", "s-old"]),
+        ("fewest_exchanges", ["s-old", "s-new", "s-mid"]),
+    ],
+)
+async def test_list_supports_summary_sort_orders(
+    app_client, make_user, db_session, sort, expected
+):
+    user = make_user(email=f"mem-sort-{sort}@test.com", tier=UserTier.PLUS)
+    old = _seed_summary(
+        db_session, user_id=user.id, session_id="s-old", exchange_count=1
+    )
+    mid = _seed_summary(
+        db_session, user_id=user.id, session_id="s-mid", exchange_count=9
+    )
+    new = _seed_summary(
+        db_session, user_id=user.id, session_id="s-new", exchange_count=5
+    )
+    old.compressed_at = datetime(2026, 8, 1, 12, 0, 0)
+    mid.compressed_at = datetime(2026, 8, 2, 12, 0, 0)
+    new.compressed_at = datetime(2026, 8, 3, 12, 0, 0)
+    db_session.add_all([old, mid, new])
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/memory/summaries?sort={sort}", headers=_pro_headers(user)
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert [row["session_id"] for row in body["summaries"]] == expected
+    assert body["filters"]["sort"] == sort
+
+
+@pytest.mark.asyncio
+async def test_list_rejects_unknown_summary_sort(app_client, make_user):
+    user = make_user(email="mem-sort-invalid@test.com", tier=UserTier.PLUS)
+
+    res = await app_client.get(
+        "/api/memory/summaries?sort=popular", headers=_pro_headers(user)
+    )
+
+    assert res.status_code == 422
 
 
 # ─── Filters ────────────────────────────────────────────────────────────────
@@ -164,6 +222,32 @@ async def test_search_matches_summary_text(app_client, make_user, db_session):
 
 
 @pytest.mark.asyncio
+async def test_search_matches_main_topics(app_client, make_user, db_session):
+    user = make_user(email="mem-topic-search@test.com", tier=UserTier.PLUS)
+    db_session.add(_seed_summary(
+        db_session,
+        user_id=user.id,
+        session_id="s1",
+        summary_text="A general discussion",
+        topics=["rare topic"],
+    ))
+    db_session.add(_seed_summary(
+        db_session,
+        user_id=user.id,
+        session_id="s2",
+        summary_text="Another discussion",
+        topics=["different topic"],
+    ))
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries?search=rare%20topic", headers=_pro_headers(user)
+    )
+    body = res.json()
+    assert {s["session_id"] for s in body["summaries"]} == {"s1"}
+
+
+@pytest.mark.asyncio
 async def test_search_escapes_like_wildcards(app_client, make_user, db_session):
     user = make_user(email="mem-wild@test.com", tier=UserTier.PLUS)
     db_session.add(_seed_summary(db_session, user_id=user.id, session_id="s1",
@@ -187,6 +271,46 @@ async def test_search_rejects_overlong_input(app_client, make_user):
         f"/api/memory/summaries?search={'x' * 200}", headers=_pro_headers(user)
     )
     assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_date_range_filter_is_inclusive_and_echoed(app_client, make_user, db_session):
+    """Memory date filters use inclusive UTC calendar days at both bounds."""
+    user = make_user(email="mem-date@test.com", tier=UserTier.PLUS)
+    before = _seed_summary(db_session, user_id=user.id, session_id="before")
+    in_range = _seed_summary(db_session, user_id=user.id, session_id="in-range")
+    final_moment = _seed_summary(db_session, user_id=user.id, session_id="final-moment")
+    after = _seed_summary(db_session, user_id=user.id, session_id="after")
+    before.compressed_at = datetime(2026, 8, 9, 23, 59, 59)
+    in_range.compressed_at = datetime(2026, 8, 10, 12, 0, 0)
+    final_moment.compressed_at = datetime(2026, 8, 12, 23, 59, 59, 999999)
+    after.compressed_at = datetime(2026, 8, 13, 0, 0, 0)
+    db_session.add_all([before, in_range, final_moment, after])
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries?from_date=2026-08-10&to_date=2026-08-12",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert {row["session_id"] for row in body["summaries"]} == {"in-range", "final-moment"}
+    assert body["filters"]["from_date"] == "2026-08-10"
+    assert body["filters"]["to_date"] == "2026-08-12"
+
+
+@pytest.mark.asyncio
+async def test_date_range_rejects_reversed_bounds(app_client, make_user):
+    user = make_user(email="mem-date-reversed@test.com", tier=UserTier.PLUS)
+
+    res = await app_client.get(
+        "/api/memory/summaries?from_date=2026-08-13&to_date=2026-08-12",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 422
+    assert res.json()["detail"]["error"] == "invalid_date_range"
 
 
 # ─── Pagination ─────────────────────────────────────────────────────────────
@@ -221,6 +345,33 @@ async def test_filters_echo_in_response(app_client, make_user, db_session):
     assert body["filters"]["category"] == "question"
     assert body["filters"]["persona_id"] == "analyst"
     assert body["filters"]["search"] == "hello"
+
+
+@pytest.mark.asyncio
+async def test_json_export_honors_summary_sort(app_client, make_user, db_session):
+    user = make_user(email="mem-sort-export@test.com", tier=UserTier.PLUS)
+    old = _seed_summary(
+        db_session, user_id=user.id, session_id="s-old", exchange_count=1
+    )
+    mid = _seed_summary(
+        db_session, user_id=user.id, session_id="s-mid", exchange_count=9
+    )
+    new = _seed_summary(
+        db_session, user_id=user.id, session_id="s-new", exchange_count=5
+    )
+    old.compressed_at = datetime(2026, 8, 1, 12, 0, 0)
+    mid.compressed_at = datetime(2026, 8, 2, 12, 0, 0)
+    new.compressed_at = datetime(2026, 8, 3, 12, 0, 0)
+    db_session.add_all([old, mid, new])
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries/export.json?sort=most_exchanges",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert [item["session_id"] for item in res.json()] == ["s-mid", "s-new", "s-old"]
 
 
 # ─── Tenant isolation ───────────────────────────────────────────────────────
@@ -363,11 +514,82 @@ async def test_delete_403_for_free_tier(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_bulk_delete_removes_owned_ids_and_skips_foreign_ids(
+    app_client, make_user, db_session
+):
+    user = make_user(email="mem-bulk-del@test.com", tier=UserTier.PLUS)
+    first = _seed_summary(db_session, user_id=user.id, session_id="bulk-1")
+    second = _seed_summary(db_session, user_id=user.id, session_id="bulk-2")
+    foreign = _seed_summary(db_session, user_id=user.id + 999, session_id="bulk-foreign")
+    db_session.add_all([first, second, foreign])
+    db_session.commit()
+    db_session.refresh(first)
+    db_session.refresh(second)
+    db_session.refresh(foreign)
+
+    res = await app_client.request(
+        "DELETE",
+        "/api/memory/summaries/bulk",
+        headers=_pro_headers(user),
+        json={"ids": [first.id, first.id, foreign.id, 9999999, second.id]},
+    )
+
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "deleted",
+        "requested": 4,
+        "deleted": 2,
+        "ids": [first.id, second.id],
+    }
+    assert db_session.query(SessionSummary).filter(SessionSummary.id == first.id).first() is None
+    assert db_session.query(SessionSummary).filter(SessionSummary.id == second.id).first() is None
+    assert db_session.query(SessionSummary).filter(SessionSummary.id == foreign.id).first() is not None
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_requires_memory_tier(app_client, make_user):
+    user = make_user(email="mem-bulk-del-free@test.com", tier=UserTier.FREE)
+    res = await app_client.request(
+        "DELETE",
+        "/api/memory/summaries/bulk",
+        headers=_pro_headers(user),
+        json={"ids": [1]},
+    )
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_rejects_empty_and_oversized_requests(app_client, make_user):
+    user = make_user(email="mem-bulk-del-boundary@test.com", tier=UserTier.PLUS)
+
+    empty = await app_client.request(
+        "DELETE",
+        "/api/memory/summaries/bulk",
+        headers=_pro_headers(user),
+        json={"ids": []},
+    )
+    oversized = await app_client.request(
+        "DELETE",
+        "/api/memory/summaries/bulk",
+        headers=_pro_headers(user),
+        json={"ids": list(range(1, 52))},
+    )
+
+    assert empty.status_code == 422
+    assert oversized.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_summary_endpoints_require_auth(app_client):
     for method, path in [
         ("GET", "/api/memory/summaries"),
         ("GET", "/api/memory/summaries/1"),
+        ("DELETE", "/api/memory/summaries/bulk"),
         ("DELETE", "/api/memory/summaries/1"),
     ]:
-        res = await app_client.request(method, path)
+        res = await app_client.request(
+            method,
+            path,
+            json={"ids": [1]} if path.endswith("/bulk") else None,
+        )
         assert res.status_code == 401, f"{method} {path} returned {res.status_code}"

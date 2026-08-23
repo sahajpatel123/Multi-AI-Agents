@@ -36,6 +36,7 @@ export interface PromptResponse {
   winner: AgentResponse;
   winner_agent_id: string;
   all_responses: ScoredAgent[];
+  scoring_reasoning?: string | null;
   integrity: IntegrityReport | null;
   tools_used: string[];
   timestamp: string;
@@ -171,6 +172,47 @@ export interface TierFeatures {
   agent_orchestrate: boolean;
   agent_watchlist: boolean;
   scoring_audit: boolean;
+}
+
+export interface MemorySummaryKeyPosition {
+  persona_id?: string;
+  topic?: string;
+  stance?: string;
+  confidence?: number;
+}
+
+export type MemorySummarySort = 'newest' | 'oldest' | 'most_exchanges' | 'fewest_exchanges';
+
+export interface MemorySummary {
+  id: number;
+  session_id: string;
+  dominant_category: string | null;
+  preferred_depth: string | null;
+  trusted_persona: string | null;
+  exchange_count: number;
+  main_topics: string[];
+  compressed_at: string | null;
+  created_at: string | null;
+  /** Only present on detail responses (list rows omit long-form fields). */
+  session_summary?: string;
+  key_positions_taken?: MemorySummaryKeyPosition[];
+  raw_exchanges_count?: number;
+}
+
+export interface MemorySummariesResponse {
+  summaries: MemorySummary[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  filters: {
+    category: string | null;
+    persona_id: string | null;
+    search: string | null;
+    from_date: string | null;
+    to_date: string | null;
+    sort?: MemorySummarySort;
+  };
 }
 
 export interface TierStatus {

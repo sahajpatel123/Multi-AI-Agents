@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { improvePrompt } from '../api';
+import { savePromptDraft } from '../lib/promptDraft';
 import { PromptInput } from './PromptInput';
 
 vi.mock('../api', () => ({
@@ -10,6 +11,14 @@ vi.mock('../api', () => ({
 const mockedImprovePrompt = vi.mocked(improvePrompt);
 
 describe('PromptInput', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
   it('calls onSubmit with the typed prompt when the form is submitted', () => {
     const onSubmit = vi.fn();
     render(<PromptInput onSubmit={onSubmit} isLoading={false} />);
@@ -119,6 +128,34 @@ describe('PromptInput', () => {
     expect(textarea.value).toBe('Second preset');
   });
 
+  it('lets a mount-time preset win over a stored draft', () => {
+    savePromptDraft('arena_prompt_draft:v1', 'stale draft');
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        draftKey="arena_prompt_draft:v1"
+        presetPrompt="Shared question?"
+        presetPromptNonce={1}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('Shared question?');
+  });
+
+  it('still restores a stored draft when no preset arrives at mount', () => {
+    savePromptDraft('arena_prompt_draft:v1', 'stored draft');
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        draftKey="arena_prompt_draft:v1"
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('stored draft');
+  });
+
   it('hides the polish control when polishEnabled is not set', () => {
     render(<PromptInput onSubmit={() => {}} isLoading={false} />);
     expect(
@@ -212,5 +249,181 @@ describe('PromptInput', () => {
     await waitFor(() => {
       expect(textarea.value).toBe('sharpened');
     });
+  });
+
+  it('ArrowUp fills the most recent prompt when the box is empty', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+  });
+
+  it('ArrowUp again walks to older prompts', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('older');
+  });
+
+  it('ArrowDown restores the draft after stepping into history', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'my draft' } });
+    textarea.setSelectionRange(0, 0);
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    expect(textarea.value).toBe('my draft');
+  });
+
+  it('ArrowUp recalls history even when the caret is mid-text', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'mid text' } });
+    textarea.setSelectionRange(3, 3);
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+  });
+
+  it('ArrowUp with a modifier key does not trigger history', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp', metaKey: true });
+    expect(textarea.value).toBe('');
+  });
+
+  it('ArrowDown without history is a no-op', () => {
+    render(<PromptInput onSubmit={() => {}} isLoading={false} />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    expect(textarea.value).toBe('');
+  });
+
+  it('editing after a history step starts a fresh walk from the new draft', () => {
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+
+    fireEvent.change(textarea, { target: { value: 'edited newest' } });
+    textarea.setSelectionRange(0, 0);
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    expect(textarea.value).toBe('edited newest');
+  });
+
+  it('submitting a recalled prompt restarts the history walk', () => {
+    const onSubmit = vi.fn();
+    render(
+      <PromptInput
+        onSubmit={onSubmit}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+
+    fireEvent.submit(textarea.closest('form')!);
+    expect(onSubmit).toHaveBeenCalledWith('newest');
+    expect(textarea.value).toBe('');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+  });
+
+  it('applying a preset resets an in-progress history walk', () => {
+    const { rerender } = render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+
+    rerender(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+        presetPrompt="fresh preset"
+        presetPromptNonce={2}
+      />,
+    );
+    expect(textarea.value).toBe('fresh preset');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+  });
+
+  it('polishing a recalled prompt restarts the history walk', async () => {
+    mockedImprovePrompt.mockResolvedValueOnce({
+      original_prompt: 'newest',
+      improved_prompt: 'sharpened',
+      refined: true,
+      note: 'Made the ask specific.',
+    });
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        polishEnabled
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+
+    fireEvent.click(screen.getByRole('button', { name: /polish prompt with ai/i }));
+    await waitFor(() => {
+      expect(textarea.value).toBe('sharpened');
+    });
+
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
   });
 });

@@ -47,18 +47,18 @@ def _force_queue_put(queue: asyncio.Queue, item: dict[str, Any]) -> None:
 
 class Orchestrator:
     """Manages parallel calls to all agents"""
-    
+
     def __init__(self):
         settings = get_settings()
         self.max_tokens = settings.max_tokens
         self.timeout = settings.timeout_seconds
         self.tool_router = ToolRouter()
-    
+
     def _inject_tool_context(self, system_prompt: str, tool_context: str) -> str:
         """Inject tool results into agent system prompt"""
         if not tool_context:
             return system_prompt
-        
+
         injected = f"{system_prompt}\n\n{tool_context}"
         logger.debug(
             "[ORCHESTRATOR] Injecting tool context chars=%s",
@@ -165,10 +165,10 @@ class Orchestrator:
             base_system_prompt = self._prepend_memory_context(base_system_prompt, memory_context)
             # Inject tool context into system prompt if available
             system_prompt = self._inject_tool_context(base_system_prompt, tool_context)
-            
+
             # Get persona_id for this agent to route API call
             persona_id = get_persona_id_for_agent(agent.agent_id, persona_ids)
-            
+
             # Route to appropriate API (Claude or Grok)
             content, in_tok, out_tok = await asyncio.wait_for(
                 call_persona(
@@ -179,7 +179,7 @@ class Orchestrator:
                 ),
                 timeout=self.timeout,
             )
-            
+
             if cost is not None:
                 route = get_route_for_persona(persona_id)
                 cost.add(in_tok, out_tok, model_key=route.get("model_key", "claude_sonnet"))
@@ -187,7 +187,7 @@ class Orchestrator:
             # Parse JSON response
             parsed = self._parse_agent_response(content, agent)
             return parsed
-            
+
         except asyncio.TimeoutError:
             return self._create_error_response(agent, "Request timed out")
         except json.JSONDecodeError as e:
@@ -198,7 +198,7 @@ class Orchestrator:
         except Exception as e:
             logger.warning("Agent call failed for %s: %s", agent.agent_id, e)
             return self._create_error_response(agent, f"Error: {str(e)}")
-    
+
 
             logger.warning("Agent call failed for %s: %s", agent.name, e, exc_info=True)
             return self._create_error_response(agent, "Agent call failed")
@@ -231,13 +231,13 @@ class Orchestrator:
         """Parse JSON response from agent"""
         # Try to extract JSON from the response
         content = content.strip()
-        
+
         # Handle potential markdown code blocks
         if content.startswith("```"):
             lines = content.split("\n")
             content = "\n".join(lines[1:-1]) if lines[-1] == "```" else "\n".join(lines[1:])
             content = content.strip()
-        
+
         data = json.loads(content)
 
         return AgentResponse(
@@ -249,7 +249,7 @@ class Orchestrator:
             key_assumption=data.get("key_assumption", ""),
             timestamp=datetime.now(UTC),
         )
-    
+
     def _create_error_response(self, agent: AgentConfig, error_msg: str) -> AgentResponse:
         """Create an error response for failed agent calls"""
         return AgentResponse(
@@ -261,7 +261,7 @@ class Orchestrator:
             key_assumption="N/A",
             timestamp=datetime.now(UTC),
         )
-    
+
     async def run_all_agents(
         self,
         prompt: str,
@@ -361,7 +361,7 @@ class Orchestrator:
         )
 
         return responses, tools_used
-    
+
     async def run_single_agent(self, agent_id: str, prompt: str, persona_ids: list[str] | None = None) -> AgentResponse | None:
         """Run a single agent by ID"""
         agent = AGENTS.get(agent_id)
@@ -374,20 +374,20 @@ class Orchestrator:
     ) -> None:
         """Simulate token streaming for non-streaming APIs by emitting word chunks."""
         words = text.split(' ')
-        
+
         for i, word in enumerate(words):
             # Add space back except for last word
             token = word + ' ' if i < len(words) - 1 else word
-            
+
             await queue.put({
                 "type": "token",
                 "agent_id": agent_id,
                 "token": token
             })
-            
+
             # Small delay between words to simulate streaming (25ms feels natural)
             await asyncio.sleep(0.025)
-    
+
     async def _stream_agent(
         self,
         agent: AgentConfig,
@@ -517,18 +517,18 @@ class Orchestrator:
         Tools are executed first and results injected into agent context.
         """
         queue: asyncio.Queue = asyncio.Queue(maxsize=STREAM_QUEUE_MAXSIZE)
-        
+
         # Execute tools first (in parallel)
         tool_results = await self.tool_router.execute_tools(prompt)
         if tracker:
             tracker.mark("tool_router_done")
-        
+
         # Format tool context for injection
         tool_context = self.tool_router.format_tool_context(tool_results)
-        
+
         # Get list of successfully used tools
         tools_used = self.tool_router.get_tool_summary(tool_results)
-        
+
         # Get all agents (always 4 agents)
         active_agents = agents or get_all_agents()
         memory_contexts = await self._build_memory_contexts(

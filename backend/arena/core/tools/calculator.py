@@ -14,9 +14,9 @@ import operator
 import re
 from typing import Any, Dict, Union
 
-logger = logging.getLogger(__name__)
-
 from arena.core.tools.base import Tool, ToolResult
+
+logger = logging.getLogger(__name__)
 
 Number = Union[int, float]
 

@@ -101,18 +101,24 @@ def test_watchlist_create_expertise_level_rejected() -> None:
 # --- WatchlistPatchBody.expertise_level ---
 
 
+def test_watchlist_patch_expertise_level_accepted() -> None:
+    """A patch may refine expertise_level without touching other fields."""
+    for level in ("none", "curious", "practitioner", "expert", "researcher"):
+        req = WatchlistPatchBody(expertise_level=level)
+        assert req.expertise_level == level
+
+
 def test_watchlist_patch_expertise_level_rejected() -> None:
-    """WatchlistPatchBody currently has no expertise_level
-    field — but the pattern applies to any future
-    expertise_level field on patch endpoints. This test
-    documents the current state: the field doesn't exist,
-    so there's nothing to validate. If a future patch adds
-    the field, the Literal allowlist should apply.
-    """
-    req = WatchlistPatchBody(interval_hours=24)
-    # No expertise_level field exists. This test just
-    # documents the current state.
-    assert not hasattr(req, "expertise_level")
+    """The Literal allowlist applies to patch expertise_level too."""
+    with pytest.raises(ValidationError):
+        WatchlistPatchBody(interval_hours=24, expertise_level="invalid")
+
+
+def test_watchlist_patch_question_optional_and_sanitized() -> None:
+    """question stays None when omitted and is sanitized when provided."""
+    assert WatchlistPatchBody(interval_hours=24).question is None
+    req = WatchlistPatchBody(question="  Refine this watch?  ")
+    assert req.question == "Refine this watch?"
 
 
 # --- CrossPollinateRequest has no expertise_level field ---
