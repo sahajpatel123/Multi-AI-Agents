@@ -7,12 +7,14 @@ repos:
         types: [text]
       - id: end-of-file-fixer
         types: [text]
+      # check-yaml / check-json / check-toml keep their upstream default
+      # selectors (extension-matched). An earlier revision overrode them
+      # with `types: [file]`, which re-tags every file in the repo as a
+      # candidate — so the job tried to parse .py/.ts/.tsx sources as
+      # YAML/JSON and failed repo-wide on first real execution.
       - id: check-yaml
-        types: [file]
       - id: check-json
-        types: [file]
       - id: check-toml
-        types: [file]
       - id: check-added-large-files
         args: ['--maxkb=1024']
       - id: check-merge-conflict
@@ -66,9 +68,12 @@ repos:
     hooks:
       - id: check-debug-statements
         name: check for debug statements
-        # Use rg with glob excludes so vendored/generated dirs (.venv,
-        # node_modules, dist, __pycache__) never trigger false positives.
-        entry: rg -n "console\.log|pdb\.set_trace|breakpoint\(\)" --glob '*.py' --glob '*.ts' --glob '*.tsx' --glob '!**/.venv*/**' --glob '!**/node_modules/**' --glob '!**/dist/**' --glob '!**/__pycache__/**' .
+        # rg exits 0 when it FINDS a match and 1 when the scan comes back
+        # clean — exactly inverted from what a gate wants. A bare rg entry
+        # therefore failed every clean run and would have PASSED on a file
+        # full of console.logs. Negate it: clean scan -> success.
+        # Glob excludes keep vendored/generated dirs out.
+        entry: bash -c '! rg -n "console\.log|pdb\.set_trace|breakpoint\(\)" --glob "*.py" --glob "*.ts" --glob "*.tsx" --glob "!**/.venv*/**" --glob "!**/node_modules/**" --glob "!**/dist/**" --glob "!**/__pycache__/**" .'
         language: system
         always_run: true
         pass_filenames: false

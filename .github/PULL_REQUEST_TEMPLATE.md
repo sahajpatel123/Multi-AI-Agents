@@ -50,7 +50,7 @@ If applicable, please ensure:
 
 ## Further configuration
 
-<!-- 
+<!--
 Additional configuration that may be needed based on the change type:
 - If adding a new environment variable to `backend/arena/config.py`, also add to `backend/.env.example`
 - If adding a new backend route, ensure it's mounted in `backend/main.py`

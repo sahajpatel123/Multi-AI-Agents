@@ -1,0 +1,25 @@
+# Ruff policy for the backend.
+#
+# Pre-commit invokes ruff from the repo root, where no other config lives;
+# ruff discovers THIS file because it is the nearest config ancestor of
+# every file under backend/. Production code keeps ruff's default rule set
+# (E4/E7/E9/F) with zero relaxations — the first full pass over it surfaced
+# a silently-dead dissent/temporal pipeline (bare `wait_for` NameError,
+# swallowed by its own except) and a /pollinate route calling a guard that
+# was never imported (guaranteed 500). That is exactly what this gate is
+# for; keep it strict.
+
+[lint.per-file-ignores]
+# Test modules play by different rules, each with a concrete reason:
+#
+#   F821  conftest's autouse `_install_pro_headers_in_test_modules`
+#         fixture assigns `_pro_headers` onto every test module at
+#         runtime, so static analysis reports "undefined name" ~900
+#         times for a name that always exists when tests execute.
+#   E402  several suites must import after sys.path/env setup lines.
+#   E712  `== True` / `== False` asserts pin exact boolean responses.
+#   F841  captured response locals (`res = await app_client.get(...)`)
+#         are often kept as documentation of the call under test.
+#   E702  semicolon-packed arrange lines in parameterized matrices.
+#   F811  intentional shadowing of module helpers in override tests.
+"tests/**" = ["F821", "E402", "E712", "F841", "E702", "F811"]
