@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Duplicate presets no longer drift away from their original: the copy
+  used to take the neighbor's slot (original position + 1), letting the
+  list's updated_at tiebreak reorder it elsewhere after any later edit.
+  Duplicating now shifts everything at or after the slot down one in the
+  same transaction, so the copy always sits directly under its original
+
 ### Added
 - Presets can now be duplicated from the sidebar panel: a Duplicate
   button reaches the backend's previously-unreachable duplicate route,

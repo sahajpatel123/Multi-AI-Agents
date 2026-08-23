@@ -1111,6 +1111,22 @@ async def duplicate_export_preset(
     from arena.core.datetime_utils import utcnow_naive
     timestamp = utcnow_naive().strftime('%Y%m%d-%H%M%S')
 
+    # Make room for the copy: every preset at or after the slot shifts down
+    # one, in the same transaction as the insert. The old bare position+1
+    # collided with the neighbor's slot, letting the list's updated_at
+    # tiebreak drift the copy away from its original after any later edit.
+    (
+        db.query(ExportPreset)
+        .filter(
+            ExportPreset.user_id == user.id,
+            ExportPreset.position >= original.position + 1,
+        )
+        .update(
+            {ExportPreset.position: ExportPreset.position + 1},
+            synchronize_session=False,
+        )
+    )
+
     duplicated = ExportPreset(
         user_id=user.id,
         name=f"{original.name} (Copy {timestamp})",

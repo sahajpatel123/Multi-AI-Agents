@@ -518,6 +518,54 @@ async def test_duplicate_export_preset_preserves_max_score(app_client, make_user
 
 
 @pytest.mark.asyncio
+async def test_duplicate_export_preset_slots_after_original(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """Duplicates land immediately after their original — neighbors shift.
+
+    The list orders by position (updated_at only breaks ties), so the old
+    bare position+1 insert collided with the neighbor's slot and let any
+    later edit drift the copy away from its original.
+    """
+    user = cleanup_export_presets
+
+    ids = {}
+    for name, position in (("A", 0), ("B", 1), ("C", 2)):
+        create_res = await app_client.post(
+            "/api/export-presets",
+            json={"name": name, "format": "json", "position": position},
+            headers=_pro_headers(user),
+        )
+        ids[name] = create_res.json()["id"]
+
+    first_copy_id = (
+        await app_client.post(
+            f"/api/export-presets/{ids['A']}/duplicate",
+            headers=_pro_headers(user),
+        )
+    ).json()["new_id"]
+    second_copy_id = (
+        await app_client.post(
+            f"/api/export-presets/{ids['A']}/duplicate",
+            headers=_pro_headers(user),
+        )
+    ).json()["new_id"]
+
+    res = await app_client.get("/api/export-presets", headers=_pro_headers(user))
+    presets_list = res.json()["presets"]
+    # Newest copy sits directly under the original; B and C follow intact.
+    assert [p["id"] for p in presets_list] == [
+        ids["A"],
+        second_copy_id,
+        first_copy_id,
+        ids["B"],
+        ids["C"],
+    ]
+    # The shifts leave positions dense — no ties for updated_at to break.
+    assert [p["position"] for p in presets_list] == [0, 1, 2, 3, 4]
+
+
+@pytest.mark.asyncio
 async def test_reorder_export_presets(app_client, make_user, db_session, cleanup_export_presets):
     """Test reordering export presets."""
     user = cleanup_export_presets
