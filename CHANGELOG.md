@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- The filter editor now honors the keyboard contract the rename editor
+  established: Enter commits from any of its inputs (search box, sort
+  select, score bounds) and Escape cancels without touching the server
+
 ### Added
 - Preset filters are now editable from the sidebar panel: a Filters
   button opens an inline editor prefilled from the row (search term,

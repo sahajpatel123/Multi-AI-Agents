@@ -900,4 +900,46 @@ describe('ExportPresetsPanel', () => {
       screen.getByRole('spinbutton', { name: /minimum score for export preset/i }),
     ).toHaveValue(90);
   });
+
+  it('closes the filter editor on Escape without saving', async () => {
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /edit filters for export preset high score responses/i }),
+    );
+    const search = await screen.findByRole('textbox', { name: /search term for export preset/i });
+    fireEvent.keyDown(search, { key: 'Escape' });
+
+    // Editor closed without touching the server.
+    expect(screen.queryByRole('button', { name: /^save filters for export preset/i })).not
+      .toBeInTheDocument();
+    expect(mockedApi.updateExportPresetFilters).not.toHaveBeenCalled();
+  });
+
+  it('saves the filter editor on Enter from any input', async () => {
+    mockedApi.updateExportPresetFilters.mockResolvedValue({
+      ...hoisted.presetCsv,
+      search: 'bitcoin',
+    });
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /edit filters for export preset high score responses/i }),
+    );
+    // Enter pressed inside the sort select — not the search box — still commits.
+    const sort = await screen.findByRole('combobox', { name: /sort order for export preset/i });
+    fireEvent.keyDown(sort, { key: 'Enter' });
+
+    await waitFor(() => {
+      // Draft was untouched, so the saved patch is exactly the stored preset.
+      expect(mockedApi.updateExportPresetFilters).toHaveBeenCalledWith(3, {
+        search: '',
+        minScore: 80,
+        maxScore: null,
+        sort: 'score',
+      });
+      // And the editor closed on commit.
+      expect(screen.queryByText(/^save filters for export preset$/i)).not.toBeInTheDocument();
+    });
+  });
 });

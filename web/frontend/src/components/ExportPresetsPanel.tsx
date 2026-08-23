@@ -265,6 +265,19 @@ export function ExportPresetsPanel() {
     [filterDraft, runAction],
   );
 
+  // Same keyboard contract as the inline rename editor: Enter commits,
+  // Escape cancels — from any input in the filter editor.
+  const handleFilterKeyDown = useCallback(
+    (preset: ExportPreset, event: React.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setEditingFiltersId(null);
+      } else if (event.key === 'Enter' && busyKey === null) {
+        void handleFilterSave(preset);
+      }
+    },
+    [busyKey, handleFilterSave],
+  );
+
   const handleMakeDefault = useCallback(
     (preset: ExportPreset) =>
       runAction(`default-${preset.id}`, async () => {
@@ -592,6 +605,7 @@ export function ExportPresetsPanel() {
                           maxLength={100}
                           placeholder="search — blank clears"
                           aria-label={`Search term for export preset ${preset.name}`}
+                          onKeyDown={(event) => handleFilterKeyDown(preset, event)}
                           onChange={(event) =>
                             setFilterDraft((draft) => ({ ...draft, search: event.target.value }))
                           }
@@ -610,6 +624,7 @@ export function ExportPresetsPanel() {
                         <select
                           value={filterDraft.sort}
                           aria-label={`Sort order for export preset ${preset.name}`}
+                          onKeyDown={(event) => handleFilterKeyDown(preset, event)}
                           onChange={(event) =>
                             setFilterDraft((draft) => ({ ...draft, sort: event.target.value }))
                           }
@@ -636,6 +651,7 @@ export function ExportPresetsPanel() {
                           max={100}
                           placeholder="min"
                           aria-label={`Minimum score for export preset ${preset.name}`}
+                          onKeyDown={(event) => handleFilterKeyDown(preset, event)}
                           value={filterDraft.minScore}
                           onChange={(event) =>
                             setFilterDraft((draft) => ({ ...draft, minScore: event.target.value }))
@@ -658,6 +674,7 @@ export function ExportPresetsPanel() {
                           max={100}
                           placeholder="max"
                           aria-label={`Maximum score for export preset ${preset.name}`}
+                          onKeyDown={(event) => handleFilterKeyDown(preset, event)}
                           value={filterDraft.maxScore}
                           onChange={(event) =>
                             setFilterDraft((draft) => ({ ...draft, maxScore: event.target.value }))
