@@ -51,6 +51,7 @@ import {
   getAgentCapabilities,
   getCapabilityDoc,
   getCapabilityExamples,
+  getAccountSecurity,
   searchMcpIntegration,
   deleteCalibrationRating,
   getCalibrationHistory,
@@ -76,6 +77,7 @@ import {
   type CapabilityDoc,
   type CapabilityUsageSummary,
   type McpSearchResult,
+  type AccountSecurity,
   type CalibrationHistoryRating,
   type CalibrationHistoryResponse,
   type CalibrationHistorySort,
@@ -1377,6 +1379,12 @@ export function ProfileModal() {
   const [mcpTestBusy, setMcpTestBusy] = useState(false);
   const [mcpTestResults, setMcpTestResults] = useState<McpSearchResult[] | null>(null);
   const [mcpTestError, setMcpTestError] = useState<string | null>(null);
+  // Account security details — fetched once when the expander opens, then cached
+  // for the life of the modal; a refusal keeps the panel closed and says why.
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [securityDetails, setSecurityDetails] = useState<AccountSecurity | null>(null);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityError, setSecurityError] = useState<string | null>(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768);
@@ -1907,6 +1915,32 @@ export function ProfileModal() {
     }
   }, [mcpTestOpenId, mcpTestQuery, mcpTestBusy]);
 
+  // Security details fetch once and stay cached while the modal is open —
+  // reopening the expander replays the loaded facts rather than re-asking.
+  // A refusal keeps whatever was there (nothing, on first open) and says why.
+  const toggleSecurityDetails = useCallback(() => {
+    const next = !securityOpen;
+    setSecurityOpen(next);
+    if (!next || securityDetails || securityLoading) return;
+    setSecurityLoading(true);
+    setSecurityError(null);
+    void getAccountSecurity()
+      .then((details) => {
+        setSecurityDetails(details);
+      })
+      .catch((error: unknown) => {
+        setSecurityDetails(null);
+        setSecurityError(
+          error instanceof Error && error.message
+            ? error.message
+            : 'Could not load your security details.',
+        );
+      })
+      .finally(() => {
+        setSecurityLoading(false);
+      });
+  }, [securityOpen, securityDetails, securityLoading]);
+
   useEffect(() => {
     if (!exportNotice) return;
     const t = window.setTimeout(() => setExportNotice(null), 2000);
@@ -2186,6 +2220,102 @@ export function ProfileModal() {
                 placeholder="Change password"
                 className="profile-modal__input"
               />
+            </div>
+
+            {/* The security endpoint was built for exactly this panel and never
+                had a caller — this expander surfaces what it honestly knows. */}
+            <div style={{ marginBottom: 18 }}>
+              <button
+                type="button"
+                onClick={toggleSecurityDetails}
+                aria-expanded={securityOpen}
+                aria-controls="account-security-region"
+                aria-label={securityOpen ? 'Hide security details' : 'Show security details'}
+                className="profile-modal__section-sub"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  color: '#F0B84E',
+                  font: 'inherit',
+                }}
+              >
+                {securityOpen ? '▾' : '▸'} Security details
+              </button>
+              <div
+                id="account-security-region"
+                role="region"
+                aria-label="Account security details"
+                aria-busy={securityLoading}
+                hidden={!securityOpen}
+                style={{ marginTop: 10 }}
+              >
+                {securityLoading ? (
+                  <p style={{ fontSize: 11, color: '#8C7355', margin: 0 }}>Loading security details…</p>
+                ) : null}
+                {securityError ? (
+                  <p role="alert" style={{ fontSize: 11, color: '#993C1D', margin: 0 }}>
+                    {securityError}
+                  </p>
+                ) : null}
+                {securityDetails ? (
+                  <dl style={{ margin: 0, display: 'grid', gap: 6 }}>
+                    {[
+                      {
+                        label: 'Member since',
+                        value: formatCalibrationDate(securityDetails.memberSince),
+                      },
+                      {
+                        label: 'Last active',
+                        value: securityDetails.lastActiveAt
+                          ? formatCalibrationDate(securityDetails.lastActiveAt)
+                          : 'No activity recorded yet',
+                      },
+                      {
+                        label: 'Email verified',
+                        value: securityDetails.isVerified ? 'Verified' : 'Not verified',
+                      },
+                      {
+                        label: 'Password',
+                        value: !securityDetails.hasPassword
+                          ? 'Not set — you sign in through a linked provider'
+                          : securityDetails.passwordLastChangedAt
+                            ? `Changed ${formatCalibrationDate(securityDetails.passwordLastChangedAt)}`
+                            : 'Original — set at signup and never changed',
+                      },
+                    ].map((row) => (
+                      <div key={row.label} style={{ display: 'flex', gap: 8 }}>
+                        <dt
+                          style={{
+                            fontSize: 11,
+                            color: '#8C7355',
+                            width: 96,
+                            flexShrink: 0,
+                            margin: 0,
+                          }}
+                        >
+                          {row.label}
+                        </dt>
+                        <dd
+                          style={{
+                            fontSize: 11,
+                            color: '#F3F0E7',
+                            margin: 0,
+                            minWidth: 0,
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {row.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+              </div>
             </div>
 
             <div style={{ borderTop: '0.5px solid #EDE4D8', margin: '20px 0' }} />

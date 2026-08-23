@@ -2027,6 +2027,48 @@ export async function searchMcpIntegration(
     }));
 }
 
+export interface AccountSecurity {
+  email: string;
+  memberSince: string | null;
+  lastActiveAt: string | null;
+  tier: string;
+  isVerified: boolean;
+  hasPassword: boolean;
+  /** Null until the backend tracks password changes — treated as "set at signup". */
+  passwordLastChangedAt: string | null;
+}
+
+export async function getAccountSecurity(): Promise<AccountSecurity> {
+  const response = await apiFetch('/api/auth/security');
+  const data = await parseJsonSafely<{
+    email?: unknown;
+    member_since?: unknown;
+    last_active_at?: unknown;
+    tier?: unknown;
+    is_verified?: unknown;
+    has_password?: unknown;
+    password_last_changed_at?: unknown;
+    detail?: string | { message?: string };
+  }>(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to load your security details'), response),
+      response.status,
+      data,
+    );
+  }
+  return {
+    email: typeof data?.email === 'string' ? data.email : '',
+    memberSince: typeof data?.member_since === 'string' ? data.member_since : null,
+    lastActiveAt: typeof data?.last_active_at === 'string' ? data.last_active_at : null,
+    tier: typeof data?.tier === 'string' ? data.tier : '',
+    isVerified: data?.is_verified === true,
+    hasPassword: data?.has_password === true,
+    passwordLastChangedAt:
+      typeof data?.password_last_changed_at === 'string' ? data.password_last_changed_at : null,
+  };
+}
+
 export async function exportAgentFeedbackSummaryJson(
   windowDays: number = 30,
 ): Promise<AgentFeedbackActivityExport> {

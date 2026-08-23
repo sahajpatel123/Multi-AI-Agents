@@ -44,6 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- The Account tab finally tells you where you stand: a Security
+  details expander calls the account-security endpoint that was built
+  for this panel but never had a frontend caller — member since, last
+  active (nulls say "no activity recorded yet" rather than a fake
+  dash), verification status, and the honest password story: original
+  since signup, last-changed date once tracking ships, or "not set —
+  linked provider". Details fetch once per modal open and are cached,
+  and a refusal surfaces verbatim with its request ID
 - Connected integrations can prove themselves: each connected row in
   the Integrations tab gains a Test search expander that runs a live
   query against the vendor (Notion, GitHub, Google Drive) through the

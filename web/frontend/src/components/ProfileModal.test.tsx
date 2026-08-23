@@ -484,6 +484,15 @@ const hoistedMocks = vi.hoisted(() => {
     })),
   getMcpIntegrations: vi.fn().mockResolvedValue({ integrations: [] }),
   searchMcpIntegration: vi.fn().mockResolvedValue([]),
+  getAccountSecurity: vi.fn().mockResolvedValue({
+    email: 'dev@example.com',
+    memberSince: '2026-01-15T09:30:00Z',
+    lastActiveAt: '2026-08-20T18:00:00Z',
+    tier: 'PRO',
+    isVerified: true,
+    hasPassword: true,
+    passwordLastChangedAt: null,
+  }),
   };
 });
 
@@ -556,6 +565,7 @@ vi.mock('../api', () => ({
   exportAgentFeedbackSummaryMarkdown: hoistedMocks.exportAgentFeedbackSummaryMarkdown,
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
   searchMcpIntegration: hoistedMocks.searchMcpIntegration,
+  getAccountSecurity: hoistedMocks.getAccountSecurity,
   exportAnalyticsActivityCsv: hoistedMocks.exportAnalyticsActivityCsv,
   exportAnalyticsActivityJson: hoistedMocks.exportAnalyticsActivityJson,
   exportAnalyticsActivityMarkdown: hoistedMocks.exportAnalyticsActivityMarkdown,
@@ -683,6 +693,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getCapabilityDoc).mockClear();
     vi.mocked(hoistedMocks.getCapabilityExamples).mockClear();
     vi.mocked(hoistedMocks.searchMcpIntegration).mockClear();
+    vi.mocked(hoistedMocks.getAccountSecurity).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).mockClear();
@@ -4185,6 +4196,75 @@ describe('ProfileModal', () => {
     ).toBeInTheDocument();
     // The taxonomy row itself survives; only the doc failed.
     expect(within(region).getByText('file.organize')).toBeInTheDocument();
+  });
+
+  async function openAccountSecurityPanel() {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    (await screen.findByRole('button', { name: /^account$/i })).click();
+    (
+      await screen.findByRole('button', { name: /show security details/i })
+    ).click();
+    return await screen.findByRole('region', { name: /account security details/i });
+  }
+
+  it('reveals account security details and fetches them only once', async () => {
+    const region = await openAccountSecurityPanel();
+
+    expect(await within(region).findByText('2026-01-15')).toBeInTheDocument();
+    expect(within(region).getByText('2026-08-20')).toBeInTheDocument();
+    expect(within(region).getByText('Verified')).toBeInTheDocument();
+    // passwordLastChangedAt is null — the honest reading is "original".
+    expect(
+      within(region).getByText('Original — set at signup and never changed'),
+    ).toBeInTheDocument();
+
+    // Collapse and reopen: the cached facts replay without a second request.
+    (screen.getByRole('button', { name: /hide security details/i })).click();
+    (
+      await screen.findByRole('button', { name: /show security details/i })
+    ).click();
+    const reopened = await screen.findByRole('region', {
+      name: /account security details/i,
+    });
+    expect(await within(reopened).findByText('2026-01-15')).toBeInTheDocument();
+    expect(hoistedMocks.getAccountSecurity).toHaveBeenCalledTimes(1);
+  });
+
+  it('says exactly what nulls mean in the security payload', async () => {
+    hoistedMocks.getAccountSecurity.mockResolvedValueOnce({
+      email: 'dev@example.com',
+      memberSince: '2026-03-02T00:00:00Z',
+      lastActiveAt: null,
+      tier: 'FREE',
+      isVerified: false,
+      hasPassword: false,
+      passwordLastChangedAt: null,
+    });
+    const region = await openAccountSecurityPanel();
+
+    expect(await within(region).findByText('No activity recorded yet')).toBeInTheDocument();
+    expect(within(region).getByText('Not verified')).toBeInTheDocument();
+    expect(
+      within(region).getByText('Not set — you sign in through a linked provider'),
+    ).toBeInTheDocument();
+  });
+
+  it('surfaces a security-details refusal verbatim and keeps the expander', async () => {
+    hoistedMocks.getAccountSecurity.mockRejectedValueOnce(
+      new Error('Too many security panel reads. Please slow down.'),
+    );
+    const region = await openAccountSecurityPanel();
+
+    expect(
+      await within(region).findByRole('alert'),
+    ).toHaveTextContent('Too many security panel reads. Please slow down.');
+    // The expander still works — hiding is always available.
+    expect(
+      screen.getByRole('button', { name: /hide security details/i }),
+    ).toBeInTheDocument();
   });
 
   it('exports category performance as JSON for the selected window', async () => {
