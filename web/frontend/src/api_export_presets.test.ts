@@ -14,6 +14,7 @@ import {
   exportPresetsBackup,
   importPresetsBackup,
   updateExportPresetFilters,
+  duplicateExportPreset,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -759,6 +760,67 @@ describe('export preset API helpers', () => {
       await expect(updateExportPresetFilters(3, { search: 'x' })).rejects.toThrow(
         'Too many export preset updates. (Request ID: req-filters-429)',
       );
+    });
+  });
+
+  describe('duplicateExportPreset', () => {
+    it('POSTs to the duplicate route and returns the normalized stub', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            status: 'duplicated',
+            original_id: 3,
+            new_id: 9,
+            name: 'High Score Responses (Copy 20260823-070000)',
+            position: 1,
+            is_default: false,
+            created_at: '2026-08-23T07:00:00',
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const result = await duplicateExportPreset(3);
+      expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/3/duplicate', {
+        method: 'POST',
+      });
+      expect(result).toEqual({
+        newId: 9,
+        name: 'High Score Responses (Copy 20260823-070000)',
+        position: 1,
+      });
+    });
+
+    it('rejects invalid ids before any request', async () => {
+      await expect(duplicateExportPreset(0)).rejects.toThrow(RangeError);
+      await expect(duplicateExportPreset(-2)).rejects.toThrow(RangeError);
+      await expect(duplicateExportPreset(1.5)).rejects.toThrow(RangeError);
+      expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the preset-limit refusal with its message and request ID', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            detail: {
+              error: 'preset_limit_reached',
+              message: 'Export preset limit reached (50). Delete some before duplicating.',
+            },
+          }),
+          { status: 400, headers: { 'x-request-id': 'req-dup-cap' } },
+        ),
+      );
+
+      await expect(duplicateExportPreset(3)).rejects.toThrow(
+        'Export preset limit reached (50). Delete some before duplicating. (Request ID: req-dup-cap)',
+      );
+    });
+
+    it('rejects a malformed success payload', async () => {
+      vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'duplicated' }), { status: 200 }),
+      );
+      await expect(duplicateExportPreset(3)).rejects.toThrow('unexpected shape');
     });
   });
 });

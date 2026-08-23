@@ -5238,6 +5238,44 @@ export async function updateExportPresetFilters(
   return normalizeExportPreset(data);
 }
 
+export type ExportPresetDuplicateResult = {
+  newId: number;
+  name: string;
+  position: number;
+};
+
+export async function duplicateExportPreset(
+  presetId: number,
+): Promise<ExportPresetDuplicateResult> {
+  if (!Number.isInteger(presetId) || presetId < 1) {
+    throw new RangeError('presetId must be a positive integer');
+  }
+  // The backend names the copy "<original> (Copy <timestamp>)" and slots
+  // it after the original; the response is a stub (id/name/position), not
+  // a full row, so callers refetch to see the copy's real fields.
+  const res = await apiFetch(
+    `/api/export-presets/${encodeURIComponent(String(presetId))}/duplicate`,
+    { method: 'POST' },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to duplicate export preset'), res));
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(res)) ||
+    (() => {
+      throw new Error('Duplicating the export preset returned no result.');
+    })();
+  if (typeof data.new_id !== 'number' || typeof data.name !== 'string') {
+    throw new Error('Duplicating the export preset returned an unexpected shape.');
+  }
+  return {
+    newId: data.new_id,
+    name: data.name,
+    position: typeof data.position === 'number' ? data.position : 0,
+  };
+}
+
 export type ExportPresetBackupEntry = {
   name: string;
   description: string | null;

@@ -4,6 +4,7 @@ import {
   bulkDeleteExportPresets,
   createExportPresetFromTemplate,
   deleteExportPreset,
+  duplicateExportPreset,
   exportPresetsBackup,
   importPresetsBackup,
   listExportPresetTemplates,
@@ -176,6 +177,18 @@ export function ExportPresetsPanel() {
           current ? current.filter((item) => item.id !== preset.id) : current,
         );
         return `Deleted "${preset.name}".`;
+      }),
+    [runAction],
+  );
+
+  const handleDuplicate = useCallback(
+    (preset: ExportPreset) =>
+      runAction(`duplicate-${preset.id}`, async () => {
+        // The copy is the server's invention — timestamped name, fresh id,
+        // slotted after the original — so refetch rather than guess its row.
+        const copy = await duplicateExportPreset(preset.id);
+        setReloadTick((tick) => tick + 1);
+        return `Duplicated "${preset.name}" as "${copy.name}".`;
       }),
     [runAction],
   );
@@ -503,6 +516,7 @@ export function ExportPresetsPanel() {
         <ul style={{ listStyle: 'none', margin: '0 0 8px', padding: 0, display: 'grid', gap: 6 }}>
           {presets.map((preset, index) => {
             const busy = busyKey === `use-${preset.id}`;
+            const duplicating = busyKey === `duplicate-${preset.id}`;
             const deleting = busyKey === `delete-${preset.id}`;
             const filters = [
               preset.search ? `“${preset.search}”` : null,
@@ -962,6 +976,27 @@ export function ExportPresetsPanel() {
                     }}
                   >
                     {busy ? 'Downloading…' : 'Download'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyKey !== null}
+                    aria-busy={duplicating}
+                    aria-label={`Duplicate export preset ${preset.name}`}
+                    onClick={() => void handleDuplicate(preset)}
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      color: duplicating ? '#A0A39A' : '#4A3728',
+                      cursor: busyKey !== null ? 'wait' : 'pointer',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                  >
+                    {duplicating ? 'Copying…' : 'Duplicate'}
                   </button>
                   <button
                     type="button"

@@ -21,6 +21,7 @@ vi.mock('../api', () => ({
   createExportPresetFromTemplate: vi.fn(),
   bulkDeleteExportPresets: vi.fn(),
   deleteExportPreset: vi.fn(),
+  duplicateExportPreset: vi.fn(),
   useExportPreset: vi.fn(),
   previewExportPreset: vi.fn(),
   renameExportPreset: vi.fn(),
@@ -941,5 +942,49 @@ describe('ExportPresetsPanel', () => {
       // And the editor closed on commit.
       expect(screen.queryByText(/^save filters for export preset$/i)).not.toBeInTheDocument();
     });
+  });
+
+  it('duplicates a preset and refetches so the server-named copy appears', async () => {
+    mockedApi.duplicateExportPreset.mockResolvedValue({
+      newId: 9,
+      name: 'High Score Responses (Copy 20260823-070000)',
+      position: 1,
+    });
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /duplicate export preset high score responses/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockedApi.duplicateExportPreset).toHaveBeenCalledWith(3);
+      // The copy is the server's invention, so the panel refetches.
+      expect(mockedApi.listExportPresets.mock.calls.length).toBe(2);
+    });
+    // The status names both the original and the server-assigned copy name.
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Duplicated "High Score Responses" as "High Score Responses (Copy 20260823-070000)".',
+    );
+  });
+
+  it('shows a duplicate refusal verbatim and keeps the row', async () => {
+    mockedApi.duplicateExportPreset.mockRejectedValue(
+      new apiModule.ApiError(
+        'Export preset limit reached (50). Delete some before duplicating.',
+        400,
+      ),
+    );
+    render(<ExportPresetsPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /duplicate export preset high score responses/i }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Export preset limit reached (50). Delete some before duplicating.',
+    );
+    // No refetch on failure — the original row stays exactly as it was.
+    expect(mockedApi.listExportPresets.mock.calls.length).toBe(1);
+    expect(screen.getByText('High Score Responses')).toBeInTheDocument();
   });
 });

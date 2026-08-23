@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Presets can now be duplicated from the sidebar panel: a Duplicate
+  button reaches the backend's previously-unreachable duplicate route,
+  which names the copy "<original> (Copy <timestamp>)" and slots it
+  after the original. Since the copy is the server's invention, the
+  panel refetches rather than guessing its row, and refusals (the
+  preset cap, tier gating) surface verbatim with their request IDs
+
 ### Improved
 - The filter editor now honors the keyboard contract the rename editor
   established: Enter commits from any of its inputs (search box, sort
