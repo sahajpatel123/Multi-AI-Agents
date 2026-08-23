@@ -27,13 +27,26 @@ def _seed_audit(
     hours_ago: int = 1,
     fallback_used: bool = False,
     score: int = 80,
+    days_ago: int | None = None,
 ) -> ScoringAudit:
     """Seed one scored exchange.
 
     ``panel`` is passed through as-is so tests can cover the JSON-string
     and NULL shapes the column actually contains in production, not just
     the happy-path list.
+
+    ``days_ago`` (when given) anchors ``created_at`` to a deterministic
+    UTC day bucket instead of ``now − N hours``. The hour-based offset
+    crosses midnight whenever the suite runs between 00:00 and 01:00
+    UTC, dropping "today" rows out of today-only windows; bucket-anchored
+    seeds keep window-membership assertions true at any wall-clock time.
     """
+    if days_ago is not None:
+        now = utcnow_naive()
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        created_at = day_start - timedelta(days=days_ago) + timedelta(minutes=30)
+    else:
+        created_at = utcnow_naive() - timedelta(hours=hours_ago)
     rec = ScoringAudit(
         session_id=str(uuid.uuid4()),
         user_id=user_id,
@@ -44,7 +57,7 @@ def _seed_audit(
         scores={"agent-1": score},
         persona_ids_used=panel,
         fallback_used=fallback_used,
-        created_at=utcnow_naive() - timedelta(hours=hours_ago),
+        created_at=created_at,
     )
     db.add(rec)
     db.flush()
@@ -696,8 +709,15 @@ async def test_trend_bucket_count_ceils_to_weeks_and_caps(
     app_client, make_user, db_session
 ):
     user = make_user(email="pwr-trend-len@test.com", tier=UserTier.PRO)
+    # days_ago=0 keeps the row inside even the days=1 window at any
+    # wall-clock time — a plain "now − 1h" seed falls into yesterday
+    # whenever the suite runs in the 00:00–01:00 UTC hour.
     _seed_audit(
-        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"]
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst"],
+        days_ago=0,
     )
     db_session.commit()
 

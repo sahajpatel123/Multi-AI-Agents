@@ -85,7 +85,15 @@ async def test_resume_all_respects_active_cap(
     assert len(resumed) == 10
     newly_resumed = [item for item in resumed if item.question.startswith("Paused")]
     assert len(newly_resumed) == 9
-    assert all(item.next_run_at > utcnow_naive() for item in newly_resumed)
+    # Resume must reschedule, not merely reactivate: every resumed watch
+    # lands at least its full interval (>= 24h here) in the future. The
+    # weaker `> utcnow_naive()` form once failed in CI on a sub-second
+    # comparison; this version fails only when resume genuinely forgets
+    # to push next_run_at forward.
+    assert all(
+        item.next_run_at >= utcnow_naive() + timedelta(hours=23)
+        for item in newly_resumed
+    )
 
 
 @pytest.mark.asyncio
