@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- The prompt-pipeline status now owns its freshness: every reading
+  carries how old it actually is ("checked 40s ago") instead of an
+  undated green dot that could sit stale all afternoon while claiming
+  health — and a missing or unparseable server timestamp renders no
+  age claim at all rather than inventing one
 - Contradiction reports communicate their states properly: the
   region now announces loading/result/refusal swaps to screen readers
   via aria-live, and a refused load offers an explicit Retry button —

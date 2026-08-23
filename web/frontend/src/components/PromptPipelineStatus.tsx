@@ -2,10 +2,30 @@ import { useCallback, useEffect, useState } from 'react';
 import { getPromptReadiness, type PromptReadiness } from '../api';
 
 /**
+ * Human age of a readiness check, from its ISO timestamp. Returns null
+ * when the timestamp is missing or unparseable — no age claim beats a
+ * wrong one. Future timestamps (clock skew) read as "just now".
+ */
+export function formatCheckAge(checkedAt: string, now: number = Date.now()): string | null {
+  const then = new Date(checkedAt).getTime();
+  if (!Number.isFinite(then)) return null;
+  const seconds = Math.max(0, Math.round((now - then) / 1000));
+  if (seconds < 10) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+/**
  * Live readiness of the prompt pipeline (db, short-term memory, route
  * wiring), surfaced where prompts are composed. Self-contained: one
  * fetch on mount, an explicit Refresh, and an aria-live announcement
- * so status swaps are heard. Degraded is data from a 503, not an error.
+ * so status swaps are heard. Degraded is data from a 503, not an
+ * error, and every reading carries its own age — an undated dot could
+ * sit stale all afternoon while claiming health.
  */
 export function PromptPipelineStatus() {
   const [status, setStatus] = useState<PromptReadiness | null>(null);
@@ -37,6 +57,7 @@ export function PromptPipelineStatus() {
   }, [load]);
 
   const failing = status ? status.checks.filter((check) => check.state !== 'ok') : [];
+  const age = status && !loading ? formatCheckAge(status.checkedAt) : null;
 
   return (
     <div
@@ -84,6 +105,11 @@ export function PromptPipelineStatus() {
               ({failing.map((check) => `${check.name}: ${check.state}`).join(' · ')})
             </span>
           ) : null}
+        </span>
+      ) : null}
+      {age ? (
+        <span style={{ fontSize: 11, color: '#A0A39A', whiteSpace: 'nowrap' }}>
+          · checked {age}
         </span>
       ) : null}
       {!loading ? (
