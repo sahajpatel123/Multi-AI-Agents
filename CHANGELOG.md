@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Accuracy verdicts can explain themselves now: choosing a verdict
+  reveals an optional note (1,000 characters, saved explicitly with a
+  dirty-aware "Note saved" marker that disappears the moment the text
+  diverges) — and every verdict change carries the current note along,
+  because the backend overwrites feedback and note together and a
+  noteless POST would silently erase what you wrote. The control also
+  moved into its own tested component instead of living inline in the
+  agent page
 - The prompt-pipeline status now owns its freshness: every reading
   carries how old it actually is ("checked 40s ago") instead of an
   undated green dot that could sit stale all afternoon while claiming

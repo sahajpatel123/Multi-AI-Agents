@@ -49,7 +49,6 @@ import {
   postAgentWatchlist,
   postAgentTaskAnswerFeedback,
   postCalibrationRate,
-  submitTaskFeedback,
   refineAgentAnswer,
   renameAgentTask,
   revokeAgentTaskShare,
@@ -66,6 +65,7 @@ import { ConduraInstallCTA } from '../components/ConduraInstallCTA';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { EmptyState } from '../components/EmptyState';
 import { PromptPipelineStatus } from '../components/PromptPipelineStatus';
+import { AgentAccuracyVerdict } from '../components/AgentAccuracyVerdict';
 import { RoomsDiscoverPanel } from '../components/RoomsDiscoverPanel';
 import { TemporalEvolutionPanel } from '../components/TemporalEvolutionPanel';
 import { buildHandoffPayload } from '../lib/conduraHandoff';
@@ -899,13 +899,6 @@ export function AgentPage() {
   const [userRating, setUserRating] = useState<number | null>(null);
   const [ratingResult, setRatingResult] = useState<any>(null);
   const [ratingSubmitBusy, setRatingSubmitBusy] = useState(false);
-  // Accuracy verdict (accurate/partial/inaccurate) — a separate axis from
-  // the calibration rating, written through the long-dormant POST /feedback.
-  const [accuracyVerdict, setAccuracyVerdict] = useState<
-    'accurate' | 'partial' | 'inaccurate' | null
-  >(null);
-  const [verdictBusy, setVerdictBusy] = useState(false);
-  const [verdictErr, setVerdictErr] = useState<string | null>(null);
   const [liveToggleBusy, setLiveToggleBusy] = useState(false);
   const [liveUpdatesPanelOpen, setLiveUpdatesPanelOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -2237,9 +2230,6 @@ export function AgentPage() {
     setCopyReportCsvFeedback('idle');
     setUserRating(null);
     setRatingResult(null);
-    setAccuracyVerdict(null);
-    setVerdictErr(null);
-    setVerdictBusy(false);
     setRatingSubmitBusy(false);
     setLiveToggleBusy(false);
     setLiveUpdatesPanelOpen(false);
@@ -3207,9 +3197,6 @@ export function AgentPage() {
     setFollowUp('');
     setUserRating(null);
     setRatingResult(null);
-    setAccuracyVerdict(null);
-    setVerdictErr(null);
-    setVerdictBusy(false);
     setLiveUpdatesPanelOpen(false);
   }, [result?.task_id, result?.refinement_count]);
 
@@ -3445,27 +3432,6 @@ export function AgentPage() {
       }
     },
     [result?.task_id, ratingSubmitBusy],
-  );
-
-  const handleAccuracyVerdictClick = useCallback(
-    async (verdict: 'accurate' | 'partial' | 'inaccurate') => {
-      if (!result?.task_id || verdictBusy) return;
-      const previous = accuracyVerdict;
-      setVerdictErr(null);
-      setVerdictBusy(true);
-      setAccuracyVerdict(verdict); // optimistic; rolled back on refusal
-      try {
-        await submitTaskFeedback(result.task_id, verdict);
-      } catch (err) {
-        setAccuracyVerdict(previous);
-        setVerdictErr(
-          err instanceof Error && err.message ? err.message : 'Could not save your accuracy verdict.',
-        );
-      } finally {
-        setVerdictBusy(false);
-      }
-    },
-    [result?.task_id, verdictBusy, accuracyVerdict],
   );
 
   const handleToggleLive = useCallback(async () => {
@@ -9926,55 +9892,7 @@ export function AgentPage() {
                           </div>
                         </>
                       ) : null}
-                      <div style={{ marginTop: 12 }}>
-                        <div style={{ fontSize: 12, color: '#8C7355', marginBottom: 6 }}>
-                          How accurate was this answer?
-                        </div>
-                        <div
-                          role="group"
-                          aria-label="Answer accuracy"
-                          style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}
-                        >
-                          {(
-                            [
-                              ['accurate', 'Accurate'],
-                              ['partial', 'Partially accurate'],
-                              ['inaccurate', 'Inaccurate'],
-                            ] as const
-                          ).map(([value, label]) => (
-                            <button
-                              key={value}
-                              type="button"
-                              aria-pressed={accuracyVerdict === value}
-                              disabled={verdictBusy}
-                              onClick={() => void handleAccuracyVerdictClick(value)}
-                              style={{
-                                padding: '4px 12px',
-                                borderRadius: 999,
-                                fontSize: 11,
-                                border:
-                                  accuracyVerdict === value ? '0.5px solid #F0B84E' : '0.5px solid #35382F',
-                                background: accuracyVerdict === value ? '#F0B84E' : 'transparent',
-                                color: accuracyVerdict === value ? '#FAF7F2' : '#8C7355',
-                                cursor: verdictBusy ? 'default' : 'pointer',
-                                fontFamily: 'var(--vp-font-sans)',
-                              }}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                          {verdictBusy ? (
-                            <span role="status" style={{ fontSize: 11, color: '#A0A39A' }}>
-                              Saving…
-                            </span>
-                          ) : null}
-                        </div>
-                        {verdictErr ? (
-                          <p role="alert" style={{ margin: '6px 0 0', fontSize: 11, color: '#C0392B' }}>
-                            {verdictErr}
-                          </p>
-                        ) : null}
-                      </div>
+                      <AgentAccuracyVerdict taskId={result.task_id} />
                       {ratingResult?.verdict ? (
                         <div
                           style={{
