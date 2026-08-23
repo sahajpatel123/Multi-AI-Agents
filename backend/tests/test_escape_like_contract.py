@@ -128,7 +128,7 @@ class TestEscapeLikeIdempotency:
         assert twice == "\\\\\\%"  # "\\\\" + "\\%"
 
     def test_backslash_count_for_complex_input(self):
-        """``\\%_`` (literal: ``\%_``) has 3 escape-worthy chars: one
+        r"""``\\%_`` (literal: ``\%_``) has 3 escape-worthy chars: one
         backslash, one ``%``, one ``_``. Output should have 4
         backslashes total — two from the original backslash being
         doubled, one before ``%``, one before ``_``."""
