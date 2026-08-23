@@ -247,7 +247,7 @@ describe('DiscussHistoryDrawer', () => {
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
   });
 
-  it('says when nothing matches and clears from there', async () => {
+  it('says when nothing matches, lets you refine in place, and clears from there', async () => {
     // One thread loads first (so the search box exists); the applied
     // search then comes back empty.
     mockedApi.listDiscussThreads
@@ -261,13 +261,48 @@ describe('DiscussHistoryDrawer', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(await screen.findByText(/No saved discussions match “kubernetes”\./)).toBeInTheDocument();
+    // The input survives into the no-match state so a new query needs no
+    // clear-then-retype detour.
+    const refinedInput = screen.getByRole('textbox', {
+      name: /search saved discussions by title/i,
+    });
+    mockedApi.listDiscussThreads.mockResolvedValue({
+      threads: [summary],
+      total: 1,
+      totalPages: 1,
+    });
+    fireEvent.change(refinedInput, { target: { value: 'migration' } });
+    fireEvent.keyDown(refinedInput, { key: 'Enter' });
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({
+        perPage: 20,
+        search: 'migration',
+      });
+    });
 
     fireEvent.click(screen.getByRole('button', { name: /clear search/i }));
     await waitFor(() => {
       expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({ perPage: 20 });
     });
-    // Back to the plain empty state once the filter lifts.
-    expect(await screen.findByText(/No saved discussions yet/)).toBeInTheDocument();
+    // The filter lifts and the unfiltered list is back.
+    await screen.findByText('Why did the migration fail?');
+    expect(screen.queryByText(/No saved discussions match/)).not.toBeInTheDocument();
+  });
+
+  it('reports how many threads an applied search matched', async () => {
+    mockedApi.listDiscussThreads.mockResolvedValue({
+      threads: [summary],
+      total: 42,
+      totalPages: 3,
+    });
+    render(<DiscussHistoryDrawer />);
+    await screen.findByText('Why did the migration fail?');
+
+    const input = screen.getByRole('textbox', { name: /search saved discussions by title/i });
+    fireEvent.change(input, { target: { value: 'fail' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(await screen.findByText('42 matches')).toBeInTheDocument();
   });
 
   it('clears an applied search with Escape before letting Escape close the drawer', async () => {

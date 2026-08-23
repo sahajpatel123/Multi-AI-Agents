@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- Search refinement no longer dead-ends: an applied search shows how
+  many threads it matched, and the input survives into the no-match
+  state so a new query needs no clear-then-retype detour
+
 ### Added
 - Saved discussions are now searchable: the history drawer's title
   search commits on Enter (the filter editors' keyboard contract) and

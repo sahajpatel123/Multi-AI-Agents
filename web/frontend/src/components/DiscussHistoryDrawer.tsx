@@ -56,6 +56,7 @@ export function DiscussHistoryDrawer({
   // applied value is what the server sees, the input is just the draft.
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
+  const [resultTotal, setResultTotal] = useState(0);
   // Bumping this forces a refetch even if the tick value is unchanged.
   const [reloadTick, setReloadTick] = useState(0);
 
@@ -74,7 +75,10 @@ export function DiscussHistoryDrawer({
       search: appliedSearch.trim() || undefined,
     })
       .then((result) => {
-        if (!cancelled) setThreads(result.threads);
+        if (!cancelled) {
+          setThreads(result.threads);
+          setResultTotal(result.total);
+        }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -109,6 +113,59 @@ export function DiscussHistoryDrawer({
       }
     },
     [appliedSearch, clearSearch, searchInput],
+  );
+
+  // One search row shared by every state that can show it, so a query can
+  // always be refined in place — including from the no-match state, which
+  // used to force clear-then-retype.
+  const searchRow = (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+      <input
+        type="text"
+        value={searchInput}
+        maxLength={128}
+        placeholder="Search titles…"
+        aria-label="Search saved discussions by title"
+        onChange={(event) => setSearchInput(event.target.value)}
+        onKeyDown={handleSearchKeyDown}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          fontSize: 11,
+          color: '#4A3728',
+          background: '#FAF7F4',
+          border: '0.5px solid #E0D8D0',
+          borderRadius: 5,
+          padding: '3px 7px',
+          fontFamily: 'var(--vp-font-sans)',
+        }}
+      />
+      {appliedSearch ? (
+        <>
+          <span style={{ fontSize: 10, color: '#A0A39A', alignSelf: 'center' }}>
+            {resultTotal} match{resultTotal === 1 ? '' : 'es'}
+          </span>
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={clearSearch}
+            title={`Showing titles matching “${appliedSearch}”`}
+            style={{
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 6,
+              padding: '2px 8px',
+              fontSize: 10,
+              color: '#5A8C6A',
+              cursor: 'pointer',
+              fontFamily: 'var(--vp-font-sans)',
+            }}
+          >
+            Clear
+          </button>
+        </>
+      ) : null}
+    </div>
   );
 
   const handleToggleRow = useCallback(
@@ -247,29 +304,32 @@ export function DiscussHistoryDrawer({
           color: '#A0A39A',
         }}
       >
-        {appliedSearch ? (
-          <>
-            No saved discussions match “{appliedSearch}”.{' '}
-            <button
-              type="button"
-              onClick={clearSearch}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                fontSize: 12,
-                color: '#5A8C6A',
-                cursor: 'pointer',
-                textDecoration: 'underline',
-                fontFamily: 'var(--vp-font-sans)',
-              }}
-            >
-              Clear search
-            </button>
-          </>
-        ) : (
-          <>No saved discussions yet — click “Save thread” to keep a conversation.</>
-        )}
+        {searchRow}
+        <p style={{ margin: 0 }}>
+          {appliedSearch ? (
+            <>
+              No saved discussions match “{appliedSearch}”.{' '}
+              <button
+                type="button"
+                onClick={clearSearch}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  fontSize: 12,
+                  color: '#5A8C6A',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontFamily: 'var(--vp-font-sans)',
+                }}
+              >
+                Clear search
+              </button>
+            </>
+          ) : (
+            <>No saved discussions yet — click “Save thread” to keep a conversation.</>
+          )}
+        </p>
       </div>
     );
   }
@@ -298,48 +358,7 @@ export function DiscussHistoryDrawer({
           {detailError}
         </p>
       ) : null}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-        <input
-          type="text"
-          value={searchInput}
-          maxLength={128}
-          placeholder="Search titles…"
-          aria-label="Search saved discussions by title"
-          onChange={(event) => setSearchInput(event.target.value)}
-          onKeyDown={handleSearchKeyDown}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 11,
-            color: '#4A3728',
-            background: '#FAF7F4',
-            border: '0.5px solid #E0D8D0',
-            borderRadius: 5,
-            padding: '3px 7px',
-            fontFamily: 'var(--vp-font-sans)',
-          }}
-        />
-        {appliedSearch ? (
-          <button
-            type="button"
-            aria-label="Clear search"
-            onClick={clearSearch}
-            title={`Showing titles matching “${appliedSearch}”`}
-            style={{
-              background: 'none',
-              border: '0.5px solid #E0D8D0',
-              borderRadius: 6,
-              padding: '2px 8px',
-              fontSize: 10,
-              color: '#5A8C6A',
-              cursor: 'pointer',
-              fontFamily: 'var(--vp-font-sans)',
-            }}
-          >
-            Clear
-          </button>
-        ) : null}
-      </div>
+      {searchRow}
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {threads.map((thread) => {
           const isOpen = openId === thread.id;
