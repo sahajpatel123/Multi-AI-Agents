@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Dispatched handoffs are no longer invisible after sending: the
+  Condura dialog lists your recent recorded handoffs with their live
+  status (colored by outcome — complete green, failed/cancelled/
+  stream-lost red, in-flight amber), and expanding one fetches its
+  event timeline (started → progress → complete…) once and caches it.
+  Wiring the GET /handoffs list and detail endpoints that had no
+  frontend callers at all
+
 ### Improved
 - Saved-handoff rows now admit when their link has aged out: every
   handoff is signed with a 24-hour window, so drafts past it show a

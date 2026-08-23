@@ -2121,6 +2121,115 @@ export async function deleteConduraHandoffDraft(draftId: number): Promise<void> 
   }
 }
 
+export interface ConduraHandoffEvent {
+  id: number;
+  eventKind: string;
+  payload: Record<string, unknown> | null;
+  createdAt: string | null;
+}
+
+export interface ConduraHandoffRecord {
+  id: number;
+  capability: string;
+  executionEnv: string;
+  status: string;
+  conduraRunId: string | null;
+  summary: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface ConduraHandoffDetail extends ConduraHandoffRecord {
+  events: ConduraHandoffEvent[];
+}
+
+function normalizeConduraHandoffEvent(row: unknown): ConduraHandoffEvent {
+  const r = (row && typeof row === 'object' ? row : {}) as Record<string, unknown>;
+  return {
+    id: typeof r.id === 'number' ? r.id : 0,
+    eventKind: typeof r.event_kind === 'string' ? r.event_kind : '',
+    payload:
+      r.payload && typeof r.payload === 'object' && !Array.isArray(r.payload)
+        ? (r.payload as Record<string, unknown>)
+        : null,
+    createdAt: typeof r.created_at === 'string' ? r.created_at : null,
+  };
+}
+
+function normalizeConduraHandoffRecord(row: unknown): ConduraHandoffRecord {
+  const r = (row && typeof row === 'object' ? row : {}) as Record<string, unknown>;
+  return {
+    id: typeof r.id === 'number' ? r.id : 0,
+    capability: typeof r.capability === 'string' ? r.capability : '',
+    executionEnv: typeof r.execution_env === 'string' ? r.execution_env : '',
+    status: typeof r.status === 'string' ? r.status : '',
+    conduraRunId:
+      typeof r.condura_run_id === 'string' && r.condura_run_id ? r.condura_run_id : null,
+    summary: typeof r.summary === 'string' && r.summary ? r.summary : null,
+    createdAt: typeof r.created_at === 'string' ? r.created_at : null,
+    updatedAt: typeof r.updated_at === 'string' ? r.updated_at : null,
+  };
+}
+
+export async function listConduraHandoffs(
+  params: { page?: number; perPage?: number; capability?: string; status?: string } = {},
+): Promise<{
+  handoffs: ConduraHandoffRecord[];
+  total: number;
+  totalPages: number;
+}> {
+  const query = new URLSearchParams();
+  if (params.page !== undefined) query.set('page', String(params.page));
+  if (params.perPage !== undefined) query.set('per_page', String(params.perPage));
+  if (params.capability && params.capability.trim()) {
+    query.set('capability', params.capability.trim());
+  }
+  if (params.status && params.status.trim()) query.set('status', params.status.trim());
+  const qs = query.toString();
+  const response = await apiFetch(`/api/condura/handoffs${qs ? `?${qs}` : ''}`, {});
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(response);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to load recent handoffs'), response),
+    );
+  }
+  const data =
+    (await parseJsonSafely<{
+      handoffs?: unknown[];
+      total?: unknown;
+      total_pages?: unknown;
+    }>(response)) || {};
+  const handoffs = Array.isArray(data.handoffs)
+    ? data.handoffs.map(normalizeConduraHandoffRecord)
+    : [];
+  return {
+    handoffs,
+    total: typeof data.total === 'number' ? data.total : handoffs.length,
+    totalPages: typeof data.total_pages === 'number' ? data.total_pages : 0,
+  };
+}
+
+export async function getConduraHandoff(handoffId: number): Promise<ConduraHandoffDetail> {
+  if (!Number.isInteger(handoffId) || handoffId < 1) {
+    throw new RangeError('handoffId must be a positive integer');
+  }
+  const response = await apiFetch(`/api/condura/handoffs/${encodeURIComponent(String(handoffId))}`, {});
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(response);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to load the handoff'), response),
+    );
+  }
+  const data =
+    (await parseJsonSafely<Record<string, unknown>>(response)) ||
+    (() => {
+      throw new Error('Loading the handoff returned no record.');
+    })();
+  const base = normalizeConduraHandoffRecord(data);
+  const rawEvents = Array.isArray(data.events) ? data.events : [];
+  return { ...base, events: rawEvents.map(normalizeConduraHandoffEvent) };
+}
+
 export async function getConduraMigrationFlags(): Promise<{
   flags: Array<{
     id: number;

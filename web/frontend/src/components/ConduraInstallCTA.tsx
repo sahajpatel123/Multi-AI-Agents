@@ -8,8 +8,12 @@ import { motionDuration } from '../lib/motion';
 import { MotionButton } from './MotionButton';
 import {
   deleteConduraHandoffDraft,
+  getConduraHandoff,
   listConduraHandoffDrafts,
+  listConduraHandoffs,
+  type ConduraHandoffDetail,
   type ConduraHandoffDraftSummary,
+  type ConduraHandoffRecord,
 } from '../api';
 import markUrl from '../assets/condura/mark.svg';
 
@@ -54,6 +58,17 @@ function draftExpiry(draft: ConduraHandoffDraftSummary): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+// Terminal failures read as failures; complete reads as success; anything
+// else (dispatch_pending / dispatched / streaming / reconcile_needed /
+// unknown) is still in flight.
+function handoffStatusColor(status: string): string {
+  if (status === 'complete') return '#5A8C6A';
+  if (status === 'failed' || status === 'stream_lost' || status === 'cancelled') {
+    return '#993C1D';
+  }
+  return '#B98A2F';
+}
+
 export function ConduraInstallCTA({
   open,
   onClose,
@@ -86,6 +101,14 @@ export function ConduraInstallCTA({
   const [busyDraftId, setBusyDraftId] = useState<number | null>(null);
   const [copiedDraftId, setCopiedDraftId] = useState<number | null>(null);
   const copiedDraftTimerRef = useRef<number | null>(null);
+  // Recorded (dispatched) handoffs: what actually happened after "Send
+  // to Condura" — listed on open, expanded into an event timeline.
+  const [handoffs, setHandoffs] = useState<ConduraHandoffRecord[] | null>(null);
+  const [handoffsError, setHandoffsError] = useState<string | null>(null);
+  const [openHandoffId, setOpenHandoffId] = useState<number | null>(null);
+  const [handoffDetails, setHandoffDetails] = useState<Record<number, ConduraHandoffDetail>>({});
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+  const [busyHandoffId, setBusyHandoffId] = useState<number | null>(null);
   const mobile = isMobileUa();
   const firstBtnRef = useRef<HTMLButtonElement | null>(null);
   const lastBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -120,6 +143,12 @@ export function ConduraInstallCTA({
       setConfirmingDeleteId(null);
       setBusyDraftId(null);
       setCopiedDraftId(null);
+      setHandoffs(null);
+      setHandoffsError(null);
+      setOpenHandoffId(null);
+      setHandoffDetails({});
+      setHandoffError(null);
+      setBusyHandoffId(null);
       clearCopyTimer();
       return;
     }
@@ -141,6 +170,27 @@ export function ConduraInstallCTA({
         setDrafts([]);
         setDraftsError(
           e instanceof Error && e.message ? e.message : 'Could not load saved handoffs.',
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  // Recent recorded handoffs refetch on every open, same as drafts.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setHandoffsError(null);
+    listConduraHandoffs({ perPage: 5 })
+      .then((result) => {
+        if (!cancelled) setHandoffs(result.handoffs);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setHandoffs([]);
+        setHandoffsError(
+          e instanceof Error && e.message ? e.message : 'Could not load recent handoffs.',
         );
       });
     return () => {
@@ -266,6 +316,30 @@ export function ConduraInstallCTA({
       );
     } finally {
       setBusyDraftId(null);
+    }
+  };
+
+  // Expanding a recorded handoff fetches its event timeline once and
+  // caches it; opening another row collapses the previous one.
+  const toggleHandoff = async (record: ConduraHandoffRecord) => {
+    setHandoffError(null);
+    if (openHandoffId === record.id) {
+      setOpenHandoffId(null);
+      return;
+    }
+    setOpenHandoffId(record.id);
+    if (handoffDetails[record.id]) return;
+    setBusyHandoffId(record.id);
+    try {
+      const detail = await getConduraHandoff(record.id);
+      setHandoffDetails((current) => ({ ...current, [record.id]: detail }));
+    } catch (e) {
+      setOpenHandoffId(null);
+      setHandoffError(
+        e instanceof Error && e.message ? e.message : 'Could not open that handoff.',
+      );
+    } finally {
+      setBusyHandoffId(null);
     }
   };
 
@@ -499,6 +573,124 @@ export function ConduraInstallCTA({
                         </button>
                       </>
                     )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
+
+        {handoffs !== null && (handoffs.length > 0 || handoffsError) ? (
+          <section
+            aria-label="Recent handoffs"
+            style={{ marginTop: 14, borderTop: '0.5px solid rgba(140,115,85,0.25)', paddingTop: 10 }}
+          >
+            <h3
+              style={{
+                margin: '0 0 6px',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#8C7355',
+                fontFamily: 'var(--vp-font-sans)',
+              }}
+            >
+              Recent handoffs ({handoffs.length})
+            </h3>
+            {handoffsError ? (
+              <p role="alert" style={{ margin: '0 0 6px', fontSize: 12, color: '#993C1D' }}>
+                {handoffsError}
+              </p>
+            ) : null}
+            {handoffError ? (
+              <p role="alert" style={{ margin: '0 0 6px', fontSize: 12, color: '#993C1D' }}>
+                {handoffError}
+              </p>
+            ) : null}
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {handoffs.map((record) => {
+                const isOpen = openHandoffId === record.id;
+                const detail = handoffDetails[record.id];
+                const busy = busyHandoffId === record.id;
+                return (
+                  <li
+                    key={record.id}
+                    style={{ borderTop: '0.5px solid rgba(140,115,85,0.12)', padding: '4px 0' }}
+                  >
+                    <button
+                      type="button"
+                      aria-expanded={isOpen}
+                      onClick={() => void toggleHandoff(record)}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: busy ? 'wait' : 'pointer',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: 12,
+                          color: '#4A3728',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {record.summary || record.capability || 'Handoff'}
+                      </span>
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: 10,
+                          color: handoffStatusColor(record.status),
+                        }}
+                      >
+                        {record.status || 'unknown status'}
+                        <span style={{ color: '#A0A39A' }}>
+                          {record.capability ? ` · ${record.capability}` : ''}
+                          {record.createdAt ? ` · ${formatDraftTime(record.createdAt)}` : ''}
+                        </span>
+                      </span>
+                    </button>
+                    {isOpen ? (
+                      <div style={{ marginTop: 4, display: 'grid', gap: 2 }}>
+                        {busy && !detail ? (
+                          <span style={{ fontSize: 10, color: '#A0A39A' }}>Opening…</span>
+                        ) : null}
+                        {detail ? (
+                          detail.events.length === 0 ? (
+                            <span style={{ fontSize: 10, color: '#A0A39A' }}>
+                              No events recorded yet.
+                            </span>
+                          ) : (
+                            detail.events.map((event) => (
+                              <div
+                                key={event.id}
+                                style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    letterSpacing: '0.04em',
+                                    textTransform: 'uppercase',
+                                    color: '#8C7355',
+                                  }}
+                                >
+                                  {event.eventKind}
+                                </span>
+                                <span style={{ fontSize: 10, color: '#A0A39A' }}>
+                                  {event.createdAt ? formatDraftTime(event.createdAt) : ''}
+                                </span>
+                              </div>
+                            ))
+                          )
+                        ) : null}
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}

@@ -9,6 +9,8 @@ const probeLocalConduraMock = vi.fn();
 const copyToClipboardMock = vi.fn();
 const listConduraHandoffDraftsMock = vi.fn();
 const deleteConduraHandoffDraftMock = vi.fn();
+const listConduraHandoffsMock = vi.fn();
+const getConduraHandoffMock = vi.fn();
 
 const probeState: { kind: 'unknown' | 'not_installed' | 'installed_not_running' | 'ready'; version?: string } = {
   kind: 'unknown',
@@ -23,6 +25,8 @@ vi.mock('../api', () => ({
     listConduraHandoffDraftsMock(...args),
   deleteConduraHandoffDraft: (...args: unknown[]) =>
     deleteConduraHandoffDraftMock(...args),
+  listConduraHandoffs: (...args: unknown[]) => listConduraHandoffsMock(...args),
+  getConduraHandoff: (...args: unknown[]) => getConduraHandoffMock(...args),
 }));
 
 vi.mock('../lib/clipboard', () => ({
@@ -75,11 +79,15 @@ describe('ConduraInstallCTA', () => {
     copyToClipboardMock.mockReset();
     listConduraHandoffDraftsMock.mockReset();
     deleteConduraHandoffDraftMock.mockReset();
+    listConduraHandoffsMock.mockReset();
+    getConduraHandoffMock.mockReset();
     copyToClipboardMock.mockResolvedValue(true);
     probeLocalConduraMock.mockResolvedValue({ kind: 'not_installed' });
     // No saved handoffs by default: the section stays out of the way of
     // the pre-existing tests.
     listConduraHandoffDraftsMock.mockResolvedValue({ drafts: [], total: 0, totalPages: 0 });
+    // No recorded handoffs either.
+    listConduraHandoffsMock.mockResolvedValue({ handoffs: [], total: 0, totalPages: 0 });
     probeState.kind = 'unknown';
   });
 
@@ -272,5 +280,99 @@ describe('ConduraInstallCTA', () => {
     });
     expect(freshCopy.getAttribute('title')).toBeNull();
     expect(screen.getAllByText(/signature expired/)).toHaveLength(1);
+  });
+
+  const handoffRecord = {
+    id: 11,
+    capability: 'delegate_task',
+    executionEnv: 'condura',
+    status: 'complete',
+    conduraRunId: 'run-9',
+    summary: 'Tidy the downloads folder',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const handoffDetail = {
+    ...handoffRecord,
+    events: [
+      { id: 1, eventKind: 'started', payload: null, createdAt: new Date().toISOString() },
+      { id: 2, eventKind: 'complete', payload: null, createdAt: new Date().toISOString() },
+    ],
+  };
+
+  it('lists recent recorded handoffs with their live status', async () => {
+    listConduraHandoffsMock.mockResolvedValue({
+      handoffs: [handoffRecord],
+      total: 1,
+      totalPages: 1,
+    });
+    renderCta();
+
+    expect(await screen.findByText('Tidy the downloads folder')).toBeInTheDocument();
+    expect(screen.getByText(/recent handoffs \(1\)/i)).toBeInTheDocument();
+    // Status is shown verbatim and colored by outcome.
+    expect(screen.getByText(/^complete/)).toHaveStyle({ color: '#5A8C6A' });
+    expect(listConduraHandoffsMock).toHaveBeenCalledWith({ perPage: 5 });
+  });
+
+  it('expands a recorded handoff into its event timeline, fetching once', async () => {
+    listConduraHandoffsMock.mockResolvedValue({
+      handoffs: [handoffRecord],
+      total: 1,
+      totalPages: 1,
+    });
+    getConduraHandoffMock.mockResolvedValue(handoffDetail);
+    renderCta();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /tidy the downloads folder/i }),
+    );
+
+    expect(await screen.findByText('started')).toBeInTheDocument();
+    // 'complete' shows up twice: once as the row's live status, once as
+    // the final timeline event.
+    expect(screen.getAllByText('complete')).toHaveLength(2);
+    expect(getConduraHandoffMock).toHaveBeenCalledTimes(1);
+    expect(getConduraHandoffMock).toHaveBeenCalledWith(11);
+
+    // Collapse and re-expand: the cached timeline means no second fetch.
+    fireEvent.click(screen.getByRole('button', { name: /tidy the downloads folder/i }));
+    fireEvent.click(screen.getByRole('button', { name: /tidy the downloads folder/i }));
+    await screen.findByText('started');
+    expect(getConduraHandoffMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a recent-handoffs load failure without touching the drafts section', async () => {
+    listConduraHandoffsMock.mockRejectedValue(new Error('handoff list unreachable'));
+    listConduraHandoffDraftsMock.mockResolvedValue({
+      drafts: [savedDraft],
+      total: 1,
+      totalPages: 1,
+    });
+    renderCta();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('handoff list unreachable');
+    // The drafts section above still works.
+    expect(await screen.findByText('Tidy the downloads folder')).toBeInTheDocument();
+  });
+
+  it('collapses on failure instead of lingering open with a stale spinner', async () => {
+    listConduraHandoffsMock.mockResolvedValue({
+      handoffs: [handoffRecord],
+      total: 1,
+      totalPages: 1,
+    });
+    getConduraHandoffMock.mockRejectedValue(new Error('Handoff not found'));
+    renderCta();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /tidy the downloads folder/i }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Handoff not found');
+    // aria-expanded back to false after the failure.
+    expect(
+      screen.getByRole('button', { name: /tidy the downloads folder/i }),
+    ).toHaveAttribute('aria-expanded', 'false');
   });
 });
