@@ -5,12 +5,12 @@ import html
 import json
 import logging
 import re
+import unicodedata
 import anthropic
 from fastapi import HTTPException
 
 from arena.core.model_router import get_route_for_prompt, get_route_for_task
 
-logger = logging.getLogger(__name__)
 from arena.models.schemas import (
     PromptCategory,
     PromptClassification,
@@ -18,6 +18,8 @@ from arena.models.schemas import (
     ToxicityResult,
     InputPipelineResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -51,8 +53,6 @@ def sanitize_input(text: str) -> str:
 # ──────────────────────────────────────────────────────────────
 # Prompt injection detection
 # ──────────────────────────────────────────────────────────────
-
-import unicodedata
 
 _INJECTION_PATTERNS: list[str] = [
     "ignore previous instructions",

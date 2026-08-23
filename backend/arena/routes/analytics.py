@@ -21,7 +21,7 @@ from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
 from arena.core.datetime_utils import utcnow_naive
 from arena.db_models import (
-    PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UserPreference, UXEvent, UserTier,
+    PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UXEvent, UserTier,
 )
 from arena.models.schemas import UserResponse
 
@@ -300,7 +300,6 @@ def _analytics_summary_payload(
     window_start = now_utc - timedelta(days=window_days - 1)
     window_start_day = window_start.date()
 
-    preference = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()
     scoring_rows = (
         db.query(ScoringAudit)
         .filter(

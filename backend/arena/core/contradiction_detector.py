@@ -7,9 +7,10 @@ from typing import Optional
 
 from arena.core.model_router import get_route_for_task
 
-logger = logging.getLogger(__name__)
 from arena.models.schemas import AgentResponse
 from arena.core.memory import get_memory_manager
+
+logger = logging.getLogger(__name__)
 
 
 class ContradictionReport:

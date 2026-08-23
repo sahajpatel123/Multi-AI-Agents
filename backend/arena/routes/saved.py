@@ -27,7 +27,6 @@ from sqlalchemy.orm import Session
 
 try:
     import openpyxl
-    from openpyxl import Workbook
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
@@ -906,7 +905,7 @@ async def export_saved(
                     cell_length = len(str(cell.value)) if cell.value else 0
                     if cell_length > max_length:
                         max_length = cell_length
-                except:
+                except Exception:
                     logger.debug("Cell length measurement failed", exc_info=True)
             adjusted_width = (max_length + 2) * 1.2
             data_ws.column_dimensions[column].width = max(10, min(adjusted_width, 80))  # Cap at 80

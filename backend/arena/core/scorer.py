@@ -8,7 +8,6 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-logger = logging.getLogger(__name__)
 
 import anthropic
 from sqlalchemy.orm import Session
@@ -18,6 +17,8 @@ from arena.core.agents import get_all_agents, get_persona_id_for_agent
 from arena.core.model_router import get_route_for_prompt
 from arena.core.observability import log_scoring_result
 from arena.models.schemas import AgentResponse, ScoredAgent, IntegrityReport
+
+logger = logging.getLogger(__name__)
 
 
 # The judge is asked for a "brief explanation" of the winner, so this bound is

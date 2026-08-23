@@ -66,7 +66,6 @@ from arena.core.agent_memory import (
     get_task_detail,
     get_watchlist_history,
     iter_user_task_export,
-    get_watchlist_statistics,
 )
 from arena.core.agent_metrics import (
     compute_user_agent_metrics,
@@ -5594,6 +5593,12 @@ async def cross_pollinate_agent_answer(
             pass
 
     user_tier = normalize_tier(get_tier_str(user))
+    # Imported locally, not at module level: the guard lives in
+    # arena.routes.prompt and importing it top-level risks an import cycle
+    # as routes grow. Before this import existed the call raised NameError,
+    # so every /pollinate request 500'd before reaching the pipeline.
+    from arena.routes.prompt import _enforce_persona_access
+
     _enforce_persona_access(user_tier, body.persona_ids)
 
     pollinate_prompt = (

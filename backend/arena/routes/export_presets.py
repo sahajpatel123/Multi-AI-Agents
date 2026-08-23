@@ -360,7 +360,7 @@ async def create_export_preset(
     if body.is_default:
         db.query(ExportPreset).filter(
             ExportPreset.user_id == user.id,
-            ExportPreset.is_default == True,
+            ExportPreset.is_default.is_(True),
         ).update({"is_default": False})
 
     # If no position specified, set it to the next available position
@@ -434,7 +434,7 @@ async def get_default_export_preset(
         db.query(ExportPreset)
         .filter(
             ExportPreset.user_id == user.id,
-            ExportPreset.is_default == True,
+            ExportPreset.is_default.is_(True),
         )
         .first()
     )
@@ -804,7 +804,7 @@ async def update_export_preset(
         db.query(ExportPreset).filter(
             ExportPreset.user_id == user.id,
             ExportPreset.id != preset.id,
-            ExportPreset.is_default == True,
+            ExportPreset.is_default.is_(True),
         ).update({"is_default": False})
         preset.is_default = True
     elif body.is_default is not None and not body.is_default:

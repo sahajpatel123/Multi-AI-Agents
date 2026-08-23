@@ -143,7 +143,9 @@ async def discuss_with_agent(
     Send a message to a single agent in a 1-on-1 conversation.
     The agent stays in character with full memory of the thread.
     """
-    user_tier = _enforce_discuss_access(user)
+    # Access enforcement happens inside the helper; its return value is
+    # intentionally unused here.
+    _enforce_discuss_access(user)
 
     # Check rate limit BEFORE any LLM calls
     try:
@@ -198,8 +200,6 @@ async def discuss_with_agent(
         original_verdict=request.original_verdict,
         previous_responses_context=prev_context,
     )
-    messages = _build_messages(request)
-
     try:
         # Get persona_id and route to appropriate API
         persona_id = get_persona_id_for_agent(request.agent_id, request.persona_ids)
@@ -258,7 +258,9 @@ async def stream_discuss(
     - "result" → final DiscussResponse with updated history
     - "error"  → something went wrong
     """
-    user_tier = _enforce_discuss_access(user)
+    # Access enforcement happens inside the helper; its return value is
+    # intentionally unused here.
+    _enforce_discuss_access(user)
 
     # Check rate limit BEFORE any LLM calls
     try:
@@ -313,7 +315,6 @@ async def stream_discuss(
         original_verdict=request.original_verdict,
         previous_responses_context=prev_context,
     )
-    messages = _build_messages(request)
 
     async def event_generator():
         # First event tells the client which request ID this stream maps to,

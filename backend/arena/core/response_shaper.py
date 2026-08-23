@@ -9,7 +9,6 @@ import anthropic
 
 from arena.core.datetime_utils import utcnow_naive
 
-logger = logging.getLogger(__name__)
 from arena.core.model_router import get_route_for_task
 from arena.models.schemas import (
     AgentResponse,
@@ -17,6 +16,8 @@ from arena.models.schemas import (
     PromptResponse,
     IntegrityReport,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────
