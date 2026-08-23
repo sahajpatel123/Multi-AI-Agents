@@ -1086,6 +1086,11 @@ describe('MemoryPage', () => {
       recentTasks: [
         { task: 'Compare EV subsidies across EU states', score: 8.4, createdAt: '2026-08-20T10:00:00Z' },
         { task: 'Draft launch checklist', score: null, createdAt: '' },
+        {
+          task: 'A'.repeat(100),
+          score: 7,
+          createdAt: '2026-08-21T09:00:00Z',
+        },
       ],
       topTopics: ['ev-policy', 'launch'],
       unresolvedContradictions: [
@@ -1104,24 +1109,32 @@ describe('MemoryPage', () => {
       within(region).getByText('Previously said rollout was Q3, later said Q4.'),
     ).toBeInTheDocument();
     expect(within(region).getByText('medium', { exact: false })).toBeInTheDocument();
+    // A run that hit the server's 100-char slice is marked, not left
+    // stopping mid-word as if it were complete.
+    expect(within(region).getByText(`${'A'.repeat(100)}…`)).toBeInTheDocument();
   });
 
-  it('says an empty agent memory plainly and surfaces refusals verbatim', async () => {
+  it('says an empty agent memory plainly', async () => {
     renderPage();
     const region = await screen.findByRole('region', { name: /what arena remembers/i });
     expect(
       await within(region).findByText('No agent tasks yet — Arena has nothing to remember.'),
     ).toBeInTheDocument();
+  });
 
+  it('surfaces a context refusal verbatim and moves focus onto it', async () => {
     getMemoryContextMock.mockReset();
-    listMemorySummariesMock.mockImplementation(async () => listResponse([], 0, 0));
     getMemoryContextMock.mockRejectedValue(
       new Error('Too many memory-context lookups. Please slow down. (Request ID: req-mem-9)'),
     );
-    renderPage('/memory?fresh=1');
+    renderPage();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    const refusal = await screen.findByRole('alert');
+    expect(refusal).toHaveTextContent(
       'Too many memory-context lookups. Please slow down.',
     );
+    // The refusal is programmatically focusable so the focus-on-error
+    // effect can land keyboard users on the reason.
+    expect(refusal).toHaveAttribute('tabindex', '-1');
   });
 });

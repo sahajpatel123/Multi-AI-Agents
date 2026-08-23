@@ -18,6 +18,15 @@ import {
 import type { MemorySummary, MemorySummarySort } from '../types';
 import { useTier } from '../context/TierContext';
 import { formatRelativePast } from '../lib/relativeTime';
+
+// The backend slices memory-context task text at 100 chars before the
+// client ever sees it — mark runs that hit the cap so they don't just
+// stop mid-word as if that were the whole story.
+const AGENT_MEMORY_TASK_SLICE = 100;
+
+function truncatedTaskText(text: string): string {
+  return text.length >= AGENT_MEMORY_TASK_SLICE ? `${text}…` : text;
+}
 import { prefersReducedMotion } from '../lib/motion';
 import { isAriaModalOpen, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { copyToClipboard } from '../lib/clipboard';
@@ -276,6 +285,14 @@ export function MemoryPage() {
   const [memoryCtx, setMemoryCtx] = useState<AgentMemoryContext | null>(null);
   const [ctxLoading, setCtxLoading] = useState(true);
   const [ctxError, setCtxError] = useState<string | null>(null);
+  const ctxErrorRef = useRef<HTMLParagraphElement | null>(null);
+
+  // Same keyboard contract as the profile-save refusal: focus lands on
+  // the reason rather than back on whatever triggered it.
+  useEffect(() => {
+    if (!ctxError) return;
+    ctxErrorRef.current?.focus();
+  }, [ctxError]);
 
   useEffect(() => {
     let cancelled = false;
@@ -960,9 +977,9 @@ export function MemoryPage() {
           </p>
         ) : ctxError ? (
           <p
+            ref={ctxErrorRef}
             role="alert"
             tabIndex={-1}
-            autoFocus
             style={{ fontSize: 13, color: '#993c1d', margin: '0 0 14px' }}
           >
             {ctxError}
@@ -1027,7 +1044,7 @@ export function MemoryPage() {
                   >
                     {memoryCtx.recentTasks.map((recent, index) => (
                       <li key={`${recent.createdAt}-${index}`} style={{ fontSize: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ minWidth: 0, wordBreak: 'break-word' }}>{recent.task}</span>
+                        <span style={{ minWidth: 0, wordBreak: 'break-word' }}>{truncatedTaskText(recent.task)}</span>
                         <span style={{ color: '#8c7355', flexShrink: 0 }}>
                           {recent.score === null ? 'unscored' : `score ${recent.score}`}
                           {recent.createdAt ? ` · ${formatRelativePast(recent.createdAt)}` : ''}

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- The agent-memory card reads honestly at the edges: runs that hit
+  the backend's 100-character slice are marked with an ellipsis
+  instead of stopping mid-word as if complete, and a refused load
+  takes keyboard focus onto its verbatim refusal — same contract as
+  the profile-save error
 - Execution facts are now actually hearable: the condura/heartbeat
   line moved outside the expand toggle, whose aria-label was masking
   it from screen readers entirely — and heartbeats render in human
