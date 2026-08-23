@@ -494,6 +494,11 @@ const hoistedMocks = vi.hoisted(() => {
     hasPassword: true,
     passwordLastChangedAt: null,
   }),
+  getAgentTaskDetail: vi.fn().mockResolvedValue({
+    task: { task_id: 'x' },
+    insight_report: null,
+    contradictions: [],
+  }),
   };
 });
 
@@ -568,6 +573,7 @@ vi.mock('../api', () => ({
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
   searchMcpIntegration: hoistedMocks.searchMcpIntegration,
   getAccountSecurity: hoistedMocks.getAccountSecurity,
+  getAgentTaskDetail: hoistedMocks.getAgentTaskDetail,
   exportAnalyticsActivityCsv: hoistedMocks.exportAnalyticsActivityCsv,
   exportAnalyticsActivityJson: hoistedMocks.exportAnalyticsActivityJson,
   exportAnalyticsActivityMarkdown: hoistedMocks.exportAnalyticsActivityMarkdown,
@@ -697,6 +703,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getCapabilityStats).mockClear();
     vi.mocked(hoistedMocks.searchMcpIntegration).mockClear();
     vi.mocked(hoistedMocks.getAccountSecurity).mockClear();
+    vi.mocked(hoistedMocks.getAgentTaskDetail).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).mockClear();
@@ -2152,6 +2159,128 @@ describe('ProfileModal', () => {
     expect(hoistedMocks.getUserAnswerFeedbackStats).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole('button', { name: 'Wrong answer' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Correct answer' })).not.toBeInTheDocument();
+  });
+
+  it('expands a rating into its contradiction report and caches it', async () => {
+    vi.mocked(hoistedMocks.getRecentAgentFeedback).mockResolvedValueOnce([
+      {
+        task_id: 'task-ok',
+        verdict: 'correct',
+        note: null,
+        created_at: '2026-08-18T09:00:00Z',
+        title: 'Correct answer',
+        task_text: null,
+      },
+      {
+        task_id: 'task-shift',
+        verdict: 'wrong',
+        note: null,
+        created_at: '2026-08-18T08:00:00Z',
+        title: 'Shifted stance',
+        task_text: null,
+      },
+    ]);
+    hoistedMocks.getAgentTaskDetail.mockResolvedValueOnce({
+      task: { task_id: 'task-shift' },
+      insight_report: null,
+      contradictions: [
+        {
+          id: 3,
+          direction: 'new',
+          other_task_id: 'task-ok',
+          summary: 'Rollout was Q3 before; this run says Q4.',
+          severity: 'medium',
+          resolved: false,
+          created_at: '2026-08-20T10:00:00Z',
+        },
+        {
+          id: 4,
+          direction: 'old',
+          other_task_id: 'task-0',
+          summary: 'Earlier run assumed a smaller market.',
+          severity: '',
+          resolved: true,
+          created_at: '2026-08-01T10:00:00Z',
+        },
+      ],
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    (
+      await screen.findByRole('button', { name: /view run detail for task-shift/i })
+    ).click();
+    const region = await screen.findByRole('region', {
+      name: /contradiction report for task-shift/i,
+    });
+    // Direction is translated into prose; missing severity says so.
+    expect(
+      await within(region).findByText(/This run shifted your earlier stance: Rollout was Q3/),
+    ).toBeInTheDocument();
+    expect(within(region).getByText(/An earlier run took a different stance/)).toBeInTheDocument();
+    expect(within(region).getByText('open')).toBeInTheDocument();
+    expect(within(region).getByText('resolved')).toBeInTheDocument();
+    expect(within(region).getByText('unknown severity')).toBeInTheDocument();
+    // The untouched row stays quiet — no fabricated reports.
+    expect(
+      screen.queryByRole('region', { name: /contradiction report for task-ok/i }),
+    ).not.toBeInTheDocument();
+
+    // Collapse and reopen: the cached report replays without a second call.
+    (screen.getByRole('button', { name: /hide run detail for task-shift/i })).click();
+    (await screen.findByRole('button', { name: /view run detail for task-shift/i })).click();
+    await waitFor(() => {
+      expect(
+        screen.getByRole('region', { name: /contradiction report for task-shift/i }),
+      ).toBeInTheDocument();
+    });
+    expect(hoistedMocks.getAgentTaskDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a contradiction-report refusal verbatim and retries on re-expand', async () => {
+    vi.mocked(hoistedMocks.getRecentAgentFeedback).mockResolvedValueOnce([
+      {
+        task_id: 'task-gone',
+        verdict: 'partial',
+        note: null,
+        created_at: '2026-08-18T09:00:00Z',
+        title: 'Vanished run',
+        task_text: null,
+      },
+    ]);
+    hoistedMocks.getAgentTaskDetail
+      .mockRejectedValueOnce(new Error('Task not found (Request ID: req-detail-2)'))
+      .mockResolvedValueOnce({
+        task: { task_id: 'task-gone' },
+        insight_report: null,
+        contradictions: [],
+      });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    (await screen.findByRole('button', { name: /view run detail for task-gone/i })).click();
+    const region = await screen.findByRole('region', {
+      name: /contradiction report for task-gone/i,
+    });
+    expect(await within(region).findByRole('alert')).toHaveTextContent(
+      'Task not found',
+    );
+
+    // Re-expanding retries from the server and recovers.
+    (screen.getByRole('button', { name: /hide run detail for task-gone/i })).click();
+    (await screen.findByRole('button', { name: /view run detail for task-gone/i })).click();
+    expect(
+      await within(
+        await screen.findByRole('region', { name: /contradiction report for task-gone/i }),
+      ).findByText('No contradictions recorded.'),
+    ).toBeInTheDocument();
+    expect(hoistedMocks.getAgentTaskDetail).toHaveBeenCalledTimes(2);
   });
 
   it('announces unclassified feedback in the activity chart', async () => {

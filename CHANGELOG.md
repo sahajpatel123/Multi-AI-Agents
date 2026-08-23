@@ -61,6 +61,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Rated runs now confess their contradictions: each rating in the
+  recent-feedback list gains a "View run detail" expander backed by
+  the task-detail endpoint that never had a caller — open
+  contradictions render with severity and an "open/resolved" state,
+  direction reads as prose ("This run shifted your earlier stance:
+  …"), an empty report says so plainly, refusals retry on re-expand,
+  and reports cache for the modal's life
 - The Memory page now shows what the agent itself leans on: a new
   "Agent memory" card calls the dormant memory-context endpoint and
   lays out your run count, recurring topics as chips, the last five

@@ -53,6 +53,7 @@ import {
   getCapabilityExamples,
   getCapabilityStats,
   getAccountSecurity,
+  getAgentTaskDetail,
   searchMcpIntegration,
   deleteCalibrationRating,
   getCalibrationHistory,
@@ -80,6 +81,7 @@ import {
   type CapabilityStat,
   type McpSearchResult,
   type AccountSecurity,
+  type AgentTaskDetailPayload,
   type CalibrationHistoryRating,
   type CalibrationHistoryResponse,
   type CalibrationHistorySort,
@@ -1325,6 +1327,12 @@ export function ProfileModal() {
   const [recentFbLoading, setRecentFbLoading] = useState(false);
   const [recentFbErr, setRecentFbErr] = useState<string | null>(null);
   const [recentFbVerdict, setRecentFbVerdict] = useState<AgentFeedbackVerdict | ''>('');
+  // Per-rating contradiction reports: fetched lazily on first expand,
+  // cached for the modal's life; closing and reopening retries a refusal.
+  const [fbDetailOpenId, setFbDetailOpenId] = useState<string | null>(null);
+  const [fbDetailCache, setFbDetailCache] = useState<Record<string, AgentTaskDetailPayload>>({});
+  const [fbDetailBusyId, setFbDetailBusyId] = useState<string | null>(null);
+  const [fbDetailErrs, setFbDetailErrs] = useState<Record<string, string>>({});
   const [feedbackSummary, setFeedbackSummary] = useState<AgentFeedbackSummary | null>(null);
   const [feedbackSummaryLoading, setFeedbackSummaryLoading] = useState(false);
   const [feedbackSummaryErr, setFeedbackSummaryErr] = useState<string | null>(null);
@@ -1987,6 +1995,37 @@ export function ProfileModal() {
         setSecurityLoading(false);
       });
   }, [securityOpen, securityDetails, securityLoading]);
+
+  // Expand one rating's contradiction report. A refused load keeps its
+  // row intact and says why; toggling again retries from the server.
+  const toggleFeedbackRunDetail = useCallback((taskId: string) => {
+    const next = fbDetailOpenId === taskId ? null : taskId;
+    setFbDetailOpenId(next);
+    if (!next || fbDetailCache[taskId] || fbDetailBusyId === taskId) return;
+    setFbDetailBusyId(taskId);
+    void getAgentTaskDetail(taskId)
+      .then((detail) => {
+        setFbDetailCache((prev) => ({ ...prev, [taskId]: detail }));
+        setFbDetailErrs((prev) => {
+          if (!(taskId in prev)) return prev;
+          const next2 = { ...prev };
+          delete next2[taskId];
+          return next2;
+        });
+      })
+      .catch((error: unknown) => {
+        setFbDetailErrs((prev) => ({
+          ...prev,
+          [taskId]:
+            error instanceof Error && error.message
+              ? error.message
+              : 'Could not load the contradiction report.',
+        }));
+      })
+      .finally(() => {
+        setFbDetailBusyId(null);
+      });
+  }, [fbDetailOpenId, fbDetailCache, fbDetailBusyId]);
 
   useEffect(() => {
     if (!exportNotice) return;
@@ -6759,6 +6798,109 @@ export function ProfileModal() {
                             >
                               Rated {formatRelativeConnected(item.created_at)}
                             </div>
+                            <button
+                              type="button"
+                              aria-expanded={fbDetailOpenId === item.task_id}
+                              aria-label={
+                                fbDetailOpenId === item.task_id
+                                  ? `Hide run detail for ${item.task_id}`
+                                  : `View run detail for ${item.task_id}`
+                              }
+                              onClick={() => toggleFeedbackRunDetail(item.task_id)}
+                              style={{
+                                marginTop: 6,
+                                padding: 0,
+                                border: 'none',
+                                background: 'none',
+                                cursor: 'pointer',
+                                fontSize: 11,
+                                color: '#F0B84E',
+                                textDecoration: 'underline',
+                                font: 'inherit',
+                                textAlign: 'left',
+                              }}
+                            >
+                              {fbDetailOpenId === item.task_id
+                                ? 'Hide run detail'
+                                : 'View run detail'}
+                            </button>
+                            {fbDetailOpenId === item.task_id ? (
+                              <div
+                                role="region"
+                                aria-label={`Contradiction report for ${item.task_id}`}
+                                aria-busy={fbDetailBusyId === item.task_id}
+                                style={{ marginTop: 8, borderTop: '0.5px solid #E0D5C5', paddingTop: 8 }}
+                              >
+                                {fbDetailBusyId === item.task_id ? (
+                                  <p style={{ fontSize: 11, color: '#A0A39A', margin: 0 }}>
+                                    Checking contradictions…
+                                  </p>
+                                ) : fbDetailErrs[item.task_id] ? (
+                                  <p role="alert" style={{ fontSize: 11, color: '#993C1D', margin: 0 }}>
+                                    {fbDetailErrs[item.task_id]}
+                                  </p>
+                                ) : fbDetailCache[item.task_id] ? (
+                                  fbDetailCache[item.task_id].contradictions.length === 0 ? (
+                                    <p style={{ fontSize: 11, color: '#8C7355', margin: 0 }}>
+                                      No contradictions recorded.
+                                    </p>
+                                  ) : (
+                                    <ul
+                                      style={{
+                                        listStyle: 'none',
+                                        padding: 0,
+                                        margin: 0,
+                                        display: 'grid',
+                                        gap: 6,
+                                      }}
+                                    >
+                                      {fbDetailCache[item.task_id].contradictions.map((contradiction) => (
+                                        <li
+                                          key={contradiction.id}
+                                          style={{ fontSize: 11, display: 'block', minWidth: 0 }}
+                                        >
+                                          <span
+                                            style={{
+                                              fontSize: 9,
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em',
+                                              borderRadius: 999,
+                                              padding: '1px 7px',
+                                              marginRight: 6,
+                                              border: '0.5px solid #E0D5C5',
+                                              background: '#EDE4D8',
+                                              color: '#A0A39A',
+                                            }}
+                                          >
+                                            {contradiction.severity || 'unknown severity'}
+                                          </span>
+                                          <span
+                                            style={{
+                                              fontSize: 9,
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em',
+                                              color:
+                                                contradiction.resolved ? '#3F6B4A' : '#9C2F2A',
+                                              marginRight: 6,
+                                            }}
+                                          >
+                                            {contradiction.resolved ? 'resolved' : 'open'}
+                                          </span>
+                                          <span style={{ display: 'block', marginTop: 2, wordBreak: 'break-word' }}>
+                                            {contradiction.direction === 'new'
+                                              ? 'This run shifted your earlier stance: '
+                                              : contradiction.direction === 'old'
+                                                ? 'An earlier run took a different stance: '
+                                                : ''}
+                                            {contradiction.summary}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )
+                                ) : null}
+                              </div>
+                            ) : null}
                           </div>
                         </li>
                       );
