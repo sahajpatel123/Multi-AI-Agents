@@ -1996,12 +1996,9 @@ export function ProfileModal() {
       });
   }, [securityOpen, securityDetails, securityLoading]);
 
-  // Expand one rating's contradiction report. A refused load keeps its
-  // row intact and says why; toggling again retries from the server.
-  const toggleFeedbackRunDetail = useCallback((taskId: string) => {
-    const next = fbDetailOpenId === taskId ? null : taskId;
-    setFbDetailOpenId(next);
-    if (!next || fbDetailCache[taskId] || fbDetailBusyId === taskId) return;
+  // Shared fetch for a rating's contradiction report; both the expand
+  // path and the explicit Retry button land here.
+  const fetchFeedbackRunDetail = useCallback((taskId: string) => {
     setFbDetailBusyId(taskId);
     void getAgentTaskDetail(taskId)
       .then((detail) => {
@@ -2025,7 +2022,40 @@ export function ProfileModal() {
       .finally(() => {
         setFbDetailBusyId(null);
       });
-  }, [fbDetailOpenId, fbDetailCache, fbDetailBusyId]);
+  }, []);
+
+  // Expand one rating's contradiction report. A refused load keeps its
+  // row intact and offers an explicit Retry rather than hiding the
+  // recovery behind collapse-and-re-expand.
+  const toggleFeedbackRunDetail = useCallback(
+    (taskId: string) => {
+      const next = fbDetailOpenId === taskId ? null : taskId;
+      setFbDetailOpenId(next);
+      if (!next || fbDetailCache[taskId] || fbDetailBusyId === taskId) return;
+      setFbDetailErrs((prev) => {
+        if (!(taskId in prev)) return prev;
+        const next2 = { ...prev };
+        delete next2[taskId];
+        return next2;
+      });
+      fetchFeedbackRunDetail(taskId);
+    },
+    [fbDetailOpenId, fbDetailCache, fbDetailBusyId, fetchFeedbackRunDetail],
+  );
+
+  const retryFeedbackRunDetail = useCallback(
+    (taskId: string) => {
+      if (fbDetailBusyId === taskId) return;
+      setFbDetailErrs((prev) => {
+        if (!(taskId in prev)) return prev;
+        const next2 = { ...prev };
+        delete next2[taskId];
+        return next2;
+      });
+      fetchFeedbackRunDetail(taskId);
+    },
+    [fbDetailBusyId, fetchFeedbackRunDetail],
+  );
 
   useEffect(() => {
     if (!exportNotice) return;
@@ -6829,6 +6859,7 @@ export function ProfileModal() {
                                 role="region"
                                 aria-label={`Contradiction report for ${item.task_id}`}
                                 aria-busy={fbDetailBusyId === item.task_id}
+                                aria-live="polite"
                                 style={{ marginTop: 8, borderTop: '0.5px solid #E0D5C5', paddingTop: 8 }}
                               >
                                 {fbDetailBusyId === item.task_id ? (
@@ -6836,9 +6867,29 @@ export function ProfileModal() {
                                     Checking contradictions…
                                   </p>
                                 ) : fbDetailErrs[item.task_id] ? (
-                                  <p role="alert" style={{ fontSize: 11, color: '#993C1D', margin: 0 }}>
-                                    {fbDetailErrs[item.task_id]}
-                                  </p>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <p role="alert" style={{ fontSize: 11, color: '#993C1D', margin: 0 }}>
+                                      {fbDetailErrs[item.task_id]}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      aria-label={`Retry loading contradiction report for ${item.task_id}`}
+                                      onClick={() => retryFeedbackRunDetail(item.task_id)}
+                                      style={{
+                                        padding: '4px 10px',
+                                        borderRadius: 6,
+                                        border: '0.5px solid #E0D5C5',
+                                        background: '#F0E8DC',
+                                        color: '#F3F0E7',
+                                        fontSize: 11,
+                                        cursor: 'pointer',
+                                        fontFamily: 'var(--vp-font-sans)',
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      Retry
+                                    </button>
+                                  </div>
                                 ) : fbDetailCache[item.task_id] ? (
                                   fbDetailCache[item.task_id].contradictions.length === 0 ? (
                                     <p style={{ fontSize: 11, color: '#8C7355', margin: 0 }}>

@@ -2271,14 +2271,11 @@ describe('ProfileModal', () => {
     expect(await within(region).findByRole('alert')).toHaveTextContent(
       'Task not found',
     );
-
-    // Re-expanding retries from the server and recovers.
-    (screen.getByRole('button', { name: /hide run detail for task-gone/i })).click();
-    (await screen.findByRole('button', { name: /view run detail for task-gone/i })).click();
+    // Recovery is an explicit, discoverable control — not hidden
+    // behind collapse-and-re-expand.
+    within(region).getByRole('button', { name: /retry loading contradiction report/i }).click();
     expect(
-      await within(
-        await screen.findByRole('region', { name: /contradiction report for task-gone/i }),
-      ).findByText('No contradictions recorded.'),
+      await within(region).findByText('No contradictions recorded.'),
     ).toBeInTheDocument();
     expect(hoistedMocks.getAgentTaskDetail).toHaveBeenCalledTimes(2);
   });

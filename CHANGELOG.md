@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Contradiction reports communicate their states properly: the
+  region now announces loading/result/refusal swaps to screen readers
+  via aria-live, and a refused load offers an explicit Retry button —
+  matching the capability-reference precedent — instead of hiding
+  recovery behind collapse-and-re-expand
 - The agent-memory card reads honestly at the edges: runs that hit
   the backend's 100-character slice are marked with an ellipsis
   instead of stopping mid-word as if complete, and a refused load
