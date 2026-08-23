@@ -4121,6 +4121,44 @@ describe('ProfileModal', () => {
     expect(await within(region).findByText('No results returned.')).toBeInTheDocument();
   });
 
+  it('skips URL-duplicated excerpts and never links non-http urls', async () => {
+    hoistedMocks.searchMcpIntegration.mockResolvedValueOnce([
+      {
+        // Notion echoes its own URL as the excerpt — the row must not print it twice.
+        title: 'Dup checklist',
+        excerpt: 'https://notion.so/dup',
+        source: 'Notion',
+        url: 'https://notion.so/dup',
+      },
+      {
+        // Vendor payloads never become javascript:/data: hrefs.
+        title: 'Odd entry',
+        excerpt: '',
+        source: 'Notion',
+        url: 'javascript:alert(1)',
+      },
+    ]);
+    const region = await openIntegrationTestSearch();
+
+    fireEvent.change(
+      await within(region).findByRole('textbox', { name: /search query for notion/i }),
+      { target: { value: 'dup' } },
+    );
+    within(region).getByRole('button', { name: 'Search' }).click();
+
+    const dupLink = await within(region).findByRole('link', { name: 'Dup checklist' });
+    expect(dupLink).toHaveAttribute('href', 'https://notion.so/dup');
+    expect(
+      within(region).queryByText('https://notion.so/dup', { selector: 'p' }),
+    ).not.toBeInTheDocument();
+
+    expect(within(region).queryByRole('link', { name: 'Odd entry' })).not.toBeInTheDocument();
+    expect(within(region).getByText('Odd entry')).toBeInTheDocument();
+
+    // The region announces its busy state for screen readers.
+    expect(region).toHaveAttribute('aria-busy', 'false');
+  });
+
   it('surfaces a doc refusal verbatim inside its row', async () => {
     hoistedMocks.getAgentCapabilities.mockResolvedValueOnce(referenceCaps);
     hoistedMocks.getCapabilityDoc.mockRejectedValueOnce(

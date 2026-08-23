@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Test-search results are tidier and safer: Notion results echo their
+  own URL as the excerpt, so that duplicate line is suppressed rather
+  than printing the same link twice; a result URL only becomes a link
+  when it's actually http(s) — vendor payloads can never render as a
+  javascript: href — and the region announces its busy state via
+  aria-busy so screen readers aren't left guessing during a search
 - Try-it prompts now wrap instead of truncating behind an ellipsis —
   you can actually read the full prompt before copying it — and the
   "Copied" flash carries aria-live so assistive tech announces the

@@ -7219,6 +7219,7 @@ export function ProfileModal() {
                                 <div
                                   role="region"
                                   aria-label={`Test search for ${service.name}`}
+                                  aria-busy={mcpTestBusy}
                                   style={{
                                     marginTop: 8,
                                     padding: 10,
@@ -7283,7 +7284,9 @@ export function ProfileModal() {
                                     <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
                                       {mcpTestResults.map((result, index) => (
                                         <div key={`${result.url}-${index}`}>
-                                          {result.url ? (
+                                          {/* Only real web URLs become links — vendor payloads
+                                              never get to render as javascript:/data: hrefs. */}
+                                          {result.url && /^https?:\/\//i.test(result.url) ? (
                                             <a
                                               href={result.url}
                                               target="_blank"
@@ -7299,7 +7302,7 @@ export function ProfileModal() {
                                             </a>
                                           ) : (
                                             <span style={{ fontSize: 11, color: '#F3F0E7' }}>
-                                              {result.title}
+                                              {result.title || result.url}
                                             </span>
                                           )}
                                           <span
@@ -7315,7 +7318,9 @@ export function ProfileModal() {
                                           >
                                             {result.source || service.name}
                                           </span>
-                                          {result.excerpt ? (
+                                          {/* Notion results echo their own URL as the excerpt —
+                                              printing that under the identical link is noise. */}
+                                          {result.excerpt && result.excerpt !== result.url ? (
                                             <p
                                               style={{
                                                 fontSize: 10,
