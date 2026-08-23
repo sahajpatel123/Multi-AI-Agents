@@ -6,6 +6,11 @@ import { copyToClipboard } from '../lib/clipboard';
 import { conduraPrimaryLabel, resolveInstallUrl } from '../lib/conduraCta';
 import { motionDuration } from '../lib/motion';
 import { MotionButton } from './MotionButton';
+import {
+  deleteConduraHandoffDraft,
+  listConduraHandoffDrafts,
+  type ConduraHandoffDraftSummary,
+} from '../api';
 import markUrl from '../assets/condura/mark.svg';
 
 const TITLE_ID = 'condura-cta-title';
@@ -13,6 +18,27 @@ const TITLE_ID = 'condura-cta-title';
 function isMobileUa(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768;
+}
+
+// Same relative-time idiom as SessionCard and DiscussHistoryDrawer.
+function formatDraftTime(timestamp: string | null): string {
+  if (!timestamp) return '';
+  const then = new Date(timestamp.endsWith('Z') ? timestamp : `${timestamp}Z`).getTime();
+  if (Number.isNaN(then)) return '';
+  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function draftLabel(draft: ConduraHandoffDraftSummary): string {
+  const intent = (draft.payload as { intent?: { summary?: unknown } } | null)?.intent;
+  const summary = typeof intent?.summary === 'string' ? intent.summary.trim() : '';
+  return summary || draft.capability || 'Saved handoff';
 }
 
 export function ConduraInstallCTA({
@@ -39,6 +65,14 @@ export function ConduraInstallCTA({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Saved-handoff drafts: fetched when the dialog opens so a handoff
+  // saved earlier (e.g. on this phone) can be re-copied or deleted.
+  const [drafts, setDrafts] = useState<ConduraHandoffDraftSummary[] | null>(null);
+  const [draftsError, setDraftsError] = useState<string | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
+  const [busyDraftId, setBusyDraftId] = useState<number | null>(null);
+  const [copiedDraftId, setCopiedDraftId] = useState<number | null>(null);
+  const copiedDraftTimerRef = useRef<number | null>(null);
   const mobile = isMobileUa();
   const firstBtnRef = useRef<HTMLButtonElement | null>(null);
   const lastBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -68,10 +102,37 @@ export function ConduraInstallCTA({
       setProbe({ kind: 'unknown' });
       setError(null);
       setCopied(false);
+      setDrafts(null);
+      setDraftsError(null);
+      setConfirmingDeleteId(null);
+      setBusyDraftId(null);
+      setCopiedDraftId(null);
       clearCopyTimer();
       return;
     }
     firstBtnRef.current?.focus();
+  }, [open]);
+
+  // Drafts refetch on every open — a draft saved on another device since
+  // the last open must be waiting here.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setDraftsError(null);
+    listConduraHandoffDrafts({ perPage: 20 })
+      .then((result) => {
+        if (!cancelled) setDrafts(result.drafts);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setDrafts([]);
+        setDraftsError(
+          e instanceof Error && e.message ? e.message : 'Could not load saved handoffs.',
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
   useEffect(() => {
@@ -114,6 +175,14 @@ export function ConduraInstallCTA({
   }, [open]);
 
   useEffect(() => () => clearCopyTimer(), []);
+  useEffect(
+    () => () => {
+      if (copiedDraftTimerRef.current != null) {
+        window.clearTimeout(copiedDraftTimerRef.current);
+      }
+    },
+    [],
+  );
 
   if (!open) return null;
 
@@ -134,6 +203,57 @@ export function ConduraInstallCTA({
       setCopied(false);
       copyTimerRef.current = null;
     }, resetMs > 0 ? resetMs : 0);
+  };
+
+  // A saved draft holds the full handoff payload, so its link can be
+  // rebuilt anywhere — that is the entire point of saving one.
+  const copySavedDraft = async (draft: ConduraHandoffDraftSummary) => {
+    if (!draft.payload) {
+      setDraftsError("This saved handoff's payload is damaged — delete it and start a fresh handoff.");
+      return;
+    }
+    try {
+      const url = handoffClipboardUrl(draft.payload as unknown as HandoffPayload);
+      const ok = await copyToClipboard(url);
+      if (!ok) throw new Error('copy failed');
+      setDraftsError(null);
+      setCopiedDraftId(draft.id);
+      if (copiedDraftTimerRef.current != null) window.clearTimeout(copiedDraftTimerRef.current);
+      const resetMs = motionDuration(2000);
+      copiedDraftTimerRef.current = window.setTimeout(() => {
+        setCopiedDraftId(null);
+        copiedDraftTimerRef.current = null;
+      }, resetMs > 0 ? resetMs : 0);
+    } catch {
+      setDraftsError('Could not copy that saved handoff link.');
+    }
+  };
+
+  // Deletion is permanent server-side, so the first click only arms an
+  // inline confirm — the row says so before anything is sent.
+  const requestDraftDelete = (draft: ConduraHandoffDraftSummary) => {
+    setDraftsError(null);
+    setConfirmingDeleteId(draft.id);
+  };
+
+  const cancelDraftDelete = () => setConfirmingDeleteId(null);
+
+  const confirmDraftDelete = async (draft: ConduraHandoffDraftSummary) => {
+    setConfirmingDeleteId(null);
+    setBusyDraftId(draft.id);
+    try {
+      await deleteConduraHandoffDraft(draft.id);
+      // The row leaves the list only after the server accepts.
+      setDrafts((current) =>
+        current ? current.filter((item) => item.id !== draft.id) : current,
+      );
+    } catch (e) {
+      setDraftsError(
+        e instanceof Error && e.message ? e.message : 'Could not delete that saved handoff.',
+      );
+    } finally {
+      setBusyDraftId(null);
+    }
   };
 
   return (
@@ -235,6 +355,128 @@ export function ConduraInstallCTA({
             Close
           </button>
         </div>
+
+        {drafts !== null && (drafts.length > 0 || draftsError) ? (
+          <section
+            aria-label="Saved handoffs"
+            style={{ marginTop: 14, borderTop: '0.5px solid rgba(140,115,85,0.25)', paddingTop: 10 }}
+          >
+            <h3
+              style={{
+                margin: '0 0 6px',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#8C7355',
+                fontFamily: 'var(--vp-font-sans)',
+              }}
+            >
+              Saved handoffs ({drafts.length})
+            </h3>
+            {draftsError ? (
+              <p role="alert" style={{ margin: '0 0 6px', fontSize: 12, color: '#993C1D' }}>
+                {draftsError}
+              </p>
+            ) : null}
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {drafts.map((draft) => {
+                const busy = busyDraftId === draft.id;
+                return (
+                  <li
+                    key={draft.id}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0' }}
+                  >
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: '#4A3728', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {draftLabel(draft)}
+                      <span style={{ display: 'block', fontSize: 10, color: '#A0A39A' }}>
+                        {draft.capability || 'unknown capability'}
+                        {draft.createdAt ? ` · ${formatDraftTime(draft.createdAt)}` : ''}
+                      </span>
+                    </span>
+                    {confirmingDeleteId === draft.id ? (
+                      <>
+                        <span style={{ fontSize: 10, color: '#993C1D' }}>Delete forever?</span>
+                        <button
+                          type="button"
+                          disabled={busyDraftId !== null}
+                          aria-label={`Confirm deleting saved handoff ${draftLabel(draft)}`}
+                          onClick={() => void confirmDraftDelete(draft)}
+                          style={{
+                            background: 'none',
+                            border: '0.5px solid #D85A30',
+                            borderRadius: 6,
+                            padding: '2px 7px',
+                            fontSize: 10,
+                            color: busy ? '#A0A39A' : '#993C1D',
+                            cursor: busyDraftId !== null ? 'wait' : 'pointer',
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        >
+                          {busy ? 'Deleting…' : 'Confirm'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busyDraftId !== null}
+                          aria-label={`Keep saved handoff ${draftLabel(draft)}`}
+                          onClick={cancelDraftDelete}
+                          style={{
+                            background: 'none',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 6,
+                            padding: '2px 7px',
+                            fontSize: 10,
+                            color: '#4A3728',
+                            cursor: busyDraftId !== null ? 'wait' : 'pointer',
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        >
+                          Keep
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          aria-label={`Copy link for saved handoff ${draftLabel(draft)}`}
+                          onClick={() => void copySavedDraft(draft)}
+                          style={{
+                            background: 'none',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 6,
+                            padding: '2px 7px',
+                            fontSize: 10,
+                            color: copiedDraftId === draft.id ? '#5A8C6A' : '#4A3728',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        >
+                          {copiedDraftId === draft.id ? 'Copied' : 'Copy link'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busyDraftId !== null}
+                          aria-label={`Delete saved handoff ${draftLabel(draft)}`}
+                          onClick={() => requestDraftDelete(draft)}
+                          style={{
+                            background: 'none',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 6,
+                            padding: '2px 7px',
+                            fontSize: 10,
+                            color: '#D85A30',
+                            cursor: busyDraftId !== null ? 'wait' : 'pointer',
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
 
         {probe.kind === 'ready' && probe.version ? (
           <p className="condura-cta__status" role="status">

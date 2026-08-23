@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Saved handoffs can now be recovered: the Condura dialog lists the
+  handoff drafts you've saved (labeled by their intent summary with
+  capability and age), rebuilds each one's condura:// link from its
+  stored payload so it can be re-copied on any device, and deletes
+  drafts behind an inline confirm — wiring the list and delete
+  handoff-draft endpoints that had no frontend callers at all
+
 ### Improved
 - The end of the saved-discussion history is now legible: a census
   line under the list reads "Showing X of Y saved discussions" while

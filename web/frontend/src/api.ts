@@ -2056,6 +2056,71 @@ export async function saveConduraHandoffDraft(body: {
   return { id: data.id };
 }
 
+export interface ConduraHandoffDraftSummary {
+  id: number;
+  capability: string;
+  payload: Record<string, unknown> | null;
+  createdAt: string | null;
+}
+
+function normalizeConduraHandoffDraft(row: unknown): ConduraHandoffDraftSummary {
+  const r = (row && typeof row === 'object' ? row : {}) as Record<string, unknown>;
+  return {
+    id: typeof r.id === 'number' ? r.id : 0,
+    capability: typeof r.capability === 'string' ? r.capability : '',
+    payload:
+      r.payload && typeof r.payload === 'object' && !Array.isArray(r.payload)
+        ? (r.payload as Record<string, unknown>)
+        : null,
+    createdAt: typeof r.created_at === 'string' ? r.created_at : null,
+  };
+}
+
+export async function listConduraHandoffDrafts(
+  params: { page?: number; perPage?: number; capability?: string } = {},
+): Promise<{ drafts: ConduraHandoffDraftSummary[]; total: number; totalPages: number }> {
+  const query = new URLSearchParams();
+  if (params.page !== undefined) query.set('page', String(params.page));
+  if (params.perPage !== undefined) query.set('per_page', String(params.perPage));
+  if (params.capability && params.capability.trim()) {
+    query.set('capability', params.capability.trim());
+  }
+  const qs = query.toString();
+  const response = await apiFetch(`/api/condura/handoff-drafts${qs ? `?${qs}` : ''}`, {});
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(response);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to load saved handoffs'), response),
+    );
+  }
+  const data =
+    (await parseJsonSafely<{ drafts?: unknown[]; total?: unknown; total_pages?: unknown }>(
+      response,
+    )) || {};
+  const drafts = Array.isArray(data.drafts) ? data.drafts.map(normalizeConduraHandoffDraft) : [];
+  return {
+    drafts,
+    total: typeof data.total === 'number' ? data.total : drafts.length,
+    totalPages: typeof data.total_pages === 'number' ? data.total_pages : 0,
+  };
+}
+
+export async function deleteConduraHandoffDraft(draftId: number): Promise<void> {
+  if (!Number.isInteger(draftId) || draftId < 1) {
+    throw new RangeError('draftId must be a positive integer');
+  }
+  const response = await apiFetch(
+    `/api/condura/handoff-drafts/${encodeURIComponent(String(draftId))}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(response);
+    throw new Error(
+      withRequestId(getErrorMessage(err, 'Failed to delete the saved handoff'), response),
+    );
+  }
+}
+
 export async function getConduraMigrationFlags(): Promise<{
   flags: Array<{
     id: number;

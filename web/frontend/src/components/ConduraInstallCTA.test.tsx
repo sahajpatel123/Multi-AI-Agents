@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ConduraInstallCTA } from './ConduraInstallCTA';
 
 const onCloseMock = vi.fn();
@@ -7,6 +7,8 @@ const onSendToConduraMock = vi.fn();
 const onSaveDraftMock = vi.fn();
 const probeLocalConduraMock = vi.fn();
 const copyToClipboardMock = vi.fn();
+const listConduraHandoffDraftsMock = vi.fn();
+const deleteConduraHandoffDraftMock = vi.fn();
 
 const probeState: { kind: 'unknown' | 'not_installed' | 'installed_not_running' | 'ready'; version?: string } = {
   kind: 'unknown',
@@ -14,6 +16,13 @@ const probeState: { kind: 'unknown' | 'not_installed' | 'installed_not_running' 
 
 vi.mock('../lib/conduraLocalProbe', () => ({
   probeLocalCondura: (...args: unknown[]) => probeLocalConduraMock(...args),
+}));
+
+vi.mock('../api', () => ({
+  listConduraHandoffDrafts: (...args: unknown[]) =>
+    listConduraHandoffDraftsMock(...args),
+  deleteConduraHandoffDraft: (...args: unknown[]) =>
+    deleteConduraHandoffDraftMock(...args),
 }));
 
 vi.mock('../lib/clipboard', () => ({
@@ -64,8 +73,13 @@ describe('ConduraInstallCTA', () => {
     onSaveDraftMock.mockReset();
     probeLocalConduraMock.mockReset();
     copyToClipboardMock.mockReset();
+    listConduraHandoffDraftsMock.mockReset();
+    deleteConduraHandoffDraftMock.mockReset();
     copyToClipboardMock.mockResolvedValue(true);
     probeLocalConduraMock.mockResolvedValue({ kind: 'not_installed' });
+    // No saved handoffs by default: the section stays out of the way of
+    // the pre-existing tests.
+    listConduraHandoffDraftsMock.mockResolvedValue({ drafts: [], total: 0, totalPages: 0 });
     probeState.kind = 'unknown';
   });
 
@@ -121,5 +135,112 @@ describe('ConduraInstallCTA', () => {
     expect(container.querySelector('.condura-cta__header')).toBeTruthy();
     expect(container.querySelector('.condura-cta__title')).toBeTruthy();
     expect(container.querySelector('.condura-cta__actions')).toBeTruthy();
+  });
+
+  const savedDraft = {
+    id: 3,
+    capability: 'file.organize',
+    payload: { intent: { capability: 'file.organize', summary: 'Tidy the downloads folder' } },
+    createdAt: new Date().toISOString(),
+  };
+
+  it('lists saved handoffs when open and labels them by their intent summary', async () => {
+    listConduraHandoffDraftsMock.mockResolvedValue({
+      drafts: [savedDraft],
+      total: 1,
+      totalPages: 1,
+    });
+    renderCta();
+
+    expect(await screen.findByText('Tidy the downloads folder')).toBeInTheDocument();
+    expect(screen.getByText(/saved handoffs \(1\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/file\.organize · just now/)).toBeInTheDocument();
+    expect(listConduraHandoffDraftsMock).toHaveBeenCalledWith({ perPage: 20 });
+  });
+
+  it('hides the saved-handoffs section entirely when there are none', async () => {
+    renderCta();
+    await waitFor(() => {
+      expect(listConduraHandoffDraftsMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/saved handoffs \(/i)).not.toBeInTheDocument();
+  });
+
+  it('re-copies a saved handoff link from its stored payload', async () => {
+    listConduraHandoffDraftsMock.mockResolvedValue({
+      drafts: [savedDraft],
+      total: 1,
+      totalPages: 1,
+    });
+    renderCta();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /copy link for saved handoff/i }),
+    );
+    await waitFor(() => {
+      // The stored payload rides along as base64 in a condura:// link.
+      expect(copyToClipboardMock).toHaveBeenCalledWith(
+        expect.stringContaining('condura://arena/handoff?payload='),
+      );
+    });
+    // The row confirms itself.
+    expect(await screen.findByText('Copied')).toBeInTheDocument();
+  });
+
+  it('deletes a saved handoff only after an inline confirm', async () => {
+    listConduraHandoffDraftsMock.mockResolvedValue({
+      drafts: [savedDraft],
+      total: 1,
+      totalPages: 1,
+    });
+    deleteConduraHandoffDraftMock.mockResolvedValue(undefined);
+    renderCta();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /delete saved handoff tidy the downloads folder/i }),
+    );
+    // Arming sends nothing.
+    expect(deleteConduraHandoffDraftMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Delete forever?')).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /confirm deleting saved handoff tidy the downloads folder/i }),
+    );
+    await waitFor(() => {
+      expect(deleteConduraHandoffDraftMock).toHaveBeenCalledWith(3);
+      expect(screen.queryByText('Tidy the downloads folder')).not.toBeInTheDocument();
+    });
+  });
+
+  it('surfaces a delete refusal verbatim and keeps the row', async () => {
+    listConduraHandoffDraftsMock.mockResolvedValue({
+      drafts: [savedDraft],
+      total: 1,
+      totalPages: 1,
+    });
+    deleteConduraHandoffDraftMock.mockRejectedValue(
+      new Error('Too many handoff-draft delete attempts. Please slow down.'),
+    );
+    renderCta();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /delete saved handoff tidy the downloads folder/i }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /confirm deleting saved handoff tidy the downloads folder/i }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Too many handoff-draft delete attempts. Please slow down.',
+    );
+    expect(screen.getByText('Tidy the downloads folder')).toBeInTheDocument();
+  });
+
+  it('shows a drafts load failure instead of pretending nothing was saved', async () => {
+    listConduraHandoffDraftsMock.mockRejectedValue(new Error('backend unreachable'));
+    renderCta();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('backend unreachable');
+    expect(screen.queryByText(/tidy the downloads folder/i)).not.toBeInTheDocument();
   });
 });
