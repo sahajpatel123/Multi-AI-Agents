@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Saved discussions are now searchable: the history drawer's title
+  search commits on Enter (the filter editors' keyboard contract) and
+  hits the list endpoint's search param that had been sitting unused.
+  A Clear chip tracks the applied filter, a no-match state names the
+  query it found nothing for, and Escape lifts the search before it
+  ever closes the drawer
+
 ### Improved
 - Continuing a saved discussion mid-reply no longer silently no-ops:
   the Continue button disables itself with its reason ("Wait for the

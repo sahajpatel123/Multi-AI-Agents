@@ -223,4 +223,75 @@ describe('DiscussHistoryDrawer', () => {
     fireEvent.click(button);
     expect(onContinue).not.toHaveBeenCalled();
   });
+
+  it('searches titles on Enter and shows only the matches', async () => {
+    mockedApi.listDiscussThreads.mockResolvedValue({
+      threads: [summary],
+      total: 1,
+      totalPages: 1,
+    });
+    render(<DiscussHistoryDrawer />);
+    await screen.findByText('Why did the migration fail?');
+
+    const input = screen.getByRole('textbox', { name: /search saved discussions by title/i });
+    fireEvent.change(input, { target: { value: 'migration' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({
+        perPage: 20,
+        search: 'migration',
+      });
+    });
+    // A Clear chip appears while a search is applied.
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
+  });
+
+  it('says when nothing matches and clears from there', async () => {
+    // One thread loads first (so the search box exists); the applied
+    // search then comes back empty.
+    mockedApi.listDiscussThreads
+      .mockResolvedValueOnce({ threads: [summary], total: 1, totalPages: 1 })
+      .mockResolvedValue({ threads: [], total: 0, totalPages: 0 });
+    render(<DiscussHistoryDrawer />);
+    await screen.findByText('Why did the migration fail?');
+
+    const input = screen.getByRole('textbox', { name: /search saved discussions by title/i });
+    fireEvent.change(input, { target: { value: 'kubernetes' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(await screen.findByText(/No saved discussions match “kubernetes”\./)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /clear search/i }));
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({ perPage: 20 });
+    });
+    // Back to the plain empty state once the filter lifts.
+    expect(await screen.findByText(/No saved discussions yet/)).toBeInTheDocument();
+  });
+
+  it('clears an applied search with Escape before letting Escape close the drawer', async () => {
+    const onClose = vi.fn();
+    render(<DiscussHistoryDrawer onClose={onClose} />);
+    await screen.findByText('Why did the migration fail?');
+
+    const input = screen.getByRole('textbox', { name: /search saved discussions by title/i });
+    fireEvent.change(input, { target: { value: 'migration' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({
+        perPage: 20,
+        search: 'migration',
+      });
+    });
+
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    // First Escape lifts the filter instead of closing the drawer.
+    await waitFor(() => {
+      expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({ perPage: 20 });
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Why did the migration fail?')).toBeInTheDocument();
+  });
 });

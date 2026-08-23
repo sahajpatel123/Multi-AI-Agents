@@ -52,6 +52,10 @@ export function DiscussHistoryDrawer({
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
+  // Search commits on Enter (the filter editors' keyboard contract); the
+  // applied value is what the server sees, the input is just the draft.
+  const [searchInput, setSearchInput] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
   // Bumping this forces a refetch even if the tick value is unchanged.
   const [reloadTick, setReloadTick] = useState(0);
 
@@ -65,7 +69,10 @@ export function DiscussHistoryDrawer({
   useEffect(() => {
     let cancelled = false;
     setLoadError(null);
-    listDiscussThreads({ perPage: 20 })
+    listDiscussThreads({
+      perPage: 20,
+      search: appliedSearch.trim() || undefined,
+    })
       .then((result) => {
         if (!cancelled) setThreads(result.threads);
       })
@@ -81,7 +88,28 @@ export function DiscussHistoryDrawer({
     return () => {
       cancelled = true;
     };
-  }, [reloadTick, refreshTick]);
+  }, [reloadTick, refreshTick, appliedSearch]);
+
+  const clearSearch = useCallback(() => {
+    setSearchInput('');
+    setAppliedSearch('');
+  }, []);
+
+  const handleSearchKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter') {
+        setAppliedSearch(searchInput.trim());
+      } else if (event.key === 'Escape') {
+        // First Escape clears an active search; only with nothing to
+        // clear does the drawer's own close handler take over.
+        if (searchInput.trim() || appliedSearch) {
+          event.stopPropagation();
+          clearSearch();
+        }
+      }
+    },
+    [appliedSearch, clearSearch, searchInput],
+  );
 
   const handleToggleRow = useCallback(
     async (thread: DiscussThreadSummary) => {
@@ -219,7 +247,29 @@ export function DiscussHistoryDrawer({
           color: '#A0A39A',
         }}
       >
-        No saved discussions yet — click “Save thread” to keep a conversation.
+        {appliedSearch ? (
+          <>
+            No saved discussions match “{appliedSearch}”.{' '}
+            <button
+              type="button"
+              onClick={clearSearch}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                fontSize: 12,
+                color: '#5A8C6A',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                fontFamily: 'var(--vp-font-sans)',
+              }}
+            >
+              Clear search
+            </button>
+          </>
+        ) : (
+          <>No saved discussions yet — click “Save thread” to keep a conversation.</>
+        )}
       </div>
     );
   }
@@ -248,6 +298,48 @@ export function DiscussHistoryDrawer({
           {detailError}
         </p>
       ) : null}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        <input
+          type="text"
+          value={searchInput}
+          maxLength={128}
+          placeholder="Search titles…"
+          aria-label="Search saved discussions by title"
+          onChange={(event) => setSearchInput(event.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 11,
+            color: '#4A3728',
+            background: '#FAF7F4',
+            border: '0.5px solid #E0D8D0',
+            borderRadius: 5,
+            padding: '3px 7px',
+            fontFamily: 'var(--vp-font-sans)',
+          }}
+        />
+        {appliedSearch ? (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={clearSearch}
+            title={`Showing titles matching “${appliedSearch}”`}
+            style={{
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 6,
+              padding: '2px 8px',
+              fontSize: 10,
+              color: '#5A8C6A',
+              cursor: 'pointer',
+              fontFamily: 'var(--vp-font-sans)',
+            }}
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {threads.map((thread) => {
           const isOpen = openId === thread.id;
