@@ -1946,6 +1946,38 @@ export async function getCapabilityDoc(capabilityId: string): Promise<Capability
   };
 }
 
+export type CapabilityExampleSet = { id: string; examples: string[] };
+
+// Curated "try one" prompt examples per capability. Public marketing
+// copy, alphabetized server-side; capabilities without curated
+// examples still appear with an empty list so callers can render a
+// placeholder without special-casing.
+export async function getCapabilityExamples(): Promise<CapabilityExampleSet[]> {
+  const response = await apiFetch(`/api/agent/capabilities/examples`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load capability examples'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<{
+    examples?: Array<{ id?: unknown; examples?: unknown }>;
+  }>(response);
+  const sets = Array.isArray(data?.examples) ? data.examples : [];
+  return sets
+    .filter((set) => typeof set?.id === 'string' && set.id.trim() !== '')
+    .map((set) => ({
+      id: String(set.id),
+      examples: Array.isArray(set.examples)
+        ? set.examples.filter(
+            (example): example is string => typeof example === 'string' && example.trim() !== '',
+          )
+        : [],
+    }));
+}
+
 export async function exportAgentFeedbackSummaryJson(
   windowDays: number = 30,
 ): Promise<AgentFeedbackActivityExport> {

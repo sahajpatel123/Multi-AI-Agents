@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Capability docs now come with a "Try it" row: each expanded
+  reference entry lists that capability's curated example prompts —
+  from the endpoint built for a chip row that never shipped — with
+  one-click copy and a "Copied" flash. A capability without curated
+  examples stays quiet, and if the examples read fails the section
+  says so at its bottom while docs keep working
 - A capability reference lives beside the usage card: one expander
   lists the full capability taxonomy (id, one-liner, execution
   badge) from the public endpoint that had no frontend caller, and

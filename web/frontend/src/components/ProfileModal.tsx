@@ -50,6 +50,7 @@ import {
   getCapabilityUsage,
   getAgentCapabilities,
   getCapabilityDoc,
+  getCapabilityExamples,
   deleteCalibrationRating,
   getCalibrationHistory,
   getCalibrationStats,
@@ -1330,6 +1331,12 @@ export function ProfileModal() {
   const [capDocBusyId, setCapDocBusyId] = useState<string | null>(null);
   const [capDocErrId, setCapDocErrId] = useState<string | null>(null);
   const [capDocErrText, setCapDocErrText] = useState<string | null>(null);
+  // "Try it" prompts per capability, loaded once with the taxonomy.
+  // A failed examples read never blocks docs — it just admits itself.
+  const [capExamples, setCapExamples] = useState<Record<string, string[]>>({});
+  const [capExamplesErr, setCapExamplesErr] = useState(false);
+  const [copiedExampleKey, setCopiedExampleKey] = useState<string | null>(null);
+  const copiedExampleTimerRef = useRef<number | null>(null);
 
   const feedbackExportDateRange: AgentFeedbackExportDateRange | undefined =
     feedbackExportFromDate || feedbackExportToDate
@@ -1480,6 +1487,33 @@ export function ProfileModal() {
     };
   }, [isOpen, activeTab, capReferenceOpen, capReferenceReload]);
 
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage' || !capReferenceOpen) return;
+    let cancelled = false;
+    setCapExamplesErr(false);
+    void getCapabilityExamples()
+      .then((sets) => {
+        if (!cancelled) {
+          const byId: Record<string, string[]> = {};
+          for (const set of sets) {
+            if (set.examples.length > 0) byId[set.id] = set.examples;
+          }
+          setCapExamples(byId);
+        }
+      })
+      .catch(() => {
+        // Examples are garnish on the reference; a refusal only
+        // admits itself at the bottom of the section.
+        if (!cancelled) {
+          setCapExamples({});
+          setCapExamplesErr(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, capReferenceOpen, capReferenceReload]);
+
   // Expand one capability row: fetch its markdown once, keep it cached
   // across collapses. A refused load surfaces verbatim inside the row.
   const toggleCapabilityDoc = useCallback(
@@ -1510,6 +1544,34 @@ export function ProfileModal() {
         });
     },
     [capOpenDocId, capDocs],
+  );
+
+  // One "Copied" flash at a time; the timer ref keeps a late flip
+  // from clobbering a newer confirmation.
+  const copyCapabilityExample = useCallback(async (example: string, key: string) => {
+    try {
+      const copied = await copyToClipboard(example);
+      if (!copied) return;
+      setCopiedExampleKey(key);
+      if (copiedExampleTimerRef.current !== null) {
+        window.clearTimeout(copiedExampleTimerRef.current);
+      }
+      copiedExampleTimerRef.current = window.setTimeout(() => {
+        copiedExampleTimerRef.current = null;
+        setCopiedExampleKey(null);
+      }, 1500);
+    } catch {
+      // Clipboard refused; the button simply stays "Copy".
+    }
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (copiedExampleTimerRef.current !== null) {
+        window.clearTimeout(copiedExampleTimerRef.current);
+      }
+    },
+    [],
   );
 
   useEffect(() => {
@@ -3146,9 +3208,77 @@ export function ProfileModal() {
                                       {capDocErrText}
                                     </p>
                                   ) : cachedDoc ? (
-                                    <div style={{ maxWidth: '100%' }}>
-                                      <CapabilityDocBody markdown={cachedDoc.markdown} />
-                                    </div>
+                                    <>
+                                      <div style={{ maxWidth: '100%' }}>
+                                        <CapabilityDocBody markdown={cachedDoc.markdown} />
+                                      </div>
+                                      {(capExamples[cap.id] ?? []).length > 0 ? (
+                                        <div style={{ marginTop: 6 }}>
+                                          <div
+                                            style={{
+                                              fontSize: 10,
+                                              textTransform: 'uppercase',
+                                              color: '#A0A39A',
+                                              letterSpacing: '0.10em',
+                                              marginBottom: 4,
+                                            }}
+                                          >
+                                            Try it
+                                          </div>
+                                          <div style={{ display: 'grid', gap: 3 }}>
+                                            {(capExamples[cap.id] ?? []).map((example, index) => {
+                                              const exampleKey = `${cap.id}:${index}`;
+                                              const copied = copiedExampleKey === exampleKey;
+                                              return (
+                                                <div
+                                                  key={exampleKey}
+                                                  style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    gap: 8,
+                                                  }}
+                                                >
+                                                  <span
+                                                    style={{
+                                                      fontSize: 11,
+                                                      color: '#C4A882',
+                                                      overflow: 'hidden',
+                                                      textOverflow: 'ellipsis',
+                                                      whiteSpace: 'nowrap',
+                                                    }}
+                                                  >
+                                                    “{example}”
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    aria-label={`Copy example prompt ${
+                                                      index + 1
+                                                    } for capability ${cap.id}`}
+                                                    onClick={() =>
+                                                      void copyCapabilityExample(example, exampleKey)
+                                                    }
+                                                    style={{
+                                                      background: 'none',
+                                                      border: '0.5px solid #E0D5C5',
+                                                      borderRadius: 4,
+                                                      padding: '1px 6px',
+                                                      fontSize: 10,
+                                                      color: copied ? '#F0B84E' : '#A0A39A',
+                                                      cursor: 'pointer',
+                                                      fontFamily: 'var(--vp-font-sans)',
+                                                      flexShrink: 0,
+                                                    }}
+                                                  >
+                                                    {copied ? 'Copied' : 'Copy'}
+                                                  </button>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                    </>
                                   ) : null}
                                 </div>
                               ) : null}
@@ -3161,6 +3291,11 @@ export function ProfileModal() {
                         No capabilities registered yet.
                       </p>
                     )}
+                    {capExamplesErr ? (
+                      <p style={{ fontSize: 11, color: '#A0A39A', margin: '8px 0 0' }}>
+                        Example prompts are unavailable right now.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
                 <div

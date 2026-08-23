@@ -427,6 +427,7 @@ const hoistedMocks = vi.hoisted(() => {
     execution: '',
     markdown: '',
   }),
+  getCapabilityExamples: vi.fn().mockResolvedValue([]),
   getRecentAgentFeedback: vi.fn().mockResolvedValue([]),
   getAgentFeedbackSummary: vi.fn().mockResolvedValue({
     total: 4,
@@ -542,6 +543,7 @@ vi.mock('../api', () => ({
   getCapabilityUsage: hoistedMocks.getCapabilityUsage,
   getAgentCapabilities: hoistedMocks.getAgentCapabilities,
   getCapabilityDoc: hoistedMocks.getCapabilityDoc,
+  getCapabilityExamples: hoistedMocks.getCapabilityExamples,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getAgentFeedbackSummary: hoistedMocks.getAgentFeedbackSummary,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
@@ -677,6 +679,7 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getCapabilityUsage).mockClear();
     vi.mocked(hoistedMocks.getAgentCapabilities).mockClear();
     vi.mocked(hoistedMocks.getCapabilityDoc).mockClear();
+    vi.mocked(hoistedMocks.getCapabilityExamples).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).mockClear();
@@ -3938,6 +3941,97 @@ describe('ProfileModal', () => {
     expect(within(region).getByText('Second item').tagName).toBe('LI');
     // The id row also reads "arena.respond", so pin the code span by tag.
     expect(within(region).getByText('arena.respond', { selector: 'code' })).toBeInTheDocument();
+  });
+
+  it('shows try-it prompts with a copy button that flashes confirmation', async () => {
+    hoistedMocks.getAgentCapabilities.mockResolvedValueOnce(referenceCaps);
+    hoistedMocks.getCapabilityExamples.mockResolvedValueOnce([
+      { id: 'arena.respond', examples: ['Debate this topic', 'Summarize the news'] },
+      { id: 'file.organize', examples: [] },
+    ]);
+    hoistedMocks.getCapabilityDoc.mockResolvedValueOnce({
+      id: 'arena.respond',
+      description: 'Four-agent panel response.',
+      execution: 'local',
+      markdown: '**Four-agent panel response.**',
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    (
+      await screen.findByRole('button', { name: /view capability reference/i })
+    ).click();
+    const region = await screen.findByRole('region', { name: /capability reference/i });
+
+    within(region)
+      .getByRole('button', { name: /expand capability arena\.respond/i })
+      .click();
+
+    expect(await within(region).findByText('Try it')).toBeInTheDocument();
+    expect(within(region).getByText('“Debate this topic”')).toBeInTheDocument();
+
+    const copyButton = within(region).getByRole('button', {
+      name: /copy example prompt 1 for capability arena\.respond/i,
+    });
+    copyButton.click();
+    await waitFor(() => {
+      expect(hoistedMocks.copyToClipboard).toHaveBeenCalledWith('Debate this topic');
+    });
+    expect(await within(region).findByText('Copied')).toBeInTheDocument();
+
+    // A capability with no curated examples stays quiet: the reference
+    // is one-open-at-a-time, so switching rows collapses this one.
+    within(region)
+      .getByRole('button', { name: /expand capability file\.organize/i })
+      .click();
+    await waitFor(() => {
+      expect(
+        within(region).getByRole('button', { name: /expand capability arena\.respond/i }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      within(region).queryByRole('button', {
+        name: /copy example prompt .*for capability file\.organize/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('admits when example prompts fail without blocking the docs', async () => {
+    hoistedMocks.getAgentCapabilities.mockResolvedValueOnce(referenceCaps);
+    hoistedMocks.getCapabilityExamples.mockRejectedValueOnce(
+      new Error('Too many capability-example lookups. Please slow down.'),
+    );
+    hoistedMocks.getCapabilityDoc.mockResolvedValueOnce({
+      id: 'arena.respond',
+      description: 'Four-agent panel response.',
+      execution: 'local',
+      markdown: '**Four-agent panel response.**',
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    (
+      await screen.findByRole('button', { name: /view capability reference/i })
+    ).click();
+    const region = await screen.findByRole('region', { name: /capability reference/i });
+
+    within(region)
+      .getByRole('button', { name: /expand capability arena\.respond/i })
+      .click();
+
+    // The doc still renders…
+    expect(
+      await within(region).findByText('Four-agent panel response.', { selector: 'strong' }),
+    ).toBeInTheDocument();
+    // …and the missing garnish says so.
+    expect(
+      await within(region).findByText('Example prompts are unavailable right now.'),
+    ).toBeInTheDocument();
+    expect(within(region).queryByText('Try it')).not.toBeInTheDocument();
   });
 
   it('surfaces a doc refusal verbatim inside its row', async () => {
