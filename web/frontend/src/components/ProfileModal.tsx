@@ -143,6 +143,15 @@ function formatCalibrationDate(iso: string | null): string {
   return iso.slice(0, 10);
 }
 
+// Security facts read as prose ("Member since …"), so they get the same
+// human date form as the billing rows; unparseable input falls back to
+// whatever the server said rather than "Invalid Date".
+function formatSecurityDate(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 function formatSignedDelta(delta: number): string {
   return delta > 0 ? `+${delta}` : String(delta);
 }
@@ -1385,6 +1394,7 @@ export function ProfileModal() {
   const [securityDetails, setSecurityDetails] = useState<AccountSecurity | null>(null);
   const [securityLoading, setSecurityLoading] = useState(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
+  const securityErrorRef = useRef<HTMLParagraphElement | null>(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768);
@@ -1987,6 +1997,13 @@ export function ProfileModal() {
     saveErrorRef.current?.focus();
   }, [saveError]);
 
+  // Same contract as the profile-save refusal: keyboard and screen-reader
+  // users land on the reason, not back on the button that failed.
+  useEffect(() => {
+    if (!securityError) return;
+    securityErrorRef.current?.focus();
+  }, [securityError]);
+
   useEffect(() => {
     return () => {
       if (saveOkTimerRef.current != null) {
@@ -2258,7 +2275,12 @@ export function ProfileModal() {
                   <p style={{ fontSize: 11, color: '#8C7355', margin: 0 }}>Loading security details…</p>
                 ) : null}
                 {securityError ? (
-                  <p role="alert" style={{ fontSize: 11, color: '#993C1D', margin: 0 }}>
+                  <p
+                    ref={securityErrorRef}
+                    role="alert"
+                    tabIndex={-1}
+                    style={{ fontSize: 11, color: '#993C1D', margin: 0 }}
+                  >
                     {securityError}
                   </p>
                 ) : null}
@@ -2267,12 +2289,14 @@ export function ProfileModal() {
                     {[
                       {
                         label: 'Member since',
-                        value: formatCalibrationDate(securityDetails.memberSince),
+                        value: securityDetails.memberSince
+                          ? formatSecurityDate(securityDetails.memberSince)
+                          : 'Unknown date',
                       },
                       {
                         label: 'Last active',
                         value: securityDetails.lastActiveAt
-                          ? formatCalibrationDate(securityDetails.lastActiveAt)
+                          ? formatSecurityDate(securityDetails.lastActiveAt)
                           : 'No activity recorded yet',
                       },
                       {
@@ -2284,7 +2308,7 @@ export function ProfileModal() {
                         value: !securityDetails.hasPassword
                           ? 'Not set — you sign in through a linked provider'
                           : securityDetails.passwordLastChangedAt
-                            ? `Changed ${formatCalibrationDate(securityDetails.passwordLastChangedAt)}`
+                            ? `Changed ${formatSecurityDate(securityDetails.passwordLastChangedAt)}`
                             : 'Original — set at signup and never changed',
                       },
                     ].map((row) => (

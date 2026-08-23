@@ -4213,8 +4213,9 @@ describe('ProfileModal', () => {
   it('reveals account security details and fetches them only once', async () => {
     const region = await openAccountSecurityPanel();
 
-    expect(await within(region).findByText('2026-01-15')).toBeInTheDocument();
-    expect(within(region).getByText('2026-08-20')).toBeInTheDocument();
+    // Dates read as prose, matching the billing rows — not raw ISO slices.
+    expect(await within(region).findByText('15 Jan 2026')).toBeInTheDocument();
+    expect(within(region).getByText('20 Aug 2026')).toBeInTheDocument();
     expect(within(region).getByText('Verified')).toBeInTheDocument();
     // passwordLastChangedAt is null — the honest reading is "original".
     expect(
@@ -4229,7 +4230,7 @@ describe('ProfileModal', () => {
     const reopened = await screen.findByRole('region', {
       name: /account security details/i,
     });
-    expect(await within(reopened).findByText('2026-01-15')).toBeInTheDocument();
+    expect(await within(reopened).findByText('15 Jan 2026')).toBeInTheDocument();
     expect(hoistedMocks.getAccountSecurity).toHaveBeenCalledTimes(1);
   });
 
@@ -4246,6 +4247,7 @@ describe('ProfileModal', () => {
     const region = await openAccountSecurityPanel();
 
     expect(await within(region).findByText('No activity recorded yet')).toBeInTheDocument();
+    expect(within(region).getByText('2 Mar 2026')).toBeInTheDocument();
     expect(within(region).getByText('Not verified')).toBeInTheDocument();
     expect(
       within(region).getByText('Not set — you sign in through a linked provider'),
@@ -4258,9 +4260,11 @@ describe('ProfileModal', () => {
     );
     const region = await openAccountSecurityPanel();
 
-    expect(
-      await within(region).findByRole('alert'),
-    ).toHaveTextContent('Too many security panel reads. Please slow down.');
+    const alert = await within(region).findByRole('alert');
+    expect(alert).toHaveTextContent('Too many security panel reads. Please slow down.');
+    // Focus lands on the refusal, not back on the button that failed —
+    // same contract as the profile-save error.
+    expect(alert).toHaveFocus();
     // The expander still works — hiding is always available.
     expect(
       screen.getByRole('button', { name: /hide security details/i }),

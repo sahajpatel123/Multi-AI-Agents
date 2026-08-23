@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Security details read like a profile, not a database: member-since
+  and last-active render as human dates ("15 Jan 2026") matching the
+  billing rows instead of raw ISO slices, an unparseable server date
+  falls back to what was sent rather than "Invalid Date", and a
+  refused load moves focus onto the refusal itself — keyboard and
+  screen-reader users land on the reason, same contract as the
+  profile-save error
 - Test-search results are tidier and safer: Notion results echo their
   own URL as the excerpt, so that duplicate line is suppressed rather
   than printing the same link twice; a result URL only becomes a link
