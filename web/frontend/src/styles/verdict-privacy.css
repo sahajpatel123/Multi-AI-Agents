@@ -368,6 +368,11 @@ body .privacy-page .privacy-posture-card {
   min-height: 232px;
   grid-template-rows: auto 1fr auto;
   padding: 18px;
+  /* Explicit zero like the rest of the hard-edged privacy sheet: the
+     E2E geometry audit caught a stray 6px computed radius leaking onto
+     these cards at tablet/mobile widths (desktop passed), breaking the
+     page's all-radii-are-0px contract. */
+  border-radius: 0;
   border-right: 1px solid var(--privacy-carbon);
   border-bottom: 1px solid var(--privacy-carbon);
   color: var(--privacy-carbon);
@@ -1997,6 +2002,17 @@ body .privacy-page .privacy-provider-links a,
 body .privacy-page .privacy-contact-band,
 body .privacy-page .privacy-contact-band a {
   border-radius: 0;
+}
+
+/* Reinstate the posture cards' hard edge against the global prism theme
+   layer: its unscoped "premium radii" block fires border-radius with
+   !important at every [class*="card"] element in the app, which catches
+   .privacy-posture-card and breaks this page's audited all-zero-radius
+   contract on tablet/mobile widths. Both rules carry !important, so the
+   cascade falls to specificity — two classes here outrank one attribute
+   selector there. */
+body .privacy-page .privacy-posture-card {
+  border-radius: 0 !important;
 }
 
 @media (max-width: 1020px) {

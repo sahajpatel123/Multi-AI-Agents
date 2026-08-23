@@ -266,7 +266,11 @@ test.describe('Privacy data flow field guide', () => {
     await expect(page.locator('#route-content main')).toHaveAttribute('inert', '');
 
     await page.keyboard.press('Shift+Tab');
-    await expect(dialog.getByRole('link', { name: /07 Changelog/i })).toBeFocused();
+    // Cycle backwards off the close button to the menu's LAST link. Kept
+    // structural (not pinned to a label): the expanded-menu link list is
+    // product content that changes; the contract under test is the focus
+    // wrap, not any one entry.
+    await expect(dialog.getByRole('link').last()).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(close).toBeFocused();
 

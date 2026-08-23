@@ -220,14 +220,52 @@ export function TermsPage() {
     };
 
     updateFromHash();
+
+    // Deep links (/terms#billing) need a programmatic scroll: the route
+    // module is lazy, so the browser's native anchor scroll fires before
+    // the clause exists and no-ops — the reader stays at the top of a
+    // long page. scrollIntoView honours .terms-clause's
+    // scroll-margin-top:104px, landing the clause just below the fixed
+    // nav. One frame waits for first layout of the lazy render.
+    const initialClause = hashClause();
+    let deepLinkFrame = 0;
+    if (initialClause) {
+      deepLinkFrame = requestAnimationFrame(() => {
+        document
+          .getElementById(initialClause)
+          ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      });
+    }
+
     window.addEventListener('hashchange', updateFromHash);
     window.addEventListener('scroll', updateFromScroll, { passive: true });
 
     return () => {
+      cancelAnimationFrame(deepLinkFrame);
       window.removeEventListener('hashchange', updateFromHash);
       window.removeEventListener('scroll', updateFromScroll);
     };
   }, []);
+
+  // Below 1020px the clause index becomes a horizontal rail (overflow-x on
+  // .terms-index nav), and scroll-driven activation can highlight a chip
+  // outside the rail's viewport — leaving the aria-current marker invisible.
+  // Nudge scrollLeft so the active link is always within view. On desktop
+  // the rail doesn't overflow and this resolves to a no-op.
+  useEffect(() => {
+    const rail = document.querySelector<HTMLElement>('.terms-index nav');
+    const active = rail?.querySelector<HTMLAnchorElement>(
+      'a[aria-current="location"]',
+    );
+    if (!rail || !active) return;
+    const railRect = rail.getBoundingClientRect();
+    const rect = active.getBoundingClientRect();
+    if (rect.left < railRect.left) {
+      rail.scrollLeft -= railRect.left - rect.left;
+    } else if (rect.right > railRect.right) {
+      rail.scrollLeft += rect.right - railRect.right;
+    }
+  }, [activeClause]);
 
   const activeIndex = TERMS_CLAUSES.findIndex(
     (clause) => clause.id === activeClause,
