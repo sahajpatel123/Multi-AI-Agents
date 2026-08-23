@@ -82,7 +82,12 @@ async def test_watchlist_history_csv_exports_final_score_not_intelligence_payloa
     assert res.status_code == 200
     assert "intelligence_score" not in res.text
     assert ",88," in res.text
-    assert "42" not in res.text
+    # Prove the payload's keys never reach the CSV. A bare "42" scan of the
+    # whole document is over-broad: task_id embeds a hex id and created_at is
+    # a timestamp, so either can legitimately contain those digits (this
+    # flaked in CI when a generated id carried "42").
+    assert "total_score" not in res.text
+    assert "breakdown" not in res.text
 
 @pytest.mark.asyncio
 async def test_watchlist_history_csv_formula_injection_defense(app_client, make_user, db_session):
