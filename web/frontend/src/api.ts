@@ -1876,6 +1876,72 @@ export async function getCapabilityUsage(
   };
 }
 
+export type AgentCapability = {
+  id: string;
+  description: string;
+  execution: string;
+};
+
+export type CapabilityDoc = AgentCapability & { markdown: string };
+
+// The capability taxonomy — public, one short line per capability.
+// Feeds the usage-tab reference list; the per-id doc endpoint below
+// carries the long-form markdown on demand.
+export async function getAgentCapabilities(): Promise<AgentCapability[]> {
+  const response = await apiFetch(`/api/agent/capabilities`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load capability reference'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<{
+    capabilities?: Array<{ id?: unknown; description?: unknown; execution?: unknown }>;
+  }>(response);
+  const capabilities = Array.isArray(data?.capabilities) ? data.capabilities : [];
+  return capabilities
+    .filter((cap) => typeof cap?.id === 'string' && cap.id.trim() !== '')
+    .map((cap) => ({
+      id: String(cap.id),
+      description: String(cap.description ?? ''),
+      execution: String(cap.execution ?? ''),
+    }));
+}
+
+// Long-form markdown doc for one capability. The backend answers 404
+// with {error: capability_not_found} on an unknown id, so a typo is
+// detectable instead of silently empty.
+export async function getCapabilityDoc(capabilityId: string): Promise<CapabilityDoc> {
+  if (!capabilityId.trim()) {
+    throw new RangeError('capabilityId must not be empty');
+  }
+  const response = await apiFetch(
+    `/api/agent/capabilities/docs/${encodeURIComponent(capabilityId.trim())}`,
+  );
+  const data = await parseJsonSafely<{
+    id?: string;
+    description?: string;
+    execution?: string;
+    markdown?: string;
+    detail?: string | { message?: string };
+  }>(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to load that capability doc'), response),
+      response.status,
+      data,
+    );
+  }
+  return {
+    id: String(data?.id ?? capabilityId.trim()),
+    description: String(data?.description ?? ''),
+    execution: String(data?.execution ?? ''),
+    markdown: String(data?.markdown ?? ''),
+  };
+}
+
 export async function exportAgentFeedbackSummaryJson(
   windowDays: number = 30,
 ): Promise<AgentFeedbackActivityExport> {

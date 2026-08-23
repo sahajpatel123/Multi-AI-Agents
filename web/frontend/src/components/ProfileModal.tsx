@@ -48,6 +48,8 @@ import {
   getAnalyticsPersonaStatsTimeline,
   getAgentFeedbackSummary,
   getCapabilityUsage,
+  getAgentCapabilities,
+  getCapabilityDoc,
   deleteCalibrationRating,
   getCalibrationHistory,
   getCalibrationStats,
@@ -68,6 +70,8 @@ import {
   type AgentFeedbackExportDateRange,
   type AgentFeedbackVerdict,
   type AnswerFeedbackStats,
+  type AgentCapability,
+  type CapabilityDoc,
   type CapabilityUsageSummary,
   type CalibrationHistoryRating,
   type CalibrationHistoryResponse,
@@ -1213,6 +1217,20 @@ export function ProfileModal() {
   const [capabilityWindowDays, setCapabilityWindowDays] = useState(30);
   const [capabilityUsageReload, setCapabilityUsageReload] = useState(0);
 
+  // The capability reference: the taxonomy list loads when the section
+  // is opened; each long-form doc is fetched once on first expand and
+  // cached — collapsing never discards a doc already in hand.
+  const [capReferenceOpen, setCapReferenceOpen] = useState(false);
+  const [capList, setCapList] = useState<AgentCapability[] | null>(null);
+  const [capListLoading, setCapListLoading] = useState(false);
+  const [capListErr, setCapListErr] = useState<string | null>(null);
+  const [capReferenceReload, setCapReferenceReload] = useState(0);
+  const [capOpenDocId, setCapOpenDocId] = useState<string | null>(null);
+  const [capDocs, setCapDocs] = useState<Record<string, CapabilityDoc>>({});
+  const [capDocBusyId, setCapDocBusyId] = useState<string | null>(null);
+  const [capDocErrId, setCapDocErrId] = useState<string | null>(null);
+  const [capDocErrText, setCapDocErrText] = useState<string | null>(null);
+
   const feedbackExportDateRange: AgentFeedbackExportDateRange | undefined =
     feedbackExportFromDate || feedbackExportToDate
       ? {
@@ -1334,6 +1352,65 @@ export function ProfileModal() {
       cancelled = true;
     };
   }, [isOpen, activeTab, capabilityWindowDays, capabilityUsageReload]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage' || !capReferenceOpen) return;
+    let cancelled = false;
+    setCapListLoading(true);
+    setCapListErr(null);
+    void getAgentCapabilities()
+      .then((capabilities) => {
+        if (!cancelled) setCapList(capabilities);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCapListErr(
+            error instanceof Error && error.message
+              ? error.message
+              : 'Could not load capability reference',
+          );
+          setCapList(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCapListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, capReferenceOpen, capReferenceReload]);
+
+  // Expand one capability row: fetch its markdown once, keep it cached
+  // across collapses. A refused load surfaces verbatim inside the row.
+  const toggleCapabilityDoc = useCallback(
+    (cap: AgentCapability) => {
+      setCapDocErrId(null);
+      setCapDocErrText(null);
+      if (capOpenDocId === cap.id) {
+        setCapOpenDocId(null);
+        return;
+      }
+      setCapOpenDocId(cap.id);
+      if (capDocs[cap.id]) return;
+      setCapDocBusyId(cap.id);
+      void getCapabilityDoc(cap.id)
+        .then((doc) => {
+          setCapDocs((current) => ({ ...current, [cap.id]: doc }));
+        })
+        .catch((error) => {
+          setCapDocErrId(cap.id);
+          setCapDocErrText(
+            error instanceof Error && error.message
+              ? error.message
+              : 'Could not load that capability doc.',
+          );
+        })
+        .finally(() => {
+          setCapDocBusyId(null);
+        });
+    },
+    [capOpenDocId, capDocs],
+  );
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage' || !calHistoryOpen) return;
@@ -2826,6 +2903,173 @@ export function ProfileModal() {
                           </div>
                         );
                       })()
+                    )}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  aria-expanded={capReferenceOpen}
+                  onClick={() => {
+                    setCapReferenceOpen((open) => !open);
+                  }}
+                  style={{
+                    marginTop: 14,
+                    padding: 0,
+                    border: 'none',
+                    background: 'none',
+                    color: '#F0B84E',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontFamily: 'var(--vp-font-sans)',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  {capReferenceOpen
+                    ? 'Hide capability reference'
+                    : `View capability reference${capList ? ` (${capList.length})` : ''}`}
+                </button>
+                {capReferenceOpen ? (
+                  <div
+                    role="region"
+                    aria-label="Capability reference"
+                    style={{
+                      marginTop: 12,
+                      padding: '10px 12px',
+                      background: '#F0E8DC',
+                      borderRadius: 8,
+                    }}
+                  >
+                    {capListLoading ? (
+                      <div
+                        style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }}
+                        role="status"
+                      >
+                        <MicroLoader label="Loading capability reference" />
+                      </div>
+                    ) : capListErr ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <p style={{ fontSize: 13, color: '#8C7355', margin: 0 }} aria-live="polite">
+                          {capListErr}
+                        </p>
+                        <button
+                          type="button"
+                          aria-label="Retry loading capability reference"
+                          style={{
+                            padding: '5px 10px',
+                            borderRadius: 6,
+                            border: '0.5px solid #E0D5C5',
+                            background: '#F0E8DC',
+                            color: '#F3F0E7',
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            fontFamily: 'var(--vp-font-sans)',
+                          }}
+                          onClick={() => setCapReferenceReload((n) => n + 1)}
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : capList && capList.length > 0 ? (
+                      <div style={{ display: 'grid', gap: 4 }}>
+                        {capList.map((cap) => {
+                          const docOpen = capOpenDocId === cap.id;
+                          const cachedDoc = capDocs[cap.id];
+                          return (
+                            <div key={cap.id}>
+                              <button
+                                type="button"
+                                aria-expanded={docOpen}
+                                aria-label={
+                                  docOpen
+                                    ? `Collapse capability ${cap.id}`
+                                    : `Expand capability ${cap.id}`
+                                }
+                                onClick={() => toggleCapabilityDoc(cap)}
+                                style={{
+                                  width: '100%',
+                                  textAlign: 'left',
+                                  padding: '6px 8px',
+                                  border: 'none',
+                                  background: 'none',
+                                  cursor: 'pointer',
+                                  borderRadius: 6,
+                                  fontFamily: 'var(--vp-font-sans)',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 8,
+                                  }}
+                                >
+                                  <span style={{ fontSize: 12, color: '#F3F0E7', fontWeight: 600 }}>
+                                    {cap.id}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: 9,
+                                      padding: '1px 6px',
+                                      borderRadius: 8,
+                                      border: '0.5px solid #E0D5C5',
+                                      background: '#EDE4D8',
+                                      color: '#A0A39A',
+                                      letterSpacing: '0.04em',
+                                    }}
+                                  >
+                                    {cap.execution || 'server'}
+                                  </span>
+                                </span>
+                                <span
+                                  style={{
+                                    display: 'block',
+                                    fontSize: 11,
+                                    color: '#8C7355',
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  {cap.description}
+                                </span>
+                              </button>
+                              {docOpen ? (
+                                <div style={{ padding: '2px 8px 6px' }}>
+                                  {capDocBusyId === cap.id ? (
+                                    <p style={{ fontSize: 11, color: '#A0A39A', margin: 0 }}>
+                                      Loading doc…
+                                    </p>
+                                  ) : capDocErrId === cap.id && capDocErrText ? (
+                                    <p
+                                      role="alert"
+                                      style={{ fontSize: 11, color: '#993C1D', margin: 0 }}
+                                    >
+                                      {capDocErrText}
+                                    </p>
+                                  ) : cachedDoc ? (
+                                    <pre
+                                      style={{
+                                        margin: 0,
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        fontSize: 11,
+                                        lineHeight: 1.55,
+                                        color: '#C4A882',
+                                        fontFamily: 'var(--vp-font-mono, monospace)',
+                                      }}
+                                    >
+                                      {cachedDoc.markdown}
+                                    </pre>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                        No capabilities registered yet.
+                      </p>
                     )}
                   </div>
                 ) : null}

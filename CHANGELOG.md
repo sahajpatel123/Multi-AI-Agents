@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- A capability reference lives beside the usage card: one expander
+  lists the full capability taxonomy (id, one-liner, execution
+  badge) from the public endpoint that had no frontend caller, and
+  expanding any row fetches its long-form markdown doc once and
+  caches it across collapses. A refused doc surfaces verbatim inside
+  its own row while the taxonomy list stays intact
 - The Usage tab now answers "which capabilities do I actually
   exercise?": a Capability usage card reads the per-capability call
   counts endpoint that had no frontend caller, with a 7/30/90-day

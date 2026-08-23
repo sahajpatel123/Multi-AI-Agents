@@ -420,6 +420,13 @@ const hoistedMocks = vi.hoisted(() => {
     byMode: {},
     byCategory: [],
   }),
+  getAgentCapabilities: vi.fn().mockResolvedValue([]),
+  getCapabilityDoc: vi.fn().mockResolvedValue({
+    id: 'arena.respond',
+    description: '',
+    execution: '',
+    markdown: '',
+  }),
   getRecentAgentFeedback: vi.fn().mockResolvedValue([]),
   getAgentFeedbackSummary: vi.fn().mockResolvedValue({
     total: 4,
@@ -533,6 +540,8 @@ vi.mock('../api', () => ({
   getCalibrationStats: hoistedMocks.getCalibrationStats,
   deleteCalibrationRating: hoistedMocks.deleteCalibrationRating,
   getCapabilityUsage: hoistedMocks.getCapabilityUsage,
+  getAgentCapabilities: hoistedMocks.getAgentCapabilities,
+  getCapabilityDoc: hoistedMocks.getCapabilityDoc,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getAgentFeedbackSummary: hoistedMocks.getAgentFeedbackSummary,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
@@ -666,6 +675,8 @@ describe('ProfileModal', () => {
     vi.mocked(hoistedMocks.getCalibrationStats).mockClear();
     vi.mocked(hoistedMocks.deleteCalibrationRating).mockClear();
     vi.mocked(hoistedMocks.getCapabilityUsage).mockClear();
+    vi.mocked(hoistedMocks.getAgentCapabilities).mockClear();
+    vi.mocked(hoistedMocks.getCapabilityDoc).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendCsv).mockClear();
     vi.mocked(hoistedMocks.exportAnalyticsPersonaWinRateTrendJson).mockClear();
@@ -3818,6 +3829,106 @@ describe('ProfileModal', () => {
       await screen.findByText('No Agent calls recorded in the last 30 days yet.'),
     ).toBeInTheDocument();
     expect(hoistedMocks.getCapabilityUsage).toHaveBeenCalledTimes(2);
+  });
+
+  const referenceCaps = [
+    { id: 'arena.respond', description: 'Four-agent panel response.', execution: 'local' },
+    { id: 'file.organize', description: 'Organize files into folders.', execution: 'server' },
+  ];
+
+  it('lists the capability taxonomy when the reference opens', async () => {
+    hoistedMocks.getAgentCapabilities.mockResolvedValueOnce(referenceCaps);
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    (
+      await screen.findByRole('button', { name: /view capability reference/i })
+    ).click();
+
+    const region = await screen.findByRole('region', { name: /capability reference/i });
+    expect(within(region).getByText('arena.respond')).toBeInTheDocument();
+    expect(within(region).getByText('Four-agent panel response.')).toBeInTheDocument();
+    expect(within(region).getByText('file.organize')).toBeInTheDocument();
+    expect(within(region).getByText('server')).toBeInTheDocument();
+    expect(hoistedMocks.getAgentCapabilities).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches a doc once on expand and keeps it cached across collapse', async () => {
+    hoistedMocks.getAgentCapabilities.mockResolvedValueOnce(referenceCaps);
+    hoistedMocks.getCapabilityDoc.mockResolvedValueOnce({
+      id: 'arena.respond',
+      description: 'Four-agent panel response.',
+      execution: 'local',
+      markdown: '**Four-agent panel response.**\n\nDetails here.',
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    (
+      await screen.findByRole('button', { name: /view capability reference/i })
+    ).click();
+    const region = await screen.findByRole('region', { name: /capability reference/i });
+
+    within(region)
+      .getByRole('button', { name: /expand capability arena\.respond/i })
+      .click();
+    expect(
+      await within(region).findByText(/Four-agent panel response\.\*\* Details here/),
+    ).toBeInTheDocument();
+    expect(hoistedMocks.getCapabilityDoc).toHaveBeenCalledTimes(1);
+
+    // Collapse, then re-expand: the cached doc renders with no refetch.
+    within(region)
+      .getByRole('button', { name: /collapse capability arena\.respond/i })
+      .click();
+    // Await the collapsed state before asserting absence, so the
+    // assertion can't outrun React's flush.
+    await waitFor(() => {
+      expect(
+        within(region).getByRole('button', { name: /expand capability arena\.respond/i }),
+      ).toBeInTheDocument();
+    });
+    expect(within(region).queryByText(/Details here/)).not.toBeInTheDocument();
+    within(region)
+      .getByRole('button', { name: /expand capability arena\.respond/i })
+      .click();
+    expect(
+      await within(region).findByText(/Four-agent panel response\.\*\* Details here/),
+    ).toBeInTheDocument();
+    expect(hoistedMocks.getCapabilityDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a doc refusal verbatim inside its row', async () => {
+    hoistedMocks.getAgentCapabilities.mockResolvedValueOnce(referenceCaps);
+    hoistedMocks.getCapabilityDoc.mockRejectedValueOnce(
+      new Error('Too many capability-doc lookups. Please slow down.'),
+    );
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    (
+      await screen.findByRole('button', { name: /view capability reference/i })
+    ).click();
+    const region = await screen.findByRole('region', { name: /capability reference/i });
+
+    within(region)
+      .getByRole('button', { name: /expand capability file\.organize/i })
+      .click();
+
+    expect(
+      await within(region).findByText(
+        'Too many capability-doc lookups. Please slow down.',
+      ),
+    ).toBeInTheDocument();
+    // The taxonomy row itself survives; only the doc failed.
+    expect(within(region).getByText('file.organize')).toBeInTheDocument();
   });
 
   it('exports category performance as JSON for the selected window', async () => {
