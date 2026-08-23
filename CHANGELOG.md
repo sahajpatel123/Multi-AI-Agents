@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Execution facts are now actually hearable: the condura/heartbeat
+  line moved outside the expand toggle, whose aria-label was masking
+  it from screen readers entirely — and heartbeats render in human
+  units ("stream heartbeat 10m", exactly what the stats endpoint's
+  docstring imagined) instead of raw "600s"
 - Security details read like a profile, not a database: member-since
   and last-active render as human dates ("15 Jan 2026") matching the
   billing rows instead of raw ISO slices, an unparseable server date

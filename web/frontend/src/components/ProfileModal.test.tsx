@@ -3906,8 +3906,14 @@ describe('ProfileModal', () => {
     ).click();
 
     const region = await screen.findByRole('region', { name: /capability reference/i });
-    // The enriched row announces how it actually runs — collapsed.
-    expect(await within(region).findByText('condura POST · stream heartbeat 600s')).toBeInTheDocument();
+    // Heartbeats render in human units, per the endpoint's own docstring.
+    expect(await within(region).findByText('condura POST · stream heartbeat 10m')).toBeInTheDocument();
+    // The fact line sits outside the toggle button — its aria-label would
+    // otherwise mask the facts from screen readers entirely.
+    const hybridToggle = within(region).getByRole('button', {
+      name: /expand capability handoff\.send/i,
+    });
+    expect(within(hybridToggle).queryByText(/heartbeat/)).not.toBeInTheDocument();
     // Plain capabilities gain no fabricated facts.
     expect(
       within(

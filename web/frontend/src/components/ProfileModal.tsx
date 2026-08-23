@@ -145,6 +145,15 @@ function formatCalibrationDate(iso: string | null): string {
   return iso.slice(0, 10);
 }
 
+// Heartbeats are authored in seconds but read in human units — the
+// stats endpoint's own docstring imagines the UI showing "10m".
+function formatHeartbeat(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return `${seconds}s`;
+  if (seconds >= 3600 && seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds >= 60 && seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
+}
+
 // Security facts read as prose ("Member since …"), so they get the same
 // human date form as the billing rows; unparseable input falls back to
 // whatever the server said rather than "Invalid Date".
@@ -3365,7 +3374,7 @@ export function ProfileModal() {
                             statBits.push(`condura ${stat.conduraMethod}`);
                           }
                           if (typeof stat?.streamHeartbeatSeconds === 'number') {
-                            statBits.push(`stream heartbeat ${stat.streamHeartbeatSeconds}s`);
+                            statBits.push(`stream heartbeat ${formatHeartbeat(stat.streamHeartbeatSeconds)}`);
                           }
                           return (
                             <div key={cap.id}>
@@ -3424,20 +3433,23 @@ export function ProfileModal() {
                                 >
                                   {cap.description}
                                 </span>
-                                {statBits.length > 0 ? (
-                                  <span
-                                    style={{
-                                      display: 'block',
-                                      fontSize: 9,
-                                      color: '#A0A39A',
-                                      marginTop: 2,
-                                      letterSpacing: '0.03em',
-                                    }}
-                                  >
-                                    {statBits.join(' · ')}
-                                  </span>
-                                ) : null}
                               </button>
+                              {/* Outside the toggle on purpose — its aria-label
+                                  would otherwise mask these facts from screen
+                                  readers entirely. */}
+                              {statBits.length > 0 ? (
+                                <span
+                                  style={{
+                                    display: 'block',
+                                    fontSize: 9,
+                                    color: '#A0A39A',
+                                    margin: '2px 8px 4px',
+                                    letterSpacing: '0.03em',
+                                  }}
+                                >
+                                  {statBits.join(' · ')}
+                                </span>
+                              ) : null}
                               {docOpen ? (
                                 <div style={{ padding: '2px 8px 6px' }}>
                                   {capDocBusyId === cap.id ? (
