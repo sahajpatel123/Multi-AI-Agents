@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- The saved-discussion history now speaks one language: known agents
+  appear by their human names ("The Analyst") in row metadata and in
+  expanded message labels — matching the filter chips instead of raw
+  ids like claude-sonnet, which remain only as fallback for unknown
+  senders
+
 ### Added
 - Saved discussions can now be filtered by agent: the history drawer
   renders one chip per known agent (plus "All agents") wired to the list

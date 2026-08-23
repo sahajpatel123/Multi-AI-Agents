@@ -383,7 +383,9 @@ describe('DiscussHistoryDrawer', () => {
       });
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /the analyst/i }));
+    // Exact name: the row button's accessible name also contains the
+    // agent's display name since rows speak the chips' language now.
+    fireEvent.click(screen.getByRole('button', { name: 'The Analyst' }));
     await waitFor(() => {
       expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({
         perPage: 20,
@@ -416,5 +418,25 @@ describe('DiscussHistoryDrawer', () => {
       expect(mockedApi.listDiscussThreads).toHaveBeenLastCalledWith({ perPage: 20 });
     });
     await screen.findByText('Why did the migration fail?');
+  });
+
+  it('names known agents in row meta and message labels, not raw ids', async () => {
+    mockedApi.getDiscussThread.mockResolvedValue(detail);
+    const roster = [{ id: 'claude-sonnet', name: 'The Analyst', color: '#8C9BAB' }];
+    render(<DiscussHistoryDrawer agents={roster} />);
+
+    expect(
+      await screen.findByText(/The Analyst · just now · 2 messages/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/claude-sonnet/)).not.toBeInTheDocument();
+
+    // The expanded view speaks the same language as the chips — the name
+    // now labels the agent's messages too (plus its chip, hence All).
+    fireEvent.click(
+      screen.getByRole('button', { name: /^why did the migration fail\?/i }),
+    );
+    expect(await screen.findByText('The lock table was stale.')).toBeInTheDocument();
+    expect(screen.getAllByText('The Analyst').length).toBeGreaterThan(1);
+    expect(screen.queryByText('claude-sonnet')).not.toBeInTheDocument();
   });
 });

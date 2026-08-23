@@ -28,6 +28,19 @@ interface AgentFilterOption {
   color: string;
 }
 
+/**
+ * Speak the chips' language everywhere: a known agent shows its human
+ * name; only unknown senders fall back to the raw id.
+ */
+function agentDisplayName(
+  id: string | null | undefined,
+  roster: AgentFilterOption[] | undefined,
+  fallback: string,
+): string {
+  const name = id ? roster?.find((agent) => agent.id === id)?.name : undefined;
+  return name || id || fallback;
+}
+
 interface DiscussHistoryDrawerProps {
   /** Bump to make the drawer refetch (e.g. right after a fresh save). */
   refreshTick?: number;
@@ -489,7 +502,7 @@ export function DiscussHistoryDrawer({
                     {thread.title || 'Untitled discussion'}
                   </span>
                   <span style={{ display: 'block', fontSize: 10, color: '#A0A39A' }}>
-                    {thread.agentId || 'unknown agent'}
+                    {agentDisplayName(thread.agentId, agents, 'unknown agent')}
                     {thread.lastMessageAt ? ` · ${formatTimeAgo(thread.lastMessageAt)}` : ''}
                     {` · ${thread.messageCount} message${thread.messageCount === 1 ? '' : 's'}`}
                   </span>
@@ -594,7 +607,9 @@ export function DiscussHistoryDrawer({
                               color: message.role === 'agent' ? '#5A8C6A' : '#A0A39A',
                             }}
                           >
-                            {message.role === 'agent' ? thread.agentId || 'Agent' : 'You'}
+                            {message.role === 'agent'
+                              ? agentDisplayName(thread.agentId, agents, 'Agent')
+                              : 'You'}
                           </span>
                           <p
                             style={{
