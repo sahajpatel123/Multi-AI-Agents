@@ -5,7 +5,7 @@ import {
   listExportPresetTemplates,
   createExportPresetFromTemplate,
   deleteExportPreset,
-  useExportPreset,
+  applyExportPreset,
   previewExportPreset,
   renameExportPreset,
   reorderExportPresets,
@@ -209,7 +209,7 @@ describe('export preset API helpers', () => {
     });
   });
 
-  describe('useExportPreset', () => {
+  describe('applyExportPreset', () => {
     it('follows the redirect to the real export and returns the server filename', async () => {
       const mockBlob = new Blob(['id,prompt'], { type: 'text/csv' });
       vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
@@ -221,7 +221,7 @@ describe('export preset API helpers', () => {
         }),
       );
 
-      const res = await useExportPreset(3, 'csv');
+      const res = await applyExportPreset(3, 'csv');
       expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/export-presets/3/use', {
         method: 'POST',
       });
@@ -233,7 +233,7 @@ describe('export preset API helpers', () => {
         new Response(new Blob(['[]'], { type: 'application/json' }), { status: 200 }),
       );
 
-      const res = await useExportPreset(7, 'xlsx');
+      const res = await applyExportPreset(7, 'xlsx');
       expect(res.filename).toBe('arena-preset-7-export.xlsx');
     });
 
@@ -242,12 +242,12 @@ describe('export preset API helpers', () => {
         new Response(new Blob(['x']), { status: 200 }),
       );
 
-      const res = await useExportPreset(7, '../../etc/passwd');
+      const res = await applyExportPreset(7, '../../etc/passwd');
       expect(res.filename).toBe('arena-preset-7-export.etcpasswd');
     });
 
     it('validates the id before fetching', async () => {
-      await expect(useExportPreset(-1)).rejects.toThrow('presetId must be a positive integer');
+      await expect(applyExportPreset(-1)).rejects.toThrow('presetId must be a positive integer');
       expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
     });
 
@@ -260,7 +260,7 @@ describe('export preset API helpers', () => {
       );
 
       try {
-        await useExportPreset(3);
+        await applyExportPreset(3);
         expect.unreachable('should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(ApiError);

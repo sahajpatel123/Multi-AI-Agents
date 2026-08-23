@@ -14,7 +14,7 @@ import {
   reorderExportPresets,
   updateExportPresetFilters,
   setDefaultExportPreset,
-  useExportPreset,
+  applyExportPreset,
   type ExportPreset,
   type ExportPresetPreview,
   type ExportPresetTemplate,
@@ -149,7 +149,7 @@ export function ExportPresetsPanel() {
   const handleUse = useCallback(
     (preset: ExportPreset) =>
       runAction(`use-${preset.id}`, async () => {
-        const { blob, filename } = await useExportPreset(preset.id, preset.format);
+        const { blob, filename } = await applyExportPreset(preset.id, preset.format);
         if (!downloadBlobFile(blob, filename)) {
           throw new Error(`Could not download "${preset.name}" — try again.`);
         }

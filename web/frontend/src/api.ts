@@ -5611,7 +5611,7 @@ export type ExportPresetDownload = {
   filename: string;
 };
 
-export async function useExportPreset(
+export async function applyExportPreset(
   presetId: number,
   fallbackExtension: string = 'csv',
 ): Promise<ExportPresetDownload> {

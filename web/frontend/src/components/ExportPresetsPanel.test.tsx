@@ -22,7 +22,7 @@ vi.mock('../api', () => ({
   bulkDeleteExportPresets: vi.fn(),
   deleteExportPreset: vi.fn(),
   duplicateExportPreset: vi.fn(),
-  useExportPreset: vi.fn(),
+  applyExportPreset: vi.fn(),
   previewExportPreset: vi.fn(),
   renameExportPreset: vi.fn(),
   reorderExportPresets: vi.fn(),
@@ -103,7 +103,7 @@ describe('ExportPresetsPanel', () => {
   });
 
   it('downloads a preset through the redirecting use endpoint', async () => {
-    mockedApi.useExportPreset.mockResolvedValue({
+    mockedApi.applyExportPreset.mockResolvedValue({
       blob: new Blob(['id,prompt'], { type: 'text/csv' }),
       filename: 'arena-saved-export.csv',
     });
@@ -114,7 +114,7 @@ describe('ExportPresetsPanel', () => {
     );
 
     await waitFor(() => {
-      expect(mockedApi.useExportPreset).toHaveBeenCalledWith(3, 'csv');
+      expect(mockedApi.applyExportPreset).toHaveBeenCalledWith(3, 'csv');
       expect(downloadModule.downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-saved-export.csv',
@@ -124,7 +124,7 @@ describe('ExportPresetsPanel', () => {
   });
 
   it('surfaces a failed preset download without losing the row', async () => {
-    mockedApi.useExportPreset.mockRejectedValue(
+    mockedApi.applyExportPreset.mockRejectedValue(
       new apiModule.ApiError('Too many export preset uses.', 429),
     );
     render(<ExportPresetsPanel />);
@@ -142,7 +142,7 @@ describe('ExportPresetsPanel', () => {
     const pending = new Promise<{ blob: Blob; filename: string }>((resolve) => {
       release = () => resolve({ blob: new Blob(['x']), filename: 'f.csv' });
     });
-    mockedApi.useExportPreset.mockReturnValueOnce(pending);
+    mockedApi.applyExportPreset.mockReturnValueOnce(pending);
     render(<ExportPresetsPanel />);
 
     const button = await screen.findByRole('button', {
@@ -770,7 +770,7 @@ describe('ExportPresetsPanel', () => {
   });
 
   it('updates the used stamp in place after downloading a preset', async () => {
-    mockedApi.useExportPreset.mockResolvedValue({
+    mockedApi.applyExportPreset.mockResolvedValue({
       blob: new Blob(['id,prompt'], { type: 'text/csv' }),
       filename: 'arena-saved-export.csv',
     });
