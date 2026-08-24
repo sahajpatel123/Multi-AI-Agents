@@ -15,6 +15,7 @@ from arena.core.cost_tracker import (
     RateLimitExceeded,
     check_and_increment_user,
 )
+from arena.core.rate_headers import rate_limit_429
 from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
 from arena.models.schemas import (
@@ -195,16 +196,7 @@ async def run_debate_round(
         try:
             check_and_increment_user(db, user.id)
         except RateLimitExceeded as e:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "rate_limit_exceeded",
-                    "message": e.message,
-                    "tier": e.tier,
-                    "prompts_used": e.used,
-                    "daily_limit": e.limit,
-                },
-            )
+            raise rate_limit_429(e) from e
 
     try:
         active_agents = get_all_agents(request.persona_ids)
@@ -307,16 +299,7 @@ async def stream_debate_round(
         try:
             check_and_increment_user(db, user.id)
         except RateLimitExceeded as e:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "rate_limit_exceeded",
-                    "message": e.message,
-                    "tier": e.tier,
-                    "prompts_used": e.used,
-                    "daily_limit": e.limit,
-                },
-            )
+            raise rate_limit_429(e) from e
 
     try:
         active_agents = get_all_agents(request.persona_ids)

@@ -37,6 +37,7 @@ from arena.core.observability import (
     log_toxicity_rejection,
     log_unhandled_exception,
 )
+from arena.core.rate_headers import rate_limit_429
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.agents import get_all_agents, get_persona_id_for_agent
 from arena.core.orchestrator import Orchestrator
@@ -165,17 +166,7 @@ def _check_rate_limit(
             used=e.used,
             limit=e.limit,
         )
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "rate_limit_exceeded",
-                "scope": e.scope,
-                "message": e.message,
-                "tier": e.tier,
-                "prompts_used": e.used,
-                "daily_limit": e.limit,
-            },
-        )
+        raise rate_limit_429(e) from e
 
 
 def _check_token_budget(

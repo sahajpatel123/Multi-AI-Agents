@@ -14,11 +14,11 @@ that's still done by _check_rate_limit in the request handler.
 
 from __future__ import annotations
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
-from arena.core.cost_tracker import get_today_token_usage
+from arena.core.cost_tracker import RateLimitExceeded, get_today_token_usage
 from arena.core.tier_config import (
     TIER_DAILY_LIMITS,
     TIER_MESSAGE_LIMITS,
@@ -64,3 +64,38 @@ async def rate_limit_headers(
         "X-RateLimit-Remaining-Tokens": str(max(tokens_limit - tokens_used, 0)),
         "X-RateLimit-Tier": tier.value,
     }
+
+
+def rate_limit_429(e: RateLimitExceeded) -> HTTPException:
+    """Build the canonical 429 for an exceeded daily message limit.
+
+    Mirrors the sliding-window limiter's contract (rate_limits.py): when the
+    moment the limit lifts is known, the ``Retry-After`` header and the body's
+    ``retry_after_seconds`` carry the same number, and ``resets_at`` names the
+    instant in UTC. When it isn't known (token budgets, missing reset), neither
+    appears — an absent field is the honest answer, not a guessed one.
+
+    Every route that catches RateLimitExceeded must raise this so all five
+    surfaces (prompt, debate ×2, discuss ×2) refuse identically.
+    """
+    detail = {
+        "error": "rate_limit_exceeded",
+        "message": e.message,
+        "tier": e.tier,
+        "prompts_used": e.used,
+        "daily_limit": e.limit,
+        "scope": e.scope,
+    }
+    headers: dict[str, str] = {}
+    retry_after = e.retry_after_seconds
+    if retry_after is not None:
+        # Keep the body and HTTP header identical. A stale reset can produce
+        # zero from the countdown property, but clients need a positive
+        # backoff value and existing limiters use the same one-second floor.
+        retry_after = max(1, retry_after)
+        detail["resets_at"] = e.reset_at
+        detail["retry_after_seconds"] = retry_after
+        # Retry-After is seconds-from-now; a just-passed reset still needs a
+        # positive value or some clients treat the header as malformed.
+        headers["Retry-After"] = str(retry_after)
+    return HTTPException(status_code=429, detail=detail, headers=headers or None)

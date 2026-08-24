@@ -1,9 +1,10 @@
 """Cost tracking — per-request token accounting and per-user daily limits"""
 
 import logging
+import math
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import func
@@ -95,6 +96,31 @@ class RateLimitExceeded(Exception):
         # caps from token-budget caps so the client can render the right UI.
         self.scope = scope
 
+    @property
+    def retry_after_seconds(self) -> Optional[int]:
+        """Whole seconds until the daily window lifts; None when unknown.
+
+        Daily limits reset at UTC midnight, so raise sites populate ``reset_at``
+        with that instant and this property turns it into the seconds value a
+        Retry-After header needs. A past reset clamps to 0 and an unparseable
+        timestamp yields None — callers must treat None as "we can't say", not
+        invent a number.
+        """
+        if not self.reset_at:
+            return None
+        try:
+            reset = datetime.fromisoformat(self.reset_at)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if reset.tzinfo is not None:
+            reset = reset.astimezone(timezone.utc).replace(tzinfo=None)
+        now = _now_utc()
+        # Retry-After must not round down: a request arriving 0.2 seconds
+        # before reset still needs to wait one whole second. ``ceil`` keeps
+        # the client from retrying early while preserving the zero result for
+        # an already elapsed reset.
+        return max(0, math.ceil((reset - now).total_seconds()))
+
 
 class TokenBudgetExceeded(RateLimitExceeded):
     """Raised when a user is over their daily token budget."""
@@ -107,6 +133,11 @@ def _reset_if_new_day(reset_at: datetime) -> bool:
     """Return True if reset_at is from a previous UTC day."""
     now = _now_utc()
     return reset_at.date() < now.date()
+
+
+def _next_utc_midnight(now: datetime) -> datetime:
+    """The instant the current UTC daily window lifts (next midnight)."""
+    return (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def check_and_increment_guest(db: Session, ip: str) -> None:
@@ -154,6 +185,7 @@ def check_and_increment_guest(db: Session, ip: str) -> None:
             tier="GUEST",
             used=record.prompt_count_today,
             limit=limit,
+            reset_at=_next_utc_midnight(now).isoformat(),
         )
 
     record.prompt_count_today += 1
@@ -201,6 +233,7 @@ def check_and_increment_user(db: Session, user_id: int) -> None:
             tier=normalized_tier.value,
             used=user.prompt_count_today,
             limit=limit,
+            reset_at=_next_utc_midnight(now).isoformat(),
         )
 
     user.prompt_count_today += 1

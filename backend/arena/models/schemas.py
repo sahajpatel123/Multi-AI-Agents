@@ -625,6 +625,11 @@ class RateLimitError(BaseModel):
     prompts_used: int
     daily_limit: int
     scope: str = ""
+    # Daily message limits expose an exact UTC reset and a transport-friendly
+    # countdown. Token-budget 429s leave these optional fields absent because
+    # their reset moment is not currently known.
+    resets_at: Optional[str] = None
+    retry_after_seconds: Optional[int] = Field(default=None, ge=0)
 
 
 # ─────────────────────────────────────────────────

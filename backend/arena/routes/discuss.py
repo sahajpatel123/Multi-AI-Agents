@@ -18,6 +18,7 @@ from arena.core.cost_tracker import (
     check_and_increment_user,
 )
 from arena.core.input_validation import sanitize_model_text
+from arena.core.rate_headers import rate_limit_429
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
@@ -150,16 +151,7 @@ async def discuss_with_agent(
     try:
         check_and_increment_user(db, user.id)
     except RateLimitExceeded as e:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "rate_limit_exceeded",
-                "message": e.message,
-                "tier": e.tier,
-                "prompts_used": e.used,
-                "daily_limit": e.limit,
-            },
-        )
+        raise rate_limit_429(e) from e
 
     try:
         agent = get_agent_config(request.agent_id, request.persona_ids)
@@ -265,16 +257,7 @@ async def stream_discuss(
     try:
         check_and_increment_user(db, user.id)
     except RateLimitExceeded as e:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "rate_limit_exceeded",
-                "message": e.message,
-                "tier": e.tier,
-                "prompts_used": e.used,
-                "daily_limit": e.limit,
-            },
-        )
+        raise rate_limit_429(e) from e
 
     try:
         agent = get_agent_config(request.agent_id, request.persona_ids)
