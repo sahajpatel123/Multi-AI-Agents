@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { AgentSharePage } from './AgentSharePage';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
@@ -79,6 +79,15 @@ function renderShare(token = 'tok_1234567890abcdef') {
         <Route path="/share/agent/:token" element={<AgentSharePage />} />
       </Routes>
     </MemoryRouter>,
+  );
+}
+
+function NavigateToReport({ token }: { token: string }) {
+  const navigate = useNavigate();
+  return (
+    <button type="button" onClick={() => navigate(`/share/agent/${token}`)}>
+      Change report
+    </button>
   );
 }
 
@@ -248,6 +257,52 @@ describe('AgentSharePage', () => {
     expect(await screen.findByText(/could not open system share/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Share failed' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    expect(track).not.toHaveBeenCalledWith('response_shared');
+  });
+
+  it('does not apply a stale share result after navigating to another report', async () => {
+    let finishShare: (() => void) | undefined;
+    const share = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishShare = resolve;
+        }),
+    );
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: share,
+    });
+    vi.mocked(getPublicAgentReport).mockImplementation(async (requestedToken) =>
+      report({
+        token: requestedToken,
+        title: requestedToken === 'tok_next' ? 'Next report' : 'Current report',
+        question: requestedToken === 'tok_next' ? 'What comes next?' : 'What is current?',
+      }),
+    );
+    render(
+      <MemoryRouter initialEntries={['/share/agent/tok_current']}>
+        <Routes>
+          <Route path="/share/agent/:token" element={<AgentSharePage />} />
+        </Routes>
+        <NavigateToReport token="tok_next" />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('What is current?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share report' }));
+    expect(await screen.findByRole('button', { name: 'Sharing report' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change report' }));
+    expect(await screen.findByText('What comes next?')).toBeInTheDocument();
+
+    await act(async () => {
+      finishShare?.();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: 'Share report' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Shared!' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/report shared using the system share sheet/i)).not.toBeInTheDocument();
     expect(track).not.toHaveBeenCalledWith('response_shared');
   });
 

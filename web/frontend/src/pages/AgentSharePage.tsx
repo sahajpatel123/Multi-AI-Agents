@@ -51,8 +51,15 @@ export function AgentSharePage() {
   const copyBusyRef = useRef(false);
   const linkCopyBusyRef = useRef(false);
   const nativeShareBusyRef = useRef(false);
+  const nativeShareRequestRef = useRef(0);
 
   useEffect(() => {
+    // A native share sheet can stay open while the user navigates to another
+    // report. Invalidate the old request so its eventual result cannot paint
+    // feedback for the new report.
+    nativeShareRequestRef.current += 1;
+    nativeShareBusyRef.current = false;
+    setNativeShareInFlight(false);
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -88,6 +95,7 @@ export function AgentSharePage() {
       });
     return () => {
       cancelled = true;
+      nativeShareRequestRef.current += 1;
     };
   }, [token]);
 
@@ -229,6 +237,7 @@ export function AgentSharePage() {
     if (nativeShareBusyRef.current || !report) return;
     nativeShareBusyRef.current = true;
     setNativeShareInFlight(true);
+    const requestId = nativeShareRequestRef.current;
     setNativeShareStatus('idle');
     setNativeShareError(null);
     const data = buildNativeShareData({
@@ -238,6 +247,7 @@ export function AgentSharePage() {
     });
     try {
       const result = await invokeNativeShare(data);
+      if (nativeShareRequestRef.current !== requestId) return;
       if (result === 'shared') {
         setNativeShareStatus('shared');
         void track('response_shared');
@@ -246,8 +256,10 @@ export function AgentSharePage() {
         setNativeShareError('Could not open system share — try Copy link instead.');
       }
     } finally {
-      nativeShareBusyRef.current = false;
-      setNativeShareInFlight(false);
+      if (nativeShareRequestRef.current === requestId) {
+        nativeShareBusyRef.current = false;
+        setNativeShareInFlight(false);
+      }
     }
   };
 
