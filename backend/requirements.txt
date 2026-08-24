@@ -12,8 +12,13 @@ email-validator==2.3.0
 # (llm_caller.py, discuss.py). Wire payload is unchanged.
 anthropic==1.0.0
 
-# OpenAI (for Grok API)
-openai==1.54.3
+# OpenAI (for Grok API) — 1.x passes the deprecated proxies= kwarg to
+# httpx.AsyncClient, removed in httpx 0.28; only the 2.x line is compatible
+# with the httpx 0.28.1 pin above. chat.completions.create keeps its
+# temperature/max_tokens kwargs in v2 and the exception roots used by
+# llm_retry.py (APIStatusError/APIConnectionError/APITimeoutError) are
+# unchanged, so this bump needs no call-site changes.
+openai==2.53.0
 
 # Async — httpx 0.28 removed the deprecated AsyncClient(proxies=/app=)
 # shortcuts; this codebase only uses transport=ASGITransport(app=...),
