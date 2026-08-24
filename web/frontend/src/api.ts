@@ -47,6 +47,8 @@ export class ApiError extends Error {
 export type RateLimitDetail = {
   error: 'rate_limit_exceeded' | 'daily_limit_reached';
   message: string;
+  /** Optional scope lets the notice distinguish daily token budgets from other 429s. */
+  scope?: string | null;
   resets_at: string | null;
   retry_after_seconds: number | null;
 };
@@ -55,6 +57,9 @@ export type RateLimitDetail = {
  * Extract the quota fields from either a FastAPI error envelope or its detail.
  * Keeping this tolerant lets the UI consume older Agent responses while using
  * the precise ``resets_at``/``retry_after_seconds`` contract on prompt routes.
+ * Older sliding-window endpoints use ``retry_after`` instead; normalize that
+ * spelling here so the notice can show the actual cooldown instead of a
+ * misleading daily-reset message.
  */
 export function getRateLimitDetail(value: unknown): RateLimitDetail | null {
   if (!value || typeof value !== 'object') return null;
@@ -66,22 +71,33 @@ export function getRateLimitDetail(value: unknown): RateLimitDetail | null {
   const error = raw.error;
   if (error !== 'rate_limit_exceeded' && error !== 'daily_limit_reached') return null;
 
+  const scope = typeof raw.scope === 'string' && raw.scope.trim()
+    ? raw.scope.trim()
+    : null;
   const message = typeof raw.message === 'string' && raw.message.trim()
     ? raw.message.trim()
-    : 'Daily usage limit reached.';
+    : error === 'daily_limit_reached'
+      ? 'Daily usage limit reached.'
+      : scope === 'tokens'
+      ? 'Daily token budget reached.'
+      : 'Rate limit reached.';
   const resetsAt = typeof raw.resets_at === 'string' && raw.resets_at.trim()
     ? raw.resets_at.trim()
     : null;
+  const rawRetryAfter = typeof raw.retry_after_seconds === 'number'
+    ? raw.retry_after_seconds
+    : raw.retry_after;
   const retryAfter =
-    typeof raw.retry_after_seconds === 'number' &&
-    Number.isFinite(raw.retry_after_seconds) &&
-    raw.retry_after_seconds >= 0
-      ? Math.ceil(raw.retry_after_seconds)
+    typeof rawRetryAfter === 'number' &&
+    Number.isFinite(rawRetryAfter) &&
+    rawRetryAfter >= 0
+      ? Math.ceil(rawRetryAfter)
       : null;
 
   return {
     error,
     message,
+    scope,
     resets_at: resetsAt,
     retry_after_seconds: retryAfter,
   };

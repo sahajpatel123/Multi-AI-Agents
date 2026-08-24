@@ -24,6 +24,7 @@ describe('daily rate-limit contract', () => {
     ).toEqual({
       error: 'rate_limit_exceeded',
       message: 'Daily message limit reached.',
+      scope: null,
       resets_at: '2026-08-25T00:00:00',
       retry_after_seconds: 43,
     });
@@ -41,8 +42,27 @@ describe('daily rate-limit contract', () => {
     ).toMatchObject({
       error: 'rate_limit_exceeded',
       message: 'Daily token budget reached.',
+      scope: 'tokens',
       resets_at: null,
       retry_after_seconds: null,
+    });
+  });
+
+  it('normalizes the legacy sliding-window retry_after field', () => {
+    expect(
+      getRateLimitDetail({
+        detail: {
+          error: 'rate_limit_exceeded',
+          message: 'Too many requests. Try again soon.',
+          retry_after: 61,
+        },
+      }),
+    ).toEqual({
+      error: 'rate_limit_exceeded',
+      message: 'Too many requests. Try again soon.',
+      scope: null,
+      resets_at: null,
+      retry_after_seconds: 61,
     });
   });
 

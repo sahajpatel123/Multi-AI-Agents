@@ -30,14 +30,17 @@ export function RateLimitNotice({
   const [startedAtMs] = useState(() => Date.now());
   const [nowMs, setNowMs] = useState(startedAtMs);
   const [refreshing, setRefreshing] = useState(false);
+  const resetAtMs = useMemo(
+    () => parseResetAt(detail.resets_at, startedAtMs),
+    [detail.resets_at, startedAtMs],
+  );
   const targetMs = useMemo(() => {
-    const resetAt = parseResetAt(detail.resets_at, startedAtMs);
-    if (resetAt !== null) return resetAt;
+    if (resetAtMs !== null) return resetAtMs;
     if (detail.retry_after_seconds !== null) {
       return startedAtMs + detail.retry_after_seconds * 1000;
     }
     return null;
-  }, [detail.resets_at, detail.retry_after_seconds, startedAtMs]);
+  }, [detail.retry_after_seconds, resetAtMs, startedAtMs]);
 
   useEffect(() => {
     if (targetMs === null) return undefined;
@@ -48,6 +51,11 @@ export function RateLimitNotice({
   const remainingSeconds = targetMs === null
     ? null
     : Math.max(0, Math.ceil((targetMs - nowMs) / 1000));
+  const title = detail.scope === 'tokens'
+    ? 'Daily token budget reached'
+    : detail.error === 'daily_limit_reached' || resetAtMs !== null
+      ? 'Daily limit reached'
+      : 'Rate limit reached';
 
   const refresh = async () => {
     if (!onRefresh || refreshing) return;
@@ -80,7 +88,7 @@ export function RateLimitNotice({
             id="rate-limit-notice-title"
             style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#8D5C19' }}
           >
-            Daily limit reached
+            {title}
           </p>
           <p style={{ margin: '6px 0 0', fontSize: 13, lineHeight: 1.5 }}>
             {detail.message}
@@ -89,11 +97,11 @@ export function RateLimitNotice({
             <p aria-live="polite" style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.5 }}>
               {remainingSeconds === 0
                 ? 'The limit should be available now. Refresh your limits to continue.'
-                : <>Available again in <strong>{formatRateLimitCountdown(remainingSeconds)}</strong> (UTC).</>}
+                : <>Available again in <strong>{formatRateLimitCountdown(remainingSeconds)}</strong>{resetAtMs !== null ? ' (UTC)' : ''}.</>}
             </p>
           ) : (
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#846F5C' }}>
-              Try again after the next UTC reset.
+              Reset timing is unavailable. Refresh your limits before trying again.
             </p>
           )}
         </div>

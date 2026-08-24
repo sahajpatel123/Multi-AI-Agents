@@ -39,6 +39,42 @@ describe('RateLimitNotice', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Available again in 11h 59m (UTC).');
   });
 
+  it('uses relative retry windows without claiming they are UTC resets', () => {
+    render(
+      <RateLimitNotice
+        detail={{
+          error: 'rate_limit_exceeded',
+          message: 'Too many requests. Try again soon.',
+          resets_at: null,
+          retry_after_seconds: 61,
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Rate limit reached')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Available again in 1m 1s.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('(UTC)');
+  });
+
+  it('does not invent a reset time when the server cannot provide one', () => {
+    render(
+      <RateLimitNotice
+        detail={{
+          error: 'rate_limit_exceeded',
+          message: 'Daily token budget reached.',
+          scope: 'tokens',
+          resets_at: null,
+          retry_after_seconds: null,
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Daily token budget reached')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Reset timing is unavailable. Refresh your limits before trying again.',
+    );
+  });
+
   it('supports refresh and dismiss actions', async () => {
     const onRefresh = vi.fn().mockResolvedValue(undefined);
     const onDismiss = vi.fn();
