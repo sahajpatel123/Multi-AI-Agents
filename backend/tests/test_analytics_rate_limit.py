@@ -47,6 +47,31 @@ async def test_analytics_event_rate_limited(app_client, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_shared_read_aloud_event_is_recorded_with_agent_id(app_client, db_session):
+    """Public-share listen events use the agent field, not persona attribution."""
+    from arena.db_models import UXEvent
+
+    res = await app_client.post(
+        "/api/analytics/event",
+        json={
+            "session_id": "shared-read-aloud-test",
+            "event_type": "shared_read_aloud",
+            "agent_id": "agent_1",
+        },
+    )
+
+    assert res.status_code == 200, res.text
+    event = (
+        db_session.query(UXEvent)
+        .filter(UXEvent.session_id == "shared-read-aloud-test")
+        .one()
+    )
+    assert event.event_type == "shared_read_aloud"
+    assert event.persona_id is None
+    assert event.agent_id == "agent_1"
+
+
+@pytest.mark.asyncio
 async def test_analytics_summary_rate_limited(app_client, make_user, monkeypatch):
     from arena.core import rate_limits
 

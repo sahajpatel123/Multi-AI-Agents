@@ -37,6 +37,7 @@ VALID_EVENT_TYPES = {
     "response_saved",
     "response_shared",
     "response_copied",
+    "shared_read_aloud",
     "leaderboard_viewed",
     "personas_viewed",
     "persona_swapped",

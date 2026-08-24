@@ -5,9 +5,10 @@ import { SharePage } from './SharePage';
 import { useAuth } from '../hooks/useAuth';
 import { SHARED_PROMPT_STORAGE_KEY } from '../lib/sharePrompt';
 
-const { navigateMock, setRedirectIntentMock } = vi.hoisted(() => ({
+const { navigateMock, setRedirectIntentMock, trackMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   setRedirectIntentMock: vi.fn(),
+  trackMock: vi.fn(),
 }));
 
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -27,6 +28,8 @@ vi.mock('../hooks/useAuth', () => ({
     isLoading: false,
   })),
 }));
+
+vi.mock('../utils/track', () => ({ default: trackMock }));
 
 vi.mock('../components/Navbar', () => ({
   Navbar: () => <div data-testid="navbar" />,
@@ -51,6 +54,7 @@ describe('SharePage', () => {
     sessionStorage.clear();
     navigateMock.mockClear();
     setRedirectIntentMock.mockClear();
+    trackMock.mockClear();
     vi.mocked(useAuth).mockImplementation(() => ({
       isAuthenticated: false,
       user: null,
@@ -79,6 +83,47 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /read this take aloud/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy take/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
+  });
+
+  it('records a shared take listen as an agent event', () => {
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    const originalSpeechSynthesis = window.speechSynthesis;
+    const originalUtterance = window.SpeechSynthesisUtterance;
+    const synthesis = { cancel: vi.fn(), speak: vi.fn() };
+    class MockUtterance {
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(readonly text: string) {}
+    }
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: synthesis,
+    });
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+      configurable: true,
+      value: MockUtterance,
+    });
+
+    try {
+      renderShare(qs);
+      const listenButton = screen.getByRole('button', { name: /read this take aloud/i });
+      fireEvent.click(listenButton);
+      expect(trackMock).toHaveBeenCalledWith('shared_read_aloud', undefined, 'agent_1');
+    } finally {
+      Object.defineProperty(window, 'speechSynthesis', {
+        configurable: true,
+        value: originalSpeechSynthesis,
+      });
+      Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+        configurable: true,
+        value: originalUtterance,
+      });
+    }
   });
 
   it('renders a shared round with all takes from round query params', () => {

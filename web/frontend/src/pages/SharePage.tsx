@@ -420,6 +420,7 @@ export function SharePage() {
                       onStart={() =>
                         void track(
                           'shared_read_aloud',
+                          undefined,
                           isRound ? undefined : agentId || undefined,
                         )
                       }
