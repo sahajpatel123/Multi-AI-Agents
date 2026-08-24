@@ -110,6 +110,7 @@ describe('AgentSharePage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     vi.mocked(useAuth).mockImplementation(() => ({
       isAuthenticated: false,
       user: null,
@@ -208,6 +209,18 @@ describe('AgentSharePage', () => {
     renderShare('tok_abc');
     await screen.findByText('Is this report shareable?');
     expect(getPublicAgentReport).toHaveBeenCalledWith('tok_abc');
+  });
+
+  it('carries the shared question into Agent Mode, including through sign-in', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: /run your own research/i }));
+
+    expect(sessionStorage.getItem('arena_prefill_question')).toBe(
+      'Is this report shareable?',
+    );
   });
 
   it('copies the report as markdown to the clipboard', async () => {
