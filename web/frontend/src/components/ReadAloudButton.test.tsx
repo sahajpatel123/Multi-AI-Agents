@@ -83,4 +83,37 @@ describe('ReadAloudButton', () => {
     render(<ReadAloudButton text="A take" />);
     expect(screen.getByRole('button', { name: /read this take aloud/i })).toBeDisabled();
   });
+
+  it('returns to idle when the browser rejects a speech request', () => {
+    const { synthesis } = installSpeechMocks();
+    synthesis.speak.mockImplementationOnce(() => {
+      throw new Error('speech unavailable');
+    });
+    const onStart = vi.fn(() => {
+      throw new Error('analytics unavailable');
+    });
+    render(<ReadAloudButton text="A take that should still recover." onStart={onStart} />);
+
+    const button = screen.getByRole('button', { name: /read this take aloud/i });
+    fireEvent.click(button);
+
+    expect(onStart).toHaveBeenCalledTimes(1);
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(button).toHaveAccessibleName('Read this take aloud');
+  });
+
+  it('finishes cleanup when the browser cancel operation throws', () => {
+    const { synthesis } = installSpeechMocks();
+    render(<ReadAloudButton text="A take" />);
+    const button = screen.getByRole('button', { name: /read this take aloud/i });
+    fireEvent.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+
+    synthesis.cancel.mockImplementation(() => {
+      throw new Error('cancel unavailable');
+    });
+    fireEvent.click(screen.getByRole('button', { name: /stop reading/i }));
+
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+  });
 });

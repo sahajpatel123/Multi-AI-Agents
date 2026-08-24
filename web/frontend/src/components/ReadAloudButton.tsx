@@ -20,6 +20,16 @@ function getSpeechSynthesis(): SpeechSynthesis | null {
   return window.speechSynthesis;
 }
 
+function cancelSpeech(synthesis: SpeechSynthesis | null): void {
+  if (!synthesis) return;
+  try {
+    synthesis.cancel();
+  } catch {
+    // Browser speech implementations can throw while the document is closing.
+    // Cleanup should still release this control's local state.
+  }
+}
+
 let activeStop: (() => void) | null = null;
 
 interface ReadAloudButtonProps {
@@ -41,7 +51,7 @@ export function ReadAloudButton({
 
   const stop = useCallback(() => {
     const synthesis = getSpeechSynthesis();
-    if (utteranceRef.current && synthesis) synthesis.cancel();
+    if (utteranceRef.current) cancelSpeech(synthesis);
     utteranceRef.current = null;
     if (activeStop === stop) activeStop = null;
     setIsSpeaking(false);
@@ -65,8 +75,15 @@ export function ReadAloudButton({
     // Speech is global in the browser, so starting here must stop another
     // card's narration rather than letting two answers overlap.
     activeStop?.();
-    synthesis.cancel();
-    const utterance = new window.SpeechSynthesisUtterance(speechText);
+    cancelSpeech(synthesis);
+
+    let utterance: SpeechSynthesisUtterance;
+    try {
+      utterance = new window.SpeechSynthesisUtterance(speechText);
+    } catch {
+      return;
+    }
+
     utteranceRef.current = utterance;
     activeStop = stop;
     const finish = () => {
@@ -78,8 +95,17 @@ export function ReadAloudButton({
     utterance.onend = finish;
     utterance.onerror = finish;
     setIsSpeaking(true);
-    onStart?.();
-    synthesis.speak(utterance);
+    try {
+      onStart?.();
+    } catch {
+      // Analytics must never prevent the response from being read aloud.
+    }
+    try {
+      synthesis.speak(utterance);
+    } catch {
+      cancelSpeech(synthesis);
+      finish();
+    }
   };
 
   const buttonLabel = isSpeaking ? `Stop reading ${label.replace(/^Read /, '')}` : label;
