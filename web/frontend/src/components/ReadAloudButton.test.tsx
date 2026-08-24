@@ -102,6 +102,50 @@ describe('ReadAloudButton', () => {
     expect(button).toHaveAccessibleName('Read this take aloud');
   });
 
+  it('queues long responses one bounded chunk at a time', () => {
+    const { synthesis, utterances } = installSpeechMocks();
+    const text = Array.from(
+      { length: 12 },
+      (_, index) => `Sentence ${index} explains why this report matters.`,
+    ).join(' ');
+    const normalizedText = readableSpeechText(text);
+    render(<ReadAloudButton text={text} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /read this take aloud/i }));
+    expect(synthesis.speak).toHaveBeenCalledTimes(1);
+
+    let index = 0;
+    while (index < 100 && index < utterances.length) {
+      act(() => utterances[index].onend?.());
+      index += 1;
+    }
+
+    expect(index).toBeGreaterThan(1);
+    expect(utterances.every((utterance) => utterance.text.length <= 240)).toBe(true);
+    expect(utterances.map((utterance) => utterance.text).join(' ')).toBe(normalizedText);
+    expect(synthesis.speak).toHaveBeenCalledTimes(index);
+    expect(screen.getByRole('button', { name: /read this take aloud/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('does not resume a queued report after the user stops it', () => {
+    const { synthesis, utterances } = installSpeechMocks();
+    const text = Array.from({ length: 12 }, (_, index) => `Sentence ${index} is long enough.`).join(' ');
+    render(<ReadAloudButton text={text} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /read this take aloud/i }));
+    fireEvent.click(screen.getByRole('button', { name: /stop reading/i }));
+    act(() => utterances[0].onend?.());
+
+    expect(synthesis.speak).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /read this take aloud/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
   it('finishes cleanup when the browser cancel operation throws', () => {
     const { synthesis } = installSpeechMocks();
     render(<ReadAloudButton text="A take" />);
