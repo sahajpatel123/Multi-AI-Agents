@@ -9,7 +9,7 @@ import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { ReadAloudButton } from '../components/ReadAloudButton';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentTitle';
 import { setRedirectIntent } from '../utils/redirectIntent';
@@ -39,11 +39,13 @@ export function AgentSharePage() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [nativeShareStatus, setNativeShareStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
   const [copyError, setCopyError] = useState<string | null>(null);
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [jsonDownloadError, setJsonDownloadError] = useState<string | null>(null);
   const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
   const [linkCopyInFlight, setLinkCopyInFlight] = useState(false);
@@ -68,10 +70,12 @@ export function AgentSharePage() {
     setCopyStatus('idle');
     setLinkStatus('idle');
     setDownloadStatus('idle');
+    setJsonDownloadStatus('idle');
     setNativeShareStatus('idle');
     setCopyError(null);
     setLinkCopyError(null);
     setDownloadError(null);
+    setJsonDownloadError(null);
     setNativeShareError(null);
     getPublicAgentReport(token)
       .then((data) => {
@@ -148,6 +152,16 @@ export function AgentSharePage() {
   }, [downloadStatus]);
 
   useEffect(() => {
+    if (jsonDownloadStatus === 'idle') return;
+    const hold = jsonDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setJsonDownloadStatus('idle');
+      setJsonDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [jsonDownloadStatus]);
+
+  useEffect(() => {
     if (linkStatus === 'idle') return;
     const hold = linkStatus === 'failed' ? 2800 : 1600;
     const t = window.setTimeout(() => {
@@ -203,6 +217,34 @@ export function AgentSharePage() {
     } else {
       setDownloadStatus('failed');
       setDownloadError('Could not download the report — try Copy report instead.');
+    }
+  };
+
+  const handleDownloadJsonReport = () => {
+    if (!report) return;
+    setJsonDownloadError(null);
+    const payload = JSON.stringify(
+      {
+        format: 'arena-agent-report',
+        version: 1,
+        title: report.title || 'Full report',
+        question: report.question,
+        answer: report.answer,
+        finalScore: report.finalScore,
+        finalConfidence: report.finalConfidence,
+        createdAt: report.createdAt,
+        sharedAt: report.sharedAt,
+      },
+      null,
+      2,
+    );
+    const stem = `agent-share-${(report.title || report.question || 'report').slice(0, 40)}`;
+    const ok = downloadJsonFile(`${payload}\n`, stem);
+    if (ok) {
+      setJsonDownloadStatus('done');
+    } else {
+      setJsonDownloadStatus('failed');
+      setJsonDownloadError('Could not download the JSON report — try Download .md instead.');
     }
   };
 
@@ -370,6 +412,11 @@ export function AgentSharePage() {
                       {downloadError}
                     </p>
                   ) : null}
+                  {jsonDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {jsonDownloadError}
+                    </p>
+                  ) : null}
                   {linkCopyError ? (
                     <p className="share-take__error" role="alert">
                       {linkCopyError}
@@ -416,6 +463,17 @@ export function AgentSharePage() {
                     </button>
                     <button
                       type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${jsonDownloadStatus === 'done' ? ' is-success' : ''}${jsonDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadJsonReport}
+                    >
+                      {jsonDownloadStatus === 'done'
+                        ? 'JSON downloaded'
+                        : jsonDownloadStatus === 'failed'
+                          ? 'JSON download failed'
+                          : 'Download .json'}
+                    </button>
+                    <button
+                      type="button"
                       className={`arena-btn arena-btn--secondary arena-btn--sm${linkStatus === 'copied' ? ' is-success' : ''}${linkStatus === 'failed' ? ' is-error' : ''}`}
                       onClick={() => void handleCopyLink()}
                       disabled={linkCopyInFlight}
@@ -458,6 +516,7 @@ export function AgentSharePage() {
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
+                    {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
                     {nativeShareStatus === 'shared' ? 'Report shared using the system share sheet.' : ''}
                   </span>
                 </div>

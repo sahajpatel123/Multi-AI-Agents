@@ -5,7 +5,7 @@ import { AgentSharePage } from './AgentSharePage';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import track from '../utils/track';
 
 vi.mock('../api', () => ({
@@ -29,6 +29,7 @@ vi.mock('../lib/clipboard', () => ({
 }));
 
 vi.mock('../lib/downloadTextFile', () => ({
+  downloadJsonFile: vi.fn(),
   downloadMarkdownFile: vi.fn(),
 }));
 
@@ -110,6 +111,7 @@ describe('AgentSharePage', () => {
       isLoading: false,
     }));
     vi.mocked(copyToClipboard).mockResolvedValue(true);
+    vi.mocked(downloadJsonFile).mockReturnValue(true);
     vi.mocked(downloadMarkdownFile).mockReturnValue(true);
   });
 
@@ -414,6 +416,39 @@ describe('AgentSharePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Download .md' }));
     expect(await screen.findByText(/could not download the report/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download failed' })).toBeInTheDocument();
+  });
+
+  it('downloads a machine-readable JSON report without the share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Download .json' }));
+    expect(await screen.findByText('JSON downloaded')).toBeInTheDocument();
+
+    const [content, filename] = vi.mocked(downloadJsonFile).mock.calls[0] ?? [];
+    expect(filename).toEqual(expect.stringContaining('agent-share-'));
+    expect(JSON.parse(content as string)).toEqual({
+      format: 'arena-agent-report',
+      version: 1,
+      title: 'Shareable research',
+      question: 'Is this report shareable?',
+      answer: 'Yes, with a token and a public page.',
+      finalScore: 84,
+      finalConfidence: 0.75,
+      createdAt: '2026-08-14T10:00:00',
+      sharedAt: '2026-08-14T11:00:00',
+    });
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the JSON download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadJsonFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Download .json' }));
+    expect(await screen.findByText(/could not download the JSON report/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'JSON download failed' })).toBeInTheDocument();
   });
 
   it('resets download feedback and clears the error after the feedback window', async () => {
