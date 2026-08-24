@@ -40,6 +40,7 @@ export function AgentSharePage() {
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [jsonDownloadFeedbackKey, setJsonDownloadFeedbackKey] = useState(0);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [nativeShareStatus, setNativeShareStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -71,6 +72,7 @@ export function AgentSharePage() {
     setLinkStatus('idle');
     setDownloadStatus('idle');
     setJsonDownloadStatus('idle');
+    setJsonDownloadFeedbackKey(0);
     setNativeShareStatus('idle');
     setCopyError(null);
     setLinkCopyError(null);
@@ -159,7 +161,7 @@ export function AgentSharePage() {
       setJsonDownloadError(null);
     }, hold);
     return () => window.clearTimeout(t);
-  }, [jsonDownloadStatus]);
+  }, [jsonDownloadFeedbackKey, jsonDownloadStatus]);
 
   useEffect(() => {
     if (linkStatus === 'idle') return;
@@ -223,6 +225,10 @@ export function AgentSharePage() {
   const handleDownloadJsonReport = () => {
     if (!report) return;
     setJsonDownloadError(null);
+    // A second synchronous download can keep the same status value (done or
+    // failed), so the status effect would otherwise keep the first timer.
+    // Bump a separate key to give every attempt its own feedback window.
+    setJsonDownloadFeedbackKey((current) => current + 1);
     const payload = JSON.stringify(
       {
         format: 'arena-agent-report',

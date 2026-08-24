@@ -451,6 +451,37 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'JSON download failed' })).toBeInTheDocument();
   });
 
+  it('starts a fresh feedback window when the JSON report is downloaded again', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+      renderShare();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      const downloadJson = () =>
+        fireEvent.click(screen.getByRole('button', { name: /^(Download \.json|JSON downloaded)$/ }));
+      downloadJson();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole('button', { name: 'JSON downloaded' })).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(1500));
+      downloadJson();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => vi.advanceTimersByTime(1500));
+
+      expect(screen.getByRole('button', { name: 'JSON downloaded' })).toBeInTheDocument();
+      expect(downloadJsonFile).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resets download feedback and clears the error after the feedback window', async () => {
     vi.useFakeTimers();
     try {
