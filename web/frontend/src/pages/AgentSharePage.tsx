@@ -23,6 +23,17 @@ import {
 import track from '../utils/track';
 import '../styles/share-landing.css';
 
+function safeSourceHref(source: string): string | null {
+  const value = source.trim();
+  if (!/^https?:\/\//i.test(value)) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Public landing for shared Agent Mode reports (/share/agent/:token).
  * Renders only the sanitized payload the backend publishes — no user or
@@ -116,6 +127,7 @@ export function AgentSharePage() {
         ? formatAgentAnswerExport({
             question: report.question || '',
             answer: report.answer || '',
+            sources: report.sources,
           })
         : '',
     [report],
@@ -238,6 +250,7 @@ export function AgentSharePage() {
         answer: report.answer,
         finalScore: report.finalScore,
         finalConfidence: report.finalConfidence,
+        sources: report.sources,
         createdAt: report.createdAt,
         sharedAt: report.sharedAt,
       },
@@ -413,6 +426,27 @@ export function AgentSharePage() {
                 <div className="share-take__section">
                   <p className="share-take__label">The report</p>
                   <AgentAnswerMarkdown markdown={report.answer} question={report.question} />
+                  {report.sources.length > 0 ? (
+                    <section className="share-take__sources" aria-label="Sources consulted">
+                      <p className="share-take__label">Sources consulted</p>
+                      <ol className="share-take__sources-list">
+                        {report.sources.map((source, index) => {
+                          const href = safeSourceHref(source);
+                          return (
+                            <li key={`${source}-${index}`}>
+                              {href ? (
+                                <a href={href} target="_blank" rel="noreferrer noopener">
+                                  {source}
+                                </a>
+                              ) : (
+                                <span>{source}</span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </section>
+                  ) : null}
                   {copyError ? (
                     <p className="share-take__error" role="alert">
                       {copyError}

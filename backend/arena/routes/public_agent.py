@@ -8,6 +8,8 @@ leak to the public link.
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,48 @@ from arena.db_models import AgentTask
 
 
 router = APIRouter()
+
+_PUBLIC_SOURCE_MAX_ITEMS = 24
+_PUBLIC_SOURCE_MAX_CHARS = 240
+
+
+def _public_source_references(row: AgentTask) -> list[str]:
+    """Return a small, text-only source list safe for an unauthenticated page.
+
+    ``sources_used`` is persisted JSON assembled from model output and search
+    context. Public shares should expose useful references without forwarding
+    arbitrary nested objects, oversized values, or duplicate rows.
+    """
+    raw = row.sources_used
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+
+    references: list[str] = []
+    seen: set[str] = set()
+    for item in parsed:
+        if not isinstance(item, str):
+            continue
+        reference = " ".join(item.split()).strip()
+        if not reference:
+            continue
+        if len(reference) > _PUBLIC_SOURCE_MAX_CHARS:
+            reference = (
+                reference[: _PUBLIC_SOURCE_MAX_CHARS - 1].rstrip() + "…"
+            )
+        key = reference.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        references.append(reference)
+        if len(references) >= _PUBLIC_SOURCE_MAX_ITEMS:
+            break
+    return references
 
 
 @router.get("/agent/{token}")
@@ -57,6 +101,7 @@ async def get_public_agent_report(
         "answer": row.final_answer,
         "final_score": row.final_score,
         "final_confidence": row.final_confidence,
+        "sources": _public_source_references(row),
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "shared_at": row.share_created_at.isoformat() if row.share_created_at else None,
     }

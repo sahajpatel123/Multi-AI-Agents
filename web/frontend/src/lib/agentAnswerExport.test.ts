@@ -32,4 +32,15 @@ describe('formatAgentAnswerExport', () => {
     expect(md).toContain('  - Findings');
     expect(md).toContain('## Answer');
   });
+
+  it('includes recorded sources as a plain markdown list', () => {
+    const md = formatAgentAnswerExport({
+      question: 'Q',
+      answer: 'A',
+      sources: ['https://example.com/source', 'Published paper'],
+    });
+    expect(md).toContain('## Sources');
+    expect(md).toContain('1. https://example.com/source');
+    expect(md).toContain('2. Published paper');
+  });
 });

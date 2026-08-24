@@ -2831,6 +2831,7 @@ export type PublicAgentReport = {
   title: string | null;
   question: string;
   answer: string;
+  sources: string[];
   finalScore: number | null;
   finalConfidence: number | null;
   createdAt: string | null;
@@ -2845,6 +2846,7 @@ export async function getPublicAgentReport(token: string): Promise<PublicAgentRe
       title?: unknown;
       question?: unknown;
       answer?: unknown;
+      sources?: unknown;
       final_score?: unknown;
       final_confidence?: unknown;
       created_at?: unknown;
@@ -2871,11 +2873,15 @@ export async function getPublicAgentReport(token: string): Promise<PublicAgentRe
     typeof v === 'number' && Number.isFinite(v) ? v : null;
   const nullableString = (v: unknown): string | null =>
     typeof v === 'string' ? v : null;
+  const sources = Array.isArray(data.sources)
+    ? data.sources.filter((source): source is string => typeof source === 'string')
+    : [];
   return {
     token: data.token,
     title: nullableString(data.title),
     question: data.question,
     answer: data.answer,
+    sources,
     finalScore: nullableNumber(data.final_score),
     finalConfidence: nullableNumber(data.final_confidence),
     createdAt: nullableString(data.created_at),

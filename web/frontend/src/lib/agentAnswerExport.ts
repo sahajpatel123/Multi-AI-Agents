@@ -15,6 +15,7 @@ export function formatAgentAnswerExport(opts: {
   question: string;
   answer: string;
   taskId?: string | null;
+  sources?: readonly string[];
 }): string {
   const question = (opts.question || '').trim() || '(no question)';
   const answer = (opts.answer || '').trim() || '_(empty answer)_';
@@ -35,6 +36,14 @@ export function formatAgentAnswerExport(opts: {
     lines.push('');
   }
   lines.push('## Answer', '', answer, '');
+  const sources = (opts.sources || [])
+    .map((source) => String(source || '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  if (sources.length > 0) {
+    lines.push('## Sources', '');
+    sources.forEach((source, index) => lines.push(`${index + 1}. ${source}`));
+    lines.push('');
+  }
   const taskId = (opts.taskId || '').trim();
   if (taskId) {
     lines.push(`_Task \`${taskId}\`_`);

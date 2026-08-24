@@ -314,6 +314,45 @@
   line-height: 1.45;
 }
 
+.share-take__sources {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 0.5px solid #e0d8d0;
+}
+
+.share-take__sources .share-take__label {
+  margin-bottom: 8px;
+}
+
+.share-take__sources-list {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 5px;
+  color: #6b6460;
+  font-family: var(--vp-font-sans, system-ui, sans-serif);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.share-take__sources-list li {
+  padding-left: 3px;
+  overflow-wrap: anywhere;
+}
+
+.share-take__sources-list a {
+  color: #8a6b4a;
+  text-decoration: underline;
+  text-decoration-color: rgba(138, 107, 74, 0.42);
+  text-underline-offset: 2px;
+}
+
+.share-take__sources-list a:hover,
+.share-take__sources-list a:focus-visible {
+  color: #2c1810;
+  text-decoration-color: #c4956a;
+}
+
 .share-take__tools {
   display: flex;
   flex-wrap: wrap;
@@ -540,6 +579,15 @@
   .share-landing--agent .share-take__answer a {
     color: #6f4c31 !important;
     text-decoration: underline;
+  }
+
+  .share-landing--agent .share-take__sources {
+    break-inside: avoid;
+  }
+
+  .share-landing--agent .share-take__sources-list,
+  .share-landing--agent .share-take__sources-list a {
+    color: #171412;
   }
 
   .share-landing--agent .share-take__answer div {

@@ -13,6 +13,7 @@ public read under /api/public/agent/{token}. The contract pinned here:
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -305,6 +306,40 @@ async def test_public_read_returns_sanitized_payload(
     assert body["shared_at"]
     for hidden in ("user_id", "task_id", "insight_report", "feedback", "is_live"):
         assert hidden not in body
+
+
+@pytest.mark.asyncio
+async def test_public_read_includes_bounded_source_references(
+    app_client, make_user, db_session
+):
+    user = make_user(email="share-sources@test.com", tier=UserTier.PRO)
+    task = _seed_task(db_session, user_id=user.id)
+    task.sources_used = json.dumps(
+        [
+            " https://example.com/research\n",
+            "HTTPS://EXAMPLE.COM/RESEARCH",
+            {"url": "https://private.example/should-not-leak"},
+            "Published source",
+            "x" * 400,
+            "",
+            42,
+        ]
+    )
+    db_session.commit()
+
+    created = await app_client.post(
+        f"/api/agent/tasks/{task.task_id}/share", headers=_headers(user)
+    )
+    token = created.json()["share_token"]
+    res = await app_client.get(f"/api/public/agent/{token}")
+
+    assert res.status_code == 200
+    sources = res.json()["sources"]
+    assert sources[:2] == ["https://example.com/research", "Published source"]
+    assert len(sources[2]) == 240
+    assert sources[2].endswith("…")
+    assert all(isinstance(source, str) for source in sources)
+    assert "private.example" not in res.text
 
 
 @pytest.mark.asyncio

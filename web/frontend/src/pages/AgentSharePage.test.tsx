@@ -65,6 +65,7 @@ function report(overrides: Partial<PublicAgentReport> = {}): PublicAgentReport {
     title: 'Shareable research',
     question: 'Is this report shareable?',
     answer: 'Yes, with a token and a public page.',
+    sources: [],
     finalScore: 84,
     finalConfidence: 0.75,
     createdAt: '2026-08-14T10:00:00',
@@ -130,6 +131,24 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: /run your own research/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /read report aloud/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+  });
+
+  it('renders safe source references and links only web URLs', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
+      report({
+        sources: ['https://example.com/research', 'A published source', 'javascript:alert(1)'],
+      }),
+    );
+    renderShare();
+
+    expect(await screen.findByText('Sources consulted')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'https://example.com/research' })).toHaveAttribute(
+      'href',
+      'https://example.com/research',
+    );
+    expect(screen.getByText('A published source')).toBeInTheDocument();
+    expect(screen.getByText('javascript:alert(1)')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'javascript:alert(1)' })).not.toBeInTheDocument();
   });
 
   it('tracks reading a shared Agent report aloud', async () => {
@@ -402,13 +421,15 @@ describe('AgentSharePage', () => {
   });
 
   it('downloads the report as a markdown file', async () => {
-    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
+      report({ sources: ['https://example.com/research'] }),
+    );
     renderShare();
     await screen.findByText('Is this report shareable?');
     fireEvent.click(screen.getByRole('button', { name: 'Download .md' }));
     expect(await screen.findByText('Downloaded')).toBeInTheDocument();
     expect(downloadMarkdownFile).toHaveBeenCalledWith(
-      expect.stringContaining('Yes, with a token and a public page.'),
+      expect.stringContaining('## Sources'),
       expect.stringContaining('agent-share-'),
     );
   });
@@ -424,7 +445,9 @@ describe('AgentSharePage', () => {
   });
 
   it('downloads a machine-readable JSON report without the share token', async () => {
-    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
+      report({ sources: ['https://example.com/research'] }),
+    );
     renderShare();
     await screen.findByText('Is this report shareable?');
     fireEvent.click(screen.getByRole('button', { name: 'Download .json' }));
@@ -438,6 +461,7 @@ describe('AgentSharePage', () => {
       title: 'Shareable research',
       question: 'Is this report shareable?',
       answer: 'Yes, with a token and a public page.',
+      sources: ['https://example.com/research'],
       finalScore: 84,
       finalConfidence: 0.75,
       createdAt: '2026-08-14T10:00:00',
