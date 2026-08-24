@@ -431,76 +431,137 @@
 }
 
 @media print {
-  @page {
+  @page agent-report {
     margin: 16mm 14mm;
   }
 
-  .share-landing {
+  .share-landing--agent {
+    page: agent-report;
     min-height: auto;
     background: #fff;
     color: #171412;
   }
 
-  .share-landing [data-public-prism-nav],
-  .share-landing .site-footer,
-  .share-landing__orbs,
-  .share-take__tools,
-  .share-take__ctas,
-  .share-take__status {
+  .share-landing--agent [data-public-prism-nav],
+  .share-landing--agent .site-footer,
+  .share-landing--agent .share-landing__orbs,
+  .share-landing--agent .share-take__tools,
+  .share-landing--agent .share-take__ctas,
+  .share-landing--agent .share-take__status,
+  .share-landing--agent .share-take__error,
+  .share-landing--agent .share-take__answer [data-answer-outline] {
     display: none !important;
   }
 
-  .share-landing__main {
+  .share-landing--agent .share-landing__main {
     max-width: none;
     padding: 0;
   }
 
-  .share-landing__title {
+  .share-landing--agent .share-landing__title {
     margin-bottom: 18pt;
     color: #171412;
     font-size: 24pt;
   }
 
-  .share-landing__title em {
+  .share-landing--agent .share-landing__title em {
     color: #6f4c31;
   }
 
-  .share-round {
+  .share-landing--agent .share-round {
     display: block;
   }
 
-  .share-take {
+  .share-landing--agent .share-take {
     margin-bottom: 18pt;
     border: 0;
     border-radius: 0;
     background: #fff;
     box-shadow: none;
+    overflow: visible;
+    break-inside: auto;
+  }
+
+  .share-landing--agent .share-take--question {
     break-inside: avoid;
   }
 
-  .share-take__rail {
+  .share-landing--agent .share-take__rail {
     height: 2px;
     print-color-adjust: exact;
   }
 
-  .share-take__body {
+  .share-landing--agent .share-take__body {
     padding: 10pt 0 0;
   }
 
-  .share-take__head {
+  .share-landing--agent .share-take__head {
     margin-bottom: 9pt;
+    break-after: avoid;
   }
 
-  .share-take__name,
-  .share-take__prompt,
-  .share-take__answer {
+  .share-landing--agent .share-take__name,
+  .share-landing--agent .share-take__prompt,
+  .share-landing--agent .share-take__answer {
     color: #171412;
   }
 
-  .share-take__answer {
+  .share-landing--agent .share-take__answer,
+  .share-landing--agent .share-take__answer * {
+    color: #171412 !important;
+  }
+
+  .share-landing--agent .share-take__answer {
     border-left-width: 2px;
     border-radius: 0;
     box-shadow: none;
+    break-inside: auto;
+  }
+
+  .share-landing--agent .share-take__answer [data-answer-outline] {
+    break-inside: avoid;
+  }
+
+  .share-landing--agent .share-take__answer h1,
+  .share-landing--agent .share-take__answer h2,
+  .share-landing--agent .share-take__answer h3,
+  .share-landing--agent .share-take__answer h4,
+  .share-landing--agent .share-take__answer h5,
+  .share-landing--agent .share-take__answer h6 {
+    break-after: avoid;
+  }
+
+  .share-landing--agent .share-take__answer p,
+  .share-landing--agent .share-take__answer li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  .share-landing--agent .share-take__answer a {
+    color: #6f4c31 !important;
+    text-decoration: underline;
+  }
+
+  .share-landing--agent .share-take__answer div {
+    overflow: visible !important;
+  }
+
+  .share-landing--agent .share-take__answer pre {
+    background: #f5efe6 !important;
+    border-color: #d8cec3 !important;
+    print-color-adjust: exact;
+  }
+
+  .share-landing--agent .share-take__answer table {
+    break-inside: auto;
+  }
+
+  .share-landing--agent .share-take__answer thead {
+    display: table-header-group;
+  }
+
+  .share-landing--agent .share-take__answer tr {
+    break-inside: avoid;
   }
 }
 

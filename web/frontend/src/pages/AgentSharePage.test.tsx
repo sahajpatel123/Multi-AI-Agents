@@ -463,6 +463,7 @@ describe('AgentSharePage', () => {
     renderShare();
     await screen.findByText('Is this report shareable?');
 
+    expect(document.querySelector('.share-landing--agent')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Print / Save PDF' }));
 
     expect(print).toHaveBeenCalledTimes(1);

@@ -403,6 +403,7 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
     <div>
       {readingLabel || showOutline ? (
         <div
+          data-answer-outline="true"
           style={{
             marginBottom: 14,
             padding: '10px 12px',

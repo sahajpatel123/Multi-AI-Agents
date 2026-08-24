@@ -332,7 +332,7 @@ export function AgentSharePage() {
       : null;
 
   return (
-    <div className="share-landing">
+    <div className="share-landing share-landing--agent">
       <div className="share-landing__orbs" aria-hidden="true">
         <div className="share-landing__orb share-landing__orb--a" />
         <div className="share-landing__orb share-landing__orb--b" />
