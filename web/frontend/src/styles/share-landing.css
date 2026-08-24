@@ -320,8 +320,33 @@
   border-top: 0.5px solid #e0d8d0;
 }
 
-.share-take__sources .share-take__label {
+.share-take__sources-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 8px;
+}
+
+.share-take__sources .share-take__label {
+  margin: 0;
+}
+
+.share-take__sources-copy {
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+
+.share-take__sources-copy.arena-btn--secondary.is-success {
+  color: #4f7a66;
+  border-color: rgba(138, 168, 153, 0.5);
+  background: rgba(232, 242, 236, 0.85);
+}
+
+.share-take__sources-copy.arena-btn--secondary.is-error {
+  color: #993c1d;
+  border-color: rgba(153, 60, 29, 0.45);
+  background: rgba(249, 236, 230, 0.85);
 }
 
 .share-take__sources-list {
@@ -485,6 +510,7 @@
   .share-landing--agent .site-footer,
   .share-landing--agent .share-landing__orbs,
   .share-landing--agent .share-take__tools,
+  .share-landing--agent .share-take__sources-copy,
   .share-landing--agent .share-take__ctas,
   .share-landing--agent .share-take__status,
   .share-landing--agent .share-take__error,

@@ -237,6 +237,40 @@ describe('AgentSharePage', () => {
     );
   });
 
+  it('copies the consulted sources without the full report', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
+      report({
+        sources: ['https://example.com/research', 'A published source'],
+      }),
+    );
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy sources' }));
+
+    expect(await screen.findByText('Sources copied')).toBeInTheDocument();
+    expect(copyToClipboard).toHaveBeenCalledWith(
+      'Sources consulted\n\n1. https://example.com/research\n2. A published source\n',
+    );
+    expect(copyToClipboard).not.toHaveBeenCalledWith(
+      expect.stringContaining('Yes, with a token and a public page.'),
+    );
+  });
+
+  it('shows an honest error when copying sources fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
+      report({ sources: ['https://example.com/research'] }),
+    );
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy sources' }));
+
+    expect(await screen.findByText(/could not copy the sources/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy sources failed' })).toBeInTheDocument();
+  });
+
   it('shows an honest error when the clipboard copy fails', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     vi.mocked(copyToClipboard).mockResolvedValueOnce(false);

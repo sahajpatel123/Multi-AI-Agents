@@ -52,6 +52,7 @@ export function AgentSharePage() {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [sourceCopyStatus, setSourceCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -59,14 +60,17 @@ export function AgentSharePage() {
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [nativeShareStatus, setNativeShareStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [sourceCopyError, setSourceCopyError] = useState<string | null>(null);
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [jsonDownloadError, setJsonDownloadError] = useState<string | null>(null);
   const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
+  const [sourceCopyInFlight, setSourceCopyInFlight] = useState(false);
   const [linkCopyInFlight, setLinkCopyInFlight] = useState(false);
   const [nativeShareInFlight, setNativeShareInFlight] = useState(false);
   const copyBusyRef = useRef(false);
+  const sourceCopyBusyRef = useRef(false);
   const linkCopyBusyRef = useRef(false);
   const nativeShareBusyRef = useRef(false);
   const nativeShareRequestRef = useRef(0);
@@ -84,12 +88,14 @@ export function AgentSharePage() {
     setNotFound(false);
     setReport(null);
     setCopyStatus('idle');
+    setSourceCopyStatus('idle');
     setLinkStatus('idle');
     setDownloadStatus('idle');
     setJsonDownloadStatus('idle');
     setJsonDownloadFeedbackKey(0);
     setNativeShareStatus('idle');
     setCopyError(null);
+    setSourceCopyError(null);
     setLinkCopyError(null);
     setDownloadError(null);
     setJsonDownloadError(null);
@@ -137,6 +143,27 @@ export function AgentSharePage() {
     [report],
   );
 
+  const publicSources = useMemo(
+    () =>
+      (report?.sources ?? [])
+        .map((source) => source.replace(/\s+/g, ' ').trim())
+        .filter(Boolean),
+    [report],
+  );
+
+  const sourceClipboardText = useMemo(
+    () =>
+      publicSources.length > 0
+        ? [
+            'Sources consulted',
+            '',
+            ...publicSources.map((source, index) => `${index + 1}. ${source}`),
+            '',
+          ].join('\n')
+        : '',
+    [publicSources],
+  );
+
   const pageUrl = typeof window === 'undefined' ? '' : window.location.href;
 
   const listenText = useMemo(
@@ -158,6 +185,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [copyStatus]);
+
+  useEffect(() => {
+    if (sourceCopyStatus === 'idle') return;
+    const hold = sourceCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setSourceCopyStatus('idle');
+      setSourceCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [sourceCopyStatus]);
 
   useEffect(() => {
     if (downloadStatus === 'idle') return;
@@ -222,6 +259,31 @@ export function AgentSharePage() {
     } finally {
       copyBusyRef.current = false;
       setCopyInFlight(false);
+    }
+  };
+
+  const handleCopySources = async () => {
+    if (sourceCopyBusyRef.current || !sourceClipboardText) return;
+    sourceCopyBusyRef.current = true;
+    setSourceCopyInFlight(true);
+    // Reset an existing result before retrying so every attempt gets a full
+    // feedback window, including repeated clicks on "Sources copied".
+    setSourceCopyStatus('idle');
+    setSourceCopyError(null);
+    try {
+      const ok = await copyToClipboard(sourceClipboardText);
+      if (ok) {
+        setSourceCopyStatus('copied');
+      } else {
+        setSourceCopyStatus('failed');
+        setSourceCopyError('Could not copy the sources — copy them manually from the list.');
+      }
+    } catch {
+      setSourceCopyStatus('failed');
+      setSourceCopyError('Could not copy the sources — copy them manually from the list.');
+    } finally {
+      sourceCopyBusyRef.current = false;
+      setSourceCopyInFlight(false);
     }
   };
 
@@ -433,11 +495,27 @@ export function AgentSharePage() {
                 <div className="share-take__section">
                   <p className="share-take__label">The report</p>
                   <AgentAnswerMarkdown markdown={report.answer} question={report.question} />
-                  {report.sources.length > 0 ? (
+                  {publicSources.length > 0 ? (
                     <section className="share-take__sources" aria-label="Sources consulted">
-                      <p className="share-take__label">Sources consulted</p>
+                      <div className="share-take__sources-head">
+                        <p className="share-take__label">Sources consulted</p>
+                        <button
+                          type="button"
+                          className={`share-take__sources-copy arena-btn arena-btn--secondary arena-btn--sm${sourceCopyStatus === 'copied' ? ' is-success' : ''}${sourceCopyStatus === 'failed' ? ' is-error' : ''}`}
+                          onClick={() => void handleCopySources()}
+                          disabled={sourceCopyInFlight}
+                        >
+                          {sourceCopyInFlight
+                            ? 'Copying…'
+                            : sourceCopyStatus === 'copied'
+                              ? 'Sources copied'
+                              : sourceCopyStatus === 'failed'
+                                ? 'Copy sources failed'
+                                : 'Copy sources'}
+                        </button>
+                      </div>
                       <ol className="share-take__sources-list">
-                        {report.sources.map((source, index) => {
+                        {publicSources.map((source, index) => {
                           const href = safeSourceHref(source);
                           return (
                             <li key={`${source}-${index}`}>
@@ -457,6 +535,11 @@ export function AgentSharePage() {
                   {copyError ? (
                     <p className="share-take__error" role="alert">
                       {copyError}
+                    </p>
+                  ) : null}
+                  {sourceCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {sourceCopyError}
                     </p>
                   ) : null}
                   {downloadError ? (
@@ -573,6 +656,7 @@ export function AgentSharePage() {
                   </div>
                   <span className="share-take__status" role="status" aria-live="polite">
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
+                    {sourceCopyStatus === 'copied' ? 'Sources copied to clipboard. ' : ''}
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
                     {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
