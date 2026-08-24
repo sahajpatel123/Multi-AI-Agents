@@ -237,6 +237,37 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'Report copied' })).toBeEnabled();
   });
 
+  it('starts a fresh feedback window when the link is copied again', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+      renderShare();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      const copyLink = () =>
+        fireEvent.click(screen.getByRole('button', { name: /^(Copy link|Link copied)$/ }));
+      copyLink();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole('button', { name: 'Link copied' })).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(1200));
+      copyLink();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      act(() => vi.advanceTimersByTime(500));
+      expect(screen.getByRole('button', { name: 'Link copied' })).toBeInTheDocument();
+      expect(copyToClipboard).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resets copy feedback and clears the error after the feedback window', async () => {
     vi.useFakeTimers();
     try {

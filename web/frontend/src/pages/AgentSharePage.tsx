@@ -176,6 +176,11 @@ export function AgentSharePage() {
     if (linkCopyBusyRef.current || !report) return;
     linkCopyBusyRef.current = true;
     setLinkCopyInFlight(true);
+    // Reset an existing result before retrying so the feedback effect can
+    // start a fresh timer when the new copy attempt completes. Without this,
+    // clicking "Link copied" again reuses the old timer and can clear the
+    // second result almost immediately.
+    setLinkStatus('idle');
     setLinkCopyError(null);
     try {
       const ok = await copyToClipboard(pageUrl);
