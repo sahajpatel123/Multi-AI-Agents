@@ -32,11 +32,15 @@ export function AgentSharePage() {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
+  const [linkCopyInFlight, setLinkCopyInFlight] = useState(false);
   const copyBusyRef = useRef(false);
+  const linkCopyBusyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,8 +49,10 @@ export function AgentSharePage() {
     setNotFound(false);
     setReport(null);
     setCopyStatus('idle');
+    setLinkStatus('idle');
     setDownloadStatus('idle');
     setCopyError(null);
+    setLinkCopyError(null);
     setDownloadError(null);
     getPublicAgentReport(token)
       .then((data) => {
@@ -89,6 +95,8 @@ export function AgentSharePage() {
     [report],
   );
 
+  const pageUrl = typeof window === 'undefined' ? '' : window.location.href;
+
   const listenText = useMemo(
     () => (report ? [report.question, report.answer].filter(Boolean).join('\n\n') : ''),
     [report],
@@ -118,6 +126,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [downloadStatus]);
+
+  useEffect(() => {
+    if (linkStatus === 'idle') return;
+    const hold = linkStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setLinkStatus('idle');
+      setLinkCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [linkStatus]);
 
   const handleCopyReport = async () => {
     if (copyBusyRef.current || !report) return;
@@ -151,6 +169,28 @@ export function AgentSharePage() {
     } else {
       setDownloadStatus('failed');
       setDownloadError('Could not download the report — try Copy report instead.');
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (linkCopyBusyRef.current || !report) return;
+    linkCopyBusyRef.current = true;
+    setLinkCopyInFlight(true);
+    setLinkCopyError(null);
+    try {
+      const ok = await copyToClipboard(pageUrl);
+      if (ok) {
+        setLinkStatus('copied');
+      } else {
+        setLinkStatus('failed');
+        setLinkCopyError('Could not copy the link — copy it from the address bar instead.');
+      }
+    } catch {
+      setLinkStatus('failed');
+      setLinkCopyError('Could not copy the link — copy it from the address bar instead.');
+    } finally {
+      linkCopyBusyRef.current = false;
+      setLinkCopyInFlight(false);
     }
   };
 
@@ -261,6 +301,11 @@ export function AgentSharePage() {
                       {downloadError}
                     </p>
                   ) : null}
+                  {linkCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {linkCopyError}
+                    </p>
+                  ) : null}
                   <div className="share-take__tools">
                     <div className="share-take__listen">
                       <ReadAloudButton
@@ -295,9 +340,24 @@ export function AgentSharePage() {
                           ? 'Download failed'
                           : 'Download .md'}
                     </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${linkStatus === 'copied' ? ' is-success' : ''}${linkStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyLink()}
+                      disabled={linkCopyInFlight}
+                    >
+                      {linkCopyInFlight
+                        ? 'Copying…'
+                        : linkStatus === 'copied'
+                          ? 'Link copied'
+                          : linkStatus === 'failed'
+                            ? 'Link copy failed'
+                            : 'Copy link'}
+                    </button>
                   </div>
                   <span className="share-take__status" role="status" aria-live="polite">
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
+                    {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
                   </span>
                 </div>

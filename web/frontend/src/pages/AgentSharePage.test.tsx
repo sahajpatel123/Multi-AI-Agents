@@ -104,6 +104,7 @@ describe('AgentSharePage', () => {
     expect(screen.getByText(/Confidence 75%/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /run your own research/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /read report aloud/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
   });
 
   it('tracks reading a shared Agent report aloud', async () => {
@@ -179,6 +180,27 @@ describe('AgentSharePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy report' }));
     expect(await screen.findByText(/could not copy the report/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy failed' })).toBeInTheDocument();
+  });
+
+  it('copies the public report URL to the clipboard', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(await screen.findByText('Link copied')).toBeInTheDocument();
+    expect(copyToClipboard).toHaveBeenCalledWith(window.location.href);
+  });
+
+  it('shows an honest error when copying the public link fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(
+      await screen.findByText(/could not copy the link.*address bar/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Link copy failed' })).toBeInTheDocument();
   });
 
   it('reports failure when the clipboard call throws', async () => {
