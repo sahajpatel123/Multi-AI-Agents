@@ -6,6 +6,7 @@ import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import track from '../utils/track';
 
 vi.mock('../api', () => ({
   getPublicAgentReport: vi.fn(),
@@ -29,6 +30,24 @@ vi.mock('../lib/clipboard', () => ({
 
 vi.mock('../lib/downloadTextFile', () => ({
   downloadMarkdownFile: vi.fn(),
+}));
+
+vi.mock('../utils/track', () => ({
+  default: vi.fn(),
+}));
+
+vi.mock('../components/ReadAloudButton', () => ({
+  ReadAloudButton: ({
+    label = 'Read this take aloud',
+    onStart,
+  }: {
+    label?: string;
+    onStart?: () => void;
+  }) => (
+    <button type="button" aria-label={label} onClick={onStart}>
+      {label}
+    </button>
+  ),
 }));
 
 vi.mock('../components/Navbar', () => ({
@@ -84,6 +103,17 @@ describe('AgentSharePage', () => {
     expect(screen.getByText(/Score 84/)).toBeInTheDocument();
     expect(screen.getByText(/Confidence 75%/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /run your own research/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /read report aloud/i })).toBeInTheDocument();
+  });
+
+  it('tracks reading a shared Agent report aloud', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: /read report aloud/i }));
+
+    expect(track).toHaveBeenCalledWith('shared_read_aloud');
   });
 
   it('falls back to the question as the report title when title is missing', async () => {

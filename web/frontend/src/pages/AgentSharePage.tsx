@@ -6,6 +6,7 @@ import { EmptyState } from '../components/EmptyState';
 import { MotionButton } from '../components/MotionButton';
 import MicroLoader from '../components/MicroLoader';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
+import { ReadAloudButton } from '../components/ReadAloudButton';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
@@ -14,6 +15,7 @@ import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentT
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { formatIsoWhen } from '../lib/relativeTime';
+import track from '../utils/track';
 import '../styles/share-landing.css';
 
 /**
@@ -84,6 +86,11 @@ export function AgentSharePage() {
             answer: report.answer || '',
           })
         : '',
+    [report],
+  );
+
+  const listenText = useMemo(
+    () => (report ? [report.question, report.answer].filter(Boolean).join('\n\n') : ''),
     [report],
   );
 
@@ -255,6 +262,14 @@ export function AgentSharePage() {
                     </p>
                   ) : null}
                   <div className="share-take__tools">
+                    <div className="share-take__listen">
+                      <ReadAloudButton
+                        text={listenText}
+                        label="Read report aloud"
+                        onStart={() => void track('shared_read_aloud')}
+                      />
+                      <span aria-hidden="true">Listen</span>
+                    </div>
                     <button
                       type="button"
                       className={`arena-btn arena-btn--secondary arena-btn--sm${copyStatus === 'copied' ? ' is-success' : ''}${copyStatus === 'failed' ? ' is-error' : ''}`}
