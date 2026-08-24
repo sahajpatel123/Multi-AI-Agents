@@ -430,6 +430,80 @@
   }
 }
 
+@media print {
+  @page {
+    margin: 16mm 14mm;
+  }
+
+  .share-landing {
+    min-height: auto;
+    background: #fff;
+    color: #171412;
+  }
+
+  .share-landing [data-public-prism-nav],
+  .share-landing .site-footer,
+  .share-landing__orbs,
+  .share-take__tools,
+  .share-take__ctas,
+  .share-take__status {
+    display: none !important;
+  }
+
+  .share-landing__main {
+    max-width: none;
+    padding: 0;
+  }
+
+  .share-landing__title {
+    margin-bottom: 18pt;
+    color: #171412;
+    font-size: 24pt;
+  }
+
+  .share-landing__title em {
+    color: #6f4c31;
+  }
+
+  .share-round {
+    display: block;
+  }
+
+  .share-take {
+    margin-bottom: 18pt;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  .share-take__rail {
+    height: 2px;
+    print-color-adjust: exact;
+  }
+
+  .share-take__body {
+    padding: 10pt 0 0;
+  }
+
+  .share-take__head {
+    margin-bottom: 9pt;
+  }
+
+  .share-take__name,
+  .share-take__prompt,
+  .share-take__answer {
+    color: #171412;
+  }
+
+  .share-take__answer {
+    border-left-width: 2px;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
 @media (max-width: 480px) {
   .share-landing__main {
     padding-left: 16px;

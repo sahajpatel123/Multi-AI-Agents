@@ -94,11 +94,16 @@ function NavigateToReport({ token }: { token: string }) {
 
 describe('AgentSharePage', () => {
   const originalNavigatorShare = navigator.share;
+  const originalWindowPrint = window.print;
 
   afterEach(() => {
     Object.defineProperty(navigator, 'share', {
       configurable: true,
       value: originalNavigatorShare,
+    });
+    Object.defineProperty(window, 'print', {
+      configurable: true,
+      value: originalWindowPrint,
     });
   });
 
@@ -449,6 +454,18 @@ describe('AgentSharePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Download .json' }));
     expect(await screen.findByText(/could not download the JSON report/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'JSON download failed' })).toBeInTheDocument();
+  });
+
+  it('opens the browser print dialog for a shared report', async () => {
+    const print = vi.fn();
+    Object.defineProperty(window, 'print', { configurable: true, value: print });
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Print / Save PDF' }));
+
+    expect(print).toHaveBeenCalledTimes(1);
   });
 
   it('starts a fresh feedback window when the JSON report is downloaded again', async () => {

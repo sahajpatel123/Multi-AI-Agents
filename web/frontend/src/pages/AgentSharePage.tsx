@@ -254,6 +254,11 @@ export function AgentSharePage() {
     }
   };
 
+  const handlePrintReport = () => {
+    if (!report || typeof window === 'undefined' || typeof window.print !== 'function') return;
+    window.print();
+  };
+
   const handleCopyLink = async () => {
     if (linkCopyBusyRef.current || !report) return;
     linkCopyBusyRef.current = true;
@@ -477,6 +482,13 @@ export function AgentSharePage() {
                         : jsonDownloadStatus === 'failed'
                           ? 'JSON download failed'
                           : 'Download .json'}
+                    </button>
+                    <button
+                      type="button"
+                      className="arena-btn arena-btn--secondary arena-btn--sm"
+                      onClick={handlePrintReport}
+                    >
+                      Print / Save PDF
                     </button>
                     <button
                       type="button"
