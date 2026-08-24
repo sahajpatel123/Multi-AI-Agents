@@ -3,7 +3,7 @@
 fastapi==0.139.2
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
-pydantic-settings==2.5.2
+pydantic-settings==2.15.0
 email-validator==2.3.0
 
 # Anthropic — v1 (2026-07) raised the Python floor to 3.10 and removed
