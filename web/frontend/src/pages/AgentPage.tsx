@@ -234,6 +234,7 @@ import {
   loadPromptDraft,
   savePromptDraft,
 } from '../lib/promptDraft';
+import { takeAgentPrefillQuestion } from '../lib/agentPrefill';
 import {
   roomCreateButtonLabel,
   roomCreateCaughtErrorMessage,
@@ -1344,14 +1345,11 @@ export function AgentPage() {
   }, [result?.status, result?.task_id, user, loadMyRooms]);
 
   useEffect(() => {
-    try {
-      const prefill = sessionStorage.getItem('arena_prefill_question');
-      if (prefill) {
-        setTask(prefill);
-        sessionStorage.removeItem('arena_prefill_question');
-      }
-    } catch { /* ignore */ }
-  }, []);
+    const prefill = takeAgentPrefillQuestion({
+      hasExplicitTask: searchParams.has('task_id') || searchParams.has('q'),
+    });
+    if (prefill) setTask(prefill);
+  }, [searchParams]);
 
   // Restore idle compose draft after q/prefill effects (do not clobber deep links).
   useEffect(() => {

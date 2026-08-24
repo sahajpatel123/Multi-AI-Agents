@@ -15,6 +15,7 @@ import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentT
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { formatIsoWhen } from '../lib/relativeTime';
+import { saveAgentPrefillQuestion } from '../lib/agentPrefill';
 import {
   buildNativeShareData,
   canUseNativeShare,
@@ -333,20 +334,9 @@ export function AgentSharePage() {
   };
 
   const goAgent = () => {
-    // Keep the shared question in the same short-lived handoff used by Room
-    // contradiction actions. AgentPage consumes it once on mount, so the CTA
-    // remains useful even when a guest must pass through sign-in first.
-    try {
-      const question = report?.question?.trim();
-      if (question) {
-        sessionStorage.setItem('arena_prefill_question', question);
-      } else {
-        sessionStorage.removeItem('arena_prefill_question');
-      }
-    } catch {
-      // Private browsing or storage policy can make sessionStorage unavailable;
-      // navigation should still work and the user can paste the question.
-    }
+    // AgentPage consumes this one-shot handoff after a guest passes through
+    // sign-in. The helper also bounds public payloads to the Agent limit.
+    saveAgentPrefillQuestion(report?.question);
     if (isAuthenticated) {
       navigate('/agent');
       return;
