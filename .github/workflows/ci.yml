@@ -134,7 +134,10 @@ jobs:
         run: python scripts/check_security_floors.py
 
       - name: Secret scan (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
+        # v3 moves the action off the Node 20 runtime GitHub is force-upgrading
+        # (v2 logged "Node.js 20 is deprecated" on every run). Same env contract:
+        # GITLEAKS_CONFIG + GITHUB_TOKEN work unchanged.
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml

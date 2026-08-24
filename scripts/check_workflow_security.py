@@ -59,9 +59,12 @@ ACTION_MINIMUM_TAGS = {
     "actions/checkout": 7,
     "actions/setup-python": 6,
     "actions/setup-node": 7,
-    "actions/upload-artifact": 4,
+    # Both workflows are aligned on v7 (Node-24 runtime); a downgrade back
+    # to v4 would reintroduce the deprecated Node 20 target.
+    "actions/upload-artifact": 7,
     "actions/dependency-review-action": 5,
-    "gitleaks/gitleaks-action": 2,
+    # v3 moved off the force-upgraded Node 20 runtime (v2 warned every run).
+    "gitleaks/gitleaks-action": 3,
     "github/codeql-action": 4,
 }
 
