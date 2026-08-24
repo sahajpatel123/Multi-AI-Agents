@@ -16,6 +16,7 @@ import {
 import { ScoredAgent, AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
 import { AgentAnswerMarkdown } from './AgentAnswerMarkdown';
+import { ReadAloudButton } from './ReadAloudButton';
 import { ShareDropdown } from './ShareDropdown';
 import {
   arenaFullTakeExpandable,
@@ -553,6 +554,11 @@ export function AgentCard({
               active={copyFeedbackActive}
               activeColor="#F0B84E"
               ariaLabel="Copy full take as markdown"
+            />
+            <ReadAloudButton
+              text={fullTakeBody}
+              label={`Read ${resolvedDisplay.name} take aloud`}
+              onStart={() => void track('response_read_aloud', displayPersonaId, agentId)}
             />
             <ActionButton
               icon={<ThumbsUp style={{ width: '15px', height: '15px', fill: isLiked ? 'currentColor' : 'none' }} />}
