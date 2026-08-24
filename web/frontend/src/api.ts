@@ -4512,7 +4512,11 @@ export async function deleteRoom(slug: string): Promise<void> {
   const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}`, { method: 'DELETE' });
   if (!response.ok) {
     const data = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(data || {}, 'Could not delete room'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data || {}, 'Could not delete room'), response),
+      response.status,
+      data,
+    );
   }
 }
 
