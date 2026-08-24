@@ -198,7 +198,17 @@
   transform: translateY(-10px);
   background: var(--carbon);
   color: var(--ivory);
-  transition: opacity 0.3s var(--ease), transform 0.3s var(--ease), visibility 0.3s;
+  /* Closing: fade out first, flip visibility only once the 0.3s fade has
+     played (delayed zero-duration transition). Opening (see .open) flips
+     visibility INSTANTLY — with `visibility 0.3s` here the menu stayed
+     visibility:hidden for ~300ms after the class flip, and the Navbar's
+     move-focus-to-close-button call silently no-oped on hidden elements,
+     leaving keyboard users trapped on the trigger (caught by the privacy
+     page's menu focus-trap E2E on its first-ever run). */
+  transition:
+    opacity 0.3s var(--ease),
+    transform 0.3s var(--ease),
+    visibility 0s linear 0.3s;
   pointer-events: none;
 }
 
@@ -207,6 +217,10 @@
   opacity: 1;
   transform: none;
   pointer-events: auto;
+  transition:
+    opacity 0.3s var(--ease),
+    transform 0.3s var(--ease),
+    visibility 0s;
 }
 
 .vp-public-menu .vp-menu-close {
