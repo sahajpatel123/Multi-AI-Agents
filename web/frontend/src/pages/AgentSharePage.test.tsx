@@ -136,7 +136,12 @@ describe('AgentSharePage', () => {
   it('renders safe source references and links only web URLs', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
       report({
-        sources: ['https://example.com/research', 'A published source', 'javascript:alert(1)'],
+        sources: [
+          'https://example.com/research',
+          'A published source',
+          'javascript:alert(1)',
+          `https://example.com/${'x'.repeat(240)}…`,
+        ],
       }),
     );
     renderShare();
@@ -149,6 +154,9 @@ describe('AgentSharePage', () => {
     expect(screen.getByText('A published source')).toBeInTheDocument();
     expect(screen.getByText('javascript:alert(1)')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'javascript:alert(1)' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: `https://example.com/${'x'.repeat(240)}…` }),
+    ).not.toBeInTheDocument();
   });
 
   it('tracks reading a shared Agent report aloud', async () => {

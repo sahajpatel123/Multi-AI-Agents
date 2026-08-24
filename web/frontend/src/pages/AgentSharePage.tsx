@@ -25,7 +25,10 @@ import '../styles/share-landing.css';
 
 function safeSourceHref(source: string): string | null {
   const value = source.trim();
-  if (!/^https?:\/\//i.test(value)) return null;
+  // The public API appends an ellipsis when it bounds an oversized source.
+  // Keep that display value as text: linking it would navigate to an
+  // incomplete URL and make a truncated reference look authoritative.
+  if (!/^https?:\/\//i.test(value) || value.endsWith('…')) return null;
   try {
     const url = new URL(value);
     return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
