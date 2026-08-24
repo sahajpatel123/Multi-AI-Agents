@@ -117,7 +117,9 @@ jobs:
         # database can contain user PII, hashed passwords, and tokens; it is
         # also gitignored so it would only appear on a local release runner.
         # Ship migration files instead if schema snapshots are ever needed.
-        uses: actions/upload-artifact@v4
+        # v7 to match ci.yml's Playwright-report upload (dependabot PR #12);
+        # v4 predates the Node-24 runtime and is on its deprecation path.
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets
           path: |
