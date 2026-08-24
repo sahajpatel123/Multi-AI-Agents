@@ -124,6 +124,26 @@ export function downloadJsonFile(
 }
 
 /**
+ * Download CSV with the same dated filename behavior as the other text
+ * exports. Keeping this wrapper in one place gives callers a spreadsheet MIME
+ * type without duplicating filename handling.
+ */
+export function downloadCsvFile(
+  content: string,
+  filenameStem: string,
+  opts?: { dated?: boolean; date?: Date },
+): boolean {
+  const dated = opts?.dated !== false;
+  const stem = dated
+    ? withDownloadDate(filenameStem, opts?.date, 'arena-export')
+    : sanitizeDownloadFilename(filenameStem, 'arena-export');
+  return downloadTextFile(content, {
+    filename: `${stem}.csv`,
+    mimeType: 'text/csv;charset=utf-8',
+  });
+}
+
+/**
  * Trigger client-side download of a Blob (e.g. CSV file from backend stream).
  * Safe no-op when document/window is unavailable.
  */

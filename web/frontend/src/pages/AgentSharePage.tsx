@@ -9,7 +9,7 @@ import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { ReadAloudButton } from '../components/ReadAloudButton';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadCsvFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentTitle';
 import { setRedirectIntent } from '../utils/redirectIntent';
@@ -38,6 +38,22 @@ function safeSourceHref(source: string): string | null {
   }
 }
 
+function formatSourceCsv(sources: readonly string[]): string {
+  const escapeCell = (raw: string) => {
+    // Quote every cell for consistent parsing, and neutralize formula-like
+    // source text so opening a public report in a spreadsheet cannot execute
+    // an accidental formula.
+    const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
+
+  return [
+    `${escapeCell('source_number')},${escapeCell('source')}`,
+    ...sources.map((source, index) => `${escapeCell(String(index + 1))},${escapeCell(source)}`),
+    '',
+  ].join('\r\n');
+}
+
 /**
  * Public landing for shared Agent Mode reports (/share/agent/:token).
  * Renders only the sanitized payload the backend publishes — no user or
@@ -57,6 +73,8 @@ export function AgentSharePage() {
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadFeedbackKey, setJsonDownloadFeedbackKey] = useState(0);
+  const [csvDownloadStatus, setCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [csvDownloadFeedbackKey, setCsvDownloadFeedbackKey] = useState(0);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [nativeShareStatus, setNativeShareStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -64,6 +82,7 @@ export function AgentSharePage() {
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [jsonDownloadError, setJsonDownloadError] = useState<string | null>(null);
+  const [csvDownloadError, setCsvDownloadError] = useState<string | null>(null);
   const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
   const [sourceCopyInFlight, setSourceCopyInFlight] = useState(false);
@@ -97,12 +116,15 @@ export function AgentSharePage() {
     setDownloadStatus('idle');
     setJsonDownloadStatus('idle');
     setJsonDownloadFeedbackKey(0);
+    setCsvDownloadStatus('idle');
+    setCsvDownloadFeedbackKey(0);
     setNativeShareStatus('idle');
     setCopyError(null);
     setSourceCopyError(null);
     setLinkCopyError(null);
     setDownloadError(null);
     setJsonDownloadError(null);
+    setCsvDownloadError(null);
     setNativeShareError(null);
     getPublicAgentReport(token)
       .then((data) => {
@@ -169,6 +191,11 @@ export function AgentSharePage() {
     [publicSources],
   );
 
+  const sourceCsvText = useMemo(
+    () => (publicSources.length > 0 ? formatSourceCsv(publicSources) : ''),
+    [publicSources],
+  );
+
   const pageUrl = typeof window === 'undefined' ? '' : window.location.href;
 
   const listenText = useMemo(
@@ -220,6 +247,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [jsonDownloadFeedbackKey, jsonDownloadStatus]);
+
+  useEffect(() => {
+    if (csvDownloadStatus === 'idle') return;
+    const hold = csvDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setCsvDownloadStatus('idle');
+      setCsvDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [csvDownloadFeedbackKey, csvDownloadStatus]);
 
   useEffect(() => {
     if (linkStatus === 'idle') return;
@@ -340,6 +377,22 @@ export function AgentSharePage() {
     } else {
       setJsonDownloadStatus('failed');
       setJsonDownloadError('Could not download the JSON report — try Download .md instead.');
+    }
+  };
+
+  const handleDownloadSourcesCsv = () => {
+    if (!report || !sourceCsvText) return;
+    setCsvDownloadError(null);
+    // Keep repeated synchronous downloads observable even when the status
+    // remains "done" so the feedback timer restarts for every click.
+    setCsvDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-sources-${(report.title || report.question || 'report').slice(0, 40)}`;
+    const ok = downloadCsvFile(sourceCsvText, stem);
+    if (ok) {
+      setCsvDownloadStatus('done');
+    } else {
+      setCsvDownloadStatus('failed');
+      setCsvDownloadError('Could not download the sources CSV — try Copy sources instead.');
     }
   };
 
@@ -523,6 +576,17 @@ export function AgentSharePage() {
                                 ? 'Copy sources failed'
                                 : 'Copy sources'}
                         </button>
+                        <button
+                          type="button"
+                          className={`share-take__sources-copy arena-btn arena-btn--secondary arena-btn--sm${csvDownloadStatus === 'done' ? ' is-success' : ''}${csvDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                          onClick={handleDownloadSourcesCsv}
+                        >
+                          {csvDownloadStatus === 'done'
+                            ? 'Sources CSV downloaded'
+                            : csvDownloadStatus === 'failed'
+                              ? 'Sources CSV failed'
+                              : 'Download sources .csv'}
+                        </button>
                       </div>
                       <ol className="share-take__sources-list">
                         {publicSources.map((source, index) => {
@@ -560,6 +624,11 @@ export function AgentSharePage() {
                   {jsonDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {jsonDownloadError}
+                    </p>
+                  ) : null}
+                  {csvDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {csvDownloadError}
                     </p>
                   ) : null}
                   {linkCopyError ? (
@@ -670,6 +739,7 @@ export function AgentSharePage() {
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
                     {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
+                    {csvDownloadStatus === 'done' ? 'Sources downloaded as CSV.' : ''}
                     {nativeShareStatus === 'shared' ? 'Report shared using the system share sheet.' : ''}
                   </span>
                 </div>

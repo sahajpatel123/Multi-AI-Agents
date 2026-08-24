@@ -5,7 +5,7 @@ import { AgentSharePage } from './AgentSharePage';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadCsvFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import track from '../utils/track';
 
 vi.mock('../api', () => ({
@@ -29,6 +29,7 @@ vi.mock('../lib/clipboard', () => ({
 }));
 
 vi.mock('../lib/downloadTextFile', () => ({
+  downloadCsvFile: vi.fn(),
   downloadJsonFile: vi.fn(),
   downloadMarkdownFile: vi.fn(),
 }));
@@ -120,6 +121,7 @@ describe('AgentSharePage', () => {
     vi.mocked(copyToClipboard).mockResolvedValue(true);
     vi.mocked(downloadJsonFile).mockReturnValue(true);
     vi.mocked(downloadMarkdownFile).mockReturnValue(true);
+    vi.mocked(downloadCsvFile).mockReturnValue(true);
   });
 
   it('renders a shared report question and answer', async () => {
@@ -269,6 +271,43 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/could not copy the sources/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy sources failed' })).toBeInTheDocument();
+  });
+
+  it('downloads consulted sources as escaped CSV without report text', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
+      report({
+        sources: ['https://example.com/research', 'A "quoted", source', '=unsafe-source'],
+      }),
+    );
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download sources .csv' }));
+
+    expect(await screen.findByText('Sources CSV downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadCsvFile).mock.calls[0] ?? [];
+    expect(filename).toEqual(expect.stringContaining('agent-share-sources-'));
+    expect(content).toBe(
+      '"source_number","source"\r\n' +
+        '"1","https://example.com/research"\r\n' +
+        '"2","A ""quoted"", source"\r\n' +
+        '"3","\'=unsafe-source"\r\n',
+    );
+    expect(content).not.toContain('Yes, with a token and a public page.');
+  });
+
+  it('shows an honest error when downloading sources as CSV fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
+      report({ sources: ['https://example.com/research'] }),
+    );
+    vi.mocked(downloadCsvFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download sources .csv' }));
+
+    expect(await screen.findByText(/could not download the sources CSV/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sources CSV failed' })).toBeInTheDocument();
   });
 
   it('does not apply a stale source copy result after navigating to another report', async () => {

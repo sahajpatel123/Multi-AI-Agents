@@ -323,6 +323,7 @@
 .share-take__sources-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 8px;
