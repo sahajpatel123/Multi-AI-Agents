@@ -320,6 +320,25 @@
   gap: 8px;
 }
 
+.share-take__listen {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 30px;
+  padding: 0 10px 0 4px;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 999px;
+  background: rgba(240, 235, 227, 0.65);
+  color: #7b6a5f;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.share-take__listen:focus-within {
+  outline: 2px solid rgba(196, 149, 106, 0.62);
+  outline-offset: 2px;
+}
+
 .share-take__tools .arena-btn {
   border-radius: 999px;
 }

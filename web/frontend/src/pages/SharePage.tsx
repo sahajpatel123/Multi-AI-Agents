@@ -5,6 +5,7 @@ import { Footer } from '../components/Footer';
 import { EmptyState } from '../components/EmptyState';
 import { MotionButton } from '../components/MotionButton';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
+import { ReadAloudButton } from '../components/ReadAloudButton';
 import { AGENTS } from '../types';
 import { isCollapsiblePrompt } from '../lib/collapsiblePrompt';
 import { PERSONAS } from '../data/personas';
@@ -25,6 +26,7 @@ import {
 } from '../lib/shareUrl';
 import { formatRoundShareText, parseRoundShareUrl } from '../lib/roundShare';
 import { saveSharedArenaPrompt } from '../lib/sharePrompt';
+import track from '../utils/track';
 import '../styles/share-landing.css';
 
 const MAX_PARAM_LEN = 2000;
@@ -94,6 +96,15 @@ export function SharePage() {
 
   const hasContent = roundRequested ? Boolean(round) : Boolean(response || prompt);
   const displayPrompt = isRound && round ? round.prompt : prompt;
+  const listenText =
+    isRound && round
+      ? formatRoundShareText({
+          prompt: round.prompt,
+          takes: round.takes,
+          resolveAgentName: (id) => resolveAgent(id).name,
+        })
+      : response || agent.oneLiner;
+  const listenLabel = isRound ? 'Read this round aloud' : 'Read this take aloud';
 
   // Prefer mind name (then prompt) in the tab so shared links are scannable in multitasking.
   useEffect(() => {
@@ -402,6 +413,19 @@ export function SharePage() {
                 ) : null}
 
                 <div className="share-take__tools">
+                  <div className="share-take__listen">
+                    <ReadAloudButton
+                      text={listenText}
+                      label={listenLabel}
+                      onStart={() =>
+                        void track(
+                          'shared_read_aloud',
+                          isRound ? undefined : agentId || undefined,
+                        )
+                      }
+                    />
+                    <span aria-hidden="true">Listen</span>
+                  </div>
                   <button
                     type="button"
                     className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'take' ? ' is-success' : ''}`}

@@ -76,6 +76,7 @@ describe('SharePage', () => {
     expect(screen.getByText('Should I ship today?')).toBeInTheDocument();
     expect(screen.getByText('Ship the smallest honest slice.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try this in arena/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /read this take aloud/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy take/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
   });
@@ -98,6 +99,7 @@ describe('SharePage', () => {
     expect(screen.getByText('Enough is when desire ends.')).toBeInTheDocument();
     expect(screen.getAllByText(/Arena take/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Arena winner')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /read this round aloud/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy round/i })).toBeInTheDocument();
   });
 
