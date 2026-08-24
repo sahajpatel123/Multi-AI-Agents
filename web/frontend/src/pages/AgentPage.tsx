@@ -40,6 +40,7 @@ import {
   getAgentSavedTask,
   getAgentStatus,
   getAgentTaskAnswerFeedback,
+  getRateLimitDetail,
   getAgentTemplates,
   getMcpIntegrations,
   getCalibrationRatingForTask,
@@ -62,6 +63,7 @@ import {
   type TaskAnswerFeedback,
 } from '../api';
 import { ConduraInstallCTA } from '../components/ConduraInstallCTA';
+import { RateLimitNotice } from '../components/RateLimitNotice';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { EmptyState } from '../components/EmptyState';
 import { PromptPipelineStatus } from '../components/PromptPipelineStatus';
@@ -793,6 +795,7 @@ export function AgentPage() {
   const activeTaskIdRef = useRef<string | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimit, setRateLimit] = useState<ReturnType<typeof getRateLimitDetail>>(null);
   const [errorCopied, setErrorCopied] = useState(false);
   const [conduraCtaOpen, setConduraCtaOpen] = useState(false);
   const [conduraCtaMessage, setConduraCtaMessage] = useState(
@@ -1723,6 +1726,7 @@ export function AgentPage() {
     activeTaskIdRef.current = null;
     const generation = ++runGenerationRef.current;
     setError(null);
+    setRateLimit(null);
     setBridgeMeta(null);
     if (isMobile) setSidebarOpen(false);
     setResult(null);
@@ -1807,8 +1811,11 @@ export function AgentPage() {
         setIsRefining(false);
         return;
       }
-      if (e instanceof ApiError && e.status === 429) {
-        setError('Daily limit reached. Resets at midnight UTC.');
+      const rateLimitDetail =
+        e instanceof ApiError && e.status === 429 ? getRateLimitDetail(e.detail) : null;
+      if (rateLimitDetail) {
+        setRateLimit(rateLimitDetail);
+        setError(null);
       } else {
         setError(e instanceof Error ? e.message : 'Agent task failed');
       }
@@ -7352,6 +7359,17 @@ export function AgentPage() {
                 </div>
               </>
             )}
+
+            {rateLimit ? (
+              <RateLimitNotice
+                detail={rateLimit}
+                onDismiss={() => setRateLimit(null)}
+                onRefresh={async () => {
+                  await refreshTier();
+                  setRateLimit(null);
+                }}
+              />
+            ) : null}
 
             {error ? (
               <div

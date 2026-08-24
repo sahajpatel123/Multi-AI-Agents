@@ -21,6 +21,7 @@ import { CrossPollinateBanner } from './components/CrossPollinateBanner';
 import { PerspectiveComparison } from './components/PerspectiveComparison';
 import { AgentAnswerMarkdown } from './components/AgentAnswerMarkdown';
 import {
+  ApiError,
   streamPrompt,
   streamDiscuss,
   getSession,
@@ -44,6 +45,7 @@ import {
   verifyArenaAnswerInAgent,
   extractStreamingPreview,
   suggestFollowUps,
+  getRateLimitDetail,
 } from './api';
 import type { SessionSummary } from './api';
 import { copyToClipboard } from './lib/clipboard';
@@ -125,6 +127,7 @@ import {
 } from './lib/keyboardShortcuts';
 import { bulkSaveNotice, unsavedTakes } from './lib/arenaSavedTakes';
 import { RecentPromptChips } from './components/RecentPromptChips';
+import { RateLimitNotice } from './components/RateLimitNotice';
 import { usePanel } from './context/PanelContext';
 import { useTier } from './context/TierContext';
 import { useProfileModal } from './context/ProfileModalContext';
@@ -220,6 +223,7 @@ function App() {
   const [animateCurrentResponseBars, setAnimateCurrentResponseBars] = useState(false);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimit, setRateLimit] = useState<ReturnType<typeof getRateLimitDetail>>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [hasSubmittedPrompt, setHasSubmittedPrompt] = useState(false);
   // A question handed off from a shared round/take landing pre-fills the
@@ -2079,6 +2083,7 @@ function App() {
     // Reset all state
     setPhase('pipeline');
     setError(null);
+    setRateLimit(null);
     setResponse(null);
     setCurrentResponses(null);
     setAnimateCurrentResponseBars(false);
@@ -2238,6 +2243,7 @@ function App() {
           if (flushTimer.current) clearInterval(flushTimer.current);
           setStreamPreviews({});
           setFollowUpSuggestions([]);
+          setRateLimit(null);
           const base = data.message || data.detail || 'Something went wrong';
           const rid = lastRequestIdRef.current;
           setError(rid ? `${base} (Request ID: ${rid})` : base);
@@ -2252,6 +2258,14 @@ function App() {
         setPhase((prev) => (prev === 'pipeline' || prev === 'streaming' || prev === 'scoring' ? 'idle' : prev));
         return;
       }
+      const rateLimitDetail =
+        err instanceof ApiError && err.status === 429
+          ? getRateLimitDetail(err.detail)
+          : null;
+      if (rateLimitDetail) {
+        setRateLimit(rateLimitDetail);
+        setError(null);
+      }
       const msg = err instanceof Error ? err.message : 'Something went wrong';
       const rid = lastRequestIdRef.current;
       if (err instanceof DOMException && err.name === 'AbortError') {
@@ -2262,7 +2276,7 @@ function App() {
         setPhase((prev) => (prev === 'pipeline' || prev === 'streaming' || prev === 'scoring' ? 'idle' : prev));
         return;
       }
-      setError(rid ? `${msg} (Request ID: ${rid})` : msg);
+      if (!rateLimitDetail) setError(rid ? `${msg} (Request ID: ${rid})` : msg);
       setPhase('idle');
     }
   };
@@ -3174,6 +3188,20 @@ function App() {
               {/* Current Prompt Display (when active) */}
               {currentPrompt && phase !== 'idle' && (
                 <CollapsiblePrompt text={currentPrompt} />
+              )}
+
+              {rateLimit && (
+                <RateLimitNotice
+                  detail={rateLimit}
+                  onDismiss={() => setRateLimit(null)}
+                  onRefresh={async () => {
+                    await refreshTier();
+                    setRateLimit(null);
+                  }}
+                  onUpgrade={isFree ? () => showPlusUpgrade(
+                    'You have used today’s Arena messages. Upgrade for more headroom before the next reset.',
+                  ) : undefined}
+                />
               )}
 
               {/* Error */}

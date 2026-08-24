@@ -43,6 +43,50 @@ export class ApiError extends Error {
   }
 }
 
+/** The structured payload returned when a daily message/token budget is spent. */
+export type RateLimitDetail = {
+  error: 'rate_limit_exceeded' | 'daily_limit_reached';
+  message: string;
+  resets_at: string | null;
+  retry_after_seconds: number | null;
+};
+
+/**
+ * Extract the quota fields from either a FastAPI error envelope or its detail.
+ * Keeping this tolerant lets the UI consume older Agent responses while using
+ * the precise ``resets_at``/``retry_after_seconds`` contract on prompt routes.
+ */
+export function getRateLimitDetail(value: unknown): RateLimitDetail | null {
+  if (!value || typeof value !== 'object') return null;
+  const outer = value as Record<string, unknown>;
+  const raw =
+    outer.detail && typeof outer.detail === 'object'
+      ? (outer.detail as Record<string, unknown>)
+      : outer;
+  const error = raw.error;
+  if (error !== 'rate_limit_exceeded' && error !== 'daily_limit_reached') return null;
+
+  const message = typeof raw.message === 'string' && raw.message.trim()
+    ? raw.message.trim()
+    : 'Daily usage limit reached.';
+  const resetsAt = typeof raw.resets_at === 'string' && raw.resets_at.trim()
+    ? raw.resets_at.trim()
+    : null;
+  const retryAfter =
+    typeof raw.retry_after_seconds === 'number' &&
+    Number.isFinite(raw.retry_after_seconds) &&
+    raw.retry_after_seconds >= 0
+      ? Math.ceil(raw.retry_after_seconds)
+      : null;
+
+  return {
+    error,
+    message,
+    resets_at: resetsAt,
+    retry_after_seconds: retryAfter,
+  };
+}
+
 export class LocalExecutionRequiredError extends Error {
   status = 409;
   detail: {
@@ -919,7 +963,7 @@ export async function streamPrompt(
   if (!response.ok) {
     const error = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
     if (response.status === 429) {
-      throw new Error(
+      throw new ApiError(
         withRequestId(
           getErrorMessage(
             error,
@@ -927,6 +971,8 @@ export async function streamPrompt(
           ),
           response,
         ),
+        response.status,
+        error,
       );
     }
     if (response.status === 401 || response.status === 403) {
