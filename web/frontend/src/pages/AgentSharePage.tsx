@@ -15,6 +15,11 @@ import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentT
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { formatIsoWhen } from '../lib/relativeTime';
+import {
+  buildNativeShareData,
+  canUseNativeShare,
+  invokeNativeShare,
+} from '../lib/shareUrl';
 import track from '../utils/track';
 import '../styles/share-landing.css';
 
@@ -34,13 +39,18 @@ export function AgentSharePage() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
+  const [nativeShareStatus, setNativeShareStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
   const [copyError, setCopyError] = useState<string | null>(null);
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
   const [linkCopyInFlight, setLinkCopyInFlight] = useState(false);
+  const [nativeShareInFlight, setNativeShareInFlight] = useState(false);
   const copyBusyRef = useRef(false);
   const linkCopyBusyRef = useRef(false);
+  const nativeShareBusyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,9 +61,11 @@ export function AgentSharePage() {
     setCopyStatus('idle');
     setLinkStatus('idle');
     setDownloadStatus('idle');
+    setNativeShareStatus('idle');
     setCopyError(null);
     setLinkCopyError(null);
     setDownloadError(null);
+    setNativeShareError(null);
     getPublicAgentReport(token)
       .then((data) => {
         if (cancelled) return;
@@ -137,6 +149,20 @@ export function AgentSharePage() {
     return () => window.clearTimeout(t);
   }, [linkStatus]);
 
+  useEffect(() => {
+    setNativeShareAvailable(canUseNativeShare());
+  }, []);
+
+  useEffect(() => {
+    if (nativeShareStatus === 'idle') return;
+    const hold = nativeShareStatus === 'failed' ? 2800 : 2200;
+    const t = window.setTimeout(() => {
+      setNativeShareStatus('idle');
+      setNativeShareError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [nativeShareStatus]);
+
   const handleCopyReport = async () => {
     if (copyBusyRef.current || !report) return;
     copyBusyRef.current = true;
@@ -196,6 +222,32 @@ export function AgentSharePage() {
     } finally {
       linkCopyBusyRef.current = false;
       setLinkCopyInFlight(false);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    if (nativeShareBusyRef.current || !report) return;
+    nativeShareBusyRef.current = true;
+    setNativeShareInFlight(true);
+    setNativeShareStatus('idle');
+    setNativeShareError(null);
+    const data = buildNativeShareData({
+      agentName: report.title || 'Agent report',
+      oneLiner: report.question || report.answer || 'A completed Agent report on Arena.',
+      shareUrl: pageUrl,
+    });
+    try {
+      const result = await invokeNativeShare(data);
+      if (result === 'shared') {
+        setNativeShareStatus('shared');
+        void track('response_shared');
+      } else if (result === 'failed' || result === 'unavailable') {
+        setNativeShareStatus('failed');
+        setNativeShareError('Could not open system share — try Copy link instead.');
+      }
+    } finally {
+      nativeShareBusyRef.current = false;
+      setNativeShareInFlight(false);
     }
   };
 
@@ -311,6 +363,11 @@ export function AgentSharePage() {
                       {linkCopyError}
                     </p>
                   ) : null}
+                  {nativeShareError ? (
+                    <p className="share-take__error" role="alert">
+                      {nativeShareError}
+                    </p>
+                  ) : null}
                   <div className="share-take__tools">
                     <div className="share-take__listen">
                       <ReadAloudButton
@@ -359,11 +416,37 @@ export function AgentSharePage() {
                             ? 'Link copy failed'
                             : 'Copy link'}
                     </button>
+                    {nativeShareAvailable ? (
+                      <button
+                        type="button"
+                        aria-label={
+                          nativeShareInFlight
+                            ? 'Sharing report'
+                            : nativeShareStatus === 'shared'
+                              ? 'Shared!'
+                              : nativeShareStatus === 'failed'
+                                ? 'Share failed'
+                                : 'Share report'
+                        }
+                        className={`arena-btn arena-btn--secondary arena-btn--sm${nativeShareStatus === 'shared' ? ' is-success' : ''}${nativeShareStatus === 'failed' ? ' is-error' : ''}`}
+                        onClick={() => void handleNativeShare()}
+                        disabled={nativeShareInFlight}
+                      >
+                        {nativeShareInFlight
+                          ? 'Sharing…'
+                          : nativeShareStatus === 'shared'
+                            ? 'Shared!'
+                            : nativeShareStatus === 'failed'
+                              ? 'Share failed'
+                              : 'Share…'}
+                      </button>
+                    ) : null}
                   </div>
                   <span className="share-take__status" role="status" aria-live="polite">
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
+                    {nativeShareStatus === 'shared' ? 'Report shared using the system share sheet.' : ''}
                   </span>
                 </div>
                 <div className="share-take__ctas">

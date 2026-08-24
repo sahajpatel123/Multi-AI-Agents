@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AgentSharePage } from './AgentSharePage';
@@ -83,6 +83,15 @@ function renderShare(token = 'tok_1234567890abcdef') {
 }
 
 describe('AgentSharePage', () => {
+  const originalNavigatorShare = navigator.share;
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: originalNavigatorShare,
+    });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useAuth).mockImplementation(() => ({
@@ -201,6 +210,45 @@ describe('AgentSharePage', () => {
       await screen.findByText(/could not copy the link.*address bar/i),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Link copy failed' })).toBeInTheDocument();
+  });
+
+  it('opens the system share sheet for a public report when available', async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: share,
+    });
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Share report' }));
+
+    expect(await screen.findByRole('button', { name: 'Shared!' })).toBeInTheDocument();
+    expect(share).toHaveBeenCalledWith({
+      title: 'Shareable research on Arena',
+      text: '"Is this report shareable?" — Shareable research on Arena',
+      url: window.location.href,
+    });
+    expect(track).toHaveBeenCalledWith('response_shared');
+  });
+
+  it('keeps Copy link available when the system share sheet fails', async () => {
+    const share = vi.fn().mockRejectedValue(new Error('share blocked'));
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: share,
+    });
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Share report' }));
+
+    expect(await screen.findByText(/could not open system share/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share failed' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    expect(track).not.toHaveBeenCalledWith('response_shared');
   });
 
   it('reports failure when the clipboard call throws', async () => {
