@@ -47,9 +47,31 @@ title = "Multi-AI-Agents gitleaks config"
     '''sk-test-fake-key[^"\\]*''',
     '''sk-ant-test-key[^"\\]*''',  # test_allowed_origins_list.py / test_production_config.py
     '''sk-ant-test-key-not-real[^"\\]*''',  # test_config_no_startup_prints.py / test_production_config.py
-    '''sk-ant-test(?!-)[^"\\]*''',  # bare sk-ant-test (conftest/test_condura)
-    '''sk-test(?!-)[^"\\]*''',  # bare sk-test (test_condura, test_temporal, test_dissent)
+    # "bare sk-ant-test / sk-test, but NOT followed by -dash". Written WITHOUT
+    # negative lookahead: Go's regexp engine (every gitleaks v8 build) panics
+    # on `(?!` — "invalid or unsupported Perl syntax" — so the lookahead forms
+    # crashed local scans and the pinned pre-commit hook entirely. Equivalent
+    # portable shape: the optional tail must not start with '-', AND the match
+    # must reach the secret's end — otherwise the bare literal alone would
+    # substring-match inside sk-ant-test-fake-key… and allow it wrongly.
+    '''sk-ant-test(?:[^-"\\][^"\\]*)?(?:["']|$)''',
+    '''sk-test(?:[^-"\\][^"\\]*)?(?:["']|$)''',
     '''sk-ol-[*]+[a-f0-9]{4}''',  # OpenAI key shape from earlier captured payload
+  ]
+
+# Frontend share-page tests use fake share tokens shaped `tok_` + 16 lowercase
+# hex chars (tok_1234567890abcdef). Real share tokens are secrets.token_urlsafe(24)
+# — mixed case with -/_ and no prefix — so this shape can never mask a genuine
+# token leak. The short fixtures (tok_abc, tok_limit, tok_net) don't trip
+# generic-api-key on their own; the pattern covers them anyway in case a future
+# fixture grows.
+[[allowlists]]
+  description = "Frontend test fixtures — fake share tokens (tok_ + hex)"
+  paths = [
+    '''(^|/)web/frontend/src/.*\.test\.[tj]sx?$''',
+  ]
+  regexes = [
+    '''tok_[0-9a-f]{8,}''',
   ]
 
 # Frontend localStorage key names — short high-entropy strings that match
