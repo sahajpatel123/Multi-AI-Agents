@@ -71,6 +71,7 @@ export function AgentSharePage() {
   const [nativeShareInFlight, setNativeShareInFlight] = useState(false);
   const copyBusyRef = useRef(false);
   const sourceCopyBusyRef = useRef(false);
+  const sourceCopyRequestRef = useRef(0);
   const linkCopyBusyRef = useRef(false);
   const nativeShareBusyRef = useRef(false);
   const nativeShareRequestRef = useRef(0);
@@ -82,6 +83,9 @@ export function AgentSharePage() {
     nativeShareRequestRef.current += 1;
     nativeShareBusyRef.current = false;
     setNativeShareInFlight(false);
+    sourceCopyRequestRef.current += 1;
+    sourceCopyBusyRef.current = false;
+    setSourceCopyInFlight(false);
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -123,6 +127,7 @@ export function AgentSharePage() {
     return () => {
       cancelled = true;
       nativeShareRequestRef.current += 1;
+      sourceCopyRequestRef.current += 1;
     };
   }, [token]);
 
@@ -266,12 +271,14 @@ export function AgentSharePage() {
     if (sourceCopyBusyRef.current || !sourceClipboardText) return;
     sourceCopyBusyRef.current = true;
     setSourceCopyInFlight(true);
+    const requestId = sourceCopyRequestRef.current;
     // Reset an existing result before retrying so every attempt gets a full
     // feedback window, including repeated clicks on "Sources copied".
     setSourceCopyStatus('idle');
     setSourceCopyError(null);
     try {
       const ok = await copyToClipboard(sourceClipboardText);
+      if (sourceCopyRequestRef.current !== requestId) return;
       if (ok) {
         setSourceCopyStatus('copied');
       } else {
@@ -279,11 +286,14 @@ export function AgentSharePage() {
         setSourceCopyError('Could not copy the sources — copy them manually from the list.');
       }
     } catch {
+      if (sourceCopyRequestRef.current !== requestId) return;
       setSourceCopyStatus('failed');
       setSourceCopyError('Could not copy the sources — copy them manually from the list.');
     } finally {
-      sourceCopyBusyRef.current = false;
-      setSourceCopyInFlight(false);
+      if (sourceCopyRequestRef.current === requestId) {
+        sourceCopyBusyRef.current = false;
+        setSourceCopyInFlight(false);
+      }
     }
   };
 

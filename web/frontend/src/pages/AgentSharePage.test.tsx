@@ -271,6 +271,49 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'Copy sources failed' })).toBeInTheDocument();
   });
 
+  it('does not apply a stale source copy result after navigating to another report', async () => {
+    let finishCopy: ((ok: boolean) => void) | undefined;
+    vi.mocked(copyToClipboard).mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishCopy = resolve;
+        }),
+    );
+    vi.mocked(getPublicAgentReport).mockImplementation(async (requestedToken) =>
+      report({
+        token: requestedToken,
+        title: requestedToken === 'tok_next' ? 'Next report' : 'Current report',
+        question: requestedToken === 'tok_next' ? 'What comes next?' : 'What is current?',
+        sources: [`https://example.com/${requestedToken}`],
+      }),
+    );
+    render(
+      <MemoryRouter initialEntries={['/share/agent/tok_current']}>
+        <Routes>
+          <Route path="/share/agent/:token" element={<AgentSharePage />} />
+        </Routes>
+        <NavigateToReport token="tok_next" />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('What is current?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy sources' }));
+    expect(await screen.findByRole('button', { name: 'Copying…' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change report' }));
+    expect(await screen.findByText('What comes next?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy sources' })).toBeEnabled();
+
+    await act(async () => {
+      finishCopy?.(true);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: 'Copy sources' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sources copied' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Sources copied to clipboard.')).not.toBeInTheDocument();
+  });
+
   it('shows an honest error when the clipboard copy fails', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
