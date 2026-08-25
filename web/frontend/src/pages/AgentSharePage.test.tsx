@@ -239,6 +239,34 @@ describe('AgentSharePage', () => {
     );
   });
 
+  it('copies a compact citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy citation' }));
+
+    expect(await screen.findByText('Citation copied')).toBeInTheDocument();
+    const [citation] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
+    expect(citation).toContain(`[Shareable research](${window.location.href})`);
+    expect(citation).toContain('Question: Is this report shareable?');
+    expect(citation).toContain('Shared: 2026-08-14');
+    expect(citation).not.toContain('Yes, with a token and a public page.');
+    expect(citation).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when copying the citation fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy citation' }));
+
+    expect(await screen.findByText(/could not copy the citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy citation failed' })).toBeInTheDocument();
+  });
+
   it('copies the consulted sources without the full report', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
       report({

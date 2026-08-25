@@ -11,6 +11,7 @@ import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadCsvFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
+import { formatAgentReportCitation } from '../lib/agentReportCitation';
 import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentTitle';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
@@ -73,6 +74,7 @@ export function AgentSharePage() {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [citationCopyStatus, setCitationCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [sourceCopyStatus, setSourceCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -83,6 +85,7 @@ export function AgentSharePage() {
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [nativeShareStatus, setNativeShareStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [citationCopyError, setCitationCopyError] = useState<string | null>(null);
   const [sourceCopyError, setSourceCopyError] = useState<string | null>(null);
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -90,10 +93,13 @@ export function AgentSharePage() {
   const [csvDownloadError, setCsvDownloadError] = useState<string | null>(null);
   const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
+  const [citationCopyInFlight, setCitationCopyInFlight] = useState(false);
   const [sourceCopyInFlight, setSourceCopyInFlight] = useState(false);
   const [linkCopyInFlight, setLinkCopyInFlight] = useState(false);
   const [nativeShareInFlight, setNativeShareInFlight] = useState(false);
   const copyBusyRef = useRef(false);
+  const citationCopyBusyRef = useRef(false);
+  const citationCopyRequestRef = useRef(0);
   const sourceCopyBusyRef = useRef(false);
   const sourceCopyRequestRef = useRef(0);
   const linkCopyBusyRef = useRef(false);
@@ -107,6 +113,9 @@ export function AgentSharePage() {
     nativeShareRequestRef.current += 1;
     nativeShareBusyRef.current = false;
     setNativeShareInFlight(false);
+    citationCopyRequestRef.current += 1;
+    citationCopyBusyRef.current = false;
+    setCitationCopyInFlight(false);
     sourceCopyRequestRef.current += 1;
     sourceCopyBusyRef.current = false;
     setSourceCopyInFlight(false);
@@ -116,6 +125,7 @@ export function AgentSharePage() {
     setNotFound(false);
     setReport(null);
     setCopyStatus('idle');
+    setCitationCopyStatus('idle');
     setSourceCopyStatus('idle');
     setLinkStatus('idle');
     setDownloadStatus('idle');
@@ -125,6 +135,7 @@ export function AgentSharePage() {
     setCsvDownloadFeedbackKey(0);
     setNativeShareStatus('idle');
     setCopyError(null);
+    setCitationCopyError(null);
     setSourceCopyError(null);
     setLinkCopyError(null);
     setDownloadError(null);
@@ -154,6 +165,7 @@ export function AgentSharePage() {
     return () => {
       cancelled = true;
       nativeShareRequestRef.current += 1;
+      citationCopyRequestRef.current += 1;
       sourceCopyRequestRef.current += 1;
     };
   }, [token]);
@@ -203,6 +215,19 @@ export function AgentSharePage() {
 
   const pageUrl = typeof window === 'undefined' ? '' : window.location.href;
 
+  const citationText = useMemo(
+    () =>
+      report
+        ? formatAgentReportCitation({
+            title: report.title,
+            question: report.question,
+            url: pageUrl,
+            sharedAt: report.sharedAt,
+          })
+        : '',
+    [pageUrl, report],
+  );
+
   const listenText = useMemo(
     () => (report ? [report.question, report.answer].filter(Boolean).join('\n\n') : ''),
     [report],
@@ -222,6 +247,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [copyStatus]);
+
+  useEffect(() => {
+    if (citationCopyStatus === 'idle') return;
+    const hold = citationCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setCitationCopyStatus('idle');
+      setCitationCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [citationCopyStatus]);
 
   useEffect(() => {
     if (sourceCopyStatus === 'idle') return;
@@ -335,6 +370,34 @@ export function AgentSharePage() {
       if (sourceCopyRequestRef.current === requestId) {
         sourceCopyBusyRef.current = false;
         setSourceCopyInFlight(false);
+      }
+    }
+  };
+
+  const handleCopyCitation = async () => {
+    if (citationCopyBusyRef.current || !citationText) return;
+    citationCopyBusyRef.current = true;
+    setCitationCopyInFlight(true);
+    const requestId = ++citationCopyRequestRef.current;
+    setCitationCopyStatus('idle');
+    setCitationCopyError(null);
+    try {
+      const ok = await copyToClipboard(citationText);
+      if (citationCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setCitationCopyStatus('copied');
+      } else {
+        setCitationCopyStatus('failed');
+        setCitationCopyError('Could not copy the citation — copy it manually instead.');
+      }
+    } catch {
+      if (citationCopyRequestRef.current !== requestId) return;
+      setCitationCopyStatus('failed');
+      setCitationCopyError('Could not copy the citation — copy it manually instead.');
+    } finally {
+      if (citationCopyRequestRef.current === requestId) {
+        citationCopyBusyRef.current = false;
+        setCitationCopyInFlight(false);
       }
     }
   };
@@ -621,6 +684,11 @@ export function AgentSharePage() {
                       {sourceCopyError}
                     </p>
                   ) : null}
+                  {citationCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {citationCopyError}
+                    </p>
+                  ) : null}
                   {downloadError ? (
                     <p className="share-take__error" role="alert">
                       {downloadError}
@@ -668,6 +736,20 @@ export function AgentSharePage() {
                         : copyStatus === 'failed'
                           ? 'Copy failed'
                           : 'Copy report'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${citationCopyStatus === 'copied' ? ' is-success' : ''}${citationCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyCitation()}
+                      disabled={citationCopyInFlight}
+                    >
+                      {citationCopyInFlight
+                        ? 'Copying…'
+                        : citationCopyStatus === 'copied'
+                          ? 'Citation copied'
+                          : citationCopyStatus === 'failed'
+                            ? 'Copy citation failed'
+                            : 'Copy citation'}
                     </button>
                     <button
                       type="button"
@@ -740,6 +822,7 @@ export function AgentSharePage() {
                   </div>
                   <span className="share-take__status" role="status" aria-live="polite">
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
+                    {citationCopyStatus === 'copied' ? 'Citation copied to clipboard. ' : ''}
                     {sourceCopyStatus === 'copied' ? 'Sources copied to clipboard. ' : ''}
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
