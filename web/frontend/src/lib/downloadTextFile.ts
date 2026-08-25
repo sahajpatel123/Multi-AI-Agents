@@ -41,6 +41,26 @@ export function withDownloadDate(
   return `${base || fallback}-${suffix}`;
 }
 
+function revokeObjectUrl(url: string): void {
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    /* ignore cleanup failures */
+  }
+}
+
+function revokeObjectUrlAfterDownload(url: string): void {
+  try {
+    if (typeof globalThis.setTimeout === 'function') {
+      globalThis.setTimeout(() => revokeObjectUrl(url), 1500);
+      return;
+    }
+  } catch {
+    // Fall through to synchronous cleanup when the host timer is unavailable.
+  }
+  revokeObjectUrl(url);
+}
+
 /**
  * Download `content` as a file. Returns true when the browser accepted the trigger.
  */
@@ -58,30 +78,36 @@ export function downloadTextFile(
 
   const mime = (opts.mimeType || 'text/plain;charset=utf-8').trim() || 'text/plain;charset=utf-8';
 
+  let url: string | null = null;
+  let anchor: HTMLAnchorElement | null = null;
+  let appended = false;
   try {
     const blob = new Blob([text], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.rel = 'noopener';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    // Revoke after the browser has a chance to start the download. Use the
-    // global timer rather than requiring `window` so a DOM-backed renderer
-    // without a window object still reports the already-triggered download as
-    // successful.
-    globalThis.setTimeout(() => {
-      try {
-        URL.revokeObjectURL(url);
-      } catch {
-        /* ignore */
-      }
-    }, 1500);
+    url = URL.createObjectURL(blob);
+    anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = 'noopener';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    appended = true;
+    anchor.click();
+    document.body.removeChild(anchor);
+    appended = false;
+    // Revoke after the browser has a chance to start the download. If DOM
+    // setup or the click throws, the catch below revokes it immediately so a
+    // failed citation export cannot leave a blob URL behind.
+    revokeObjectUrlAfterDownload(url);
     return true;
   } catch {
+    if (appended && anchor) {
+      try {
+        document.body.removeChild(anchor);
+      } catch {
+        /* ignore secondary DOM cleanup failures */
+      }
+    }
+    if (url) revokeObjectUrl(url);
     return false;
   }
 }

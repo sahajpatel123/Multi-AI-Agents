@@ -70,6 +70,32 @@ describe('downloadTextFile', () => {
     expect(anchor.href).toBe('blob:mock');
   });
 
+  it('revokes the object URL and removes the anchor when clicking fails', () => {
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+
+    const anchor = {
+      href: '',
+      download: '',
+      rel: '',
+      style: { display: '' },
+      click: vi.fn(() => {
+        throw new Error('blocked download');
+      }),
+    };
+    const removeChild = vi.spyOn(document.body, 'removeChild').mockImplementation((node) => node);
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') return anchor as unknown as HTMLAnchorElement;
+      return document.createElementNS('http://www.w3.org/1999/xhtml', tag);
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((node) => node);
+
+    expect(downloadTextFile('citation', { filename: 'citation.txt' })).toBe(false);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock');
+    expect(removeChild).toHaveBeenCalledWith(anchor);
+  });
+
   it('returns false for empty content', () => {
     expect(downloadTextFile('', { filename: 'x.md' })).toBe(false);
   });

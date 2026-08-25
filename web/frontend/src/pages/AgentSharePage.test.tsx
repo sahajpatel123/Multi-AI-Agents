@@ -1005,6 +1005,39 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'MLA download failed' })).toBeInTheDocument();
   });
 
+  it('starts a fresh feedback window when the MLA citation is downloaded again', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+      renderShare();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      const downloadMla = () =>
+        fireEvent.click(
+          screen.getByRole('button', { name: /^(Download MLA|MLA downloaded)$/ }),
+        );
+      downloadMla();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole('button', { name: 'MLA downloaded' })).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(1500));
+      downloadMla();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => vi.advanceTimersByTime(1500));
+
+      expect(screen.getByRole('button', { name: 'MLA downloaded' })).toBeInTheDocument();
+      expect(downloadMlaFile).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('downloads a public IEEE citation without the report body or share token', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     renderShare();
