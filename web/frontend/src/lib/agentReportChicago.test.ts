@@ -25,8 +25,16 @@ describe('formatAgentReportChicago', () => {
       sharedAt: '2026-02-30T11:00:00Z',
     });
 
-    expect(result).toBe('Arena. “A ’useful’ report?” Arena Agent report.\n');
+    expect(result).toBe('Arena. “A ‘useful’ report?” Arena Agent report.\n');
     expect(result).not.toContain('javascript:');
+  });
+
+  it('keeps multiple nested quote pairs typographically balanced', () => {
+    expect(
+      formatAgentReportChicago({
+        title: 'The "first" and “second” finding',
+      }),
+    ).toBe('Arena. “The ‘first’ and ‘second’ finding.” Arena Agent report.\n');
   });
 
   it('rejects credential-bearing URLs and falls back to the question', () => {

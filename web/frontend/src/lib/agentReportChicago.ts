@@ -86,8 +86,17 @@ function safePublicUrl(raw: string | null | undefined): string {
 
 function quoteChicagoTitle(value: string): string {
   // Keep the entry structurally unambiguous when a public title contains
-  // straight or curly double quotes of its own.
-  const safeTitle = value.replace(/["“”]/g, '’');
+  // straight or curly double quotes of its own. Alternate the curly single
+  // marks for ASCII quotes because the opening mark is not interchangeable
+  // with the closing apostrophe.
+  let nestedQuoteOpen = true;
+  const safeTitle = value.replace(/["“”]/g, (mark) => {
+    if (mark === '“') return '‘';
+    if (mark === '”') return '’';
+    const replacement = nestedQuoteOpen ? '‘' : '’';
+    nestedQuoteOpen = !nestedQuoteOpen;
+    return replacement;
+  });
   const terminalPunctuation = /[.!?]$/.test(safeTitle) ? '' : '.';
   return `“${safeTitle}${terminalPunctuation}”`;
 }
