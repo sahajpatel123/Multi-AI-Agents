@@ -8,6 +8,7 @@ import { copyToClipboard } from '../lib/clipboard';
 import {
   downloadBibtexFile,
   downloadCsvFile,
+  downloadCslJsonFile,
   downloadJsonFile,
   downloadMarkdownFile,
   downloadRisFile,
@@ -37,6 +38,7 @@ vi.mock('../lib/clipboard', () => ({
 vi.mock('../lib/downloadTextFile', () => ({
   downloadBibtexFile: vi.fn(),
   downloadCsvFile: vi.fn(),
+  downloadCslJsonFile: vi.fn(),
   downloadJsonFile: vi.fn(),
   downloadMarkdownFile: vi.fn(),
   downloadRisFile: vi.fn(),
@@ -131,6 +133,7 @@ describe('AgentSharePage', () => {
     vi.mocked(downloadMarkdownFile).mockReturnValue(true);
     vi.mocked(downloadBibtexFile).mockReturnValue(true);
     vi.mocked(downloadCsvFile).mockReturnValue(true);
+    vi.mocked(downloadCslJsonFile).mockReturnValue(true);
     vi.mocked(downloadRisFile).mockReturnValue(true);
   });
 
@@ -768,6 +771,35 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/could not download the RIS citation/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'RIS download failed' })).toBeInTheDocument();
+  });
+
+  it('downloads a public CSL-JSON citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download .csl.json' }));
+
+    expect(await screen.findByText('CSL-JSON downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadCslJsonFile).mock.calls[0] ?? [];
+    expect(content).toContain('"type": "webpage"');
+    expect(content).toContain('"title": "Shareable research"');
+    expect(content).toContain('Question: Is this report shareable?');
+    expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the CSL-JSON download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadCslJsonFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download .csl.json' }));
+
+    expect(await screen.findByText(/could not download the CSL-JSON citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'CSL-JSON download failed' })).toBeInTheDocument();
   });
 
   it('opens the browser print dialog for a shared report', async () => {

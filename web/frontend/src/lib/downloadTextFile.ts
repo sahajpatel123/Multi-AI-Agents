@@ -124,6 +124,25 @@ export function downloadJsonFile(
 }
 
 /**
+ * Download a CSL-JSON citation with a reference-manager-friendly extension
+ * and MIME type.
+ */
+export function downloadCslJsonFile(
+  content: string,
+  filenameStem: string,
+  opts?: { dated?: boolean; date?: Date },
+): boolean {
+  const dated = opts?.dated !== false;
+  const stem = dated
+    ? withDownloadDate(filenameStem, opts?.date, 'arena-export')
+    : sanitizeDownloadFilename(filenameStem, 'arena-export');
+  return downloadTextFile(content, {
+    filename: `${stem}.csl.json`,
+    mimeType: 'application/vnd.citationstyles.csl+json;charset=utf-8',
+  });
+}
+
+/**
  * Download CSV with the same dated filename behavior as the other text
  * exports. Keeping this wrapper in one place gives callers a spreadsheet MIME
  * type without duplicating filename handling.
