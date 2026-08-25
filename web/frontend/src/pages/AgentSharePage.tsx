@@ -8,7 +8,7 @@ import MicroLoader from '../components/MicroLoader';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { ReadAloudButton } from '../components/ReadAloudButton';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
-import { copyJsonToClipboard, copyToClipboard } from '../lib/clipboard';
+import { copyJsonToClipboard, copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
   downloadAmaFile,
   downloadApaFile,
@@ -1102,7 +1102,9 @@ export function AgentSharePage() {
     setAnswerCopyStatus('idle');
     setAnswerCopyError(null);
     try {
-      const ok = await copyToClipboard(report.answer);
+      // Keep the answer-only action Markdown-aware while retaining the exact
+      // answer text as the plain-text clipboard representation.
+      const ok = await copyMarkdownToClipboard(report.answer);
       if (answerCopyRequestRef.current !== requestId) return;
       if (ok) {
         setAnswerCopyStatus('copied');

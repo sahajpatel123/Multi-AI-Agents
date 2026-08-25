@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { AgentSharePage } from './AgentSharePage';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
-import { copyJsonToClipboard, copyToClipboard } from '../lib/clipboard';
+import { copyJsonToClipboard, copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
   downloadAmaFile,
   downloadApaFile,
@@ -44,6 +44,7 @@ vi.mock('../hooks/useAuth', () => ({
 
 vi.mock('../lib/clipboard', () => ({
   copyJsonToClipboard: vi.fn(),
+  copyMarkdownToClipboard: vi.fn(),
   copyToClipboard: vi.fn(),
 }));
 
@@ -152,6 +153,7 @@ describe('AgentSharePage', () => {
       isLoading: false,
     }));
     vi.mocked(copyToClipboard).mockResolvedValue(true);
+    vi.mocked(copyMarkdownToClipboard).mockResolvedValue(true);
     vi.mocked(copyJsonToClipboard).mockResolvedValue(true);
     vi.mocked(downloadJsonFile).mockReturnValue(true);
     vi.mocked(downloadHtmlFile).mockReturnValue(true);
@@ -295,13 +297,17 @@ describe('AgentSharePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy answer' }));
 
     expect(await screen.findByText('Answer copied')).toBeInTheDocument();
-    expect(copyToClipboard).toHaveBeenCalledWith('Yes, with a token and a public page.');
-    expect(copyToClipboard).not.toHaveBeenCalledWith(expect.stringContaining('Is this report shareable?'));
+    expect(copyMarkdownToClipboard).toHaveBeenCalledWith(
+      'Yes, with a token and a public page.',
+    );
+    expect(copyToClipboard).not.toHaveBeenCalledWith(
+      expect.stringContaining('Yes, with a token and a public page.'),
+    );
   });
 
   it('shows an honest error when copying only the answer fails', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
-    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    vi.mocked(copyMarkdownToClipboard).mockResolvedValueOnce(false);
     renderShare();
     await screen.findByText('Is this report shareable?');
 
