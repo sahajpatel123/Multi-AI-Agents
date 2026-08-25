@@ -69,6 +69,12 @@ function safePublicUrl(raw: string | null | undefined): string {
     // Never copy credentials into a citation, even if this helper is reused
     // with a URL other than the current browser location.
     if (url.username || url.password) return '';
+    // Keep the formatter provenance-only even when it is called outside the
+    // share page. Query strings and fragments can contain tracking values,
+    // private state, or one-off client navigation that should not become part
+    // of a stable bibliography entry.
+    url.search = '';
+    url.hash = '';
     return url.href;
   } catch {
     return '';

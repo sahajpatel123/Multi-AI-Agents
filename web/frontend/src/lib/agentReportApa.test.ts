@@ -26,4 +26,16 @@ describe('formatAgentReportApa', () => {
       }),
     ).toBe('Arena. (n.d.). A report [AI-generated research report]. Arena.\n');
   });
+
+  it('keeps tracking parameters and fragments out of the public URL', () => {
+    expect(
+      formatAgentReportApa({
+        title: 'Stable report',
+        url: 'https://arena.example/share/agent/public-report?utm_source=copy&session=private#draft',
+      }),
+    ).toBe(
+      'Arena. (n.d.). Stable report [AI-generated research report]. Arena. ' +
+        'https://arena.example/share/agent/public-report\n',
+    );
+  });
 });
