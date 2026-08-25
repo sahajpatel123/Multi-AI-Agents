@@ -25,6 +25,7 @@ import { formatAgentReportBibtex } from '../lib/agentReportBibtex';
 import { formatAgentReportApa } from '../lib/agentReportApa';
 import { formatAgentReportChicago } from '../lib/agentReportChicago';
 import { formatAgentReportCitation } from '../lib/agentReportCitation';
+import { formatAgentReportCitationBundle } from '../lib/agentReportCitationBundle';
 import { formatAgentReportCslJson } from '../lib/agentReportCslJson';
 import { formatAgentReportIeee } from '../lib/agentReportIeee';
 import { formatAgentReportMla } from '../lib/agentReportMla';
@@ -94,6 +95,7 @@ export function AgentSharePage() {
   const [bibtexCopyStatus, setBibtexCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [cslJsonCopyStatus, setCslJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [citationCopyStatus, setCitationCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [bundleCopyStatus, setBundleCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [apaCopyStatus, setApaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [chicagoCopyStatus, setChicagoCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [mlaCopyStatus, setMlaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -124,6 +126,7 @@ export function AgentSharePage() {
   const [bibtexCopyError, setBibtexCopyError] = useState<string | null>(null);
   const [cslJsonCopyError, setCslJsonCopyError] = useState<string | null>(null);
   const [citationCopyError, setCitationCopyError] = useState<string | null>(null);
+  const [bundleCopyError, setBundleCopyError] = useState<string | null>(null);
   const [apaCopyError, setApaCopyError] = useState<string | null>(null);
   const [chicagoCopyError, setChicagoCopyError] = useState<string | null>(null);
   const [mlaCopyError, setMlaCopyError] = useState<string | null>(null);
@@ -145,6 +148,7 @@ export function AgentSharePage() {
   const [bibtexCopyInFlight, setBibtexCopyInFlight] = useState(false);
   const [cslJsonCopyInFlight, setCslJsonCopyInFlight] = useState(false);
   const [citationCopyInFlight, setCitationCopyInFlight] = useState(false);
+  const [bundleCopyInFlight, setBundleCopyInFlight] = useState(false);
   const [apaCopyInFlight, setApaCopyInFlight] = useState(false);
   const [chicagoCopyInFlight, setChicagoCopyInFlight] = useState(false);
   const [mlaCopyInFlight, setMlaCopyInFlight] = useState(false);
@@ -159,6 +163,8 @@ export function AgentSharePage() {
   const cslJsonCopyBusyRef = useRef(false);
   const cslJsonCopyRequestRef = useRef(0);
   const citationCopyBusyRef = useRef(false);
+  const bundleCopyBusyRef = useRef(false);
+  const bundleCopyRequestRef = useRef(0);
   const citationCopyRequestRef = useRef(0);
   const apaCopyBusyRef = useRef(false);
   const apaCopyRequestRef = useRef(0);
@@ -192,6 +198,9 @@ export function AgentSharePage() {
     citationCopyRequestRef.current += 1;
     citationCopyBusyRef.current = false;
     setCitationCopyInFlight(false);
+    bundleCopyRequestRef.current += 1;
+    bundleCopyBusyRef.current = false;
+    setBundleCopyInFlight(false);
     apaCopyRequestRef.current += 1;
     apaCopyBusyRef.current = false;
     setApaCopyInFlight(false);
@@ -219,6 +228,7 @@ export function AgentSharePage() {
     setBibtexCopyStatus('idle');
     setCslJsonCopyStatus('idle');
     setCitationCopyStatus('idle');
+    setBundleCopyStatus('idle');
     setApaCopyStatus('idle');
     setChicagoCopyStatus('idle');
     setMlaCopyStatus('idle');
@@ -248,6 +258,7 @@ export function AgentSharePage() {
     setBibtexCopyError(null);
     setCslJsonCopyError(null);
     setCitationCopyError(null);
+    setBundleCopyError(null);
     setApaCopyError(null);
     setChicagoCopyError(null);
     setMlaCopyError(null);
@@ -291,6 +302,7 @@ export function AgentSharePage() {
       bibtexCopyRequestRef.current += 1;
       cslJsonCopyRequestRef.current += 1;
       citationCopyRequestRef.current += 1;
+      bundleCopyRequestRef.current += 1;
       apaCopyRequestRef.current += 1;
       chicagoCopyRequestRef.current += 1;
       mlaCopyRequestRef.current += 1;
@@ -424,6 +436,19 @@ export function AgentSharePage() {
     [citationUrl, report],
   );
 
+  const bundleText = useMemo(
+    () =>
+      report
+        ? formatAgentReportCitationBundle({
+            title: report.title,
+            question: report.question,
+            url: citationUrl,
+            sharedAt: report.sharedAt,
+          })
+        : '',
+    [citationUrl, report],
+  );
+
   const bibtexText = useMemo(
     () =>
       report
@@ -492,6 +517,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [citationCopyStatus]);
+
+  useEffect(() => {
+    if (bundleCopyStatus === 'idle') return;
+    const hold = bundleCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setBundleCopyStatus('idle');
+      setBundleCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [bundleCopyStatus]);
 
   useEffect(() => {
     if (bibtexCopyStatus === 'idle') return;
@@ -763,6 +798,34 @@ export function AgentSharePage() {
       if (citationCopyRequestRef.current === requestId) {
         citationCopyBusyRef.current = false;
         setCitationCopyInFlight(false);
+      }
+    }
+  };
+
+  const handleCopyCitationBundle = async () => {
+    if (bundleCopyBusyRef.current || !bundleText) return;
+    bundleCopyBusyRef.current = true;
+    setBundleCopyInFlight(true);
+    const requestId = ++bundleCopyRequestRef.current;
+    setBundleCopyStatus('idle');
+    setBundleCopyError(null);
+    try {
+      const ok = await copyToClipboard(bundleText);
+      if (bundleCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setBundleCopyStatus('copied');
+      } else {
+        setBundleCopyStatus('failed');
+        setBundleCopyError('Could not copy the citation bundle — copy each style instead.');
+      }
+    } catch {
+      if (bundleCopyRequestRef.current !== requestId) return;
+      setBundleCopyStatus('failed');
+      setBundleCopyError('Could not copy the citation bundle — copy each style instead.');
+    } finally {
+      if (bundleCopyRequestRef.current === requestId) {
+        bundleCopyBusyRef.current = false;
+        setBundleCopyInFlight(false);
       }
     }
   };
@@ -1347,6 +1410,11 @@ export function AgentSharePage() {
                       {citationCopyError}
                     </p>
                   ) : null}
+                  {bundleCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {bundleCopyError}
+                    </p>
+                  ) : null}
                   {apaCopyError ? (
                     <p className="share-take__error" role="alert">
                       {apaCopyError}
@@ -1463,6 +1531,20 @@ export function AgentSharePage() {
                           : citationCopyStatus === 'failed'
                             ? 'Copy citation failed'
                         : 'Copy citation'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${bundleCopyStatus === 'copied' ? ' is-success' : ''}${bundleCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyCitationBundle()}
+                      disabled={bundleCopyInFlight}
+                    >
+                      {bundleCopyInFlight
+                        ? 'Copying…'
+                        : bundleCopyStatus === 'copied'
+                          ? 'All citations copied'
+                          : bundleCopyStatus === 'failed'
+                            ? 'Copy all failed'
+                            : 'Copy all citations'}
                     </button>
                     <button
                       type="button"
@@ -1700,6 +1782,7 @@ export function AgentSharePage() {
                   <span className="share-take__status" role="status" aria-live="polite">
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
                     {citationCopyStatus === 'copied' ? 'Citation copied to clipboard. ' : ''}
+                    {bundleCopyStatus === 'copied' ? 'APA, Chicago, IEEE, and MLA citations copied. ' : ''}
                     {apaCopyStatus === 'copied' ? 'APA citation copied to clipboard. ' : ''}
                     {chicagoCopyStatus === 'copied' ? 'Chicago citation copied to clipboard. ' : ''}
                     {mlaCopyStatus === 'copied' ? 'MLA citation copied to clipboard. ' : ''}
