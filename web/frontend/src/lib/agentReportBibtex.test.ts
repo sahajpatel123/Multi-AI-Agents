@@ -72,6 +72,18 @@ describe('formatAgentReportBibtex', () => {
     expect(bibtex).toContain('@misc{arena_private_url_undated_1cutwlh,');
   });
 
+  it('omits impossible shared dates instead of emitting misleading metadata', () => {
+    const bibtex = formatAgentReportBibtex({
+      title: 'Undated report',
+      sharedAt: '2026-02-30T11:00:00Z',
+    });
+
+    expect(bibtex).not.toContain('year = {');
+    expect(bibtex).not.toContain('date = {');
+    expect(bibtex).toContain('title = {Undated report},');
+    expect(bibtex).toContain('note = {Arena Agent report.},');
+  });
+
   it('flattens control and directional marks before BibTeX escaping', () => {
     const bibtex = formatAgentReportBibtex({
       title: 'A\u202Emode\u0007report',

@@ -21,7 +21,34 @@ function normalizeBibtexText(raw: string | null | undefined, max = 240): string 
 }
 
 function bibtexDate(raw: string | null | undefined): string {
-  return normalizeBibtexText(raw, 80).match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '';
+  const match = normalizeBibtexText(raw, 80).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return '';
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const daysInMonth = [
+    31,
+    year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+
+  // Keep malformed timestamps from becoming misleading BibTeX metadata.
+  // RIS and CSL-JSON apply the same calendar validation for this bundle.
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth[month - 1]) {
+    return '';
+  }
+
+  return `${match[1]}-${match[2]}-${match[3]}`;
 }
 
 function safePublicUrl(raw: string | null | undefined): string {

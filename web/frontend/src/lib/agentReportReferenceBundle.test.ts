@@ -35,7 +35,7 @@ describe('formatAgentReportReferenceBundle', () => {
       ...sharedOpts,
       title: 'A‮mode\u0007report',
       url: undefined,
-      sharedAt: 'not-a-date',
+      sharedAt: '2026-02-30T11:00:00Z',
     });
 
     expect(bundle).not.toMatch(/[\u061c\u200b\u200e\u200f\u202a-\u202e]/);
@@ -46,6 +46,10 @@ describe('formatAgentReportReferenceBundle', () => {
       }),
     ).toBe(false);
     expect(bundle.match(/A mode report/g)).toHaveLength(3);
+    expect(bundle).not.toContain('year = {2026}');
+    expect(bundle).not.toContain('date = {2026-02-30}');
+    expect(bundle).not.toContain('PY  - 2026');
+    expect(bundle).not.toContain('"issued"');
     expect(bundle.endsWith('\n')).toBe(true);
     expect(bundle).not.toMatch(/\n{3,}/);
   });
