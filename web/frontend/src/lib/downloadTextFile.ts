@@ -144,6 +144,26 @@ export function downloadCsvFile(
 }
 
 /**
+ * Download a BibTeX citation with a citation-manager-friendly extension and
+ * MIME type. Keeping this alongside the other text exports prevents callers
+ * from duplicating dated filename handling.
+ */
+export function downloadBibtexFile(
+  content: string,
+  filenameStem: string,
+  opts?: { dated?: boolean; date?: Date },
+): boolean {
+  const dated = opts?.dated !== false;
+  const stem = dated
+    ? withDownloadDate(filenameStem, opts?.date, 'arena-export')
+    : sanitizeDownloadFilename(filenameStem, 'arena-export');
+  return downloadTextFile(content, {
+    filename: `${stem}.bib`,
+    mimeType: 'application/x-bibtex;charset=utf-8',
+  });
+}
+
+/**
  * Trigger client-side download of a Blob (e.g. CSV file from backend stream).
  * Safe no-op when document/window is unavailable.
  */

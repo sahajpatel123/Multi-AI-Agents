@@ -9,7 +9,12 @@ import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { ReadAloudButton } from '../components/ReadAloudButton';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadCsvFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
+import {
+  downloadBibtexFile,
+  downloadCsvFile,
+  downloadJsonFile,
+  downloadMarkdownFile,
+} from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { formatAgentReportBibtex } from '../lib/agentReportBibtex';
 import { formatAgentReportCitation } from '../lib/agentReportCitation';
@@ -82,6 +87,8 @@ export function AgentSharePage() {
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadFeedbackKey, setJsonDownloadFeedbackKey] = useState(0);
+  const [bibtexDownloadStatus, setBibtexDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [bibtexDownloadFeedbackKey, setBibtexDownloadFeedbackKey] = useState(0);
   const [csvDownloadStatus, setCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [csvDownloadFeedbackKey, setCsvDownloadFeedbackKey] = useState(0);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
@@ -93,6 +100,7 @@ export function AgentSharePage() {
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [jsonDownloadError, setJsonDownloadError] = useState<string | null>(null);
+  const [bibtexDownloadError, setBibtexDownloadError] = useState<string | null>(null);
   const [csvDownloadError, setCsvDownloadError] = useState<string | null>(null);
   const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
@@ -141,6 +149,8 @@ export function AgentSharePage() {
     setDownloadStatus('idle');
     setJsonDownloadStatus('idle');
     setJsonDownloadFeedbackKey(0);
+    setBibtexDownloadStatus('idle');
+    setBibtexDownloadFeedbackKey(0);
     setCsvDownloadStatus('idle');
     setCsvDownloadFeedbackKey(0);
     setNativeShareStatus('idle');
@@ -151,6 +161,7 @@ export function AgentSharePage() {
     setLinkCopyError(null);
     setDownloadError(null);
     setJsonDownloadError(null);
+    setBibtexDownloadError(null);
     setCsvDownloadError(null);
     setNativeShareError(null);
     getPublicAgentReport(token)
@@ -322,6 +333,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [jsonDownloadFeedbackKey, jsonDownloadStatus]);
+
+  useEffect(() => {
+    if (bibtexDownloadStatus === 'idle') return;
+    const hold = bibtexDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setBibtexDownloadStatus('idle');
+      setBibtexDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [bibtexDownloadFeedbackKey, bibtexDownloadStatus]);
 
   useEffect(() => {
     if (csvDownloadStatus === 'idle') return;
@@ -508,6 +529,22 @@ export function AgentSharePage() {
     } else {
       setJsonDownloadStatus('failed');
       setJsonDownloadError('Could not download the JSON report — try Download .md instead.');
+    }
+  };
+
+  const handleDownloadBibtex = () => {
+    if (!report || !bibtexText) return;
+    setBibtexDownloadError(null);
+    // Bump the key so repeated synchronous downloads restart their feedback
+    // window even when the status remains "done".
+    setBibtexDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}`;
+    const ok = downloadBibtexFile(bibtexText, stem);
+    if (ok) {
+      setBibtexDownloadStatus('done');
+    } else {
+      setBibtexDownloadStatus('failed');
+      setBibtexDownloadError('Could not download the BibTeX citation — try Copy BibTeX instead.');
     }
   };
 
@@ -767,6 +804,11 @@ export function AgentSharePage() {
                       {jsonDownloadError}
                     </p>
                   ) : null}
+                  {bibtexDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {bibtexDownloadError}
+                    </p>
+                  ) : null}
                   {csvDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {csvDownloadError}
@@ -832,6 +874,17 @@ export function AgentSharePage() {
                           : bibtexCopyStatus === 'failed'
                             ? 'Copy BibTeX failed'
                             : 'Copy BibTeX'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${bibtexDownloadStatus === 'done' ? ' is-success' : ''}${bibtexDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadBibtex}
+                    >
+                      {bibtexDownloadStatus === 'done'
+                        ? 'BibTeX downloaded'
+                        : bibtexDownloadStatus === 'failed'
+                          ? 'BibTeX download failed'
+                          : 'Download .bib'}
                     </button>
                     <button
                       type="button"
@@ -910,6 +963,7 @@ export function AgentSharePage() {
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
                     {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
+                    {bibtexDownloadStatus === 'done' ? 'BibTeX citation downloaded.' : ''}
                     {csvDownloadStatus === 'done' ? 'Sources downloaded as CSV.' : ''}
                     {nativeShareStatus === 'shared' ? 'Report shared using the system share sheet.' : ''}
                   </span>

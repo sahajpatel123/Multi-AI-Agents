@@ -5,7 +5,12 @@ import { AgentSharePage } from './AgentSharePage';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadCsvFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
+import {
+  downloadBibtexFile,
+  downloadCsvFile,
+  downloadJsonFile,
+  downloadMarkdownFile,
+} from '../lib/downloadTextFile';
 import track from '../utils/track';
 
 vi.mock('../api', () => ({
@@ -29,6 +34,7 @@ vi.mock('../lib/clipboard', () => ({
 }));
 
 vi.mock('../lib/downloadTextFile', () => ({
+  downloadBibtexFile: vi.fn(),
   downloadCsvFile: vi.fn(),
   downloadJsonFile: vi.fn(),
   downloadMarkdownFile: vi.fn(),
@@ -121,6 +127,7 @@ describe('AgentSharePage', () => {
     vi.mocked(copyToClipboard).mockResolvedValue(true);
     vi.mocked(downloadJsonFile).mockReturnValue(true);
     vi.mocked(downloadMarkdownFile).mockReturnValue(true);
+    vi.mocked(downloadBibtexFile).mockReturnValue(true);
     vi.mocked(downloadCsvFile).mockReturnValue(true);
   });
 
@@ -675,6 +682,34 @@ describe('AgentSharePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Download .json' }));
     expect(await screen.findByText(/could not download the JSON report/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'JSON download failed' })).toBeInTheDocument();
+  });
+
+  it('downloads the public BibTeX citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download .bib' }));
+
+    expect(await screen.findByText('BibTeX downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadBibtexFile).mock.calls[0] ?? [];
+    expect(content).toMatch(/^@online\{arena_shareable_research_20260814_[a-z0-9]+,/m);
+    expect(content).toContain('title = {Shareable research}');
+    expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the BibTeX download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadBibtexFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download .bib' }));
+
+    expect(await screen.findByText(/could not download the BibTeX citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'BibTeX download failed' })).toBeInTheDocument();
   });
 
   it('opens the browser print dialog for a shared report', async () => {

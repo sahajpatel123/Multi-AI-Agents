@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  downloadBibtexFile,
   downloadCsvFile,
   downloadJsonFile,
   downloadMarkdownFile,
@@ -159,6 +160,30 @@ describe('downloadTextFile', () => {
       downloadCsvFile('source_number,source\n1,https://example.com', 'Public Sources', { date: d }),
     ).toBe(true);
     expect(anchor.download).toBe('public-sources-2026-07-16.csv');
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('downloadBibtexFile adds .bib extension and citation MIME type', () => {
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.fn();
+    const anchor = {
+      href: '',
+      download: '',
+      rel: '',
+      style: { display: '' },
+      click,
+    };
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') return anchor as unknown as HTMLAnchorElement;
+      return document.createElementNS('http://www.w3.org/1999/xhtml', tag);
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+    vi.spyOn(document.body, 'removeChild').mockImplementation((n) => n);
+
+    const d = new Date(2026, 6, 16);
+    expect(downloadBibtexFile('@online{arena_report}', 'Agent Citation', { date: d })).toBe(true);
+    expect(anchor.download).toBe('agent-citation-2026-07-16.bib');
     expect(click).toHaveBeenCalled();
   });
 });
