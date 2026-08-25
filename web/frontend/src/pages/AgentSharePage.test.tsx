@@ -644,6 +644,7 @@ describe('AgentSharePage', () => {
     expect(bundle).toContain('BibTeX\n@online{');
     expect(bundle).toContain('RIS\nTY  - ELEC');
     expect(bundle).toContain('CSL-JSON\n[');
+    expect(bundle).toContain('EndNote XML\n<?xml version="1.0" encoding="UTF-8"?>');
     expect(bundle).not.toContain('Yes, with a token and a public page.');
     expect(bundle).not.toContain('tok_1234567890abcdef');
     expect(copyJsonToClipboard).not.toHaveBeenCalled();
@@ -1453,6 +1454,7 @@ describe('AgentSharePage', () => {
     expect(content).toContain('BibTeX\n@online{');
     expect(content).toContain('RIS\nTY  - ELEC');
     expect(content).toContain('CSL-JSON\n[');
+    expect(content).toContain('EndNote XML\n<?xml version="1.0" encoding="UTF-8"?>');
     expect(filename).toEqual(expect.stringContaining('-reference-bundle'));
     expect(content).not.toContain('Yes, with a token and a public page.');
     expect(content).not.toContain('tok_1234567890abcdef');

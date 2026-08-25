@@ -6,9 +6,10 @@
 
 import { formatAgentReportBibtex } from './agentReportBibtex';
 import { formatAgentReportCslJson } from './agentReportCslJson';
+import { formatAgentReportEndnote } from './agentReportEndnote';
 import { formatAgentReportRis } from './agentReportRis';
 
-/** Format BibTeX, RIS, and CSL-JSON as one portable text export. */
+/** Format BibTeX, RIS, CSL-JSON, and EndNote XML as one portable text export. */
 export function formatAgentReportReferenceBundle(opts: {
   title?: string | null;
   question?: string | null;
@@ -19,6 +20,7 @@ export function formatAgentReportReferenceBundle(opts: {
     ['BibTeX', formatAgentReportBibtex(opts)],
     ['RIS', formatAgentReportRis(opts)],
     ['CSL-JSON', formatAgentReportCslJson(opts)],
+    ['EndNote XML', formatAgentReportEndnote(opts)],
   ];
 
   // Keep one blank line between formats and exactly one trailing newline so

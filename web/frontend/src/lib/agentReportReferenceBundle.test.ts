@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatAgentReportBibtex } from './agentReportBibtex';
 import { formatAgentReportCslJson } from './agentReportCslJson';
+import { formatAgentReportEndnote } from './agentReportEndnote';
 import { formatAgentReportReferenceBundle } from './agentReportReferenceBundle';
 import { formatAgentReportRis } from './agentReportRis';
 
@@ -20,11 +21,13 @@ describe('formatAgentReportReferenceBundle', () => {
         'BibTeX\n' + formatAgentReportBibtex(sharedOpts),
         'RIS\n' + formatAgentReportRis(sharedOpts),
         'CSL-JSON\n' + formatAgentReportCslJson(sharedOpts),
+        'EndNote XML\n' + formatAgentReportEndnote(sharedOpts),
       ].join('\n'),
     );
     expect(bundle).toContain('BibTeX\n@online{');
     expect(bundle).toContain('RIS\nTY  - ELEC');
     expect(bundle).toContain('CSL-JSON\n[\n');
+    expect(bundle).toContain('EndNote XML\n<?xml version="1.0" encoding="UTF-8"?>');
     expect(bundle).not.toContain('utm_source');
     expect(bundle).toContain('Question: Is this report shareable?');
     expect(bundle).not.toContain('Yes, with a token and a public page.');
@@ -45,11 +48,12 @@ describe('formatAgentReportReferenceBundle', () => {
         return (codePoint >= 0 && codePoint <= 8) || codePoint === 11 || codePoint === 12 || (codePoint >= 14 && codePoint <= 31) || codePoint === 127;
       }),
     ).toBe(false);
-    expect(bundle.match(/A mode report/g)).toHaveLength(3);
+    expect(bundle.match(/A mode report/g)).toHaveLength(4);
     expect(bundle).not.toContain('year = {2026}');
     expect(bundle).not.toContain('date = {2026-02-30}');
     expect(bundle).not.toContain('PY  - 2026');
     expect(bundle).not.toContain('"issued"');
+    expect(bundle).not.toContain('<year>2026</year>');
     expect(bundle.endsWith('\n')).toBe(true);
     expect(bundle).not.toMatch(/\n{3,}/);
   });
