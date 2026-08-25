@@ -64,4 +64,16 @@ describe('formatAgentReportCslJson', () => {
     expect(value).not.toContain('secret');
     expect(value).not.toContain('"URL"');
   });
+
+  it.each([
+    '2026-02-28-draft',
+    '2026-02-28T25:00:00Z',
+    '2026-02-28T11:00:00Z trailing',
+  ])('omits malformed shared timestamps: %s', (sharedAt) => {
+    const value = JSON.parse(
+      formatAgentReportCslJson({ title: 'A report', sharedAt }),
+    ) as Array<Record<string, unknown>>;
+
+    expect(value[0]).not.toHaveProperty('issued');
+  });
 });

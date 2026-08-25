@@ -84,6 +84,17 @@ describe('formatAgentReportBibtex', () => {
     expect(bibtex).toContain('note = {Arena Agent report.},');
   });
 
+  it.each([
+    '2026-02-28-draft',
+    '2026-02-28T25:00:00Z',
+    '2026-02-28T11:00:00Z trailing',
+  ])('omits malformed shared timestamps: %s', (sharedAt) => {
+    const bibtex = formatAgentReportBibtex({ title: 'A report', sharedAt });
+
+    expect(bibtex).not.toContain('year = {');
+    expect(bibtex).not.toContain('date = {');
+  });
+
   it('flattens control and directional marks before BibTeX escaping', () => {
     const bibtex = formatAgentReportBibtex({
       title: 'A\u202Emode\u0007report',

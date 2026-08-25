@@ -78,4 +78,15 @@ describe('formatAgentReportRis', () => {
     expect(ris).toContain('N1  - Arena Agent report.');
     expect(ris.endsWith('ER  - \n')).toBe(true);
   });
+
+  it.each([
+    '2026-02-28-draft',
+    '2026-02-28T25:00:00Z',
+    '2026-02-28T11:00:00Z trailing',
+  ])('omits malformed shared timestamps: %s', (sharedAt) => {
+    const ris = formatAgentReportRis({ title: 'A report', sharedAt });
+
+    expect(ris).not.toContain('PY  -');
+    expect(ris).not.toContain('DA  -');
+  });
 });

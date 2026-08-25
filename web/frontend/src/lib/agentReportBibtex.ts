@@ -21,7 +21,12 @@ function normalizeBibtexText(raw: string | null | undefined, max = 240): string 
 }
 
 function bibtexDate(raw: string | null | undefined): string {
-  const match = normalizeBibtexText(raw, 80).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  // Only accept an ISO calendar date or timestamp. Matching just the date
+  // prefix would turn malformed metadata such as `2026-02-28-draft` into a
+  // misleading publication date in an imported bibliography entry.
+  const match = normalizeBibtexText(raw, 80).match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-](\d{2}):(\d{2}))?)?$/,
+  );
   if (!match) return '';
 
   const year = Number(match[1]);
@@ -46,6 +51,23 @@ function bibtexDate(raw: string | null | undefined): string {
   // RIS and CSL-JSON apply the same calendar validation for this bundle.
   if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth[month - 1]) {
     return '';
+  }
+
+  if (match[4] !== undefined) {
+    const hour = Number(match[4]);
+    const minute = Number(match[5]);
+    const second = match[6] === undefined ? 0 : Number(match[6]);
+    const offsetHour = match[7] === undefined ? 0 : Number(match[7]);
+    const offsetMinute = match[8] === undefined ? 0 : Number(match[8]);
+    if (
+      hour > 23 ||
+      minute > 59 ||
+      second > 59 ||
+      offsetHour > 23 ||
+      offsetMinute > 59
+    ) {
+      return '';
+    }
   }
 
   return `${match[1]}-${match[2]}-${match[3]}`;
