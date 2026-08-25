@@ -104,6 +104,7 @@ export function AgentSharePage() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [bibtexCopyStatus, setBibtexCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [cslJsonCopyStatus, setCslJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [referenceBundleCopyStatus, setReferenceBundleCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [citationCopyStatus, setCitationCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [bundleCopyStatus, setBundleCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [amaCopyStatus, setAmaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -150,6 +151,7 @@ export function AgentSharePage() {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [bibtexCopyError, setBibtexCopyError] = useState<string | null>(null);
   const [cslJsonCopyError, setCslJsonCopyError] = useState<string | null>(null);
+  const [referenceBundleCopyError, setReferenceBundleCopyError] = useState<string | null>(null);
   const [citationCopyError, setCitationCopyError] = useState<string | null>(null);
   const [bundleCopyError, setBundleCopyError] = useState<string | null>(null);
   const [amaCopyError, setAmaCopyError] = useState<string | null>(null);
@@ -181,6 +183,7 @@ export function AgentSharePage() {
   const [copyInFlight, setCopyInFlight] = useState(false);
   const [bibtexCopyInFlight, setBibtexCopyInFlight] = useState(false);
   const [cslJsonCopyInFlight, setCslJsonCopyInFlight] = useState(false);
+  const [referenceBundleCopyInFlight, setReferenceBundleCopyInFlight] = useState(false);
   const [citationCopyInFlight, setCitationCopyInFlight] = useState(false);
   const [bundleCopyInFlight, setBundleCopyInFlight] = useState(false);
   const [amaCopyInFlight, setAmaCopyInFlight] = useState(false);
@@ -199,6 +202,8 @@ export function AgentSharePage() {
   const bibtexCopyRequestRef = useRef(0);
   const cslJsonCopyBusyRef = useRef(false);
   const cslJsonCopyRequestRef = useRef(0);
+  const referenceBundleCopyBusyRef = useRef(false);
+  const referenceBundleCopyRequestRef = useRef(0);
   const citationCopyBusyRef = useRef(false);
   const bundleCopyBusyRef = useRef(false);
   const bundleCopyRequestRef = useRef(0);
@@ -238,6 +243,9 @@ export function AgentSharePage() {
     cslJsonCopyRequestRef.current += 1;
     cslJsonCopyBusyRef.current = false;
     setCslJsonCopyInFlight(false);
+    referenceBundleCopyRequestRef.current += 1;
+    referenceBundleCopyBusyRef.current = false;
+    setReferenceBundleCopyInFlight(false);
     citationCopyRequestRef.current += 1;
     citationCopyBusyRef.current = false;
     setCitationCopyInFlight(false);
@@ -279,6 +287,7 @@ export function AgentSharePage() {
     setCopyStatus('idle');
     setBibtexCopyStatus('idle');
     setCslJsonCopyStatus('idle');
+    setReferenceBundleCopyStatus('idle');
     setCitationCopyStatus('idle');
     setBundleCopyStatus('idle');
     setAmaCopyStatus('idle');
@@ -324,6 +333,7 @@ export function AgentSharePage() {
     setCopyError(null);
     setBibtexCopyError(null);
     setCslJsonCopyError(null);
+    setReferenceBundleCopyError(null);
     setCitationCopyError(null);
     setBundleCopyError(null);
     setAmaCopyError(null);
@@ -377,6 +387,7 @@ export function AgentSharePage() {
       nativeShareRequestRef.current += 1;
       bibtexCopyRequestRef.current += 1;
       cslJsonCopyRequestRef.current += 1;
+      referenceBundleCopyRequestRef.current += 1;
       citationCopyRequestRef.current += 1;
       bundleCopyRequestRef.current += 1;
       amaCopyRequestRef.current += 1;
@@ -688,6 +699,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [cslJsonCopyStatus]);
+
+  useEffect(() => {
+    if (referenceBundleCopyStatus === 'idle') return;
+    const hold = referenceBundleCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setReferenceBundleCopyStatus('idle');
+      setReferenceBundleCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [referenceBundleCopyStatus]);
 
   useEffect(() => {
     if (apaCopyStatus === 'idle') return;
@@ -1131,6 +1152,34 @@ export function AgentSharePage() {
       if (cslJsonCopyRequestRef.current === requestId) {
         cslJsonCopyBusyRef.current = false;
         setCslJsonCopyInFlight(false);
+      }
+    }
+  };
+
+  const handleCopyReferenceBundle = async () => {
+    if (referenceBundleCopyBusyRef.current || !referenceBundleText) return;
+    referenceBundleCopyBusyRef.current = true;
+    setReferenceBundleCopyInFlight(true);
+    const requestId = ++referenceBundleCopyRequestRef.current;
+    setReferenceBundleCopyStatus('idle');
+    setReferenceBundleCopyError(null);
+    try {
+      const ok = await copyToClipboard(referenceBundleText);
+      if (referenceBundleCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setReferenceBundleCopyStatus('copied');
+      } else {
+        setReferenceBundleCopyStatus('failed');
+        setReferenceBundleCopyError('Could not copy the reference bundle — try Download references instead.');
+      }
+    } catch {
+      if (referenceBundleCopyRequestRef.current !== requestId) return;
+      setReferenceBundleCopyStatus('failed');
+      setReferenceBundleCopyError('Could not copy the reference bundle — try Download references instead.');
+    } finally {
+      if (referenceBundleCopyRequestRef.current === requestId) {
+        referenceBundleCopyBusyRef.current = false;
+        setReferenceBundleCopyInFlight(false);
       }
     }
   };
@@ -1797,6 +1846,11 @@ export function AgentSharePage() {
                       {cslJsonCopyError}
                     </p>
                   ) : null}
+                  {referenceBundleCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {referenceBundleCopyError}
+                    </p>
+                  ) : null}
                   {citationCopyError ? (
                     <p className="share-take__error" role="alert">
                       {citationCopyError}
@@ -2180,6 +2234,20 @@ export function AgentSharePage() {
                     </button>
                     <button
                       type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${referenceBundleCopyStatus === 'copied' ? ' is-success' : ''}${referenceBundleCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyReferenceBundle()}
+                      disabled={referenceBundleCopyInFlight}
+                    >
+                      {referenceBundleCopyInFlight
+                        ? 'Copying…'
+                        : referenceBundleCopyStatus === 'copied'
+                          ? 'References copied'
+                          : referenceBundleCopyStatus === 'failed'
+                            ? 'Copy references failed'
+                            : 'Copy references'}
+                    </button>
+                    <button
+                      type="button"
                       className={`arena-btn arena-btn--secondary arena-btn--sm${bibtexDownloadStatus === 'done' ? ' is-success' : ''}${bibtexDownloadStatus === 'failed' ? ' is-error' : ''}`}
                       onClick={handleDownloadBibtex}
                     >
@@ -2337,6 +2405,7 @@ export function AgentSharePage() {
                     {vancouverCopyStatus === 'copied' ? 'Vancouver citation copied to clipboard. ' : ''}
                     {bibtexCopyStatus === 'copied' ? 'BibTeX citation copied to clipboard. ' : ''}
                     {cslJsonCopyStatus === 'copied' ? 'CSL-JSON citation copied to clipboard. ' : ''}
+                    {referenceBundleCopyStatus === 'copied' ? 'BibTeX, RIS, and CSL-JSON citations copied to clipboard. ' : ''}
                     {sourceCopyStatus === 'copied' ? 'Sources copied to clipboard. ' : ''}
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}

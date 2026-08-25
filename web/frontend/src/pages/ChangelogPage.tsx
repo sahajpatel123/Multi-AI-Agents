@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Shared Agent reports: copy BibTeX, RIS, and CSL-JSON together as one labeled reference-manager bundle',
       '[NEW] Shared Agent reports: download BibTeX, RIS, and CSL-JSON together as one labeled reference-manager bundle',
       '[IMPROVED] Export presets: the panel honors one-default-per-user with a Default badge and a one-click Make default action',
       '[NEW] Export presets: rename presets inline from the sidebar panel — Enter saves, Escape cancels, failures keep your draft',

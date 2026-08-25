@@ -632,6 +632,35 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'Copy CSL-JSON failed' })).toBeInTheDocument();
   });
 
+  it('copies all reference-manager citations as one labeled bundle', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy references' }));
+
+    expect(await screen.findByText('References copied')).toBeInTheDocument();
+    const [bundle] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
+    expect(bundle).toContain('BibTeX\n@online{');
+    expect(bundle).toContain('RIS\nTY  - ELEC');
+    expect(bundle).toContain('CSL-JSON\n[');
+    expect(bundle).not.toContain('Yes, with a token and a public page.');
+    expect(bundle).not.toContain('tok_1234567890abcdef');
+    expect(copyJsonToClipboard).not.toHaveBeenCalled();
+  });
+
+  it('shows an honest error when copying the reference-manager bundle fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy references' }));
+
+    expect(await screen.findByText(/could not copy the reference bundle/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy references failed' })).toBeInTheDocument();
+  });
+
   it('copies the consulted sources without the full report', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
       report({
