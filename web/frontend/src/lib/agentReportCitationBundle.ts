@@ -28,7 +28,10 @@ export function formatAgentReportCitationBundle(opts: {
     ['MLA', formatAgentReportMla(opts)],
   ];
 
-  // Every formatter terminates its citation with exactly one newline, so a
-  // bare join leaves one blank line between labeled sections.
-  return sections.map(([label, citation]) => `${label}\n${citation}`).join('\n');
+  // Keep the bundle layout stable even if a formatter later gains an extra
+  // trailing blank line. This prevents labels from drifting away from their
+  // citation and guarantees exactly one final newline for clipboard users.
+  return sections
+    .map(([label, citation]) => `${label}\n${citation.trimEnd()}\n`)
+    .join('\n');
 }

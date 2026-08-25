@@ -40,6 +40,8 @@ describe('formatAgentReportCitationBundle', () => {
     expect(sections[1]).toBe(`Chicago\n${formatAgentReportChicago(sharedOpts)}`);
     expect(sections[2]).toBe(`IEEE\n${formatAgentReportIeee(sharedOpts)}`);
     expect(sections[3]).toBe(`MLA\n${formatAgentReportMla(sharedOpts)}`);
+    expect(bundle.endsWith('\n')).toBe(true);
+    expect(bundle).not.toMatch(/\n{3,}/);
   });
 
   it('never emits reference-manager formats meant for software', () => {

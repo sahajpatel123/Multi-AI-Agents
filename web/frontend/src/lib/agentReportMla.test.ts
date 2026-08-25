@@ -17,6 +17,17 @@ describe('formatAgentReportMla', () => {
     expect(result).not.toContain('Is this report shareable?');
   });
 
+  it('does not duplicate a comma already present in the title', () => {
+    expect(
+      formatAgentReportMla({
+        title: 'A report in progress,',
+        url: 'https://arena.example/share/agent/public-report',
+      }),
+    ).toBe(
+      'Arena. “A report in progress,” Arena Agent report, https://arena.example/share/agent/public-report.\n',
+    );
+  });
+
   it('flattens hostile title text and omits invalid metadata', () => {
     const result = formatAgentReportMla({
       title: 'A "useful"\nreport',

@@ -97,7 +97,9 @@ function quoteChicagoTitle(value: string): string {
     nestedQuoteOpen = !nestedQuoteOpen;
     return replacement;
   });
-  const terminalPunctuation = /[.!?]$/.test(safeTitle) ? '' : '.';
+  // A title may already carry its own comma. Avoid producing the visibly
+  // malformed `,.` sequence while preserving Chicago's terminal period.
+  const terminalPunctuation = /[.!?,]$/.test(safeTitle) ? '' : '.';
   return `“${safeTitle}${terminalPunctuation}”`;
 }
 

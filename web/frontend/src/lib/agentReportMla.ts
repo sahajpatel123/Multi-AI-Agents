@@ -89,7 +89,9 @@ function quoteMlaTitle(value: string): string {
   // MLA places the title's terminal punctuation before the closing quote. Do
   // not add a second period when the public title is already a question,
   // exclamation, or full-stop title.
-  const terminalPunctuation = /[.!?]$/.test(safeTitle) ? '' : '.';
+  // A title may already carry its own comma. Avoid producing the visibly
+  // malformed `,.` sequence while preserving MLA's terminal period.
+  const terminalPunctuation = /[.!?,]$/.test(safeTitle) ? '' : '.';
   return `“${safeTitle}${terminalPunctuation}”`;
 }
 

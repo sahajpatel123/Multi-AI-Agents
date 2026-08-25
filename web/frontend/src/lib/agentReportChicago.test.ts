@@ -17,6 +17,17 @@ describe('formatAgentReportChicago', () => {
     expect(result).not.toContain('Is this report shareable?');
   });
 
+  it('does not duplicate a comma already present in the title', () => {
+    expect(
+      formatAgentReportChicago({
+        title: 'A report in progress,',
+        url: 'https://arena.example/share/agent/public-report',
+      }),
+    ).toBe(
+      'Arena. “A report in progress,” Arena Agent report. https://arena.example/share/agent/public-report.\n',
+    );
+  });
+
   it('does not duplicate terminal punctuation and removes unsafe metadata', () => {
     const result = formatAgentReportChicago({
       title: 'A "useful"\nreport?',
