@@ -11,7 +11,10 @@ function normalizeCslText(raw: string | null | undefined, max = 240): string {
     // JSON strings can safely contain newlines, but flattening user-authored
     // metadata keeps imported records readable and bounded.
     // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/[\u0000-\u001f\u007f\u0080-\u009f]+/g, ' ')
+    // Remove invisible directional controls so untrusted text cannot reorder
+    // what a reader sees in an imported reference-manager record.
+    .replace(/[\u061c\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, max);
@@ -54,6 +57,10 @@ function safePublicUrl(raw: string | null | undefined): string {
     const url = new URL(value);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
     if (url.username || url.password) return '';
+    // Keep the record stable rather than preserving tracking parameters or
+    // fragment-only client state, matching the other citation exports.
+    url.search = '';
+    url.hash = '';
     return url.href;
   } catch {
     return '';

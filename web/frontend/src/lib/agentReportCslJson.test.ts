@@ -41,6 +41,20 @@ describe('formatAgentReportCslJson', () => {
     expect(value).not.toContain('fake tag?\n');
   });
 
+  it('flattens directional marks and strips tracking state from URLs', () => {
+    const value = JSON.parse(
+      formatAgentReportCslJson({
+        title: 'A‮modereport',
+        question: 'Does the​note stay intact?',
+        url: 'https://arena.example/share/agent/public-token?utm_source=copy#draft',
+      }),
+    ) as [{ title: string; note: string; URL?: string }];
+
+    expect(value[0].title).toBe('A mode report');
+    expect(value[0].note).toBe('Arena Agent report. Question: Does the note stay intact?');
+    expect(value[0].URL).toBe('https://arena.example/share/agent/public-token');
+  });
+
   it('omits credential-bearing URLs', () => {
     const value = formatAgentReportCslJson({
       title: 'Private URL',
