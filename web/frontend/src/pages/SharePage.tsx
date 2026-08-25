@@ -245,6 +245,11 @@ export function SharePage() {
     }
   };
 
+  const handlePrintShare = () => {
+    if (!hasContent || typeof window === 'undefined' || typeof window.print !== 'function') return;
+    window.print();
+  };
+
   const promptClamped = Boolean(
     displayPrompt && !promptExpanded && isCollapsiblePrompt(displayPrompt),
   );
@@ -452,6 +457,13 @@ export function SharePage() {
                       : downloadStatus === 'failed'
                         ? 'Download failed'
                         : 'Download .md'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--secondary arena-btn--sm"
+                    onClick={handlePrintShare}
+                  >
+                    Print / Save PDF
                   </button>
                   <button
                     type="button"

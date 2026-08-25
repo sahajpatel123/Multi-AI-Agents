@@ -638,6 +638,80 @@
   .share-landing--agent .share-take__answer tr {
     break-inside: avoid;
   }
+
+  @page shared-take {
+    margin: 16mm 14mm;
+  }
+
+  .share-landing:not(.share-landing--agent) {
+    page: shared-take;
+    min-height: auto;
+    background: #fff;
+    color: #171412;
+  }
+
+  .share-landing:not(.share-landing--agent) [data-public-prism-nav],
+  .share-landing:not(.share-landing--agent) .site-footer,
+  .share-landing:not(.share-landing--agent) .share-landing__orbs,
+  .share-landing:not(.share-landing--agent) .share-take--tools,
+  .share-landing:not(.share-landing--agent) .share-landing__minds {
+    display: none !important;
+  }
+
+  .share-landing:not(.share-landing--agent) .share-landing__main {
+    max-width: none;
+    padding: 0;
+  }
+
+  .share-landing:not(.share-landing--agent) .share-landing__title {
+    margin-bottom: 18pt;
+    color: #171412;
+    font-size: 24pt;
+  }
+
+  .share-landing:not(.share-landing--agent) .share-landing__title em,
+  .share-landing:not(.share-landing--agent) .share-take__name,
+  .share-landing:not(.share-landing--agent) .share-take__prompt,
+  .share-landing:not(.share-landing--agent) .share-take__answer {
+    color: #171412;
+  }
+
+  .share-landing:not(.share-landing--agent) .share-round {
+    display: block;
+  }
+
+  .share-landing:not(.share-landing--agent) .share-take {
+    margin-bottom: 18pt;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+    overflow: visible;
+    break-inside: auto;
+  }
+
+  .share-landing:not(.share-landing--agent) .share-take--question {
+    break-inside: avoid;
+  }
+
+  .share-landing:not(.share-landing--agent) .share-take__rail {
+    height: 2px;
+    print-color-adjust: exact;
+  }
+
+  .share-landing:not(.share-landing--agent) .share-take__body {
+    padding: 10pt 0 0;
+  }
+
+  .share-landing:not(.share-landing--agent) .share-take__answer,
+  .share-landing:not(.share-landing--agent) .share-take__answer * {
+    color: #171412 !important;
+  }
+
+  .share-landing:not(.share-landing--agent) .share-take__answer a {
+    color: #6f4c31 !important;
+    text-decoration: underline;
+  }
 }
 
 @media (max-width: 480px) {

@@ -83,6 +83,27 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /read this take aloud/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy take/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /print \/ save pdf/i })).toBeInTheDocument();
+  });
+
+  it('opens the browser print dialog for a shared take', () => {
+    const print = vi.fn();
+    const originalPrint = window.print;
+    Object.defineProperty(window, 'print', { configurable: true, value: print });
+
+    try {
+      const qs =
+        '?agent=agent_1&prompt=' +
+        encodeURIComponent('Should I ship today?') +
+        '&response=' +
+        encodeURIComponent('Ship the smallest honest slice.');
+      renderShare(qs);
+
+      fireEvent.click(screen.getByRole('button', { name: /print \/ save pdf/i }));
+      expect(print).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'print', { configurable: true, value: originalPrint });
+    }
   });
 
   it('records a shared take listen as an agent event', () => {
