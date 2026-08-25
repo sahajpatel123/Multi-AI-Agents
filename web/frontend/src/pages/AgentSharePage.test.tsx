@@ -6,6 +6,7 @@ import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
 import { copyJsonToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
+  downloadAmaFile,
   downloadApaFile,
   downloadBibtexFile,
   downloadChicagoFile,
@@ -44,6 +45,7 @@ vi.mock('../lib/clipboard', () => ({
 }));
 
 vi.mock('../lib/downloadTextFile', () => ({
+  downloadAmaFile: vi.fn(),
   downloadApaFile: vi.fn(),
   downloadBibtexFile: vi.fn(),
   downloadChicagoFile: vi.fn(),
@@ -147,6 +149,7 @@ describe('AgentSharePage', () => {
     vi.mocked(copyJsonToClipboard).mockResolvedValue(true);
     vi.mocked(downloadJsonFile).mockReturnValue(true);
     vi.mocked(downloadMarkdownFile).mockReturnValue(true);
+    vi.mocked(downloadAmaFile).mockReturnValue(true);
     vi.mocked(downloadApaFile).mockReturnValue(true);
     vi.mocked(downloadBibtexFile).mockReturnValue(true);
     vi.mocked(downloadChicagoFile).mockReturnValue(true);
@@ -303,7 +306,7 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'Copy citation failed' })).toBeInTheDocument();
   });
 
-  it('copies all six prose citations in one labeled bundle', async () => {
+  it('copies all seven prose citations in one labeled bundle', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     renderShare();
     await screen.findByText('Is this report shareable?');
@@ -312,6 +315,7 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText('All citations copied')).toBeInTheDocument();
     const [bundle] = vi.mocked(copyToClipboard).mock.calls.at(-1) ?? [];
+    expect(bundle).toContain('AMA\nArena. Shareable research. Arena Agent report [Internet].');
     expect(bundle).toContain('APA\nArena. (2026, August 14). Shareable research');
     expect(bundle).toContain('Chicago\n');
     expect(bundle).toContain('Harvard\n');
@@ -332,6 +336,35 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/could not copy the citation bundle/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy all failed' })).toBeInTheDocument();
+  });
+
+  it('copies an AMA citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy AMA' }));
+
+    expect(await screen.findByText('AMA copied')).toBeInTheDocument();
+    const [ama] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
+    expect(ama).toContain(
+      'Arena. Shareable research. Arena Agent report [Internet]. Published 2026 Aug 14.',
+    );
+    expect(ama).toContain(window.location.href);
+    expect(ama).not.toContain('Yes, with a token and a public page.');
+    expect(ama).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when copying the AMA citation fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy AMA' }));
+
+    expect(await screen.findByText(/could not copy the AMA citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy AMA failed' })).toBeInTheDocument();
   });
 
   it('copies an APA citation without the report body or share token', async () => {
@@ -978,6 +1011,37 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'JSON download failed' })).toBeInTheDocument();
   });
 
+  it('downloads the public AMA citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download AMA' }));
+
+    expect(await screen.findByText('AMA downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadAmaFile).mock.calls[0] ?? [];
+    expect(content).toContain(
+      'Arena. Shareable research. Arena Agent report [Internet]. Published 2026 Aug 14.',
+    );
+    expect(content).toContain(window.location.href);
+    expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));
+    expect(filename).toEqual(expect.stringContaining('-ama'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the AMA download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadAmaFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download AMA' }));
+
+    expect(await screen.findByText(/could not download the AMA citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'AMA download failed' })).toBeInTheDocument();
+  });
+
   it('downloads the public APA citation without the report body or share token', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     renderShare();
@@ -1206,6 +1270,7 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText('All citations downloaded')).toBeInTheDocument();
     const [content, filename] = vi.mocked(downloadCitationBundleFile).mock.calls[0] ?? [];
+    expect(content).toContain('AMA\n');
     expect(content).toContain('APA\n');
     expect(content).toContain('Chicago\n');
     expect(content).toContain('Harvard\n');

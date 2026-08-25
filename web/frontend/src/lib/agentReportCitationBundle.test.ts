@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatAgentReportApa } from './agentReportApa';
+import { formatAgentReportAma } from './agentReportAma';
 import { formatAgentReportBibtex } from './agentReportBibtex';
 import { formatAgentReportChicago } from './agentReportChicago';
 import { formatAgentReportCitationBundle } from './agentReportCitationBundle';
@@ -21,6 +22,7 @@ describe('formatAgentReportCitationBundle', () => {
 
     expect(bundle).toBe(
       [
+        'AMA\n' + formatAgentReportAma(sharedOpts),
         'APA\n' + formatAgentReportApa(sharedOpts),
         'Chicago\n' + formatAgentReportChicago(sharedOpts),
         'Harvard\n' + formatAgentReportHarvard(sharedOpts),
@@ -29,6 +31,7 @@ describe('formatAgentReportCitationBundle', () => {
         'Vancouver\n' + formatAgentReportVancouver(sharedOpts),
       ].join('\n'),
     );
+    expect(bundle).toContain('AMA\nArena. Shareable research. Arena Agent report [Internet].');
     expect(bundle).toContain('APA\nArena. (2026, August 14). Shareable research');
     expect(bundle).toContain('Harvard\nArena (2026) ‘Shareable research’');
     expect(bundle).toContain('IEEE\nArena, “Shareable research,”');
@@ -38,15 +41,16 @@ describe('formatAgentReportCitationBundle', () => {
 
   it('keeps each section identical to the standalone formatter', () => {
     const bundle = formatAgentReportCitationBundle(sharedOpts);
-    const sections = bundle.split(/\n(?=APA\n|Chicago\n|Harvard\n|IEEE\n|MLA\n|Vancouver\n)/);
+    const sections = bundle.split(/\n(?=AMA\n|APA\n|Chicago\n|Harvard\n|IEEE\n|MLA\n|Vancouver\n)/);
 
-    expect(sections).toHaveLength(6);
-    expect(sections[0]).toBe(`APA\n${formatAgentReportApa(sharedOpts)}`);
-    expect(sections[1]).toBe(`Chicago\n${formatAgentReportChicago(sharedOpts)}`);
-    expect(sections[2]).toBe(`Harvard\n${formatAgentReportHarvard(sharedOpts)}`);
-    expect(sections[3]).toBe(`IEEE\n${formatAgentReportIeee(sharedOpts)}`);
-    expect(sections[4]).toBe(`MLA\n${formatAgentReportMla(sharedOpts)}`);
-    expect(sections[5]).toBe(`Vancouver\n${formatAgentReportVancouver(sharedOpts)}`);
+    expect(sections).toHaveLength(7);
+    expect(sections[0]).toBe(`AMA\n${formatAgentReportAma(sharedOpts)}`);
+    expect(sections[1]).toBe(`APA\n${formatAgentReportApa(sharedOpts)}`);
+    expect(sections[2]).toBe(`Chicago\n${formatAgentReportChicago(sharedOpts)}`);
+    expect(sections[3]).toBe(`Harvard\n${formatAgentReportHarvard(sharedOpts)}`);
+    expect(sections[4]).toBe(`IEEE\n${formatAgentReportIeee(sharedOpts)}`);
+    expect(sections[5]).toBe(`MLA\n${formatAgentReportMla(sharedOpts)}`);
+    expect(sections[6]).toBe(`Vancouver\n${formatAgentReportVancouver(sharedOpts)}`);
     expect(bundle.endsWith('\n')).toBe(true);
     expect(bundle).not.toMatch(/\n{3,}/);
   });
@@ -68,6 +72,6 @@ describe('formatAgentReportCitationBundle', () => {
     });
 
     expect(bundle).not.toMatch(/[\u061c\u200b\u200e\u200f\u202a-\u202e]/);
-    expect(bundle.match(/A mode report/g)).toHaveLength(6);
+    expect(bundle.match(/A mode report/g)).toHaveLength(7);
   });
 });

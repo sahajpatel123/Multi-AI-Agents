@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  downloadAmaFile,
   downloadApaFile,
   downloadBibtexFile,
   downloadChicagoFile,
@@ -265,6 +266,30 @@ describe('downloadTextFile', () => {
     const d = new Date(2026, 6, 16);
     expect(downloadRisFile('TY  - ELEC\nER  -\n', 'Agent Citation', { date: d })).toBe(true);
     expect(anchor.download).toBe('agent-citation-2026-07-16.ris');
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('downloadAmaFile adds a dated .txt citation filename', () => {
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.fn();
+    const anchor = {
+      href: '',
+      download: '',
+      rel: '',
+      style: { display: '' },
+      click,
+    };
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') return anchor as unknown as HTMLAnchorElement;
+      return document.createElementNS('http://www.w3.org/1999/xhtml', tag);
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+    vi.spyOn(document.body, 'removeChild').mockImplementation((n) => n);
+
+    const d = new Date(2026, 6, 16);
+    expect(downloadAmaFile('Arena AMA citation', 'Agent Citation AMA', { date: d })).toBe(true);
+    expect(anchor.download).toBe('agent-citation-ama-2026-07-16.txt');
     expect(click).toHaveBeenCalled();
   });
 
