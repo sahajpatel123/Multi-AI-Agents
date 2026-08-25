@@ -38,8 +38,16 @@ describe('formatAgentReportHarvard', () => {
       sharedAt: 'not-a-date',
     });
 
-    expect(result).toBe('Arena (n.d.) ‘A ’useful’ report’, Arena Agent report.\n');
+    expect(result).toBe('Arena (n.d.) ‘A “useful” report’, Arena Agent report.\n');
     expect(result).not.toContain('javascript:');
+  });
+
+  it('keeps contractions readable while disambiguating nested title quotes', () => {
+    const result = formatAgentReportHarvard({
+      title: "Researcher's 'useful' guide",
+    });
+
+    expect(result).toBe('Arena (n.d.) ‘Researcher’s “useful” guide’, Arena Agent report.\n');
   });
 
   it('removes invisible directional marks and rejects credential-bearing URLs', () => {

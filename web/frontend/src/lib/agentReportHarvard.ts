@@ -85,9 +85,17 @@ function safePublicUrl(raw: string | null | undefined): string {
 }
 
 function quoteHarvardTitle(value: string): string {
-  // Curly single quotes make the entry readable while converting authored
-  // apostrophes avoids an ambiguous closing quote in a pasted citation.
-  const safeTitle = value.replace(/[\u0027\u2018\u2019]/g, '’');
+  // Harvard uses single quotes for the outer title. Convert paired
+  // user-authored single quotes into nested double quotes, while leaving
+  // possessives and contractions (for example, Researcher's) as apostrophes.
+  // The surrounding-character checks prevent the apostrophe in "Alice's
+  // 'Guide'" from being mistaken for the opening quote of a pair.
+  const safeTitle = value
+    .replace(
+      /(^|[^\p{L}\p{N}])['‘]([^'’]+)['’](?=$|[^\p{L}\p{N}])/gu,
+      '$1“$2”',
+    )
+    .replace(/'/g, '’');
   return `‘${safeTitle}’`;
 }
 

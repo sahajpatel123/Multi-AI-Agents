@@ -300,7 +300,7 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'Copy citation failed' })).toBeInTheDocument();
   });
 
-  it('copies all four prose citations in one labeled bundle', async () => {
+  it('copies all five prose citations in one labeled bundle', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     renderShare();
     await screen.findByText('Is this report shareable?');
