@@ -15,6 +15,7 @@ import {
   downloadCslJsonFile,
   downloadEndnoteFile,
   downloadHarvardFile,
+  downloadHtmlFile,
   downloadJsonFile,
   downloadIeeeFile,
   downloadMlaFile,
@@ -56,6 +57,7 @@ vi.mock('../lib/downloadTextFile', () => ({
   downloadCslJsonFile: vi.fn(),
   downloadEndnoteFile: vi.fn(),
   downloadHarvardFile: vi.fn(),
+  downloadHtmlFile: vi.fn(),
   downloadJsonFile: vi.fn(),
   downloadIeeeFile: vi.fn(),
   downloadMlaFile: vi.fn(),
@@ -152,6 +154,7 @@ describe('AgentSharePage', () => {
     vi.mocked(copyToClipboard).mockResolvedValue(true);
     vi.mocked(copyJsonToClipboard).mockResolvedValue(true);
     vi.mocked(downloadJsonFile).mockReturnValue(true);
+    vi.mocked(downloadHtmlFile).mockReturnValue(true);
     vi.mocked(downloadMarkdownFile).mockReturnValue(true);
     vi.mocked(downloadAmaFile).mockReturnValue(true);
     vi.mocked(downloadApaFile).mockReturnValue(true);
@@ -1069,6 +1072,35 @@ describe('AgentSharePage', () => {
       sharedAt: '2026-08-14T11:00:00',
     });
     expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('downloads a self-contained HTML report without the share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
+      report({ sources: ['https://example.com/research'] }),
+    );
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Download .html' }));
+
+    expect(await screen.findByText('HTML downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadHtmlFile).mock.calls[0] ?? [];
+    expect(filename).toEqual(expect.stringContaining('agent-share-'));
+    expect(content).toContain('<!doctype html>');
+    expect(content).toContain('<h1>Shareable research</h1>');
+    expect(content).toContain('Yes, with a token and a public page.');
+    expect(content).toContain('Sources consulted');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the HTML download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadHtmlFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+    fireEvent.click(screen.getByRole('button', { name: 'Download .html' }));
+
+    expect(await screen.findByText(/could not download the HTML report/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'HTML download failed' })).toBeInTheDocument();
   });
 
   it('shows an honest error when the JSON download fails', async () => {

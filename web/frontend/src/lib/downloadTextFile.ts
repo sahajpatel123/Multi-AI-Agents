@@ -153,6 +153,26 @@ export function downloadJsonFile(
 }
 
 /**
+ * Download a standalone HTML report with a browser-friendly extension and
+ * MIME type. Keeping this wrapper beside JSON avoids duplicating the shared
+ * filename/date handling in report pages.
+ */
+export function downloadHtmlFile(
+  content: string,
+  filenameStem: string,
+  opts?: { dated?: boolean; date?: Date },
+): boolean {
+  const dated = opts?.dated !== false;
+  const stem = dated
+    ? withDownloadDate(filenameStem, opts?.date, 'arena-export')
+    : sanitizeDownloadFilename(filenameStem, 'arena-export');
+  return downloadTextFile(content, {
+    filename: `${stem}.html`,
+    mimeType: 'text/html;charset=utf-8',
+  });
+}
+
+/**
  * Download a CSL-JSON citation with a reference-manager-friendly extension
  * and MIME type.
  */

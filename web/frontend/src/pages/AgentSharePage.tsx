@@ -19,6 +19,7 @@ import {
   downloadCslJsonFile,
   downloadEndnoteFile,
   downloadHarvardFile,
+  downloadHtmlFile,
   downloadJsonFile,
   downloadIeeeFile,
   downloadMlaFile,
@@ -28,6 +29,7 @@ import {
   downloadVancouverFile,
 } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
+import { formatAgentReportHtml } from '../lib/agentReportHtml';
 import { formatAgentReportBibtex } from '../lib/agentReportBibtex';
 import { formatAgentReportAma } from '../lib/agentReportAma';
 import { formatAgentReportApa } from '../lib/agentReportApa';
@@ -123,6 +125,8 @@ export function AgentSharePage() {
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadFeedbackKey, setJsonDownloadFeedbackKey] = useState(0);
+  const [htmlDownloadStatus, setHtmlDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [htmlDownloadFeedbackKey, setHtmlDownloadFeedbackKey] = useState(0);
   const [amaDownloadStatus, setAmaDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [amaDownloadFeedbackKey, setAmaDownloadFeedbackKey] = useState(0);
   const [apaDownloadStatus, setApaDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -172,6 +176,7 @@ export function AgentSharePage() {
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [jsonDownloadError, setJsonDownloadError] = useState<string | null>(null);
+  const [htmlDownloadError, setHtmlDownloadError] = useState<string | null>(null);
   const [amaDownloadError, setAmaDownloadError] = useState<string | null>(null);
   const [apaDownloadError, setApaDownloadError] = useState<string | null>(null);
   const [chicagoDownloadError, setChicagoDownloadError] = useState<string | null>(null);
@@ -317,6 +322,8 @@ export function AgentSharePage() {
     setDownloadStatus('idle');
     setJsonDownloadStatus('idle');
     setJsonDownloadFeedbackKey(0);
+    setHtmlDownloadStatus('idle');
+    setHtmlDownloadFeedbackKey(0);
     setAmaDownloadStatus('idle');
     setAmaDownloadFeedbackKey(0);
     setApaDownloadStatus('idle');
@@ -365,6 +372,7 @@ export function AgentSharePage() {
     setLinkCopyError(null);
     setDownloadError(null);
     setJsonDownloadError(null);
+    setHtmlDownloadError(null);
     setAmaDownloadError(null);
     setApaDownloadError(null);
     setChicagoDownloadError(null);
@@ -479,6 +487,23 @@ export function AgentSharePage() {
       return pageUrl;
     }
   }, [pageUrl]);
+
+  const htmlReport = useMemo(
+    () =>
+      report
+        ? formatAgentReportHtml({
+            title: report.title,
+            question: report.question,
+            answer: report.answer,
+            sources: report.sources,
+            url: citationUrl,
+            sharedAt: report.sharedAt,
+            finalScore: report.finalScore,
+            finalConfidence: report.finalConfidence,
+          })
+        : '',
+    [citationUrl, report],
+  );
 
   const citationText = useMemo(
     () =>
@@ -851,6 +876,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [jsonDownloadFeedbackKey, jsonDownloadStatus]);
+
+  useEffect(() => {
+    if (htmlDownloadStatus === 'idle') return;
+    const hold = htmlDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setHtmlDownloadStatus('idle');
+      setHtmlDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [htmlDownloadFeedbackKey, htmlDownloadStatus]);
 
   useEffect(() => {
     if (amaDownloadStatus === 'idle') return;
@@ -1506,6 +1541,20 @@ export function AgentSharePage() {
     }
   };
 
+  const handleDownloadHtmlReport = () => {
+    if (!report || !htmlReport) return;
+    setHtmlDownloadError(null);
+    setHtmlDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-${(report.title || report.question || 'report').slice(0, 40)}`;
+    const ok = downloadHtmlFile(htmlReport, stem);
+    if (ok) {
+      setHtmlDownloadStatus('done');
+    } else {
+      setHtmlDownloadStatus('failed');
+      setHtmlDownloadError('Could not download the HTML report — try Download .md instead.');
+    }
+  };
+
   const handleDownloadAma = () => {
     if (!report || !amaText) return;
     setAmaDownloadError(null);
@@ -2010,6 +2059,11 @@ export function AgentSharePage() {
                       {jsonDownloadError}
                     </p>
                   ) : null}
+                  {htmlDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {htmlDownloadError}
+                    </p>
+                  ) : null}
                   {amaDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {amaDownloadError}
@@ -2476,6 +2530,17 @@ export function AgentSharePage() {
                     </button>
                     <button
                       type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${htmlDownloadStatus === 'done' ? ' is-success' : ''}${htmlDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadHtmlReport}
+                    >
+                      {htmlDownloadStatus === 'done'
+                        ? 'HTML downloaded'
+                        : htmlDownloadStatus === 'failed'
+                          ? 'HTML download failed'
+                          : 'Download .html'}
+                    </button>
+                    <button
+                      type="button"
                       className="arena-btn arena-btn--secondary arena-btn--sm"
                       onClick={handlePrintReport}
                     >
@@ -2540,6 +2605,7 @@ export function AgentSharePage() {
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
                     {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
+                    {htmlDownloadStatus === 'done' ? 'Report downloaded as HTML.' : ''}
                     {amaDownloadStatus === 'done' ? 'AMA citation downloaded.' : ''}
                     {apaDownloadStatus === 'done' ? 'APA citation downloaded.' : ''}
                     {harvardDownloadStatus === 'done' ? 'Harvard citation downloaded.' : ''}
