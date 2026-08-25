@@ -19,6 +19,7 @@ import {
   downloadMlaFile,
   downloadMarkdownFile,
   downloadRisFile,
+  downloadReferenceBundleFile,
   downloadVancouverFile,
 } from '../lib/downloadTextFile';
 import track from '../utils/track';
@@ -58,6 +59,7 @@ vi.mock('../lib/downloadTextFile', () => ({
   downloadMlaFile: vi.fn(),
   downloadMarkdownFile: vi.fn(),
   downloadRisFile: vi.fn(),
+  downloadReferenceBundleFile: vi.fn(),
   downloadVancouverFile: vi.fn(),
 }));
 
@@ -160,6 +162,7 @@ describe('AgentSharePage', () => {
     vi.mocked(downloadIeeeFile).mockReturnValue(true);
     vi.mocked(downloadMlaFile).mockReturnValue(true);
     vi.mocked(downloadRisFile).mockReturnValue(true);
+    vi.mocked(downloadReferenceBundleFile).mockReturnValue(true);
     vi.mocked(downloadVancouverFile).mockReturnValue(true);
   });
 
@@ -1407,6 +1410,35 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/try Copy CSL-JSON instead/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'CSL-JSON download failed' })).toBeInTheDocument();
+  });
+
+  it('downloads all reference-manager citations as one labeled bundle', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download references' }));
+
+    expect(await screen.findByText('References downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadReferenceBundleFile).mock.calls[0] ?? [];
+    expect(content).toContain('BibTeX\n@online{');
+    expect(content).toContain('RIS\nTY  - ELEC');
+    expect(content).toContain('CSL-JSON\n[');
+    expect(filename).toEqual(expect.stringContaining('-reference-bundle'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the reference-manager bundle download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadReferenceBundleFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download references' }));
+
+    expect(await screen.findByText(/could not download the reference bundle/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reference bundle failed' })).toBeInTheDocument();
   });
 
   it('starts a fresh feedback window when the CSL-JSON citation is downloaded again', async () => {

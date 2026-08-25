@@ -23,6 +23,7 @@ import {
   downloadMlaFile,
   downloadMarkdownFile,
   downloadRisFile,
+  downloadReferenceBundleFile,
   downloadVancouverFile,
 } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
@@ -37,6 +38,7 @@ import { formatAgentReportIeee } from '../lib/agentReportIeee';
 import { formatAgentReportHarvard } from '../lib/agentReportHarvard';
 import { formatAgentReportMla } from '../lib/agentReportMla';
 import { formatAgentReportRis } from '../lib/agentReportRis';
+import { formatAgentReportReferenceBundle } from '../lib/agentReportReferenceBundle';
 import { formatAgentReportVancouver } from '../lib/agentReportVancouver';
 import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentTitle';
 import { setRedirectIntent } from '../utils/redirectIntent';
@@ -139,6 +141,8 @@ export function AgentSharePage() {
   const [risDownloadFeedbackKey, setRisDownloadFeedbackKey] = useState(0);
   const [cslJsonDownloadStatus, setCslJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [cslJsonDownloadFeedbackKey, setCslJsonDownloadFeedbackKey] = useState(0);
+  const [referenceBundleDownloadStatus, setReferenceBundleDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [referenceBundleDownloadFeedbackKey, setReferenceBundleDownloadFeedbackKey] = useState(0);
   const [csvDownloadStatus, setCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [csvDownloadFeedbackKey, setCsvDownloadFeedbackKey] = useState(0);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
@@ -171,6 +175,7 @@ export function AgentSharePage() {
   const [bibtexDownloadError, setBibtexDownloadError] = useState<string | null>(null);
   const [risDownloadError, setRisDownloadError] = useState<string | null>(null);
   const [cslJsonDownloadError, setCslJsonDownloadError] = useState<string | null>(null);
+  const [referenceBundleDownloadError, setReferenceBundleDownloadError] = useState<string | null>(null);
   const [csvDownloadError, setCsvDownloadError] = useState<string | null>(null);
   const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
@@ -311,6 +316,8 @@ export function AgentSharePage() {
     setRisDownloadFeedbackKey(0);
     setCslJsonDownloadStatus('idle');
     setCslJsonDownloadFeedbackKey(0);
+    setReferenceBundleDownloadStatus('idle');
+    setReferenceBundleDownloadFeedbackKey(0);
     setCsvDownloadStatus('idle');
     setCsvDownloadFeedbackKey(0);
     setNativeShareStatus('idle');
@@ -342,6 +349,7 @@ export function AgentSharePage() {
     setBibtexDownloadError(null);
     setRisDownloadError(null);
     setCslJsonDownloadError(null);
+    setReferenceBundleDownloadError(null);
     setCsvDownloadError(null);
     setNativeShareError(null);
     getPublicAgentReport(token)
@@ -589,6 +597,19 @@ export function AgentSharePage() {
     () =>
       report
         ? formatAgentReportCslJson({
+            title: report.title,
+            question: report.question,
+            url: citationUrl,
+            sharedAt: report.sharedAt,
+          })
+        : '',
+    [citationUrl, report],
+  );
+
+  const referenceBundleText = useMemo(
+    () =>
+      report
+        ? formatAgentReportReferenceBundle({
             title: report.title,
             question: report.question,
             url: citationUrl,
@@ -877,6 +898,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [cslJsonDownloadFeedbackKey, cslJsonDownloadStatus]);
+
+  useEffect(() => {
+    if (referenceBundleDownloadStatus === 'idle') return;
+    const hold = referenceBundleDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setReferenceBundleDownloadStatus('idle');
+      setReferenceBundleDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [referenceBundleDownloadFeedbackKey, referenceBundleDownloadStatus]);
 
   useEffect(() => {
     if (csvDownloadStatus === 'idle') return;
@@ -1504,6 +1535,22 @@ export function AgentSharePage() {
     }
   };
 
+  const handleDownloadReferenceBundle = () => {
+    if (!report || !referenceBundleText) return;
+    setReferenceBundleDownloadError(null);
+    setReferenceBundleDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}-reference-bundle`;
+    const ok = downloadReferenceBundleFile(referenceBundleText, stem);
+    if (ok) {
+      setReferenceBundleDownloadStatus('done');
+    } else {
+      setReferenceBundleDownloadStatus('failed');
+      setReferenceBundleDownloadError(
+        'Could not download the reference bundle — try the individual citation downloads instead.',
+      );
+    }
+  };
+
   const handleDownloadSourcesCsv = () => {
     if (!report || !sourceCsvText) return;
     setCsvDownloadError(null);
@@ -1865,6 +1912,11 @@ export function AgentSharePage() {
                       {cslJsonDownloadError}
                     </p>
                   ) : null}
+                  {referenceBundleDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {referenceBundleDownloadError}
+                    </p>
+                  ) : null}
                   {csvDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {csvDownloadError}
@@ -2161,6 +2213,17 @@ export function AgentSharePage() {
                     </button>
                     <button
                       type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${referenceBundleDownloadStatus === 'done' ? ' is-success' : ''}${referenceBundleDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadReferenceBundle}
+                    >
+                      {referenceBundleDownloadStatus === 'done'
+                        ? 'References downloaded'
+                        : referenceBundleDownloadStatus === 'failed'
+                          ? 'Reference bundle failed'
+                          : 'Download references'}
+                    </button>
+                    <button
+                      type="button"
                       className={`arena-btn arena-btn--secondary arena-btn--sm${ieeeDownloadStatus === 'done' ? ' is-success' : ''}${ieeeDownloadStatus === 'failed' ? ' is-error' : ''}`}
                       onClick={handleDownloadIeee}
                     >
@@ -2289,6 +2352,7 @@ export function AgentSharePage() {
                     {bibtexDownloadStatus === 'done' ? 'BibTeX citation downloaded.' : ''}
                     {risDownloadStatus === 'done' ? 'RIS citation downloaded.' : ''}
                     {cslJsonDownloadStatus === 'done' ? 'CSL-JSON citation downloaded.' : ''}
+                    {referenceBundleDownloadStatus === 'done' ? 'Reference-manager bundle downloaded.' : ''}
                     {csvDownloadStatus === 'done' ? 'Sources downloaded as CSV.' : ''}
                     {nativeShareStatus === 'shared' ? 'Report shared using the system share sheet.' : ''}
                   </span>
