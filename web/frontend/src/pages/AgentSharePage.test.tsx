@@ -276,7 +276,7 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText('BibTeX copied')).toBeInTheDocument();
     const [bibtex] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
-    expect(bibtex).toContain('@online{arena_shareable_research_20260814,');
+    expect(bibtex).toMatch(/^@online\{arena_shareable_research_20260814_[a-z0-9]+,/m);
     expect(bibtex).toContain('title = {Shareable research}');
     expect(bibtex).toContain('Question: Is this report shareable?');
     expect(bibtex).not.toContain('Yes, with a token and a public page.');

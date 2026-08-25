@@ -11,7 +11,7 @@ describe('formatAgentReportBibtex', () => {
         sharedAt: '2026-08-14T11:00:00Z',
       }),
     ).toBe(
-      '@online{arena_research_brief_20260814,\n' +
+      '@online{arena_research_brief_20260814_0vyxz1t,\n' +
         '  author = {{Arena}},\n' +
         '  title = {Research brief},\n' +
         '  year = {2026},\n' +
@@ -43,7 +43,7 @@ describe('formatAgentReportBibtex', () => {
         url: 'javascript:alert(1)',
       }),
     ).toBe(
-      '@misc{arena_a_report_without_a_safe_url_undated,\n' +
+      '@misc{arena_a_report_without_a_safe_url_undated_0b5fv39,\n' +
         '  author = {{Arena}},\n' +
         '  title = {A report without a safe URL},\n' +
         '  note = {Arena Agent report.},\n' +
@@ -58,6 +58,25 @@ describe('formatAgentReportBibtex', () => {
     });
 
     expect(bibtex).not.toContain('secret');
-    expect(bibtex).toContain('@misc{arena_private_url_undated,');
+    expect(bibtex).toContain('@misc{arena_private_url_undated_1cutwlh,');
+  });
+
+  it('keeps same-title reports distinct when they share a date', () => {
+    const first = formatAgentReportBibtex({
+      title: 'Daily brief',
+      sharedAt: '2026-08-14T09:00:00Z',
+      url: 'https://arena.example/share/agent/first-public-token',
+    });
+    const second = formatAgentReportBibtex({
+      title: 'Daily brief',
+      sharedAt: '2026-08-14T17:00:00Z',
+      url: 'https://arena.example/share/agent/second-public-token',
+    });
+
+    const firstKey = first.match(/^@online\{([^,]+)/)?.[1];
+    const secondKey = second.match(/^@online\{([^,]+)/)?.[1];
+    expect(firstKey).toMatch(/^arena_daily_brief_20260814_/);
+    expect(secondKey).toMatch(/^arena_daily_brief_20260814_/);
+    expect(firstKey).not.toBe(secondKey);
   });
 });

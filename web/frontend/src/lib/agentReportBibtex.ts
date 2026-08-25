@@ -40,7 +40,19 @@ function escapeBibtexValue(value: string): string {
     .replace(/\^/g, '\\textasciicircum{}');
 }
 
-function entryKey(title: string, date: string): string {
+function bibtexKeyFingerprint(value: string): string {
+  // BibTeX keys must be stable across copies, but two reports can share a
+  // title and date. An opaque short fingerprint keeps the key useful to a
+  // reader without copying the report's share token into the key.
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36).padStart(7, '0');
+}
+
+function entryKey(title: string, date: string, identity: string): string {
   const titlePart = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
@@ -48,7 +60,7 @@ function entryKey(title: string, date: string): string {
     .slice(0, 48)
     .replace(/_+$/g, '');
   const datePart = date ? date.replace(/-/g, '') : 'undated';
-  return `arena_${titlePart || 'agent_report'}_${datePart}`;
+  return `arena_${titlePart || 'agent_report'}_${datePart}_${bibtexKeyFingerprint(identity)}`;
 }
 
 /**
@@ -70,8 +82,9 @@ export function formatAgentReportBibtex(opts: {
   const date = bibtexDate(opts.sharedAt);
   const url = safePublicUrl(opts.url);
   const type = url ? 'online' : 'misc';
+  const identity = url || [title, question, date].join('\u0000');
   const lines = [
-    `@${type}{${entryKey(title, date)},`,
+    `@${type}{${entryKey(title, date, identity)},`,
     '  author = {{Arena}},',
     `  title = {${escapeBibtexValue(title)}},`,
   ];
