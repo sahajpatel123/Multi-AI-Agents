@@ -267,6 +267,34 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'Copy citation failed' })).toBeInTheDocument();
   });
 
+  it('copies a BibTeX citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy BibTeX' }));
+
+    expect(await screen.findByText('BibTeX copied')).toBeInTheDocument();
+    const [bibtex] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
+    expect(bibtex).toContain('@online{arena_shareable_research_20260814,');
+    expect(bibtex).toContain('title = {Shareable research}');
+    expect(bibtex).toContain('Question: Is this report shareable?');
+    expect(bibtex).not.toContain('Yes, with a token and a public page.');
+    expect(bibtex).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when copying the BibTeX citation fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy BibTeX' }));
+
+    expect(await screen.findByText(/could not copy the BibTeX citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy BibTeX failed' })).toBeInTheDocument();
+  });
+
   it('copies the consulted sources without the full report', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
       report({
