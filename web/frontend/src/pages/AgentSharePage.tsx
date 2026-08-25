@@ -47,11 +47,16 @@ function formatSourceCsv(sources: readonly string[]): string {
     return `"${safe.replace(/"/g, '""')}"`;
   };
 
-  return [
-    `${escapeCell('source_number')},${escapeCell('source')}`,
-    ...sources.map((source, index) => `${escapeCell(String(index + 1))},${escapeCell(source)}`),
-    '',
-  ].join('\r\n');
+  // Match Arena's other spreadsheet exports so Excel detects UTF-8 source
+  // labels and URLs instead of opening non-ASCII text with a legacy encoding.
+  return (
+    '\uFEFF' +
+    [
+      `${escapeCell('source_number')},${escapeCell('source')}`,
+      ...sources.map((source, index) => `${escapeCell(String(index + 1))},${escapeCell(source)}`),
+      '',
+    ].join('\r\n')
+  );
 }
 
 /**

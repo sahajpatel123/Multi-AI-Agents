@@ -276,7 +276,11 @@ describe('AgentSharePage', () => {
   it('downloads consulted sources as escaped CSV without report text', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(
       report({
-        sources: ['https://example.com/research', 'A "quoted", source', '=unsafe-source'],
+        sources: [
+          'https://例子.example/研究',
+          'A "quoted", source',
+          '=unsafe-source',
+        ],
       }),
     );
     renderShare();
@@ -288,8 +292,8 @@ describe('AgentSharePage', () => {
     const [content, filename] = vi.mocked(downloadCsvFile).mock.calls[0] ?? [];
     expect(filename).toEqual(expect.stringContaining('agent-share-sources-'));
     expect(content).toBe(
-      '"source_number","source"\r\n' +
-        '"1","https://example.com/research"\r\n' +
+      '\uFEFF"source_number","source"\r\n' +
+        '"1","https://例子.example/研究"\r\n' +
         '"2","A ""quoted"", source"\r\n' +
         '"3","\'=unsafe-source"\r\n',
     );
