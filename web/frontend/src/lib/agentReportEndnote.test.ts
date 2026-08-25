@@ -68,6 +68,23 @@ describe('formatAgentReportEndnote', () => {
     expect(xml).not.toContain('second line\n');
   });
 
+  it('keeps forbidden Unicode out and never splits an emoji at the length cap', () => {
+    const title = `${'x'.repeat(239)}💡`;
+    const xml = formatAgentReportEndnote({
+      title: `${title}\u0000\u000b\ufffe\uffff${String.fromCharCode(0xd800)}`,
+    });
+
+    expect(xml).toContain(`<title>${title}</title>`);
+    expect(xml).not.toContain('\u0000');
+    expect(xml).not.toContain('\u000b');
+    expect(xml).not.toContain('\ufffe');
+    expect(xml).not.toContain('\uffff');
+    expect(xml).not.toContain(String.fromCharCode(0xd800));
+
+    const parsed = new DOMParser().parseFromString(xml, 'application/xml');
+    expect(parsed.querySelector('parsererror')).toBeNull();
+  });
+
   it('strips tracking state, rejects credentials, and omits malformed dates', () => {
     const stable = formatAgentReportEndnote({
       title: 'Stable URL',

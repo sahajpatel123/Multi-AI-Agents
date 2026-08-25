@@ -5,8 +5,28 @@
  * never belong in a reference-manager export.
  */
 
+function isXml10CodePoint(codePoint: number): boolean {
+  return (
+    codePoint === 0x9 ||
+    codePoint === 0xa ||
+    codePoint === 0xd ||
+    (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+    (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+    (codePoint >= 0x10000 && codePoint <= 0x10ffff)
+  );
+}
+
 function normalizeEndnoteText(raw: string | null | undefined, max = 240): string {
-  return String(raw ?? '')
+  const normalized = Array.from(String(raw ?? ''))
+    // XML 1.0 cannot represent C0 controls, surrogates, or the noncharacters
+    // outside its allowed Unicode ranges. Replace those with a space before
+    // the length cap so a supplementary character cannot be split in half by
+    // JavaScript's UTF-16 string slicing while existing field sanitization
+    // remains readable.
+    .map((character) =>
+      isXml10CodePoint(character.codePointAt(0) ?? 0) ? character : ' ',
+    )
+    .join('')
     // EndNote XML is line-oriented in practice. Flatten user-authored
     // controls before escaping so metadata cannot create misleading markup.
     // eslint-disable-next-line no-control-regex
@@ -15,8 +35,9 @@ function normalizeEndnoteText(raw: string | null | undefined, max = 240): string
     // reorder what a reader sees (Trojan Source style).
     .replace(/[\u061c\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, max);
+    .trim();
+
+  return Array.from(normalized).slice(0, max).join('');
 }
 
 function endnoteDate(raw: string | null | undefined): { iso: string; year: string } | null {
