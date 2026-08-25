@@ -18,6 +18,7 @@ import {
   downloadCslJsonFile,
   downloadJsonFile,
   downloadIeeeFile,
+  downloadMlaFile,
   downloadMarkdownFile,
   downloadRisFile,
 } from '../lib/downloadTextFile';
@@ -111,6 +112,8 @@ export function AgentSharePage() {
   const [apaDownloadFeedbackKey, setApaDownloadFeedbackKey] = useState(0);
   const [chicagoDownloadStatus, setChicagoDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [chicagoDownloadFeedbackKey, setChicagoDownloadFeedbackKey] = useState(0);
+  const [mlaDownloadStatus, setMlaDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [mlaDownloadFeedbackKey, setMlaDownloadFeedbackKey] = useState(0);
   const [ieeeDownloadStatus, setIeeeDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [ieeeDownloadFeedbackKey, setIeeeDownloadFeedbackKey] = useState(0);
   const [bundleDownloadStatus, setBundleDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -141,6 +144,7 @@ export function AgentSharePage() {
   const [jsonDownloadError, setJsonDownloadError] = useState<string | null>(null);
   const [apaDownloadError, setApaDownloadError] = useState<string | null>(null);
   const [chicagoDownloadError, setChicagoDownloadError] = useState<string | null>(null);
+  const [mlaDownloadError, setMlaDownloadError] = useState<string | null>(null);
   const [ieeeDownloadError, setIeeeDownloadError] = useState<string | null>(null);
   const [bundleDownloadError, setBundleDownloadError] = useState<string | null>(null);
   const [bibtexDownloadError, setBibtexDownloadError] = useState<string | null>(null);
@@ -247,6 +251,8 @@ export function AgentSharePage() {
     setApaDownloadFeedbackKey(0);
     setChicagoDownloadStatus('idle');
     setChicagoDownloadFeedbackKey(0);
+    setMlaDownloadStatus('idle');
+    setMlaDownloadFeedbackKey(0);
     setIeeeDownloadStatus('idle');
     setIeeeDownloadFeedbackKey(0);
     setBundleDownloadStatus('idle');
@@ -276,6 +282,7 @@ export function AgentSharePage() {
     setJsonDownloadError(null);
     setApaDownloadError(null);
     setChicagoDownloadError(null);
+    setMlaDownloadError(null);
     setIeeeDownloadError(null);
     setBundleDownloadError(null);
     setBibtexDownloadError(null);
@@ -654,6 +661,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [chicagoDownloadFeedbackKey, chicagoDownloadStatus]);
+
+  useEffect(() => {
+    if (mlaDownloadStatus === 'idle') return;
+    const hold = mlaDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setMlaDownloadStatus('idle');
+      setMlaDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [mlaDownloadFeedbackKey, mlaDownloadStatus]);
 
   useEffect(() => {
     if (ieeeDownloadStatus === 'idle') return;
@@ -1133,6 +1150,20 @@ export function AgentSharePage() {
     }
   };
 
+  const handleDownloadMla = () => {
+    if (!report || !mlaText) return;
+    setMlaDownloadError(null);
+    setMlaDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}-mla`;
+    const ok = downloadMlaFile(mlaText, stem);
+    if (ok) {
+      setMlaDownloadStatus('done');
+    } else {
+      setMlaDownloadStatus('failed');
+      setMlaDownloadError('Could not download the MLA citation — try Copy MLA instead.');
+    }
+  };
+
   const handleDownloadIeee = () => {
     if (!report || !ieeeText) return;
     setIeeeDownloadError(null);
@@ -1492,6 +1523,11 @@ export function AgentSharePage() {
                       {chicagoDownloadError}
                     </p>
                   ) : null}
+                  {mlaDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {mlaDownloadError}
+                    </p>
+                  ) : null}
                   {ieeeDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {ieeeDownloadError}
@@ -1646,6 +1682,17 @@ export function AgentSharePage() {
                           : mlaCopyStatus === 'failed'
                             ? 'Copy MLA failed'
                             : 'Copy MLA'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${mlaDownloadStatus === 'done' ? ' is-success' : ''}${mlaDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadMla}
+                    >
+                      {mlaDownloadStatus === 'done'
+                        ? 'MLA downloaded'
+                        : mlaDownloadStatus === 'failed'
+                          ? 'MLA download failed'
+                          : 'Download MLA'}
                     </button>
                     <button
                       type="button"
@@ -1843,6 +1890,7 @@ export function AgentSharePage() {
                     {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
                     {apaDownloadStatus === 'done' ? 'APA citation downloaded.' : ''}
                     {chicagoDownloadStatus === 'done' ? 'Chicago citation downloaded.' : ''}
+                    {mlaDownloadStatus === 'done' ? 'MLA citation downloaded.' : ''}
                     {ieeeDownloadStatus === 'done' ? 'IEEE citation downloaded.' : ''}
                     {bundleDownloadStatus === 'done' ? 'Citation bundle downloaded.' : ''}
                     {bibtexDownloadStatus === 'done' ? 'BibTeX citation downloaded.' : ''}

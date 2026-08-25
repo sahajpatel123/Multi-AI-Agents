@@ -14,6 +14,7 @@ import {
   downloadCslJsonFile,
   downloadJsonFile,
   downloadIeeeFile,
+  downloadMlaFile,
   downloadMarkdownFile,
   downloadRisFile,
 } from '../lib/downloadTextFile';
@@ -49,6 +50,7 @@ vi.mock('../lib/downloadTextFile', () => ({
   downloadCslJsonFile: vi.fn(),
   downloadJsonFile: vi.fn(),
   downloadIeeeFile: vi.fn(),
+  downloadMlaFile: vi.fn(),
   downloadMarkdownFile: vi.fn(),
   downloadRisFile: vi.fn(),
 }));
@@ -148,6 +150,7 @@ describe('AgentSharePage', () => {
     vi.mocked(downloadCsvFile).mockReturnValue(true);
     vi.mocked(downloadCslJsonFile).mockReturnValue(true);
     vi.mocked(downloadIeeeFile).mockReturnValue(true);
+    vi.mocked(downloadMlaFile).mockReturnValue(true);
     vi.mocked(downloadRisFile).mockReturnValue(true);
   });
 
@@ -969,6 +972,37 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/could not download the Chicago citation/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Chicago download failed' })).toBeInTheDocument();
+  });
+
+  it('downloads a public MLA citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download MLA' }));
+
+    expect(await screen.findByText('MLA downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadMlaFile).mock.calls[0] ?? [];
+    expect(content).toContain(
+      'Arena. “Shareable research.” Arena Agent report, 14 Aug. 2026, http://localhost:3000/.',
+    );
+    expect(content).toContain(window.location.href);
+    expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));
+    expect(filename).toEqual(expect.stringContaining('-mla'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the MLA download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadMlaFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download MLA' }));
+
+    expect(await screen.findByText(/could not download the MLA citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'MLA download failed' })).toBeInTheDocument();
   });
 
   it('downloads a public IEEE citation without the report body or share token', async () => {
