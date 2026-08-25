@@ -242,6 +242,26 @@ export function downloadChicagoFile(
 }
 
 /**
+ * Download a plain-text IEEE-style citation with a format-specific filename.
+ * Keeping this beside the other citation wrappers gives bibliography users a
+ * predictable `.txt` export without duplicating browser download handling.
+ */
+export function downloadIeeeFile(
+  content: string,
+  filenameStem: string,
+  opts?: { dated?: boolean; date?: Date },
+): boolean {
+  const dated = opts?.dated !== false;
+  const stem = dated
+    ? withDownloadDate(filenameStem, opts?.date, 'arena-export')
+    : sanitizeDownloadFilename(filenameStem, 'arena-export');
+  return downloadTextFile(content, {
+    filename: `${stem}.txt`,
+    mimeType: 'text/plain;charset=utf-8',
+  });
+}
+
+/**
  * Trigger client-side download of a Blob (e.g. CSV file from backend stream).
  * Safe no-op when document/window is unavailable.
  */

@@ -16,6 +16,7 @@ import {
   downloadCsvFile,
   downloadCslJsonFile,
   downloadJsonFile,
+  downloadIeeeFile,
   downloadMarkdownFile,
   downloadRisFile,
 } from '../lib/downloadTextFile';
@@ -25,6 +26,7 @@ import { formatAgentReportApa } from '../lib/agentReportApa';
 import { formatAgentReportChicago } from '../lib/agentReportChicago';
 import { formatAgentReportCitation } from '../lib/agentReportCitation';
 import { formatAgentReportCslJson } from '../lib/agentReportCslJson';
+import { formatAgentReportIeee } from '../lib/agentReportIeee';
 import { formatAgentReportMla } from '../lib/agentReportMla';
 import { formatAgentReportRis } from '../lib/agentReportRis';
 import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentTitle';
@@ -95,6 +97,7 @@ export function AgentSharePage() {
   const [apaCopyStatus, setApaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [chicagoCopyStatus, setChicagoCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [mlaCopyStatus, setMlaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [ieeeCopyStatus, setIeeeCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [risCopyStatus, setRisCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [sourceCopyStatus, setSourceCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -105,6 +108,8 @@ export function AgentSharePage() {
   const [apaDownloadFeedbackKey, setApaDownloadFeedbackKey] = useState(0);
   const [chicagoDownloadStatus, setChicagoDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [chicagoDownloadFeedbackKey, setChicagoDownloadFeedbackKey] = useState(0);
+  const [ieeeDownloadStatus, setIeeeDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [ieeeDownloadFeedbackKey, setIeeeDownloadFeedbackKey] = useState(0);
   const [bibtexDownloadStatus, setBibtexDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [bibtexDownloadFeedbackKey, setBibtexDownloadFeedbackKey] = useState(0);
   const [risDownloadStatus, setRisDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -122,6 +127,7 @@ export function AgentSharePage() {
   const [apaCopyError, setApaCopyError] = useState<string | null>(null);
   const [chicagoCopyError, setChicagoCopyError] = useState<string | null>(null);
   const [mlaCopyError, setMlaCopyError] = useState<string | null>(null);
+  const [ieeeCopyError, setIeeeCopyError] = useState<string | null>(null);
   const [risCopyError, setRisCopyError] = useState<string | null>(null);
   const [sourceCopyError, setSourceCopyError] = useState<string | null>(null);
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
@@ -129,6 +135,7 @@ export function AgentSharePage() {
   const [jsonDownloadError, setJsonDownloadError] = useState<string | null>(null);
   const [apaDownloadError, setApaDownloadError] = useState<string | null>(null);
   const [chicagoDownloadError, setChicagoDownloadError] = useState<string | null>(null);
+  const [ieeeDownloadError, setIeeeDownloadError] = useState<string | null>(null);
   const [bibtexDownloadError, setBibtexDownloadError] = useState<string | null>(null);
   const [risDownloadError, setRisDownloadError] = useState<string | null>(null);
   const [cslJsonDownloadError, setCslJsonDownloadError] = useState<string | null>(null);
@@ -141,6 +148,7 @@ export function AgentSharePage() {
   const [apaCopyInFlight, setApaCopyInFlight] = useState(false);
   const [chicagoCopyInFlight, setChicagoCopyInFlight] = useState(false);
   const [mlaCopyInFlight, setMlaCopyInFlight] = useState(false);
+  const [ieeeCopyInFlight, setIeeeCopyInFlight] = useState(false);
   const [risCopyInFlight, setRisCopyInFlight] = useState(false);
   const [sourceCopyInFlight, setSourceCopyInFlight] = useState(false);
   const [linkCopyInFlight, setLinkCopyInFlight] = useState(false);
@@ -158,6 +166,8 @@ export function AgentSharePage() {
   const chicagoCopyRequestRef = useRef(0);
   const mlaCopyBusyRef = useRef(false);
   const mlaCopyRequestRef = useRef(0);
+  const ieeeCopyBusyRef = useRef(false);
+  const ieeeCopyRequestRef = useRef(0);
   const risCopyBusyRef = useRef(false);
   const risCopyRequestRef = useRef(0);
   const sourceCopyBusyRef = useRef(false);
@@ -191,6 +201,9 @@ export function AgentSharePage() {
     mlaCopyRequestRef.current += 1;
     mlaCopyBusyRef.current = false;
     setMlaCopyInFlight(false);
+    ieeeCopyRequestRef.current += 1;
+    ieeeCopyBusyRef.current = false;
+    setIeeeCopyInFlight(false);
     risCopyRequestRef.current += 1;
     risCopyBusyRef.current = false;
     setRisCopyInFlight(false);
@@ -209,6 +222,7 @@ export function AgentSharePage() {
     setApaCopyStatus('idle');
     setChicagoCopyStatus('idle');
     setMlaCopyStatus('idle');
+    setIeeeCopyStatus('idle');
     setRisCopyStatus('idle');
     setSourceCopyStatus('idle');
     setLinkStatus('idle');
@@ -219,6 +233,8 @@ export function AgentSharePage() {
     setApaDownloadFeedbackKey(0);
     setChicagoDownloadStatus('idle');
     setChicagoDownloadFeedbackKey(0);
+    setIeeeDownloadStatus('idle');
+    setIeeeDownloadFeedbackKey(0);
     setBibtexDownloadStatus('idle');
     setBibtexDownloadFeedbackKey(0);
     setRisDownloadStatus('idle');
@@ -235,6 +251,7 @@ export function AgentSharePage() {
     setApaCopyError(null);
     setChicagoCopyError(null);
     setMlaCopyError(null);
+    setIeeeCopyError(null);
     setRisCopyError(null);
     setSourceCopyError(null);
     setLinkCopyError(null);
@@ -242,6 +259,7 @@ export function AgentSharePage() {
     setJsonDownloadError(null);
     setApaDownloadError(null);
     setChicagoDownloadError(null);
+    setIeeeDownloadError(null);
     setBibtexDownloadError(null);
     setRisDownloadError(null);
     setCslJsonDownloadError(null);
@@ -276,6 +294,7 @@ export function AgentSharePage() {
       apaCopyRequestRef.current += 1;
       chicagoCopyRequestRef.current += 1;
       mlaCopyRequestRef.current += 1;
+      ieeeCopyRequestRef.current += 1;
       risCopyRequestRef.current += 1;
       sourceCopyRequestRef.current += 1;
     };
@@ -383,6 +402,19 @@ export function AgentSharePage() {
     () =>
       report
         ? formatAgentReportMla({
+            title: report.title,
+            question: report.question,
+            url: citationUrl,
+            sharedAt: report.sharedAt,
+          })
+        : '',
+    [citationUrl, report],
+  );
+
+  const ieeeText = useMemo(
+    () =>
+      report
+        ? formatAgentReportIeee({
             title: report.title,
             question: report.question,
             url: citationUrl,
@@ -512,6 +544,16 @@ export function AgentSharePage() {
   }, [mlaCopyStatus]);
 
   useEffect(() => {
+    if (ieeeCopyStatus === 'idle') return;
+    const hold = ieeeCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setIeeeCopyStatus('idle');
+      setIeeeCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [ieeeCopyStatus]);
+
+  useEffect(() => {
     if (risCopyStatus === 'idle') return;
     const hold = risCopyStatus === 'failed' ? 2800 : 1600;
     const t = window.setTimeout(() => {
@@ -570,6 +612,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [chicagoDownloadFeedbackKey, chicagoDownloadStatus]);
+
+  useEffect(() => {
+    if (ieeeDownloadStatus === 'idle') return;
+    const hold = ieeeDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setIeeeDownloadStatus('idle');
+      setIeeeDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [ieeeDownloadFeedbackKey, ieeeDownloadStatus]);
 
   useEffect(() => {
     if (bibtexDownloadStatus === 'idle') return;
@@ -855,6 +907,34 @@ export function AgentSharePage() {
     }
   };
 
+  const handleCopyIeee = async () => {
+    if (ieeeCopyBusyRef.current || !ieeeText) return;
+    ieeeCopyBusyRef.current = true;
+    setIeeeCopyInFlight(true);
+    const requestId = ++ieeeCopyRequestRef.current;
+    setIeeeCopyStatus('idle');
+    setIeeeCopyError(null);
+    try {
+      const ok = await copyToClipboard(ieeeText);
+      if (ieeeCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setIeeeCopyStatus('copied');
+      } else {
+        setIeeeCopyStatus('failed');
+        setIeeeCopyError('Could not copy the IEEE citation — copy it manually instead.');
+      }
+    } catch {
+      if (ieeeCopyRequestRef.current !== requestId) return;
+      setIeeeCopyStatus('failed');
+      setIeeeCopyError('Could not copy the IEEE citation — copy it manually instead.');
+    } finally {
+      if (ieeeCopyRequestRef.current === requestId) {
+        ieeeCopyBusyRef.current = false;
+        setIeeeCopyInFlight(false);
+      }
+    }
+  };
+
   const handleCopyRis = async () => {
     if (risCopyBusyRef.current || !risText) return;
     risCopyBusyRef.current = true;
@@ -970,6 +1050,20 @@ export function AgentSharePage() {
     } else {
       setChicagoDownloadStatus('failed');
       setChicagoDownloadError('Could not download the Chicago citation — try Copy Chicago instead.');
+    }
+  };
+
+  const handleDownloadIeee = () => {
+    if (!report || !ieeeText) return;
+    setIeeeDownloadError(null);
+    setIeeeDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}-ieee`;
+    const ok = downloadIeeeFile(ieeeText, stem);
+    if (ok) {
+      setIeeeDownloadStatus('done');
+    } else {
+      setIeeeDownloadStatus('failed');
+      setIeeeDownloadError('Could not download the IEEE citation — try Copy IEEE instead.');
     }
   };
 
@@ -1268,6 +1362,11 @@ export function AgentSharePage() {
                       {mlaCopyError}
                     </p>
                   ) : null}
+                  {ieeeCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {ieeeCopyError}
+                    </p>
+                  ) : null}
                   {risCopyError ? (
                     <p className="share-take__error" role="alert">
                       {risCopyError}
@@ -1291,6 +1390,11 @@ export function AgentSharePage() {
                   {chicagoDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {chicagoDownloadError}
+                    </p>
+                  ) : null}
+                  {ieeeDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {ieeeDownloadError}
                     </p>
                   ) : null}
                   {bibtexDownloadError ? (
@@ -1426,6 +1530,20 @@ export function AgentSharePage() {
                     </button>
                     <button
                       type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${ieeeCopyStatus === 'copied' ? ' is-success' : ''}${ieeeCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyIeee()}
+                      disabled={ieeeCopyInFlight}
+                    >
+                      {ieeeCopyInFlight
+                        ? 'Copying…'
+                        : ieeeCopyStatus === 'copied'
+                          ? 'IEEE copied'
+                          : ieeeCopyStatus === 'failed'
+                            ? 'Copy IEEE failed'
+                            : 'Copy IEEE'}
+                    </button>
+                    <button
+                      type="button"
                       className={`arena-btn arena-btn--secondary arena-btn--sm${bibtexCopyStatus === 'copied' ? ' is-success' : ''}${bibtexCopyStatus === 'failed' ? ' is-error' : ''}`}
                       onClick={() => void handleCopyBibtex()}
                       disabled={bibtexCopyInFlight}
@@ -1498,6 +1616,17 @@ export function AgentSharePage() {
                         : cslJsonDownloadStatus === 'failed'
                           ? 'CSL-JSON download failed'
                           : 'Download .csl.json'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${ieeeDownloadStatus === 'done' ? ' is-success' : ''}${ieeeDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadIeee}
+                    >
+                      {ieeeDownloadStatus === 'done'
+                        ? 'IEEE downloaded'
+                        : ieeeDownloadStatus === 'failed'
+                          ? 'IEEE download failed'
+                          : 'Download IEEE'}
                     </button>
                     <button
                       type="button"
@@ -1574,6 +1703,7 @@ export function AgentSharePage() {
                     {apaCopyStatus === 'copied' ? 'APA citation copied to clipboard. ' : ''}
                     {chicagoCopyStatus === 'copied' ? 'Chicago citation copied to clipboard. ' : ''}
                     {mlaCopyStatus === 'copied' ? 'MLA citation copied to clipboard. ' : ''}
+                    {ieeeCopyStatus === 'copied' ? 'IEEE citation copied to clipboard. ' : ''}
                     {bibtexCopyStatus === 'copied' ? 'BibTeX citation copied to clipboard. ' : ''}
                     {cslJsonCopyStatus === 'copied' ? 'CSL-JSON citation copied to clipboard. ' : ''}
                     {sourceCopyStatus === 'copied' ? 'Sources copied to clipboard. ' : ''}
@@ -1582,6 +1712,7 @@ export function AgentSharePage() {
                     {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
                     {apaDownloadStatus === 'done' ? 'APA citation downloaded.' : ''}
                     {chicagoDownloadStatus === 'done' ? 'Chicago citation downloaded.' : ''}
+                    {ieeeDownloadStatus === 'done' ? 'IEEE citation downloaded.' : ''}
                     {bibtexDownloadStatus === 'done' ? 'BibTeX citation downloaded.' : ''}
                     {risDownloadStatus === 'done' ? 'RIS citation downloaded.' : ''}
                     {cslJsonDownloadStatus === 'done' ? 'CSL-JSON citation downloaded.' : ''}
