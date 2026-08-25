@@ -16,6 +16,7 @@ import {
   downloadCsvFile,
   downloadCitationBundleFile,
   downloadCslJsonFile,
+  downloadHarvardFile,
   downloadJsonFile,
   downloadIeeeFile,
   downloadMlaFile,
@@ -30,6 +31,7 @@ import { formatAgentReportCitation } from '../lib/agentReportCitation';
 import { formatAgentReportCitationBundle } from '../lib/agentReportCitationBundle';
 import { formatAgentReportCslJson } from '../lib/agentReportCslJson';
 import { formatAgentReportIeee } from '../lib/agentReportIeee';
+import { formatAgentReportHarvard } from '../lib/agentReportHarvard';
 import { formatAgentReportMla } from '../lib/agentReportMla';
 import { formatAgentReportRis } from '../lib/agentReportRis';
 import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentTitle';
@@ -99,6 +101,7 @@ export function AgentSharePage() {
   const [citationCopyStatus, setCitationCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [bundleCopyStatus, setBundleCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [apaCopyStatus, setApaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [harvardCopyStatus, setHarvardCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [chicagoCopyStatus, setChicagoCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [mlaCopyStatus, setMlaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [ieeeCopyStatus, setIeeeCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -110,6 +113,8 @@ export function AgentSharePage() {
   const [jsonDownloadFeedbackKey, setJsonDownloadFeedbackKey] = useState(0);
   const [apaDownloadStatus, setApaDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [apaDownloadFeedbackKey, setApaDownloadFeedbackKey] = useState(0);
+  const [harvardDownloadStatus, setHarvardDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [harvardDownloadFeedbackKey, setHarvardDownloadFeedbackKey] = useState(0);
   const [chicagoDownloadStatus, setChicagoDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [chicagoDownloadFeedbackKey, setChicagoDownloadFeedbackKey] = useState(0);
   const [mlaDownloadStatus, setMlaDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -134,6 +139,7 @@ export function AgentSharePage() {
   const [citationCopyError, setCitationCopyError] = useState<string | null>(null);
   const [bundleCopyError, setBundleCopyError] = useState<string | null>(null);
   const [apaCopyError, setApaCopyError] = useState<string | null>(null);
+  const [harvardCopyError, setHarvardCopyError] = useState<string | null>(null);
   const [chicagoCopyError, setChicagoCopyError] = useState<string | null>(null);
   const [mlaCopyError, setMlaCopyError] = useState<string | null>(null);
   const [ieeeCopyError, setIeeeCopyError] = useState<string | null>(null);
@@ -147,6 +153,7 @@ export function AgentSharePage() {
   const [mlaDownloadError, setMlaDownloadError] = useState<string | null>(null);
   const [ieeeDownloadError, setIeeeDownloadError] = useState<string | null>(null);
   const [bundleDownloadError, setBundleDownloadError] = useState<string | null>(null);
+  const [harvardDownloadError, setHarvardDownloadError] = useState<string | null>(null);
   const [bibtexDownloadError, setBibtexDownloadError] = useState<string | null>(null);
   const [risDownloadError, setRisDownloadError] = useState<string | null>(null);
   const [cslJsonDownloadError, setCslJsonDownloadError] = useState<string | null>(null);
@@ -158,6 +165,7 @@ export function AgentSharePage() {
   const [citationCopyInFlight, setCitationCopyInFlight] = useState(false);
   const [bundleCopyInFlight, setBundleCopyInFlight] = useState(false);
   const [apaCopyInFlight, setApaCopyInFlight] = useState(false);
+  const [harvardCopyInFlight, setHarvardCopyInFlight] = useState(false);
   const [chicagoCopyInFlight, setChicagoCopyInFlight] = useState(false);
   const [mlaCopyInFlight, setMlaCopyInFlight] = useState(false);
   const [ieeeCopyInFlight, setIeeeCopyInFlight] = useState(false);
@@ -176,6 +184,8 @@ export function AgentSharePage() {
   const citationCopyRequestRef = useRef(0);
   const apaCopyBusyRef = useRef(false);
   const apaCopyRequestRef = useRef(0);
+  const harvardCopyBusyRef = useRef(false);
+  const harvardCopyRequestRef = useRef(0);
   const chicagoCopyBusyRef = useRef(false);
   const chicagoCopyRequestRef = useRef(0);
   const mlaCopyBusyRef = useRef(false);
@@ -212,6 +222,9 @@ export function AgentSharePage() {
     apaCopyRequestRef.current += 1;
     apaCopyBusyRef.current = false;
     setApaCopyInFlight(false);
+    harvardCopyRequestRef.current += 1;
+    harvardCopyBusyRef.current = false;
+    setHarvardCopyInFlight(false);
     chicagoCopyRequestRef.current += 1;
     chicagoCopyBusyRef.current = false;
     setChicagoCopyInFlight(false);
@@ -238,6 +251,7 @@ export function AgentSharePage() {
     setCitationCopyStatus('idle');
     setBundleCopyStatus('idle');
     setApaCopyStatus('idle');
+    setHarvardCopyStatus('idle');
     setChicagoCopyStatus('idle');
     setMlaCopyStatus('idle');
     setIeeeCopyStatus('idle');
@@ -249,6 +263,8 @@ export function AgentSharePage() {
     setJsonDownloadFeedbackKey(0);
     setApaDownloadStatus('idle');
     setApaDownloadFeedbackKey(0);
+    setHarvardDownloadStatus('idle');
+    setHarvardDownloadFeedbackKey(0);
     setChicagoDownloadStatus('idle');
     setChicagoDownloadFeedbackKey(0);
     setMlaDownloadStatus('idle');
@@ -272,6 +288,7 @@ export function AgentSharePage() {
     setCitationCopyError(null);
     setBundleCopyError(null);
     setApaCopyError(null);
+    setHarvardCopyError(null);
     setChicagoCopyError(null);
     setMlaCopyError(null);
     setIeeeCopyError(null);
@@ -285,6 +302,7 @@ export function AgentSharePage() {
     setMlaDownloadError(null);
     setIeeeDownloadError(null);
     setBundleDownloadError(null);
+    setHarvardDownloadError(null);
     setBibtexDownloadError(null);
     setRisDownloadError(null);
     setCslJsonDownloadError(null);
@@ -318,6 +336,7 @@ export function AgentSharePage() {
       citationCopyRequestRef.current += 1;
       bundleCopyRequestRef.current += 1;
       apaCopyRequestRef.current += 1;
+      harvardCopyRequestRef.current += 1;
       chicagoCopyRequestRef.current += 1;
       mlaCopyRequestRef.current += 1;
       ieeeCopyRequestRef.current += 1;
@@ -402,6 +421,19 @@ export function AgentSharePage() {
     () =>
       report
         ? formatAgentReportApa({
+            title: report.title,
+            question: report.question,
+            url: citationUrl,
+            sharedAt: report.sharedAt,
+          })
+        : '',
+    [citationUrl, report],
+  );
+
+  const harvardText = useMemo(
+    () =>
+      report
+        ? formatAgentReportHarvard({
             title: report.title,
             question: report.question,
             url: citationUrl,
@@ -573,6 +605,16 @@ export function AgentSharePage() {
   }, [apaCopyStatus]);
 
   useEffect(() => {
+    if (harvardCopyStatus === 'idle') return;
+    const hold = harvardCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setHarvardCopyStatus('idle');
+      setHarvardCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [harvardCopyStatus]);
+
+  useEffect(() => {
     if (chicagoCopyStatus === 'idle') return;
     const hold = chicagoCopyStatus === 'failed' ? 2800 : 1600;
     const t = window.setTimeout(() => {
@@ -651,6 +693,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [apaDownloadFeedbackKey, apaDownloadStatus]);
+
+  useEffect(() => {
+    if (harvardDownloadStatus === 'idle') return;
+    const hold = harvardDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setHarvardDownloadStatus('idle');
+      setHarvardDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [harvardDownloadFeedbackKey, harvardDownloadStatus]);
 
   useEffect(() => {
     if (chicagoDownloadStatus === 'idle') return;
@@ -948,6 +1000,34 @@ export function AgentSharePage() {
     }
   };
 
+  const handleCopyHarvard = async () => {
+    if (harvardCopyBusyRef.current || !harvardText) return;
+    harvardCopyBusyRef.current = true;
+    setHarvardCopyInFlight(true);
+    const requestId = ++harvardCopyRequestRef.current;
+    setHarvardCopyStatus('idle');
+    setHarvardCopyError(null);
+    try {
+      const ok = await copyToClipboard(harvardText);
+      if (harvardCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setHarvardCopyStatus('copied');
+      } else {
+        setHarvardCopyStatus('failed');
+        setHarvardCopyError('Could not copy the Harvard citation — copy it manually instead.');
+      }
+    } catch {
+      if (harvardCopyRequestRef.current !== requestId) return;
+      setHarvardCopyStatus('failed');
+      setHarvardCopyError('Could not copy the Harvard citation — copy it manually instead.');
+    } finally {
+      if (harvardCopyRequestRef.current === requestId) {
+        harvardCopyBusyRef.current = false;
+        setHarvardCopyInFlight(false);
+      }
+    }
+  };
+
   const handleCopyChicago = async () => {
     if (chicagoCopyBusyRef.current || !chicagoText) return;
     chicagoCopyBusyRef.current = true;
@@ -1133,6 +1213,20 @@ export function AgentSharePage() {
     } else {
       setApaDownloadStatus('failed');
       setApaDownloadError('Could not download the APA citation — try Copy APA instead.');
+    }
+  };
+
+  const handleDownloadHarvard = () => {
+    if (!report || !harvardText) return;
+    setHarvardDownloadError(null);
+    setHarvardDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}-harvard`;
+    const ok = downloadHarvardFile(harvardText, stem);
+    if (ok) {
+      setHarvardDownloadStatus('done');
+    } else {
+      setHarvardDownloadStatus('failed');
+      setHarvardDownloadError('Could not download the Harvard citation — try Copy Harvard instead.');
     }
   };
 
@@ -1483,6 +1577,11 @@ export function AgentSharePage() {
                       {apaCopyError}
                     </p>
                   ) : null}
+                  {harvardCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {harvardCopyError}
+                    </p>
+                  ) : null}
                   {chicagoCopyError ? (
                     <p className="share-take__error" role="alert">
                       {chicagoCopyError}
@@ -1516,6 +1615,11 @@ export function AgentSharePage() {
                   {apaDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {apaDownloadError}
+                    </p>
+                  ) : null}
+                  {harvardDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {harvardDownloadError}
                     </p>
                   ) : null}
                   {chicagoDownloadError ? (
@@ -1642,7 +1746,32 @@ export function AgentSharePage() {
                         ? 'APA downloaded'
                         : apaDownloadStatus === 'failed'
                           ? 'APA download failed'
-                          : 'Download APA'}
+                        : 'Download APA'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${harvardCopyStatus === 'copied' ? ' is-success' : ''}${harvardCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyHarvard()}
+                      disabled={harvardCopyInFlight}
+                    >
+                      {harvardCopyInFlight
+                        ? 'Copying…'
+                        : harvardCopyStatus === 'copied'
+                          ? 'Harvard copied'
+                          : harvardCopyStatus === 'failed'
+                            ? 'Copy Harvard failed'
+                            : 'Copy Harvard'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${harvardDownloadStatus === 'done' ? ' is-success' : ''}${harvardDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadHarvard}
+                    >
+                      {harvardDownloadStatus === 'done'
+                        ? 'Harvard downloaded'
+                        : harvardDownloadStatus === 'failed'
+                          ? 'Harvard download failed'
+                          : 'Download Harvard'}
                     </button>
                     <button
                       type="button"
@@ -1877,8 +2006,9 @@ export function AgentSharePage() {
                   <span className="share-take__status" role="status" aria-live="polite">
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
                     {citationCopyStatus === 'copied' ? 'Citation copied to clipboard. ' : ''}
-                    {bundleCopyStatus === 'copied' ? 'APA, Chicago, IEEE, and MLA citations copied. ' : ''}
+                    {bundleCopyStatus === 'copied' ? 'APA, Chicago, Harvard, IEEE, and MLA citations copied. ' : ''}
                     {apaCopyStatus === 'copied' ? 'APA citation copied to clipboard. ' : ''}
+                    {harvardCopyStatus === 'copied' ? 'Harvard citation copied to clipboard. ' : ''}
                     {chicagoCopyStatus === 'copied' ? 'Chicago citation copied to clipboard. ' : ''}
                     {mlaCopyStatus === 'copied' ? 'MLA citation copied to clipboard. ' : ''}
                     {ieeeCopyStatus === 'copied' ? 'IEEE citation copied to clipboard. ' : ''}
@@ -1889,6 +2019,7 @@ export function AgentSharePage() {
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
                     {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
                     {apaDownloadStatus === 'done' ? 'APA citation downloaded.' : ''}
+                    {harvardDownloadStatus === 'done' ? 'Harvard citation downloaded.' : ''}
                     {chicagoDownloadStatus === 'done' ? 'Chicago citation downloaded.' : ''}
                     {mlaDownloadStatus === 'done' ? 'MLA citation downloaded.' : ''}
                     {ieeeDownloadStatus === 'done' ? 'IEEE citation downloaded.' : ''}

@@ -12,6 +12,7 @@ import {
   downloadCitationBundleFile,
   downloadCsvFile,
   downloadCslJsonFile,
+  downloadHarvardFile,
   downloadJsonFile,
   downloadIeeeFile,
   downloadMlaFile,
@@ -48,6 +49,7 @@ vi.mock('../lib/downloadTextFile', () => ({
   downloadCitationBundleFile: vi.fn(),
   downloadCsvFile: vi.fn(),
   downloadCslJsonFile: vi.fn(),
+  downloadHarvardFile: vi.fn(),
   downloadJsonFile: vi.fn(),
   downloadIeeeFile: vi.fn(),
   downloadMlaFile: vi.fn(),
@@ -149,6 +151,7 @@ describe('AgentSharePage', () => {
     vi.mocked(downloadCitationBundleFile).mockReturnValue(true);
     vi.mocked(downloadCsvFile).mockReturnValue(true);
     vi.mocked(downloadCslJsonFile).mockReturnValue(true);
+    vi.mocked(downloadHarvardFile).mockReturnValue(true);
     vi.mocked(downloadIeeeFile).mockReturnValue(true);
     vi.mocked(downloadMlaFile).mockReturnValue(true);
     vi.mocked(downloadRisFile).mockReturnValue(true);
@@ -308,6 +311,7 @@ describe('AgentSharePage', () => {
     const [bundle] = vi.mocked(copyToClipboard).mock.calls.at(-1) ?? [];
     expect(bundle).toContain('APA\nArena. (2026, August 14). Shareable research');
     expect(bundle).toContain('Chicago\n');
+    expect(bundle).toContain('Harvard\n');
     expect(bundle).toContain('IEEE\n');
     expect(bundle).toContain('MLA\n');
     expect(bundle).not.toContain('Yes, with a token and a public page.');
@@ -409,6 +413,35 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/could not copy the APA citation/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy APA failed' })).toBeInTheDocument();
+  });
+
+  it('copies a Harvard citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Harvard' }));
+
+    expect(await screen.findByText('Harvard copied')).toBeInTheDocument();
+    const [harvard] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
+    expect(harvard).toContain(
+      'Arena (2026) ‘Shareable research’, Arena Agent report. Available at:',
+    );
+    expect(harvard).toContain('(Accessed: 14 August 2026)');
+    expect(harvard).not.toContain('Yes, with a token and a public page.');
+    expect(harvard).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when copying the Harvard citation fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Harvard' }));
+
+    expect(await screen.findByText(/could not copy the Harvard citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy Harvard failed' })).toBeInTheDocument();
   });
 
   it('copies a Chicago citation without the report body or share token', async () => {
@@ -943,6 +976,37 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'APA download failed' })).toBeInTheDocument();
   });
 
+  it('downloads a public Harvard citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download Harvard' }));
+
+    expect(await screen.findByText('Harvard downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadHarvardFile).mock.calls[0] ?? [];
+    expect(content).toContain(
+      'Arena (2026) ‘Shareable research’, Arena Agent report. Available at:',
+    );
+    expect(content).toContain('(Accessed: 14 August 2026)');
+    expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));
+    expect(filename).toEqual(expect.stringContaining('-harvard'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the Harvard download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadHarvardFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download Harvard' }));
+
+    expect(await screen.findByText(/could not download the Harvard citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Harvard download failed' })).toBeInTheDocument();
+  });
+
   it('downloads a public Chicago citation without the report body or share token', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     renderShare();
@@ -1080,6 +1144,7 @@ describe('AgentSharePage', () => {
     const [content, filename] = vi.mocked(downloadCitationBundleFile).mock.calls[0] ?? [];
     expect(content).toContain('APA\n');
     expect(content).toContain('Chicago\n');
+    expect(content).toContain('Harvard\n');
     expect(content).toContain('IEEE\n');
     expect(content).toContain('MLA\n');
     expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));

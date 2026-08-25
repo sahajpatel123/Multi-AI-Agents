@@ -1,6 +1,6 @@
 /**
- * Build a labeled bundle of the four prose citation styles (APA, Chicago,
- * IEEE, MLA) for a public Agent report.
+ * Build a labeled bundle of the five prose citation styles (APA, Chicago,
+ * Harvard, IEEE, MLA) for a public Agent report.
  *
  * Writers often need the same source in several styles; copying each one
  * separately is tedious and error-prone. Each formatter already sanitizes
@@ -11,6 +11,7 @@
 
 import { formatAgentReportApa } from './agentReportApa';
 import { formatAgentReportChicago } from './agentReportChicago';
+import { formatAgentReportHarvard } from './agentReportHarvard';
 import { formatAgentReportIeee } from './agentReportIeee';
 import { formatAgentReportMla } from './agentReportMla';
 
@@ -24,6 +25,7 @@ export function formatAgentReportCitationBundle(opts: {
   const sections: Array<[string, string]> = [
     ['APA', formatAgentReportApa(opts)],
     ['Chicago', formatAgentReportChicago(opts)],
+    ['Harvard', formatAgentReportHarvard(opts)],
     ['IEEE', formatAgentReportIeee(opts)],
     ['MLA', formatAgentReportMla(opts)],
   ];

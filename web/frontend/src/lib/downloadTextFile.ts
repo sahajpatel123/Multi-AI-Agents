@@ -251,6 +251,27 @@ export function downloadApaFile(
 }
 
 /**
+ * Download a plain-text Harvard-style citation with a format-specific
+ * filename. Keeping this beside the other prose citation wrappers gives
+ * bibliography users a predictable `.txt` export without duplicating
+ * browser download handling.
+ */
+export function downloadHarvardFile(
+  content: string,
+  filenameStem: string,
+  opts?: { dated?: boolean; date?: Date },
+): boolean {
+  const dated = opts?.dated !== false;
+  const stem = dated
+    ? withDownloadDate(filenameStem, opts?.date, 'arena-export')
+    : sanitizeDownloadFilename(filenameStem, 'arena-export');
+  return downloadTextFile(content, {
+    filename: `${stem}.txt`,
+    mimeType: 'text/plain;charset=utf-8',
+  });
+}
+
+/**
  * Download a plain-text Chicago bibliography citation with a dated filename.
  * Keeping this wrapper beside the APA helper gives citation users a stable
  * format-specific filename without duplicating browser download handling.

@@ -6,6 +6,7 @@ import {
   downloadCsvFile,
   downloadCitationBundleFile,
   downloadCslJsonFile,
+  downloadHarvardFile,
   downloadJsonFile,
   downloadIeeeFile,
   downloadMlaFile,
@@ -314,6 +315,32 @@ describe('downloadTextFile', () => {
       true,
     );
     expect(anchor.download).toBe('agent-citation-chicago-2026-07-16.txt');
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('downloadHarvardFile adds a dated .txt citation filename', () => {
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.fn();
+    const anchor = {
+      href: '',
+      download: '',
+      rel: '',
+      style: { display: '' },
+      click,
+    };
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') return anchor as unknown as HTMLAnchorElement;
+      return document.createElementNS('http://www.w3.org/1999/xhtml', tag);
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+    vi.spyOn(document.body, 'removeChild').mockImplementation((n) => n);
+
+    const d = new Date(2026, 6, 16);
+    expect(downloadHarvardFile('Arena Harvard citation', 'Agent Citation Harvard', { date: d })).toBe(
+      true,
+    );
+    expect(anchor.download).toBe('agent-citation-harvard-2026-07-16.txt');
     expect(click).toHaveBeenCalled();
   });
 
