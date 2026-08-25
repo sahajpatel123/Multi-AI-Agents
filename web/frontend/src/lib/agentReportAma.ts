@@ -23,7 +23,12 @@ function normalizeAmaText(raw: string | null | undefined, max = 240): string {
 
 function amaDate(raw: string | null | undefined): string {
   const value = normalizeAmaText(raw, 80);
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  // Only accept an ISO calendar date or timestamp. Matching just the date
+  // prefix would turn malformed metadata such as `2026-02-28-draft` into a
+  // misleading publication date in a pasted bibliography entry.
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-](\d{2}):(\d{2}))?)?$/,
+  );
   if (!match) return '';
 
   const year = Number(match[1]);
@@ -46,6 +51,23 @@ function amaDate(raw: string | null | undefined): string {
 
   if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth[month - 1]) {
     return '';
+  }
+
+  if (match[4] !== undefined) {
+    const hour = Number(match[4]);
+    const minute = Number(match[5]);
+    const second = match[6] === undefined ? 0 : Number(match[6]);
+    const offsetHour = match[7] === undefined ? 0 : Number(match[7]);
+    const offsetMinute = match[8] === undefined ? 0 : Number(match[8]);
+    if (
+      hour > 23 ||
+      minute > 59 ||
+      second > 59 ||
+      offsetHour > 23 ||
+      offsetMinute > 59
+    ) {
+      return '';
+    }
   }
 
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -84,7 +106,7 @@ export function formatAgentReportAma(opts: {
   sharedAt?: string | null;
 }): string {
   const title =
-    normalizeAmaText(opts.title) || normalizeAmaText(opts.question) || 'Arena Agent report';
+    normalizeAmaText(opts.title) || normalizeAmaText(opts.question) || 'Untitled report';
   const date = amaDate(opts.sharedAt);
   const url = safePublicUrl(opts.url);
   const published = date ? ` Published ${date}.` : '';

@@ -29,6 +29,23 @@ describe('formatAgentReportAma', () => {
     expect(result).not.toContain('javascript:');
   });
 
+  it.each([
+    '2026-02-28-draft',
+    '2026-02-28T25:00:00Z',
+    '2026-02-28T11:00:00Z trailing',
+  ])('does not label malformed timestamps as published: %s', (sharedAt) => {
+    const result = formatAgentReportAma({ title: 'A report', sharedAt });
+
+    expect(result).toBe('Arena. A report. Arena Agent report [Internet].\n');
+    expect(result).not.toContain('Published');
+  });
+
+  it('uses a concise fallback when both public title fields are empty', () => {
+    expect(formatAgentReportAma({})).toBe(
+      'Arena. Untitled report. Arena Agent report [Internet].\n',
+    );
+  });
+
   it('removes invisible directional marks and rejects credential-bearing URLs', () => {
     const result = formatAgentReportAma({
       title: 'A\u202Emode report',
