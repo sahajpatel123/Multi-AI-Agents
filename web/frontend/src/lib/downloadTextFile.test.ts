@@ -7,6 +7,7 @@ import {
   downloadCsvFile,
   downloadCitationBundleFile,
   downloadCslJsonFile,
+  downloadEndnoteFile,
   downloadHarvardFile,
   downloadJsonFile,
   downloadIeeeFile,
@@ -293,6 +294,30 @@ describe('downloadTextFile', () => {
       downloadReferenceBundleFile('BibTeX\n...\n\nRIS\n...', 'Reference Bundle', { date: d }),
     ).toBe(true);
     expect(anchor.download).toBe('reference-bundle-2026-07-16.txt');
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('downloadEndnoteFile adds a dated .xml extension', () => {
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.fn();
+    const anchor = {
+      href: '',
+      download: '',
+      rel: '',
+      style: { display: '' },
+      click,
+    };
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') return anchor as unknown as HTMLAnchorElement;
+      return document.createElementNS('http://www.w3.org/1999/xhtml', tag);
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+    vi.spyOn(document.body, 'removeChild').mockImplementation((n) => n);
+
+    const d = new Date(2026, 6, 16);
+    expect(downloadEndnoteFile('<?xml version="1.0"?>', 'Agent Citation', { date: d })).toBe(true);
+    expect(anchor.download).toBe('agent-citation-2026-07-16.xml');
     expect(click).toHaveBeenCalled();
   });
 

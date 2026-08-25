@@ -13,6 +13,7 @@ import {
   downloadCitationBundleFile,
   downloadCsvFile,
   downloadCslJsonFile,
+  downloadEndnoteFile,
   downloadHarvardFile,
   downloadJsonFile,
   downloadIeeeFile,
@@ -53,6 +54,7 @@ vi.mock('../lib/downloadTextFile', () => ({
   downloadCitationBundleFile: vi.fn(),
   downloadCsvFile: vi.fn(),
   downloadCslJsonFile: vi.fn(),
+  downloadEndnoteFile: vi.fn(),
   downloadHarvardFile: vi.fn(),
   downloadJsonFile: vi.fn(),
   downloadIeeeFile: vi.fn(),
@@ -158,6 +160,7 @@ describe('AgentSharePage', () => {
     vi.mocked(downloadCitationBundleFile).mockReturnValue(true);
     vi.mocked(downloadCsvFile).mockReturnValue(true);
     vi.mocked(downloadCslJsonFile).mockReturnValue(true);
+    vi.mocked(downloadEndnoteFile).mockReturnValue(true);
     vi.mocked(downloadHarvardFile).mockReturnValue(true);
     vi.mocked(downloadIeeeFile).mockReturnValue(true);
     vi.mocked(downloadMlaFile).mockReturnValue(true);
@@ -630,6 +633,35 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/try Download \.csl\.json instead/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy CSL-JSON failed' })).toBeInTheDocument();
+  });
+
+  it('copies a standalone EndNote XML citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy EndNote' }));
+
+    expect(await screen.findByText('EndNote copied')).toBeInTheDocument();
+    const [endnote] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
+    expect(endnote).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(endnote).toContain('<title>Shareable research</title>');
+    expect(endnote).toContain('<date>2026-08-14</date>');
+    expect(endnote).toContain('Question: Is this report shareable?');
+    expect(endnote).not.toContain('Yes, with a token and a public page.');
+    expect(endnote).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when copying the EndNote XML citation fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy EndNote' }));
+
+    expect(await screen.findByText(/try Download \.xml instead/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy EndNote failed' })).toBeInTheDocument();
   });
 
   it('copies all reference-manager citations as one labeled bundle', async () => {
@@ -1445,6 +1477,37 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/try Copy CSL-JSON instead/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'CSL-JSON download failed' })).toBeInTheDocument();
+  });
+
+  it('downloads a standalone EndNote XML citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download EndNote XML' }));
+
+    expect(await screen.findByText('EndNote downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadEndnoteFile).mock.calls[0] ?? [];
+    expect(content).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(content).toContain('<title>Shareable research</title>');
+    expect(content).toContain('<date>2026-08-14</date>');
+    expect(content).toContain('Question: Is this report shareable?');
+    expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));
+    expect(filename).toEqual(expect.stringContaining('-endnote'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the EndNote XML download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadEndnoteFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download EndNote XML' }));
+
+    expect(await screen.findByText(/try Copy EndNote instead/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'EndNote download failed' })).toBeInTheDocument();
   });
 
   it('downloads all reference-manager citations as one labeled bundle', async () => {

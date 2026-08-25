@@ -17,6 +17,7 @@ import {
   downloadCsvFile,
   downloadCitationBundleFile,
   downloadCslJsonFile,
+  downloadEndnoteFile,
   downloadHarvardFile,
   downloadJsonFile,
   downloadIeeeFile,
@@ -34,6 +35,7 @@ import { formatAgentReportChicago } from '../lib/agentReportChicago';
 import { formatAgentReportCitation } from '../lib/agentReportCitation';
 import { formatAgentReportCitationBundle } from '../lib/agentReportCitationBundle';
 import { formatAgentReportCslJson } from '../lib/agentReportCslJson';
+import { formatAgentReportEndnote } from '../lib/agentReportEndnote';
 import { formatAgentReportIeee } from '../lib/agentReportIeee';
 import { formatAgentReportHarvard } from '../lib/agentReportHarvard';
 import { formatAgentReportMla } from '../lib/agentReportMla';
@@ -105,6 +107,7 @@ export function AgentSharePage() {
   const [bibtexCopyStatus, setBibtexCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [cslJsonCopyStatus, setCslJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [referenceBundleCopyStatus, setReferenceBundleCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [endnoteCopyStatus, setEndnoteCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [citationCopyStatus, setCitationCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [bundleCopyStatus, setBundleCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [amaCopyStatus, setAmaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -144,6 +147,8 @@ export function AgentSharePage() {
   const [cslJsonDownloadFeedbackKey, setCslJsonDownloadFeedbackKey] = useState(0);
   const [referenceBundleDownloadStatus, setReferenceBundleDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [referenceBundleDownloadFeedbackKey, setReferenceBundleDownloadFeedbackKey] = useState(0);
+  const [endnoteDownloadStatus, setEndnoteDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [endnoteDownloadFeedbackKey, setEndnoteDownloadFeedbackKey] = useState(0);
   const [csvDownloadStatus, setCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [csvDownloadFeedbackKey, setCsvDownloadFeedbackKey] = useState(0);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
@@ -152,6 +157,7 @@ export function AgentSharePage() {
   const [bibtexCopyError, setBibtexCopyError] = useState<string | null>(null);
   const [cslJsonCopyError, setCslJsonCopyError] = useState<string | null>(null);
   const [referenceBundleCopyError, setReferenceBundleCopyError] = useState<string | null>(null);
+  const [endnoteCopyError, setEndnoteCopyError] = useState<string | null>(null);
   const [citationCopyError, setCitationCopyError] = useState<string | null>(null);
   const [bundleCopyError, setBundleCopyError] = useState<string | null>(null);
   const [amaCopyError, setAmaCopyError] = useState<string | null>(null);
@@ -178,12 +184,14 @@ export function AgentSharePage() {
   const [risDownloadError, setRisDownloadError] = useState<string | null>(null);
   const [cslJsonDownloadError, setCslJsonDownloadError] = useState<string | null>(null);
   const [referenceBundleDownloadError, setReferenceBundleDownloadError] = useState<string | null>(null);
+  const [endnoteDownloadError, setEndnoteDownloadError] = useState<string | null>(null);
   const [csvDownloadError, setCsvDownloadError] = useState<string | null>(null);
   const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
   const [bibtexCopyInFlight, setBibtexCopyInFlight] = useState(false);
   const [cslJsonCopyInFlight, setCslJsonCopyInFlight] = useState(false);
   const [referenceBundleCopyInFlight, setReferenceBundleCopyInFlight] = useState(false);
+  const [endnoteCopyInFlight, setEndnoteCopyInFlight] = useState(false);
   const [citationCopyInFlight, setCitationCopyInFlight] = useState(false);
   const [bundleCopyInFlight, setBundleCopyInFlight] = useState(false);
   const [amaCopyInFlight, setAmaCopyInFlight] = useState(false);
@@ -204,6 +212,8 @@ export function AgentSharePage() {
   const cslJsonCopyRequestRef = useRef(0);
   const referenceBundleCopyBusyRef = useRef(false);
   const referenceBundleCopyRequestRef = useRef(0);
+  const endnoteCopyBusyRef = useRef(false);
+  const endnoteCopyRequestRef = useRef(0);
   const citationCopyBusyRef = useRef(false);
   const bundleCopyBusyRef = useRef(false);
   const bundleCopyRequestRef = useRef(0);
@@ -246,6 +256,9 @@ export function AgentSharePage() {
     referenceBundleCopyRequestRef.current += 1;
     referenceBundleCopyBusyRef.current = false;
     setReferenceBundleCopyInFlight(false);
+    endnoteCopyRequestRef.current += 1;
+    endnoteCopyBusyRef.current = false;
+    setEndnoteCopyInFlight(false);
     citationCopyRequestRef.current += 1;
     citationCopyBusyRef.current = false;
     setCitationCopyInFlight(false);
@@ -288,6 +301,7 @@ export function AgentSharePage() {
     setBibtexCopyStatus('idle');
     setCslJsonCopyStatus('idle');
     setReferenceBundleCopyStatus('idle');
+    setEndnoteCopyStatus('idle');
     setCitationCopyStatus('idle');
     setBundleCopyStatus('idle');
     setAmaCopyStatus('idle');
@@ -327,6 +341,8 @@ export function AgentSharePage() {
     setCslJsonDownloadFeedbackKey(0);
     setReferenceBundleDownloadStatus('idle');
     setReferenceBundleDownloadFeedbackKey(0);
+    setEndnoteDownloadStatus('idle');
+    setEndnoteDownloadFeedbackKey(0);
     setCsvDownloadStatus('idle');
     setCsvDownloadFeedbackKey(0);
     setNativeShareStatus('idle');
@@ -334,6 +350,7 @@ export function AgentSharePage() {
     setBibtexCopyError(null);
     setCslJsonCopyError(null);
     setReferenceBundleCopyError(null);
+    setEndnoteCopyError(null);
     setCitationCopyError(null);
     setBundleCopyError(null);
     setAmaCopyError(null);
@@ -360,6 +377,7 @@ export function AgentSharePage() {
     setRisDownloadError(null);
     setCslJsonDownloadError(null);
     setReferenceBundleDownloadError(null);
+    setEndnoteDownloadError(null);
     setCsvDownloadError(null);
     setNativeShareError(null);
     getPublicAgentReport(token)
@@ -388,6 +406,7 @@ export function AgentSharePage() {
       bibtexCopyRequestRef.current += 1;
       cslJsonCopyRequestRef.current += 1;
       referenceBundleCopyRequestRef.current += 1;
+      endnoteCopyRequestRef.current += 1;
       citationCopyRequestRef.current += 1;
       bundleCopyRequestRef.current += 1;
       amaCopyRequestRef.current += 1;
@@ -617,6 +636,19 @@ export function AgentSharePage() {
     [citationUrl, report],
   );
 
+  const endnoteText = useMemo(
+    () =>
+      report
+        ? formatAgentReportEndnote({
+            title: report.title,
+            question: report.question,
+            url: citationUrl,
+            sharedAt: report.sharedAt,
+          })
+        : '',
+    [citationUrl, report],
+  );
+
   const referenceBundleText = useMemo(
     () =>
       report
@@ -709,6 +741,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [referenceBundleCopyStatus]);
+
+  useEffect(() => {
+    if (endnoteCopyStatus === 'idle') return;
+    const hold = endnoteCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setEndnoteCopyStatus('idle');
+      setEndnoteCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [endnoteCopyStatus]);
 
   useEffect(() => {
     if (apaCopyStatus === 'idle') return;
@@ -929,6 +971,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [referenceBundleDownloadFeedbackKey, referenceBundleDownloadStatus]);
+
+  useEffect(() => {
+    if (endnoteDownloadStatus === 'idle') return;
+    const hold = endnoteDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setEndnoteDownloadStatus('idle');
+      setEndnoteDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [endnoteDownloadFeedbackKey, endnoteDownloadStatus]);
 
   useEffect(() => {
     if (csvDownloadStatus === 'idle') return;
@@ -1380,6 +1432,34 @@ export function AgentSharePage() {
     }
   };
 
+  const handleCopyEndnote = async () => {
+    if (endnoteCopyBusyRef.current || !endnoteText) return;
+    endnoteCopyBusyRef.current = true;
+    setEndnoteCopyInFlight(true);
+    const requestId = ++endnoteCopyRequestRef.current;
+    setEndnoteCopyStatus('idle');
+    setEndnoteCopyError(null);
+    try {
+      const ok = await copyToClipboard(endnoteText);
+      if (endnoteCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setEndnoteCopyStatus('copied');
+      } else {
+        setEndnoteCopyStatus('failed');
+        setEndnoteCopyError('Could not copy the EndNote XML citation — try Download .xml instead.');
+      }
+    } catch {
+      if (endnoteCopyRequestRef.current !== requestId) return;
+      setEndnoteCopyStatus('failed');
+      setEndnoteCopyError('Could not copy the EndNote XML citation — try Download .xml instead.');
+    } finally {
+      if (endnoteCopyRequestRef.current === requestId) {
+        endnoteCopyBusyRef.current = false;
+        setEndnoteCopyInFlight(false);
+      }
+    }
+  };
+
   const handleDownloadReport = () => {
     if (!report) return;
     setDownloadError(null);
@@ -1581,6 +1661,20 @@ export function AgentSharePage() {
     } else {
       setCslJsonDownloadStatus('failed');
       setCslJsonDownloadError('Could not download the CSL-JSON citation — try Copy CSL-JSON instead.');
+    }
+  };
+
+  const handleDownloadEndnote = () => {
+    if (!report || !endnoteText) return;
+    setEndnoteDownloadError(null);
+    setEndnoteDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}-endnote`;
+    const ok = downloadEndnoteFile(endnoteText, stem);
+    if (ok) {
+      setEndnoteDownloadStatus('done');
+    } else {
+      setEndnoteDownloadStatus('failed');
+      setEndnoteDownloadError('Could not download the EndNote XML citation — try Copy EndNote instead.');
     }
   };
 
@@ -1851,6 +1945,11 @@ export function AgentSharePage() {
                       {referenceBundleCopyError}
                     </p>
                   ) : null}
+                  {endnoteCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {endnoteCopyError}
+                    </p>
+                  ) : null}
                   {citationCopyError ? (
                     <p className="share-take__error" role="alert">
                       {citationCopyError}
@@ -1969,6 +2068,11 @@ export function AgentSharePage() {
                   {referenceBundleDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {referenceBundleDownloadError}
+                    </p>
+                  ) : null}
+                  {endnoteDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {endnoteDownloadError}
                     </p>
                   ) : null}
                   {csvDownloadError ? (
@@ -2234,6 +2338,20 @@ export function AgentSharePage() {
                     </button>
                     <button
                       type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${endnoteCopyStatus === 'copied' ? ' is-success' : ''}${endnoteCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyEndnote()}
+                      disabled={endnoteCopyInFlight}
+                    >
+                      {endnoteCopyInFlight
+                        ? 'Copying…'
+                        : endnoteCopyStatus === 'copied'
+                          ? 'EndNote copied'
+                          : endnoteCopyStatus === 'failed'
+                            ? 'Copy EndNote failed'
+                            : 'Copy EndNote'}
+                    </button>
+                    <button
+                      type="button"
                       className={`arena-btn arena-btn--secondary arena-btn--sm${referenceBundleCopyStatus === 'copied' ? ' is-success' : ''}${referenceBundleCopyStatus === 'failed' ? ' is-error' : ''}`}
                       onClick={() => void handleCopyReferenceBundle()}
                       disabled={referenceBundleCopyInFlight}
@@ -2278,6 +2396,17 @@ export function AgentSharePage() {
                         : cslJsonDownloadStatus === 'failed'
                           ? 'CSL-JSON download failed'
                           : 'Download .csl.json'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${endnoteDownloadStatus === 'done' ? ' is-success' : ''}${endnoteDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadEndnote}
+                    >
+                      {endnoteDownloadStatus === 'done'
+                        ? 'EndNote downloaded'
+                        : endnoteDownloadStatus === 'failed'
+                          ? 'EndNote download failed'
+                          : 'Download EndNote XML'}
                     </button>
                     <button
                       type="button"
@@ -2405,6 +2534,7 @@ export function AgentSharePage() {
                     {vancouverCopyStatus === 'copied' ? 'Vancouver citation copied to clipboard. ' : ''}
                     {bibtexCopyStatus === 'copied' ? 'BibTeX citation copied to clipboard. ' : ''}
                     {cslJsonCopyStatus === 'copied' ? 'CSL-JSON citation copied to clipboard. ' : ''}
+                    {endnoteCopyStatus === 'copied' ? 'EndNote XML citation copied to clipboard. ' : ''}
                     {referenceBundleCopyStatus === 'copied' ? 'BibTeX, RIS, CSL-JSON, and EndNote XML citations copied to clipboard. ' : ''}
                     {sourceCopyStatus === 'copied' ? 'Sources copied to clipboard. ' : ''}
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
@@ -2421,6 +2551,7 @@ export function AgentSharePage() {
                     {bibtexDownloadStatus === 'done' ? 'BibTeX citation downloaded.' : ''}
                     {risDownloadStatus === 'done' ? 'RIS citation downloaded.' : ''}
                     {cslJsonDownloadStatus === 'done' ? 'CSL-JSON citation downloaded.' : ''}
+                    {endnoteDownloadStatus === 'done' ? 'EndNote XML citation downloaded.' : ''}
                     {referenceBundleDownloadStatus === 'done' ? 'Reference-manager bundle downloaded.' : ''}
                     {csvDownloadStatus === 'done' ? 'Sources downloaded as CSV.' : ''}
                     {nativeShareStatus === 'shared' ? 'Report shared using the system share sheet.' : ''}
