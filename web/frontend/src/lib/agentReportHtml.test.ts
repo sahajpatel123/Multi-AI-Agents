@@ -51,4 +51,17 @@ describe('formatAgentReportHtml', () => {
     expect(html).toContain('<title>A question</title>');
     expect(html).toContain('No answer was provided.');
   });
+
+  it('keeps Markdown syntax literal inside inline code spans', () => {
+    const html = formatAgentReportHtml({
+      answer:
+        '`**literal**` and `[source](https://example.com/paper)` plus [source](https://example.com/paper)',
+    });
+
+    expect(html).toContain(
+      '<code>**literal**</code> and <code>[source](https://example.com/paper)</code> plus <a href="https://example.com/paper" target="_blank" rel="noreferrer noopener">source</a>',
+    );
+    expect(html).not.toContain('<code><strong>literal</strong></code>');
+    expect(html).not.toContain('<code><a ');
+  });
 });

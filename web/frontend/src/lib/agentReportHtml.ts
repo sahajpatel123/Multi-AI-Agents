@@ -61,17 +61,27 @@ function stablePublicUrl(raw: string | null | undefined): string | null {
 }
 
 function inlineMarkdown(raw: string): string {
-  const links: string[] = [];
-  const withLinkTokens = raw.replace(
+  const protectedFragments: string[] = [];
+  const protect = (fragment: string): string => {
+    const token = `\u0000ARENA-INLINE-TOKEN-${protectedFragments.length}\u0000`;
+    protectedFragments.push(fragment);
+    return token;
+  };
+
+  // Protect code before looking for links or emphasis. Otherwise Markdown
+  // that is meant to be shown literally (for example `[x](https://...)` or
+  // `**literal**`) can be turned into active formatting inside <code>.
+  const withCodeTokens = raw.replace(/`([^`\n]+)`/g, (_match, code: string) =>
+    protect(`<code>${escapeHtml(code)}</code>`),
+  );
+  const withLinkTokens = withCodeTokens.replace(
     /\[([^\]\n]+)\]\(([^\s)]+)\)/g,
     (match: string, label: string, href: string) => {
-    const safeHref = safeHttpUrl(href);
-    if (!safeHref) return match;
-    const token = `\u0000ARENA-LINK-TOKEN-${links.length}\u0000`;
-    links.push(
-      `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label)}</a>`,
-    );
-    return token;
+      const safeHref = safeHttpUrl(href);
+      if (!safeHref) return match;
+      const link =
+        `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label)}</a>`;
+      return protect(link);
     },
   );
 
@@ -82,8 +92,8 @@ function inlineMarkdown(raw: string): string {
     .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
     .replace(/_([^_\n]+)_/g, '<em>$1</em>');
 
-  links.forEach((link, index) => {
-    escaped = escaped.replace(`\u0000ARENA-LINK-TOKEN-${index}\u0000`, link);
+  protectedFragments.forEach((fragment, index) => {
+    escaped = escaped.replace(`\u0000ARENA-INLINE-TOKEN-${index}\u0000`, fragment);
   });
   return escaped;
 }
