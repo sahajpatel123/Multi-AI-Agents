@@ -108,9 +108,15 @@ export function formatAgentReportIeee(opts: {
     normalizeIeeeText(opts.title) || normalizeIeeeText(opts.question) || 'Arena Agent report';
   const date = ieeeDate(opts.sharedAt);
   const url = safePublicUrl(opts.url);
-  const citationParts = [`Arena, ${quoteIeeeTitle(title)}`, 'Arena Agent report', date].filter(Boolean);
-  const availability = url ? `[Online]. Available: ${url}` : '[Online]';
+  // IEEE separates the site label from the date with a comma
+  // ("TechTarget, Mar. 2021."), so only join the date onto the label then.
+  const descriptor = date ? `Arena Agent report, ${date}` : 'Arena Agent report';
+  const citationParts = [`Arena, ${quoteIeeeTitle(title)}`, descriptor];
 
-  return `${citationParts.join(' ')}. ${availability}.
+  // Never terminate a URL with a period: readers and citation managers can
+  // mistake it for part of the address. The bracketed fallback keeps its own.
+  const availability = url ? `[Online]. Available: ${url}` : '[Online].';
+
+  return `${citationParts.join(' ')}. ${availability}
 `;
 }

@@ -345,7 +345,7 @@ describe('AgentSharePage', () => {
     expect(await screen.findByText('IEEE copied')).toBeInTheDocument();
     const [ieee] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
     expect(ieee).toContain(
-      'Arena, “Shareable research,” Arena Agent report Aug. 14, 2026. [Online]. Available:',
+      'Arena, “Shareable research,” Arena Agent report, Aug. 14, 2026. [Online]. Available:',
     );
     expect(ieee).toContain(window.location.href);
     expect(ieee).not.toContain('Yes, with a token and a public page.');
@@ -949,7 +949,7 @@ describe('AgentSharePage', () => {
     expect(await screen.findByText('IEEE downloaded')).toBeInTheDocument();
     const [content, filename] = vi.mocked(downloadIeeeFile).mock.calls[0] ?? [];
     expect(content).toContain(
-      'Arena, “Shareable research,” Arena Agent report Aug. 14, 2026. [Online]. Available:',
+      'Arena, “Shareable research,” Arena Agent report, Aug. 14, 2026. [Online]. Available:',
     );
     expect(content).toContain(window.location.href);
     expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));

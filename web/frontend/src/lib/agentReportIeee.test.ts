@@ -11,10 +11,23 @@ describe('formatAgentReportIeee', () => {
     });
 
     expect(result).toBe(
-      'Arena, “Shareable research,” Arena Agent report Aug. 14, 2026. ' +
-        '[Online]. Available: https://arena.example/share/agent/public-report.\n',
+      'Arena, “Shareable research,” Arena Agent report, Aug. 14, 2026. ' +
+        '[Online]. Available: https://arena.example/share/agent/public-report\n',
     );
     expect(result).not.toContain('Is this report shareable?');
+    // A trailing period after the URL would be misread as part of the address.
+    expect(result).not.toMatch(/public-report\.\n$/);
+  });
+
+  it('separates the site label from the date with a comma when there is no URL', () => {
+    const result = formatAgentReportIeee({
+      title: 'Offline research',
+      sharedAt: '2026-08-14T11:00:00Z',
+    });
+
+    expect(result).toBe(
+      'Arena, “Offline research,” Arena Agent report, Aug. 14, 2026. [Online].\n',
+    );
   });
 
   it('flattens hostile metadata and omits invalid URLs and dates', () => {
@@ -48,7 +61,7 @@ describe('formatAgentReportIeee', () => {
           title,
           url: 'https://arena.example/share/agent/public-report',
         }),
-      ).toBe(`Arena, “${title}” Arena Agent report. [Online]. Available: https://arena.example/share/agent/public-report.\n`);
+      ).toBe(`Arena, “${title}” Arena Agent report. [Online]. Available: https://arena.example/share/agent/public-report\n`);
     },
   );
 });
