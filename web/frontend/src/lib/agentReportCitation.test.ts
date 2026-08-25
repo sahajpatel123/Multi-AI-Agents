@@ -26,18 +26,31 @@ describe('formatAgentReportCitation', () => {
     ).toBe('**A report without a title** — Arena Agent report.\n');
   });
 
-  it('keeps hostile Markdown and URL punctuation inside the citation', () => {
+  it('keeps hostile Markdown punctuation escaped inside the citation', () => {
     expect(
       formatAgentReportCitation({
         title: 'A [useful] *report*',
         question: 'Can [this](https://evil.example) be *trusted*? `no`',
-        url: 'https://arena.example/share/agent/public-token?q=(draft)',
+        url: 'https://arena.example/share/agent/public-token',
         sharedAt: '2026-08-14T11:00:00Z',
       }),
     ).toBe(
-      '[A \\[useful\\] \\*report\\*](<https://arena.example/share/agent/public-token?q=(draft)>) — Arena Agent report.\n' +
+      '[A \\[useful\\] \\*report\\*](<https://arena.example/share/agent/public-token>) — Arena Agent report.\n' +
         'Question: Can \\[this\\](https://evil.example) be \\*trusted\\*? \\`no\\`\n' +
         'Shared: 2026-08-14\n',
+    );
+  });
+
+  it('flattens controls and strips tracking state from URLs', () => {
+    expect(
+      formatAgentReportCitation({
+        title: 'A‮modereport',
+        question: 'Does the​note stay intact?',
+        url: 'https://arena.example/share/agent/public-token?utm_source=copy#draft',
+      }),
+    ).toBe(
+      '[A mode report](<https://arena.example/share/agent/public-token>) — Arena Agent report.\n' +
+        'Question: Does the note stay intact?\n',
     );
   });
 
