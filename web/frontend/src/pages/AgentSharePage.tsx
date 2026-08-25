@@ -14,10 +14,12 @@ import {
   downloadCsvFile,
   downloadJsonFile,
   downloadMarkdownFile,
+  downloadRisFile,
 } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { formatAgentReportBibtex } from '../lib/agentReportBibtex';
 import { formatAgentReportCitation } from '../lib/agentReportCitation';
+import { formatAgentReportRis } from '../lib/agentReportRis';
 import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentTitle';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
@@ -89,6 +91,8 @@ export function AgentSharePage() {
   const [jsonDownloadFeedbackKey, setJsonDownloadFeedbackKey] = useState(0);
   const [bibtexDownloadStatus, setBibtexDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [bibtexDownloadFeedbackKey, setBibtexDownloadFeedbackKey] = useState(0);
+  const [risDownloadStatus, setRisDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [risDownloadFeedbackKey, setRisDownloadFeedbackKey] = useState(0);
   const [csvDownloadStatus, setCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [csvDownloadFeedbackKey, setCsvDownloadFeedbackKey] = useState(0);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
@@ -101,6 +105,7 @@ export function AgentSharePage() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [jsonDownloadError, setJsonDownloadError] = useState<string | null>(null);
   const [bibtexDownloadError, setBibtexDownloadError] = useState<string | null>(null);
+  const [risDownloadError, setRisDownloadError] = useState<string | null>(null);
   const [csvDownloadError, setCsvDownloadError] = useState<string | null>(null);
   const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
@@ -151,6 +156,8 @@ export function AgentSharePage() {
     setJsonDownloadFeedbackKey(0);
     setBibtexDownloadStatus('idle');
     setBibtexDownloadFeedbackKey(0);
+    setRisDownloadStatus('idle');
+    setRisDownloadFeedbackKey(0);
     setCsvDownloadStatus('idle');
     setCsvDownloadFeedbackKey(0);
     setNativeShareStatus('idle');
@@ -162,6 +169,7 @@ export function AgentSharePage() {
     setDownloadError(null);
     setJsonDownloadError(null);
     setBibtexDownloadError(null);
+    setRisDownloadError(null);
     setCsvDownloadError(null);
     setNativeShareError(null);
     getPublicAgentReport(token)
@@ -278,6 +286,19 @@ export function AgentSharePage() {
     [citationUrl, report],
   );
 
+  const risText = useMemo(
+    () =>
+      report
+        ? formatAgentReportRis({
+            title: report.title,
+            question: report.question,
+            url: citationUrl,
+            sharedAt: report.sharedAt,
+          })
+        : '',
+    [citationUrl, report],
+  );
+
   const listenText = useMemo(
     () => (report ? [report.question, report.answer].filter(Boolean).join('\n\n') : ''),
     [report],
@@ -357,6 +378,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [bibtexDownloadFeedbackKey, bibtexDownloadStatus]);
+
+  useEffect(() => {
+    if (risDownloadStatus === 'idle') return;
+    const hold = risDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setRisDownloadStatus('idle');
+      setRisDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [risDownloadFeedbackKey, risDownloadStatus]);
 
   useEffect(() => {
     if (csvDownloadStatus === 'idle') return;
@@ -559,6 +590,21 @@ export function AgentSharePage() {
     } else {
       setBibtexDownloadStatus('failed');
       setBibtexDownloadError('Could not download the BibTeX citation — try Copy BibTeX instead.');
+    }
+  };
+
+  const handleDownloadRis = () => {
+    if (!report || !risText) return;
+    setRisDownloadError(null);
+    // Restart the feedback timer for repeated synchronous downloads.
+    setRisDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}`;
+    const ok = downloadRisFile(risText, stem);
+    if (ok) {
+      setRisDownloadStatus('done');
+    } else {
+      setRisDownloadStatus('failed');
+      setRisDownloadError('Could not download the RIS citation — try Download .bib instead.');
     }
   };
 
@@ -823,6 +869,11 @@ export function AgentSharePage() {
                       {bibtexDownloadError}
                     </p>
                   ) : null}
+                  {risDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {risDownloadError}
+                    </p>
+                  ) : null}
                   {csvDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {csvDownloadError}
@@ -902,6 +953,17 @@ export function AgentSharePage() {
                     </button>
                     <button
                       type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${risDownloadStatus === 'done' ? ' is-success' : ''}${risDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadRis}
+                    >
+                      {risDownloadStatus === 'done'
+                        ? 'RIS downloaded'
+                        : risDownloadStatus === 'failed'
+                          ? 'RIS download failed'
+                          : 'Download .ris'}
+                    </button>
+                    <button
+                      type="button"
                       className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}${downloadStatus === 'failed' ? ' is-error' : ''}`}
                       onClick={handleDownloadReport}
                     >
@@ -978,6 +1040,7 @@ export function AgentSharePage() {
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
                     {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
                     {bibtexDownloadStatus === 'done' ? 'BibTeX citation downloaded.' : ''}
+                    {risDownloadStatus === 'done' ? 'RIS citation downloaded.' : ''}
                     {csvDownloadStatus === 'done' ? 'Sources downloaded as CSV.' : ''}
                     {nativeShareStatus === 'shared' ? 'Report shared using the system share sheet.' : ''}
                   </span>

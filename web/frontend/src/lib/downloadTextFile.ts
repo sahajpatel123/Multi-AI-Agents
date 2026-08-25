@@ -164,6 +164,25 @@ export function downloadBibtexFile(
 }
 
 /**
+ * Download an RIS citation with a reference-manager-friendly extension and
+ * MIME type. Keeping this beside BibTeX avoids duplicating filename safety.
+ */
+export function downloadRisFile(
+  content: string,
+  filenameStem: string,
+  opts?: { dated?: boolean; date?: Date },
+): boolean {
+  const dated = opts?.dated !== false;
+  const stem = dated
+    ? withDownloadDate(filenameStem, opts?.date, 'arena-export')
+    : sanitizeDownloadFilename(filenameStem, 'arena-export');
+  return downloadTextFile(content, {
+    filename: `${stem}.ris`,
+    mimeType: 'application/x-research-info-systems;charset=utf-8',
+  });
+}
+
+/**
  * Trigger client-side download of a Blob (e.g. CSV file from backend stream).
  * Safe no-op when document/window is unavailable.
  */

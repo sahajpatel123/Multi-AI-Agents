@@ -10,6 +10,7 @@ import {
   downloadCsvFile,
   downloadJsonFile,
   downloadMarkdownFile,
+  downloadRisFile,
 } from '../lib/downloadTextFile';
 import track from '../utils/track';
 
@@ -38,6 +39,7 @@ vi.mock('../lib/downloadTextFile', () => ({
   downloadCsvFile: vi.fn(),
   downloadJsonFile: vi.fn(),
   downloadMarkdownFile: vi.fn(),
+  downloadRisFile: vi.fn(),
 }));
 
 vi.mock('../utils/track', () => ({
@@ -129,6 +131,7 @@ describe('AgentSharePage', () => {
     vi.mocked(downloadMarkdownFile).mockReturnValue(true);
     vi.mocked(downloadBibtexFile).mockReturnValue(true);
     vi.mocked(downloadCsvFile).mockReturnValue(true);
+    vi.mocked(downloadRisFile).mockReturnValue(true);
   });
 
   it('renders a shared report question and answer', async () => {
@@ -735,6 +738,36 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/could not download the BibTeX citation/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'BibTeX download failed' })).toBeInTheDocument();
+  });
+
+  it('downloads a public RIS citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download .ris' }));
+
+    expect(await screen.findByText('RIS downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadRisFile).mock.calls[0] ?? [];
+    expect(content).toContain('TY  - ELEC');
+    expect(content).toContain('TI  - Shareable research');
+    expect(content).toContain('DA  - 2026/08/14');
+    expect(content).toContain('Question: Is this report shareable?');
+    expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the RIS download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadRisFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download .ris' }));
+
+    expect(await screen.findByText(/could not download the RIS citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'RIS download failed' })).toBeInTheDocument();
   });
 
   it('opens the browser print dialog for a shared report', async () => {
