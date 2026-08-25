@@ -238,17 +238,31 @@ export function AgentSharePage() {
 
   const pageUrl = typeof window === 'undefined' ? '' : window.location.href;
 
+  const citationUrl = useMemo(() => {
+    if (!pageUrl) return '';
+    try {
+      const url = new URL(pageUrl);
+      // A citation should remain stable and must not carry tracking values or
+      // client-only fragment state copied from the current browser tab.
+      url.search = '';
+      url.hash = '';
+      return url.href;
+    } catch {
+      return pageUrl;
+    }
+  }, [pageUrl]);
+
   const citationText = useMemo(
     () =>
       report
         ? formatAgentReportCitation({
             title: report.title,
             question: report.question,
-            url: pageUrl,
+            url: citationUrl,
             sharedAt: report.sharedAt,
           })
         : '',
-    [pageUrl, report],
+    [citationUrl, report],
   );
 
   const bibtexText = useMemo(
@@ -257,11 +271,11 @@ export function AgentSharePage() {
         ? formatAgentReportBibtex({
             title: report.title,
             question: report.question,
-            url: pageUrl,
+            url: citationUrl,
             sharedAt: report.sharedAt,
           })
         : '',
-    [pageUrl, report],
+    [citationUrl, report],
   );
 
   const listenText = useMemo(

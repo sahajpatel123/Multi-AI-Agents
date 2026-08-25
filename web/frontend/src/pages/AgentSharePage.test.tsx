@@ -700,6 +700,31 @@ describe('AgentSharePage', () => {
     expect(content).not.toContain('tok_1234567890abcdef');
   });
 
+  it('keeps tracking parameters and fragments out of the downloaded citation URL', async () => {
+    const originalUrl = window.location.href;
+    window.history.replaceState(
+      {},
+      '',
+      '/share/agent/tok_1234567890abcdef?utm_source=research&session=private#draft',
+    );
+    try {
+      vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+      renderShare();
+      await screen.findByText('Is this report shareable?');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Download .bib' }));
+
+      const [content] = vi.mocked(downloadBibtexFile).mock.calls[0] ?? [];
+      const canonicalUrl = `${window.location.origin}/share/agent/tok_1234567890abcdef`;
+      expect(content).toContain(`url = {${canonicalUrl.replace(/_/g, '\\_')}},`);
+      expect(content).not.toContain('utm_source');
+      expect(content).not.toContain('session=private');
+      expect(content).not.toContain('#draft');
+    } finally {
+      window.history.replaceState({}, '', originalUrl);
+    }
+  });
+
   it('shows an honest error when the BibTeX download fails', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     vi.mocked(downloadBibtexFile).mockReturnValueOnce(false);
