@@ -10,7 +10,11 @@ function normalizeApaText(raw: string | null | undefined, max = 240): string {
     // APA output is plain text, so flatten user-authored control characters
     // before they can create misleading extra lines in a pasted citation.
     // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/[\u0000-\u001f\u007f\u0080-\u009f]+/g, ' ')
+    // Directional marks and isolates are invisible but can reorder what a
+    // reader sees in a downloaded citation. Preserve the surrounding words
+    // while removing those presentation controls from untrusted text.
+    .replace(/[\u061c\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, max);

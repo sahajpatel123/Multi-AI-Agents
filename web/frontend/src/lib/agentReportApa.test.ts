@@ -38,4 +38,13 @@ describe('formatAgentReportApa', () => {
         'https://arena.example/share/agent/public-report\n',
     );
   });
+
+  it('removes invisible directional controls from user-authored text', () => {
+    expect(
+      formatAgentReportApa({
+        title: 'A\u202E misleading\u2066 title',
+        sharedAt: '2026-08-14T11:00:00',
+      }),
+    ).toBe('Arena. (2026, August 14). A misleading title [AI-generated research report]. Arena.\n');
+  });
 });
