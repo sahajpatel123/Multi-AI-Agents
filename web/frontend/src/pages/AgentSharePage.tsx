@@ -87,6 +87,7 @@ export function AgentSharePage() {
   const [notFound, setNotFound] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [bibtexCopyStatus, setBibtexCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [cslJsonCopyStatus, setCslJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [citationCopyStatus, setCitationCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [apaCopyStatus, setApaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [mlaCopyStatus, setMlaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -107,6 +108,7 @@ export function AgentSharePage() {
   const [nativeShareStatus, setNativeShareStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
   const [copyError, setCopyError] = useState<string | null>(null);
   const [bibtexCopyError, setBibtexCopyError] = useState<string | null>(null);
+  const [cslJsonCopyError, setCslJsonCopyError] = useState<string | null>(null);
   const [citationCopyError, setCitationCopyError] = useState<string | null>(null);
   const [apaCopyError, setApaCopyError] = useState<string | null>(null);
   const [mlaCopyError, setMlaCopyError] = useState<string | null>(null);
@@ -121,6 +123,7 @@ export function AgentSharePage() {
   const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
   const [bibtexCopyInFlight, setBibtexCopyInFlight] = useState(false);
+  const [cslJsonCopyInFlight, setCslJsonCopyInFlight] = useState(false);
   const [citationCopyInFlight, setCitationCopyInFlight] = useState(false);
   const [apaCopyInFlight, setApaCopyInFlight] = useState(false);
   const [mlaCopyInFlight, setMlaCopyInFlight] = useState(false);
@@ -130,6 +133,8 @@ export function AgentSharePage() {
   const copyBusyRef = useRef(false);
   const bibtexCopyBusyRef = useRef(false);
   const bibtexCopyRequestRef = useRef(0);
+  const cslJsonCopyBusyRef = useRef(false);
+  const cslJsonCopyRequestRef = useRef(0);
   const citationCopyBusyRef = useRef(false);
   const citationCopyRequestRef = useRef(0);
   const apaCopyBusyRef = useRef(false);
@@ -152,6 +157,9 @@ export function AgentSharePage() {
     bibtexCopyRequestRef.current += 1;
     bibtexCopyBusyRef.current = false;
     setBibtexCopyInFlight(false);
+    cslJsonCopyRequestRef.current += 1;
+    cslJsonCopyBusyRef.current = false;
+    setCslJsonCopyInFlight(false);
     citationCopyRequestRef.current += 1;
     citationCopyBusyRef.current = false;
     setCitationCopyInFlight(false);
@@ -171,6 +179,7 @@ export function AgentSharePage() {
     setReport(null);
     setCopyStatus('idle');
     setBibtexCopyStatus('idle');
+    setCslJsonCopyStatus('idle');
     setCitationCopyStatus('idle');
     setApaCopyStatus('idle');
     setMlaCopyStatus('idle');
@@ -190,6 +199,7 @@ export function AgentSharePage() {
     setNativeShareStatus('idle');
     setCopyError(null);
     setBibtexCopyError(null);
+    setCslJsonCopyError(null);
     setCitationCopyError(null);
     setApaCopyError(null);
     setMlaCopyError(null);
@@ -226,6 +236,7 @@ export function AgentSharePage() {
       cancelled = true;
       nativeShareRequestRef.current += 1;
       bibtexCopyRequestRef.current += 1;
+      cslJsonCopyRequestRef.current += 1;
       citationCopyRequestRef.current += 1;
       apaCopyRequestRef.current += 1;
       mlaCopyRequestRef.current += 1;
@@ -409,6 +420,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [bibtexCopyStatus]);
+
+  useEffect(() => {
+    if (cslJsonCopyStatus === 'idle') return;
+    const hold = cslJsonCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setCslJsonCopyStatus('idle');
+      setCslJsonCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [cslJsonCopyStatus]);
 
   useEffect(() => {
     if (apaCopyStatus === 'idle') return;
@@ -628,6 +649,34 @@ export function AgentSharePage() {
       if (bibtexCopyRequestRef.current === requestId) {
         bibtexCopyBusyRef.current = false;
         setBibtexCopyInFlight(false);
+      }
+    }
+  };
+
+  const handleCopyCslJson = async () => {
+    if (cslJsonCopyBusyRef.current || !cslJsonText) return;
+    cslJsonCopyBusyRef.current = true;
+    setCslJsonCopyInFlight(true);
+    const requestId = ++cslJsonCopyRequestRef.current;
+    setCslJsonCopyStatus('idle');
+    setCslJsonCopyError(null);
+    try {
+      const ok = await copyToClipboard(cslJsonText);
+      if (cslJsonCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setCslJsonCopyStatus('copied');
+      } else {
+        setCslJsonCopyStatus('failed');
+        setCslJsonCopyError('Could not copy the CSL-JSON citation — copy it manually instead.');
+      }
+    } catch {
+      if (cslJsonCopyRequestRef.current !== requestId) return;
+      setCslJsonCopyStatus('failed');
+      setCslJsonCopyError('Could not copy the CSL-JSON citation — copy it manually instead.');
+    } finally {
+      if (cslJsonCopyRequestRef.current === requestId) {
+        cslJsonCopyBusyRef.current = false;
+        setCslJsonCopyInFlight(false);
       }
     }
   };
@@ -1020,6 +1069,11 @@ export function AgentSharePage() {
                       {bibtexCopyError}
                     </p>
                   ) : null}
+                  {cslJsonCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {cslJsonCopyError}
+                    </p>
+                  ) : null}
                   {citationCopyError ? (
                     <p className="share-take__error" role="alert">
                       {citationCopyError}
@@ -1156,6 +1210,20 @@ export function AgentSharePage() {
                     </button>
                     <button
                       type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${cslJsonCopyStatus === 'copied' ? ' is-success' : ''}${cslJsonCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyCslJson()}
+                      disabled={cslJsonCopyInFlight}
+                    >
+                      {cslJsonCopyInFlight
+                        ? 'Copying…'
+                        : cslJsonCopyStatus === 'copied'
+                          ? 'CSL-JSON copied'
+                          : cslJsonCopyStatus === 'failed'
+                            ? 'Copy CSL-JSON failed'
+                            : 'Copy CSL-JSON'}
+                    </button>
+                    <button
+                      type="button"
                       className={`arena-btn arena-btn--secondary arena-btn--sm${bibtexDownloadStatus === 'done' ? ' is-success' : ''}${bibtexDownloadStatus === 'failed' ? ' is-error' : ''}`}
                       onClick={handleDownloadBibtex}
                     >
@@ -1262,6 +1330,7 @@ export function AgentSharePage() {
                     {apaCopyStatus === 'copied' ? 'APA citation copied to clipboard. ' : ''}
                     {mlaCopyStatus === 'copied' ? 'MLA citation copied to clipboard. ' : ''}
                     {bibtexCopyStatus === 'copied' ? 'BibTeX citation copied to clipboard. ' : ''}
+                    {cslJsonCopyStatus === 'copied' ? 'CSL-JSON citation copied to clipboard. ' : ''}
                     {sourceCopyStatus === 'copied' ? 'Sources copied to clipboard. ' : ''}
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
