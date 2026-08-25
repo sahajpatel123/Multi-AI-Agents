@@ -22,6 +22,7 @@ import {
   downloadMlaFile,
   downloadMarkdownFile,
   downloadRisFile,
+  downloadVancouverFile,
 } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { formatAgentReportBibtex } from '../lib/agentReportBibtex';
@@ -34,6 +35,7 @@ import { formatAgentReportIeee } from '../lib/agentReportIeee';
 import { formatAgentReportHarvard } from '../lib/agentReportHarvard';
 import { formatAgentReportMla } from '../lib/agentReportMla';
 import { formatAgentReportRis } from '../lib/agentReportRis';
+import { formatAgentReportVancouver } from '../lib/agentReportVancouver';
 import { applyAbsoluteDocumentTitle, applyDocumentTitle } from '../lib/documentTitle';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
@@ -105,6 +107,7 @@ export function AgentSharePage() {
   const [chicagoCopyStatus, setChicagoCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [mlaCopyStatus, setMlaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [ieeeCopyStatus, setIeeeCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [vancouverCopyStatus, setVancouverCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [risCopyStatus, setRisCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [sourceCopyStatus, setSourceCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -121,6 +124,8 @@ export function AgentSharePage() {
   const [mlaDownloadFeedbackKey, setMlaDownloadFeedbackKey] = useState(0);
   const [ieeeDownloadStatus, setIeeeDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [ieeeDownloadFeedbackKey, setIeeeDownloadFeedbackKey] = useState(0);
+  const [vancouverDownloadStatus, setVancouverDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [vancouverDownloadFeedbackKey, setVancouverDownloadFeedbackKey] = useState(0);
   const [bundleDownloadStatus, setBundleDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [bundleDownloadFeedbackKey, setBundleDownloadFeedbackKey] = useState(0);
   const [bibtexDownloadStatus, setBibtexDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -143,6 +148,7 @@ export function AgentSharePage() {
   const [chicagoCopyError, setChicagoCopyError] = useState<string | null>(null);
   const [mlaCopyError, setMlaCopyError] = useState<string | null>(null);
   const [ieeeCopyError, setIeeeCopyError] = useState<string | null>(null);
+  const [vancouverCopyError, setVancouverCopyError] = useState<string | null>(null);
   const [risCopyError, setRisCopyError] = useState<string | null>(null);
   const [sourceCopyError, setSourceCopyError] = useState<string | null>(null);
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
@@ -152,6 +158,7 @@ export function AgentSharePage() {
   const [chicagoDownloadError, setChicagoDownloadError] = useState<string | null>(null);
   const [mlaDownloadError, setMlaDownloadError] = useState<string | null>(null);
   const [ieeeDownloadError, setIeeeDownloadError] = useState<string | null>(null);
+  const [vancouverDownloadError, setVancouverDownloadError] = useState<string | null>(null);
   const [bundleDownloadError, setBundleDownloadError] = useState<string | null>(null);
   const [harvardDownloadError, setHarvardDownloadError] = useState<string | null>(null);
   const [bibtexDownloadError, setBibtexDownloadError] = useState<string | null>(null);
@@ -169,6 +176,7 @@ export function AgentSharePage() {
   const [chicagoCopyInFlight, setChicagoCopyInFlight] = useState(false);
   const [mlaCopyInFlight, setMlaCopyInFlight] = useState(false);
   const [ieeeCopyInFlight, setIeeeCopyInFlight] = useState(false);
+  const [vancouverCopyInFlight, setVancouverCopyInFlight] = useState(false);
   const [risCopyInFlight, setRisCopyInFlight] = useState(false);
   const [sourceCopyInFlight, setSourceCopyInFlight] = useState(false);
   const [linkCopyInFlight, setLinkCopyInFlight] = useState(false);
@@ -192,6 +200,8 @@ export function AgentSharePage() {
   const mlaCopyRequestRef = useRef(0);
   const ieeeCopyBusyRef = useRef(false);
   const ieeeCopyRequestRef = useRef(0);
+  const vancouverCopyBusyRef = useRef(false);
+  const vancouverCopyRequestRef = useRef(0);
   const risCopyBusyRef = useRef(false);
   const risCopyRequestRef = useRef(0);
   const sourceCopyBusyRef = useRef(false);
@@ -234,6 +244,9 @@ export function AgentSharePage() {
     ieeeCopyRequestRef.current += 1;
     ieeeCopyBusyRef.current = false;
     setIeeeCopyInFlight(false);
+    vancouverCopyRequestRef.current += 1;
+    vancouverCopyBusyRef.current = false;
+    setVancouverCopyInFlight(false);
     risCopyRequestRef.current += 1;
     risCopyBusyRef.current = false;
     setRisCopyInFlight(false);
@@ -255,6 +268,7 @@ export function AgentSharePage() {
     setChicagoCopyStatus('idle');
     setMlaCopyStatus('idle');
     setIeeeCopyStatus('idle');
+    setVancouverCopyStatus('idle');
     setRisCopyStatus('idle');
     setSourceCopyStatus('idle');
     setLinkStatus('idle');
@@ -271,6 +285,8 @@ export function AgentSharePage() {
     setMlaDownloadFeedbackKey(0);
     setIeeeDownloadStatus('idle');
     setIeeeDownloadFeedbackKey(0);
+    setVancouverDownloadStatus('idle');
+    setVancouverDownloadFeedbackKey(0);
     setBundleDownloadStatus('idle');
     setBundleDownloadFeedbackKey(0);
     setBibtexDownloadStatus('idle');
@@ -292,6 +308,7 @@ export function AgentSharePage() {
     setChicagoCopyError(null);
     setMlaCopyError(null);
     setIeeeCopyError(null);
+    setVancouverCopyError(null);
     setRisCopyError(null);
     setSourceCopyError(null);
     setLinkCopyError(null);
@@ -301,6 +318,7 @@ export function AgentSharePage() {
     setChicagoDownloadError(null);
     setMlaDownloadError(null);
     setIeeeDownloadError(null);
+    setVancouverDownloadError(null);
     setBundleDownloadError(null);
     setHarvardDownloadError(null);
     setBibtexDownloadError(null);
@@ -340,6 +358,7 @@ export function AgentSharePage() {
       chicagoCopyRequestRef.current += 1;
       mlaCopyRequestRef.current += 1;
       ieeeCopyRequestRef.current += 1;
+      vancouverCopyRequestRef.current += 1;
       risCopyRequestRef.current += 1;
       sourceCopyRequestRef.current += 1;
     };
@@ -473,6 +492,19 @@ export function AgentSharePage() {
     () =>
       report
         ? formatAgentReportIeee({
+            title: report.title,
+            question: report.question,
+            url: citationUrl,
+            sharedAt: report.sharedAt,
+          })
+        : '',
+    [citationUrl, report],
+  );
+
+  const vancouverText = useMemo(
+    () =>
+      report
+        ? formatAgentReportVancouver({
             title: report.title,
             question: report.question,
             url: citationUrl,
@@ -645,6 +677,16 @@ export function AgentSharePage() {
   }, [ieeeCopyStatus]);
 
   useEffect(() => {
+    if (vancouverCopyStatus === 'idle') return;
+    const hold = vancouverCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setVancouverCopyStatus('idle');
+      setVancouverCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [vancouverCopyStatus]);
+
+  useEffect(() => {
     if (risCopyStatus === 'idle') return;
     const hold = risCopyStatus === 'failed' ? 2800 : 1600;
     const t = window.setTimeout(() => {
@@ -733,6 +775,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [ieeeDownloadFeedbackKey, ieeeDownloadStatus]);
+
+  useEffect(() => {
+    if (vancouverDownloadStatus === 'idle') return;
+    const hold = vancouverDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setVancouverDownloadStatus('idle');
+      setVancouverDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [vancouverDownloadFeedbackKey, vancouverDownloadStatus]);
 
   useEffect(() => {
     if (bundleDownloadStatus === 'idle') return;
@@ -1112,6 +1164,34 @@ export function AgentSharePage() {
     }
   };
 
+  const handleCopyVancouver = async () => {
+    if (vancouverCopyBusyRef.current || !vancouverText) return;
+    vancouverCopyBusyRef.current = true;
+    setVancouverCopyInFlight(true);
+    const requestId = ++vancouverCopyRequestRef.current;
+    setVancouverCopyStatus('idle');
+    setVancouverCopyError(null);
+    try {
+      const ok = await copyToClipboard(vancouverText);
+      if (vancouverCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setVancouverCopyStatus('copied');
+      } else {
+        setVancouverCopyStatus('failed');
+        setVancouverCopyError('Could not copy the Vancouver citation — copy it manually instead.');
+      }
+    } catch {
+      if (vancouverCopyRequestRef.current !== requestId) return;
+      setVancouverCopyStatus('failed');
+      setVancouverCopyError('Could not copy the Vancouver citation — copy it manually instead.');
+    } finally {
+      if (vancouverCopyRequestRef.current === requestId) {
+        vancouverCopyBusyRef.current = false;
+        setVancouverCopyInFlight(false);
+      }
+    }
+  };
+
   const handleCopyRis = async () => {
     if (risCopyBusyRef.current || !risText) return;
     risCopyBusyRef.current = true;
@@ -1269,6 +1349,20 @@ export function AgentSharePage() {
     } else {
       setIeeeDownloadStatus('failed');
       setIeeeDownloadError('Could not download the IEEE citation — try Copy IEEE instead.');
+    }
+  };
+
+  const handleDownloadVancouver = () => {
+    if (!report || !vancouverText) return;
+    setVancouverDownloadError(null);
+    setVancouverDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}-vancouver`;
+    const ok = downloadVancouverFile(vancouverText, stem);
+    if (ok) {
+      setVancouverDownloadStatus('done');
+    } else {
+      setVancouverDownloadStatus('failed');
+      setVancouverDownloadError('Could not download the Vancouver citation — try Copy Vancouver instead.');
     }
   };
 
@@ -1597,6 +1691,11 @@ export function AgentSharePage() {
                       {ieeeCopyError}
                     </p>
                   ) : null}
+                  {vancouverCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {vancouverCopyError}
+                    </p>
+                  ) : null}
                   {risCopyError ? (
                     <p className="share-take__error" role="alert">
                       {risCopyError}
@@ -1635,6 +1734,11 @@ export function AgentSharePage() {
                   {ieeeDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {ieeeDownloadError}
+                    </p>
+                  ) : null}
+                  {vancouverDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {vancouverDownloadError}
                     </p>
                   ) : null}
                   {bundleDownloadError ? (
@@ -1835,7 +1939,21 @@ export function AgentSharePage() {
                           ? 'IEEE copied'
                           : ieeeCopyStatus === 'failed'
                             ? 'Copy IEEE failed'
-                            : 'Copy IEEE'}
+                        : 'Copy IEEE'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${vancouverCopyStatus === 'copied' ? ' is-success' : ''}${vancouverCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyVancouver()}
+                      disabled={vancouverCopyInFlight}
+                    >
+                      {vancouverCopyInFlight
+                        ? 'Copying…'
+                        : vancouverCopyStatus === 'copied'
+                          ? 'Vancouver copied'
+                          : vancouverCopyStatus === 'failed'
+                            ? 'Copy Vancouver failed'
+                            : 'Copy Vancouver'}
                     </button>
                     <button
                       type="button"
@@ -1921,7 +2039,18 @@ export function AgentSharePage() {
                         ? 'IEEE downloaded'
                         : ieeeDownloadStatus === 'failed'
                           ? 'IEEE download failed'
-                          : 'Download IEEE'}
+                        : 'Download IEEE'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${vancouverDownloadStatus === 'done' ? ' is-success' : ''}${vancouverDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadVancouver}
+                    >
+                      {vancouverDownloadStatus === 'done'
+                        ? 'Vancouver downloaded'
+                        : vancouverDownloadStatus === 'failed'
+                          ? 'Vancouver download failed'
+                          : 'Download Vancouver'}
                     </button>
                     <button
                       type="button"
@@ -2006,12 +2135,13 @@ export function AgentSharePage() {
                   <span className="share-take__status" role="status" aria-live="polite">
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
                     {citationCopyStatus === 'copied' ? 'Citation copied to clipboard. ' : ''}
-                    {bundleCopyStatus === 'copied' ? 'APA, Chicago, Harvard, IEEE, and MLA citations copied. ' : ''}
+                    {bundleCopyStatus === 'copied' ? 'APA, Chicago, Harvard, IEEE, MLA, and Vancouver citations copied. ' : ''}
                     {apaCopyStatus === 'copied' ? 'APA citation copied to clipboard. ' : ''}
                     {harvardCopyStatus === 'copied' ? 'Harvard citation copied to clipboard. ' : ''}
                     {chicagoCopyStatus === 'copied' ? 'Chicago citation copied to clipboard. ' : ''}
                     {mlaCopyStatus === 'copied' ? 'MLA citation copied to clipboard. ' : ''}
                     {ieeeCopyStatus === 'copied' ? 'IEEE citation copied to clipboard. ' : ''}
+                    {vancouverCopyStatus === 'copied' ? 'Vancouver citation copied to clipboard. ' : ''}
                     {bibtexCopyStatus === 'copied' ? 'BibTeX citation copied to clipboard. ' : ''}
                     {cslJsonCopyStatus === 'copied' ? 'CSL-JSON citation copied to clipboard. ' : ''}
                     {sourceCopyStatus === 'copied' ? 'Sources copied to clipboard. ' : ''}
@@ -2023,6 +2153,7 @@ export function AgentSharePage() {
                     {chicagoDownloadStatus === 'done' ? 'Chicago citation downloaded.' : ''}
                     {mlaDownloadStatus === 'done' ? 'MLA citation downloaded.' : ''}
                     {ieeeDownloadStatus === 'done' ? 'IEEE citation downloaded.' : ''}
+                    {vancouverDownloadStatus === 'done' ? 'Vancouver citation downloaded.' : ''}
                     {bundleDownloadStatus === 'done' ? 'Citation bundle downloaded.' : ''}
                     {bibtexDownloadStatus === 'done' ? 'BibTeX citation downloaded.' : ''}
                     {risDownloadStatus === 'done' ? 'RIS citation downloaded.' : ''}

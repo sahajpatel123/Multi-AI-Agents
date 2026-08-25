@@ -6,6 +6,7 @@ import { formatAgentReportCitationBundle } from './agentReportCitationBundle';
 import { formatAgentReportHarvard } from './agentReportHarvard';
 import { formatAgentReportIeee } from './agentReportIeee';
 import { formatAgentReportMla } from './agentReportMla';
+import { formatAgentReportVancouver } from './agentReportVancouver';
 
 const sharedOpts = {
   title: 'Shareable research',
@@ -15,7 +16,7 @@ const sharedOpts = {
 };
 
 describe('formatAgentReportCitationBundle', () => {
-  it('labels one APA, Chicago, Harvard, IEEE, and MLA section per report', () => {
+  it('labels one section for each supported prose citation style', () => {
     const bundle = formatAgentReportCitationBundle(sharedOpts);
 
     expect(bundle).toBe(
@@ -25,6 +26,7 @@ describe('formatAgentReportCitationBundle', () => {
         'Harvard\n' + formatAgentReportHarvard(sharedOpts),
         'IEEE\n' + formatAgentReportIeee(sharedOpts),
         'MLA\n' + formatAgentReportMla(sharedOpts),
+        'Vancouver\n' + formatAgentReportVancouver(sharedOpts),
       ].join('\n'),
     );
     expect(bundle).toContain('APA\nArena. (2026, August 14). Shareable research');
@@ -36,14 +38,15 @@ describe('formatAgentReportCitationBundle', () => {
 
   it('keeps each section identical to the standalone formatter', () => {
     const bundle = formatAgentReportCitationBundle(sharedOpts);
-    const sections = bundle.split(/\n(?=APA\n|Chicago\n|Harvard\n|IEEE\n|MLA\n)/);
+    const sections = bundle.split(/\n(?=APA\n|Chicago\n|Harvard\n|IEEE\n|MLA\n|Vancouver\n)/);
 
-    expect(sections).toHaveLength(5);
+    expect(sections).toHaveLength(6);
     expect(sections[0]).toBe(`APA\n${formatAgentReportApa(sharedOpts)}`);
     expect(sections[1]).toBe(`Chicago\n${formatAgentReportChicago(sharedOpts)}`);
     expect(sections[2]).toBe(`Harvard\n${formatAgentReportHarvard(sharedOpts)}`);
     expect(sections[3]).toBe(`IEEE\n${formatAgentReportIeee(sharedOpts)}`);
     expect(sections[4]).toBe(`MLA\n${formatAgentReportMla(sharedOpts)}`);
+    expect(sections[5]).toBe(`Vancouver\n${formatAgentReportVancouver(sharedOpts)}`);
     expect(bundle.endsWith('\n')).toBe(true);
     expect(bundle).not.toMatch(/\n{3,}/);
   });
@@ -65,6 +68,6 @@ describe('formatAgentReportCitationBundle', () => {
     });
 
     expect(bundle).not.toMatch(/[\u061c\u200b\u200e\u200f\u202a-\u202e]/);
-    expect(bundle.match(/A mode report/g)).toHaveLength(5);
+    expect(bundle.match(/A mode report/g)).toHaveLength(6);
   });
 });
