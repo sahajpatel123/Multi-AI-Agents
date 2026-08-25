@@ -47,4 +47,16 @@ describe('formatAgentReportRis', () => {
     expect(ris).not.toContain('secret');
     expect(ris).not.toContain('UR  -');
   });
+
+  it('omits impossible shared dates instead of emitting misleading metadata', () => {
+    const ris = formatAgentReportRis({
+      title: 'Undated report',
+      sharedAt: '2026-02-30T11:00:00Z',
+    });
+
+    expect(ris).not.toContain('PY  -');
+    expect(ris).not.toContain('DA  -');
+    expect(ris).toContain('N1  - Arena Agent report.');
+    expect(ris.endsWith('ER  - \n')).toBe(true);
+  });
 });
