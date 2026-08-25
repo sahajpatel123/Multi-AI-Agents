@@ -29,6 +29,18 @@ describe('formatAgentReportVancouver', () => {
     );
   });
 
+  it('does not create a comma-period sequence for comma-ended titles', () => {
+    expect(
+      formatAgentReportVancouver({
+        title: 'A report in progress,',
+        url: 'https://arena.example/share/agent/public-report',
+      }),
+    ).toBe(
+      'Arena. A report in progress, [Internet]. Arena Agent report. ' +
+        'Available from: https://arena.example/share/agent/public-report\n',
+    );
+  });
+
   it('flattens hostile metadata and omits invalid URLs and dates', () => {
     const result = formatAgentReportVancouver({
       title: 'A "useful"\nreport',

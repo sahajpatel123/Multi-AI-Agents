@@ -71,8 +71,10 @@ function safePublicUrl(raw: string | null | undefined): string {
 
 function finishTitle(value: string): string {
   // Vancouver uses sentence-style titles. Avoid a duplicate terminal period
-  // while keeping question and exclamation titles intact.
-  return /[.!?]$/.test(value) ? value : `${value}.`;
+  // while keeping question, exclamation, and comma titles intact. A comma
+  // followed by the period we add here would produce the visibly malformed
+  // `,.` sequence in the pasted citation.
+  return /[.!?,]$/.test(value) ? value : `${value}.`;
 }
 
 /** Format a public Agent report as a plain-text Vancouver/NLM-style citation. */
