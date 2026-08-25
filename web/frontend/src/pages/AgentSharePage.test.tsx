@@ -287,6 +287,30 @@ describe('AgentSharePage', () => {
     );
   });
 
+  it('copies only the answer body without report metadata', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy answer' }));
+
+    expect(await screen.findByText('Answer copied')).toBeInTheDocument();
+    expect(copyToClipboard).toHaveBeenCalledWith('Yes, with a token and a public page.');
+    expect(copyToClipboard).not.toHaveBeenCalledWith(expect.stringContaining('Is this report shareable?'));
+  });
+
+  it('shows an honest error when copying only the answer fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy answer' }));
+
+    expect(await screen.findByText(/could not copy the answer/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy answer failed' })).toBeInTheDocument();
+  });
+
   it('copies a compact citation without the report body or share token', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     renderShare();

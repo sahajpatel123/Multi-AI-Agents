@@ -106,6 +106,7 @@ export function AgentSharePage() {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [answerCopyStatus, setAnswerCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [bibtexCopyStatus, setBibtexCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [cslJsonCopyStatus, setCslJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [referenceBundleCopyStatus, setReferenceBundleCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -193,6 +194,8 @@ export function AgentSharePage() {
   const [csvDownloadError, setCsvDownloadError] = useState<string | null>(null);
   const [nativeShareError, setNativeShareError] = useState<string | null>(null);
   const [copyInFlight, setCopyInFlight] = useState(false);
+  const [answerCopyError, setAnswerCopyError] = useState<string | null>(null);
+  const [answerCopyInFlight, setAnswerCopyInFlight] = useState(false);
   const [bibtexCopyInFlight, setBibtexCopyInFlight] = useState(false);
   const [cslJsonCopyInFlight, setCslJsonCopyInFlight] = useState(false);
   const [referenceBundleCopyInFlight, setReferenceBundleCopyInFlight] = useState(false);
@@ -211,6 +214,8 @@ export function AgentSharePage() {
   const [linkCopyInFlight, setLinkCopyInFlight] = useState(false);
   const [nativeShareInFlight, setNativeShareInFlight] = useState(false);
   const copyBusyRef = useRef(false);
+  const answerCopyBusyRef = useRef(false);
+  const answerCopyRequestRef = useRef(0);
   const bibtexCopyBusyRef = useRef(false);
   const bibtexCopyRequestRef = useRef(0);
   const cslJsonCopyBusyRef = useRef(false);
@@ -252,6 +257,9 @@ export function AgentSharePage() {
     nativeShareRequestRef.current += 1;
     nativeShareBusyRef.current = false;
     setNativeShareInFlight(false);
+    answerCopyRequestRef.current += 1;
+    answerCopyBusyRef.current = false;
+    setAnswerCopyInFlight(false);
     bibtexCopyRequestRef.current += 1;
     bibtexCopyBusyRef.current = false;
     setBibtexCopyInFlight(false);
@@ -303,6 +311,7 @@ export function AgentSharePage() {
     setNotFound(false);
     setReport(null);
     setCopyStatus('idle');
+    setAnswerCopyStatus('idle');
     setBibtexCopyStatus('idle');
     setCslJsonCopyStatus('idle');
     setReferenceBundleCopyStatus('idle');
@@ -354,6 +363,7 @@ export function AgentSharePage() {
     setCsvDownloadFeedbackKey(0);
     setNativeShareStatus('idle');
     setCopyError(null);
+    setAnswerCopyError(null);
     setBibtexCopyError(null);
     setCslJsonCopyError(null);
     setReferenceBundleCopyError(null);
@@ -411,6 +421,7 @@ export function AgentSharePage() {
     return () => {
       cancelled = true;
       nativeShareRequestRef.current += 1;
+      answerCopyRequestRef.current += 1;
       bibtexCopyRequestRef.current += 1;
       cslJsonCopyRequestRef.current += 1;
       referenceBundleCopyRequestRef.current += 1;
@@ -706,6 +717,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [copyStatus]);
+
+  useEffect(() => {
+    if (answerCopyStatus === 'idle') return;
+    const hold = answerCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setAnswerCopyStatus('idle');
+      setAnswerCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [answerCopyStatus]);
 
   useEffect(() => {
     if (citationCopyStatus === 'idle') return;
@@ -1070,6 +1091,34 @@ export function AgentSharePage() {
     } finally {
       copyBusyRef.current = false;
       setCopyInFlight(false);
+    }
+  };
+
+  const handleCopyAnswer = async () => {
+    if (answerCopyBusyRef.current || !report?.answer) return;
+    answerCopyBusyRef.current = true;
+    setAnswerCopyInFlight(true);
+    const requestId = ++answerCopyRequestRef.current;
+    setAnswerCopyStatus('idle');
+    setAnswerCopyError(null);
+    try {
+      const ok = await copyToClipboard(report.answer);
+      if (answerCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setAnswerCopyStatus('copied');
+      } else {
+        setAnswerCopyStatus('failed');
+        setAnswerCopyError('Could not copy the answer — select the text manually.');
+      }
+    } catch {
+      if (answerCopyRequestRef.current !== requestId) return;
+      setAnswerCopyStatus('failed');
+      setAnswerCopyError('Could not copy the answer — select the text manually.');
+    } finally {
+      if (answerCopyRequestRef.current === requestId) {
+        answerCopyBusyRef.current = false;
+        setAnswerCopyInFlight(false);
+      }
     }
   };
 
@@ -1974,6 +2023,11 @@ export function AgentSharePage() {
                       {copyError}
                     </p>
                   ) : null}
+                  {answerCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {answerCopyError}
+                    </p>
+                  ) : null}
                   {sourceCopyError ? (
                     <p className="share-take__error" role="alert">
                       {sourceCopyError}
@@ -2166,6 +2220,20 @@ export function AgentSharePage() {
                         : copyStatus === 'failed'
                           ? 'Copy failed'
                           : 'Copy report'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${answerCopyStatus === 'copied' ? ' is-success' : ''}${answerCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyAnswer()}
+                      disabled={answerCopyInFlight || !report.answer}
+                    >
+                      {answerCopyInFlight
+                        ? 'Copying…'
+                        : answerCopyStatus === 'copied'
+                          ? 'Answer copied'
+                          : answerCopyStatus === 'failed'
+                            ? 'Copy answer failed'
+                            : 'Copy answer'}
                     </button>
                     <button
                       type="button"
@@ -2588,6 +2656,7 @@ export function AgentSharePage() {
                   </div>
                   <span className="share-take__status" role="status" aria-live="polite">
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
+                    {answerCopyStatus === 'copied' ? 'Answer copied to clipboard. ' : ''}
                     {citationCopyStatus === 'copied' ? 'Citation copied to clipboard. ' : ''}
                     {bundleCopyStatus === 'copied' ? 'AMA, APA, Chicago, Harvard, IEEE, MLA, and Vancouver citations copied. ' : ''}
                     {amaCopyStatus === 'copied' ? 'AMA citation copied to clipboard. ' : ''}
