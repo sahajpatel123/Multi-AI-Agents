@@ -8,6 +8,13 @@
 
 function normalizeBibtexText(raw: string | null | undefined, max = 240): string {
   return String(raw ?? '')
+    // BibTeX output is plain text. Flatten user-authored control characters
+    // before they can create misleading extra lines in a downloaded entry.
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f\u0080-\u009f]+/g, ' ')
+    // Remove invisible directional controls so untrusted text cannot reorder
+    // what a reader sees in a pasted .bib file (Trojan Source style).
+    .replace(/[\u061c\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, max);

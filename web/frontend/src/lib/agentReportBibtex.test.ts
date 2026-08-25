@@ -61,6 +61,20 @@ describe('formatAgentReportBibtex', () => {
     expect(bibtex).toContain('@misc{arena_private_url_undated_1cutwlh,');
   });
 
+  it('flattens control and directional marks before BibTeX escaping', () => {
+    const bibtex = formatAgentReportBibtex({
+      title: 'A\u202Emode\u0007report',
+      question: 'Does the\u200bnote stay intact?',
+    });
+
+    // Newlines inside a field would break the entry; direction overrides must
+    // not survive into a pasted .bib file either.
+    // eslint-disable-next-line no-control-regex
+    expect(bibtex).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u202a-\u202e]/);
+    expect(bibtex).toContain('title = {A mode report},');
+    expect(bibtex).toContain('Question: Does the note stay intact?');
+  });
+
   it('keeps same-title reports distinct when they share a date', () => {
     const first = formatAgentReportBibtex({
       title: 'Daily brief',
