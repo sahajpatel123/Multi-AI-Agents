@@ -19,6 +19,7 @@ import {
 } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { formatAgentReportBibtex } from '../lib/agentReportBibtex';
+import { formatAgentReportApa } from '../lib/agentReportApa';
 import { formatAgentReportCitation } from '../lib/agentReportCitation';
 import { formatAgentReportCslJson } from '../lib/agentReportCslJson';
 import { formatAgentReportRis } from '../lib/agentReportRis';
@@ -86,6 +87,7 @@ export function AgentSharePage() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [bibtexCopyStatus, setBibtexCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [citationCopyStatus, setCitationCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [apaCopyStatus, setApaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [sourceCopyStatus, setSourceCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -104,6 +106,7 @@ export function AgentSharePage() {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [bibtexCopyError, setBibtexCopyError] = useState<string | null>(null);
   const [citationCopyError, setCitationCopyError] = useState<string | null>(null);
+  const [apaCopyError, setApaCopyError] = useState<string | null>(null);
   const [sourceCopyError, setSourceCopyError] = useState<string | null>(null);
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -116,6 +119,7 @@ export function AgentSharePage() {
   const [copyInFlight, setCopyInFlight] = useState(false);
   const [bibtexCopyInFlight, setBibtexCopyInFlight] = useState(false);
   const [citationCopyInFlight, setCitationCopyInFlight] = useState(false);
+  const [apaCopyInFlight, setApaCopyInFlight] = useState(false);
   const [sourceCopyInFlight, setSourceCopyInFlight] = useState(false);
   const [linkCopyInFlight, setLinkCopyInFlight] = useState(false);
   const [nativeShareInFlight, setNativeShareInFlight] = useState(false);
@@ -124,6 +128,8 @@ export function AgentSharePage() {
   const bibtexCopyRequestRef = useRef(0);
   const citationCopyBusyRef = useRef(false);
   const citationCopyRequestRef = useRef(0);
+  const apaCopyBusyRef = useRef(false);
+  const apaCopyRequestRef = useRef(0);
   const sourceCopyBusyRef = useRef(false);
   const sourceCopyRequestRef = useRef(0);
   const linkCopyBusyRef = useRef(false);
@@ -143,6 +149,9 @@ export function AgentSharePage() {
     citationCopyRequestRef.current += 1;
     citationCopyBusyRef.current = false;
     setCitationCopyInFlight(false);
+    apaCopyRequestRef.current += 1;
+    apaCopyBusyRef.current = false;
+    setApaCopyInFlight(false);
     sourceCopyRequestRef.current += 1;
     sourceCopyBusyRef.current = false;
     setSourceCopyInFlight(false);
@@ -154,6 +163,7 @@ export function AgentSharePage() {
     setCopyStatus('idle');
     setBibtexCopyStatus('idle');
     setCitationCopyStatus('idle');
+    setApaCopyStatus('idle');
     setSourceCopyStatus('idle');
     setLinkStatus('idle');
     setDownloadStatus('idle');
@@ -171,6 +181,7 @@ export function AgentSharePage() {
     setCopyError(null);
     setBibtexCopyError(null);
     setCitationCopyError(null);
+    setApaCopyError(null);
     setSourceCopyError(null);
     setLinkCopyError(null);
     setDownloadError(null);
@@ -205,6 +216,7 @@ export function AgentSharePage() {
       nativeShareRequestRef.current += 1;
       bibtexCopyRequestRef.current += 1;
       citationCopyRequestRef.current += 1;
+      apaCopyRequestRef.current += 1;
       sourceCopyRequestRef.current += 1;
     };
   }, [token]);
@@ -272,6 +284,19 @@ export function AgentSharePage() {
     () =>
       report
         ? formatAgentReportCitation({
+            title: report.title,
+            question: report.question,
+            url: citationUrl,
+            sharedAt: report.sharedAt,
+          })
+        : '',
+    [citationUrl, report],
+  );
+
+  const apaText = useMemo(
+    () =>
+      report
+        ? formatAgentReportApa({
             title: report.title,
             question: report.question,
             url: citationUrl,
@@ -359,6 +384,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [bibtexCopyStatus]);
+
+  useEffect(() => {
+    if (apaCopyStatus === 'idle') return;
+    const hold = apaCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setApaCopyStatus('idle');
+      setApaCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [apaCopyStatus]);
 
   useEffect(() => {
     if (sourceCopyStatus === 'idle') return;
@@ -558,6 +593,34 @@ export function AgentSharePage() {
       if (bibtexCopyRequestRef.current === requestId) {
         bibtexCopyBusyRef.current = false;
         setBibtexCopyInFlight(false);
+      }
+    }
+  };
+
+  const handleCopyApa = async () => {
+    if (apaCopyBusyRef.current || !apaText) return;
+    apaCopyBusyRef.current = true;
+    setApaCopyInFlight(true);
+    const requestId = ++apaCopyRequestRef.current;
+    setApaCopyStatus('idle');
+    setApaCopyError(null);
+    try {
+      const ok = await copyToClipboard(apaText);
+      if (apaCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setApaCopyStatus('copied');
+      } else {
+        setApaCopyStatus('failed');
+        setApaCopyError('Could not copy the APA citation — copy it manually instead.');
+      }
+    } catch {
+      if (apaCopyRequestRef.current !== requestId) return;
+      setApaCopyStatus('failed');
+      setApaCopyError('Could not copy the APA citation — copy it manually instead.');
+    } finally {
+      if (apaCopyRequestRef.current === requestId) {
+        apaCopyBusyRef.current = false;
+        setApaCopyInFlight(false);
       }
     }
   };
@@ -899,6 +962,11 @@ export function AgentSharePage() {
                       {citationCopyError}
                     </p>
                   ) : null}
+                  {apaCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {apaCopyError}
+                    </p>
+                  ) : null}
                   {downloadError ? (
                     <p className="share-take__error" role="alert">
                       {downloadError}
@@ -975,6 +1043,20 @@ export function AgentSharePage() {
                           : citationCopyStatus === 'failed'
                             ? 'Copy citation failed'
                         : 'Copy citation'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${apaCopyStatus === 'copied' ? ' is-success' : ''}${apaCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyApa()}
+                      disabled={apaCopyInFlight}
+                    >
+                      {apaCopyInFlight
+                        ? 'Copying…'
+                        : apaCopyStatus === 'copied'
+                          ? 'APA copied'
+                          : apaCopyStatus === 'failed'
+                            ? 'Copy APA failed'
+                            : 'Copy APA'}
                     </button>
                     <button
                       type="button"
@@ -1095,6 +1177,7 @@ export function AgentSharePage() {
                   <span className="share-take__status" role="status" aria-live="polite">
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
                     {citationCopyStatus === 'copied' ? 'Citation copied to clipboard. ' : ''}
+                    {apaCopyStatus === 'copied' ? 'APA citation copied to clipboard. ' : ''}
                     {bibtexCopyStatus === 'copied' ? 'BibTeX citation copied to clipboard. ' : ''}
                     {sourceCopyStatus === 'copied' ? 'Sources copied to clipboard. ' : ''}
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}

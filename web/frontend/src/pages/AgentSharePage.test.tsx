@@ -280,6 +280,34 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'Copy citation failed' })).toBeInTheDocument();
   });
 
+  it('copies an APA citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy APA' }));
+
+    expect(await screen.findByText('APA copied')).toBeInTheDocument();
+    const [apa] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
+    expect(apa).toContain(
+      'Arena. (2026, August 14). Shareable research [AI-generated research report]. Arena.',
+    );
+    expect(apa).not.toContain('Yes, with a token and a public page.');
+    expect(apa).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when copying the APA citation fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy APA' }));
+
+    expect(await screen.findByText(/could not copy the APA citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy APA failed' })).toBeInTheDocument();
+  });
+
   it('copies a BibTeX citation without the report body or share token', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     renderShare();
