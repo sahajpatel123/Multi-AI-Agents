@@ -802,6 +802,41 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'CSL-JSON download failed' })).toBeInTheDocument();
   });
 
+  it('starts a fresh feedback window when the CSL-JSON citation is downloaded again', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+      renderShare();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      const downloadCslJson = () =>
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /^(Download \.csl\.json|CSL-JSON downloaded)$/,
+          }),
+        );
+      downloadCslJson();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole('button', { name: 'CSL-JSON downloaded' })).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(1500));
+      downloadCslJson();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => vi.advanceTimersByTime(1500));
+
+      expect(screen.getByRole('button', { name: 'CSL-JSON downloaded' })).toBeInTheDocument();
+      expect(downloadCslJsonFile).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('opens the browser print dialog for a shared report', async () => {
     const print = vi.fn();
     Object.defineProperty(window, 'print', { configurable: true, value: print });
