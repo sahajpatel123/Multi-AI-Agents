@@ -39,4 +39,16 @@ describe('formatAgentReportMla', () => {
     expect(result).toBe('Arena. “A report without a title.” Arena Agent report.\n');
     expect(result).not.toContain('secret');
   });
+
+  it.each(['Why now?', 'Stop!', 'A finished report.'])(
+    'does not duplicate terminal punctuation for title %j',
+    (title) => {
+      expect(
+        formatAgentReportMla({
+          title,
+          url: 'https://arena.example/share/agent/public-report',
+        }),
+      ).toBe(`Arena. “${title}” Arena Agent report, https://arena.example/share/agent/public-report.\n`);
+    },
+  );
 });

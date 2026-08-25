@@ -83,7 +83,11 @@ function quoteMlaTitle(value: string): string {
   // Use curly outer quotes and turn nested double quotes into apostrophes so a
   // user-authored title cannot make the citation look structurally ambiguous.
   const safeTitle = value.replace(/["“”]/g, '’');
-  return `“${safeTitle}.”`;
+  // MLA places the title's terminal punctuation before the closing quote. Do
+  // not add a second period when the public title is already a question,
+  // exclamation, or full-stop title.
+  const terminalPunctuation = /[.!?]$/.test(safeTitle) ? '' : '.';
+  return `“${safeTitle}${terminalPunctuation}”`;
 }
 
 /** Format a public Agent report as a plain-text MLA 9-style citation. */
