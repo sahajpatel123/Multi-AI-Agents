@@ -9,6 +9,7 @@ import {
   downloadApaFile,
   downloadBibtexFile,
   downloadChicagoFile,
+  downloadCitationBundleFile,
   downloadCsvFile,
   downloadCslJsonFile,
   downloadJsonFile,
@@ -43,6 +44,7 @@ vi.mock('../lib/downloadTextFile', () => ({
   downloadApaFile: vi.fn(),
   downloadBibtexFile: vi.fn(),
   downloadChicagoFile: vi.fn(),
+  downloadCitationBundleFile: vi.fn(),
   downloadCsvFile: vi.fn(),
   downloadCslJsonFile: vi.fn(),
   downloadJsonFile: vi.fn(),
@@ -142,6 +144,7 @@ describe('AgentSharePage', () => {
     vi.mocked(downloadApaFile).mockReturnValue(true);
     vi.mocked(downloadBibtexFile).mockReturnValue(true);
     vi.mocked(downloadChicagoFile).mockReturnValue(true);
+    vi.mocked(downloadCitationBundleFile).mockReturnValue(true);
     vi.mocked(downloadCsvFile).mockReturnValue(true);
     vi.mocked(downloadCslJsonFile).mockReturnValue(true);
     vi.mocked(downloadIeeeFile).mockReturnValue(true);
@@ -997,6 +1000,39 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/could not download the IEEE citation/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'IEEE download failed' })).toBeInTheDocument();
+  });
+
+  it('downloads all prose citations without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download all citations' }));
+
+    expect(await screen.findByText('All citations downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadCitationBundleFile).mock.calls[0] ?? [];
+    expect(content).toContain('APA\n');
+    expect(content).toContain('Chicago\n');
+    expect(content).toContain('IEEE\n');
+    expect(content).toContain('MLA\n');
+    expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));
+    expect(filename).toEqual(expect.stringContaining('-all'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the citation bundle download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadCitationBundleFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download all citations' }));
+
+    expect(
+      await screen.findByText(/could not download the citation bundle/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bundle download failed' })).toBeInTheDocument();
   });
 
   it('downloads the public BibTeX citation without the report body or share token', async () => {

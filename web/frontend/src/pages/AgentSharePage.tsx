@@ -14,6 +14,7 @@ import {
   downloadBibtexFile,
   downloadChicagoFile,
   downloadCsvFile,
+  downloadCitationBundleFile,
   downloadCslJsonFile,
   downloadJsonFile,
   downloadIeeeFile,
@@ -112,6 +113,8 @@ export function AgentSharePage() {
   const [chicagoDownloadFeedbackKey, setChicagoDownloadFeedbackKey] = useState(0);
   const [ieeeDownloadStatus, setIeeeDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [ieeeDownloadFeedbackKey, setIeeeDownloadFeedbackKey] = useState(0);
+  const [bundleDownloadStatus, setBundleDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [bundleDownloadFeedbackKey, setBundleDownloadFeedbackKey] = useState(0);
   const [bibtexDownloadStatus, setBibtexDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [bibtexDownloadFeedbackKey, setBibtexDownloadFeedbackKey] = useState(0);
   const [risDownloadStatus, setRisDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -139,6 +142,7 @@ export function AgentSharePage() {
   const [apaDownloadError, setApaDownloadError] = useState<string | null>(null);
   const [chicagoDownloadError, setChicagoDownloadError] = useState<string | null>(null);
   const [ieeeDownloadError, setIeeeDownloadError] = useState<string | null>(null);
+  const [bundleDownloadError, setBundleDownloadError] = useState<string | null>(null);
   const [bibtexDownloadError, setBibtexDownloadError] = useState<string | null>(null);
   const [risDownloadError, setRisDownloadError] = useState<string | null>(null);
   const [cslJsonDownloadError, setCslJsonDownloadError] = useState<string | null>(null);
@@ -245,6 +249,8 @@ export function AgentSharePage() {
     setChicagoDownloadFeedbackKey(0);
     setIeeeDownloadStatus('idle');
     setIeeeDownloadFeedbackKey(0);
+    setBundleDownloadStatus('idle');
+    setBundleDownloadFeedbackKey(0);
     setBibtexDownloadStatus('idle');
     setBibtexDownloadFeedbackKey(0);
     setRisDownloadStatus('idle');
@@ -271,6 +277,7 @@ export function AgentSharePage() {
     setApaDownloadError(null);
     setChicagoDownloadError(null);
     setIeeeDownloadError(null);
+    setBundleDownloadError(null);
     setBibtexDownloadError(null);
     setRisDownloadError(null);
     setCslJsonDownloadError(null);
@@ -657,6 +664,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [ieeeDownloadFeedbackKey, ieeeDownloadStatus]);
+
+  useEffect(() => {
+    if (bundleDownloadStatus === 'idle') return;
+    const hold = bundleDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setBundleDownloadStatus('idle');
+      setBundleDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [bundleDownloadFeedbackKey, bundleDownloadStatus]);
 
   useEffect(() => {
     if (bibtexDownloadStatus === 'idle') return;
@@ -1130,6 +1147,21 @@ export function AgentSharePage() {
     }
   };
 
+  const handleDownloadCitationBundle = () => {
+    if (!report || !bundleText) return;
+    setBundleDownloadError(null);
+    // Restart the feedback timer for repeated synchronous downloads.
+    setBundleDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}-all`;
+    const ok = downloadCitationBundleFile(bundleText, stem);
+    if (ok) {
+      setBundleDownloadStatus('done');
+    } else {
+      setBundleDownloadStatus('failed');
+      setBundleDownloadError('Could not download the citation bundle — try Copy all citations instead.');
+    }
+  };
+
   const handleDownloadRis = () => {
     if (!report || !risText) return;
     setRisDownloadError(null);
@@ -1465,6 +1497,11 @@ export function AgentSharePage() {
                       {ieeeDownloadError}
                     </p>
                   ) : null}
+                  {bundleDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {bundleDownloadError}
+                    </p>
+                  ) : null}
                   {bibtexDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {bibtexDownloadError}
@@ -1712,6 +1749,17 @@ export function AgentSharePage() {
                     </button>
                     <button
                       type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${bundleDownloadStatus === 'done' ? ' is-success' : ''}${bundleDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadCitationBundle}
+                    >
+                      {bundleDownloadStatus === 'done'
+                        ? 'All citations downloaded'
+                        : bundleDownloadStatus === 'failed'
+                          ? 'Bundle download failed'
+                          : 'Download all citations'}
+                    </button>
+                    <button
+                      type="button"
                       className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}${downloadStatus === 'failed' ? ' is-error' : ''}`}
                       onClick={handleDownloadReport}
                     >
@@ -1796,6 +1844,7 @@ export function AgentSharePage() {
                     {apaDownloadStatus === 'done' ? 'APA citation downloaded.' : ''}
                     {chicagoDownloadStatus === 'done' ? 'Chicago citation downloaded.' : ''}
                     {ieeeDownloadStatus === 'done' ? 'IEEE citation downloaded.' : ''}
+                    {bundleDownloadStatus === 'done' ? 'Citation bundle downloaded.' : ''}
                     {bibtexDownloadStatus === 'done' ? 'BibTeX citation downloaded.' : ''}
                     {risDownloadStatus === 'done' ? 'RIS citation downloaded.' : ''}
                     {cslJsonDownloadStatus === 'done' ? 'CSL-JSON citation downloaded.' : ''}

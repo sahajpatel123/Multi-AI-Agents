@@ -69,8 +69,11 @@ export function downloadTextFile(
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    // Revoke after the browser has a chance to start the download.
-    window.setTimeout(() => {
+    // Revoke after the browser has a chance to start the download. Use the
+    // global timer rather than requiring `window` so a DOM-backed renderer
+    // without a window object still reports the already-triggered download as
+    // successful.
+    globalThis.setTimeout(() => {
       try {
         URL.revokeObjectURL(url);
       } catch {
@@ -262,6 +265,27 @@ export function downloadIeeeFile(
 }
 
 /**
+ * Download the labeled multi-style citation bundle as plain text with a
+ * format-specific filename. Keeping this beside the per-style wrappers gives
+ * bundle users a predictable `.txt` export without duplicating browser
+ * download handling.
+ */
+export function downloadCitationBundleFile(
+  content: string,
+  filenameStem: string,
+  opts?: { dated?: boolean; date?: Date },
+): boolean {
+  const dated = opts?.dated !== false;
+  const stem = dated
+    ? withDownloadDate(filenameStem, opts?.date, 'arena-export')
+    : sanitizeDownloadFilename(filenameStem, 'arena-export');
+  return downloadTextFile(content, {
+    filename: `${stem}.txt`,
+    mimeType: 'text/plain;charset=utf-8',
+  });
+}
+
+/**
  * Trigger client-side download of a Blob (e.g. CSV file from backend stream).
  * Safe no-op when document/window is unavailable.
  */
@@ -285,7 +309,7 @@ export function downloadBlobFile(
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    window.setTimeout(() => {
+    globalThis.setTimeout(() => {
       try {
         URL.revokeObjectURL(url);
       } catch {

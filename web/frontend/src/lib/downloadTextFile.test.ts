@@ -4,6 +4,7 @@ import {
   downloadBibtexFile,
   downloadChicagoFile,
   downloadCsvFile,
+  downloadCitationBundleFile,
   downloadCslJsonFile,
   downloadJsonFile,
   downloadIeeeFile,
@@ -70,6 +71,29 @@ describe('downloadTextFile', () => {
 
   it('returns false for empty content', () => {
     expect(downloadTextFile('', { filename: 'x.md' })).toBe(false);
+  });
+
+  it('keeps a triggered download successful when window is unavailable for cleanup', () => {
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+    vi.stubGlobal('window', undefined);
+    const click = vi.fn();
+    const anchor = {
+      href: '',
+      download: '',
+      rel: '',
+      style: { display: '' },
+      click,
+    };
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') return anchor as unknown as HTMLAnchorElement;
+      return document.createElementNS('http://www.w3.org/1999/xhtml', tag);
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((node) => node);
+    vi.spyOn(document.body, 'removeChild').mockImplementation((node) => node);
+
+    expect(downloadTextFile('citation bundle', { filename: 'citations.txt' })).toBe(true);
+    expect(click).toHaveBeenCalled();
   });
 
   it('downloadMarkdownFile adds .md extension and date by default', () => {
@@ -287,6 +311,32 @@ describe('downloadTextFile', () => {
     const d = new Date(2026, 6, 16);
     expect(downloadIeeeFile('Arena IEEE citation', 'Agent Citation IEEE', { date: d })).toBe(true);
     expect(anchor.download).toBe('agent-citation-ieee-2026-07-16.txt');
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('downloadCitationBundleFile adds a dated .txt bundle filename', () => {
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.fn();
+    const anchor = {
+      href: '',
+      download: '',
+      rel: '',
+      style: { display: '' },
+      click,
+    };
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') return anchor as unknown as HTMLAnchorElement;
+      return document.createElementNS('http://www.w3.org/1999/xhtml', tag);
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+    vi.spyOn(document.body, 'removeChild').mockImplementation((n) => n);
+
+    const d = new Date(2026, 6, 16);
+    expect(
+      downloadCitationBundleFile('APA\n…\nMLA\n', 'All Citations Bundle', { date: d }),
+    ).toBe(true);
+    expect(anchor.download).toBe('all-citations-bundle-2026-07-16.txt');
     expect(click).toHaveBeenCalled();
   });
 
