@@ -10,6 +10,7 @@ import { ReadAloudButton } from '../components/ReadAloudButton';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { copyJsonToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
+  downloadApaFile,
   downloadBibtexFile,
   downloadCsvFile,
   downloadCslJsonFile,
@@ -97,6 +98,8 @@ export function AgentSharePage() {
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [jsonDownloadFeedbackKey, setJsonDownloadFeedbackKey] = useState(0);
+  const [apaDownloadStatus, setApaDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [apaDownloadFeedbackKey, setApaDownloadFeedbackKey] = useState(0);
   const [bibtexDownloadStatus, setBibtexDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [bibtexDownloadFeedbackKey, setBibtexDownloadFeedbackKey] = useState(0);
   const [risDownloadStatus, setRisDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -118,6 +121,7 @@ export function AgentSharePage() {
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [jsonDownloadError, setJsonDownloadError] = useState<string | null>(null);
+  const [apaDownloadError, setApaDownloadError] = useState<string | null>(null);
   const [bibtexDownloadError, setBibtexDownloadError] = useState<string | null>(null);
   const [risDownloadError, setRisDownloadError] = useState<string | null>(null);
   const [cslJsonDownloadError, setCslJsonDownloadError] = useState<string | null>(null);
@@ -197,6 +201,8 @@ export function AgentSharePage() {
     setDownloadStatus('idle');
     setJsonDownloadStatus('idle');
     setJsonDownloadFeedbackKey(0);
+    setApaDownloadStatus('idle');
+    setApaDownloadFeedbackKey(0);
     setBibtexDownloadStatus('idle');
     setBibtexDownloadFeedbackKey(0);
     setRisDownloadStatus('idle');
@@ -217,6 +223,7 @@ export function AgentSharePage() {
     setLinkCopyError(null);
     setDownloadError(null);
     setJsonDownloadError(null);
+    setApaDownloadError(null);
     setBibtexDownloadError(null);
     setRisDownloadError(null);
     setCslJsonDownloadError(null);
@@ -501,6 +508,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [jsonDownloadFeedbackKey, jsonDownloadStatus]);
+
+  useEffect(() => {
+    if (apaDownloadStatus === 'idle') return;
+    const hold = apaDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setApaDownloadStatus('idle');
+      setApaDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [apaDownloadFeedbackKey, apaDownloadStatus]);
 
   useEffect(() => {
     if (bibtexDownloadStatus === 'idle') return;
@@ -848,6 +865,20 @@ export function AgentSharePage() {
     }
   };
 
+  const handleDownloadApa = () => {
+    if (!report || !apaText) return;
+    setApaDownloadError(null);
+    setApaDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}-apa`;
+    const ok = downloadApaFile(apaText, stem);
+    if (ok) {
+      setApaDownloadStatus('done');
+    } else {
+      setApaDownloadStatus('failed');
+      setApaDownloadError('Could not download the APA citation — try Copy APA instead.');
+    }
+  };
+
   const handleDownloadRis = () => {
     if (!report || !risText) return;
     setRisDownloadError(null);
@@ -1153,6 +1184,11 @@ export function AgentSharePage() {
                       {jsonDownloadError}
                     </p>
                   ) : null}
+                  {apaDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {apaDownloadError}
+                    </p>
+                  ) : null}
                   {bibtexDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {bibtexDownloadError}
@@ -1232,7 +1268,18 @@ export function AgentSharePage() {
                           ? 'APA copied'
                           : apaCopyStatus === 'failed'
                             ? 'Copy APA failed'
-                            : 'Copy APA'}
+                        : 'Copy APA'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${apaDownloadStatus === 'done' ? ' is-success' : ''}${apaDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadApa}
+                    >
+                      {apaDownloadStatus === 'done'
+                        ? 'APA downloaded'
+                        : apaDownloadStatus === 'failed'
+                          ? 'APA download failed'
+                          : 'Download APA'}
                     </button>
                     <button
                       type="button"
@@ -1403,6 +1450,7 @@ export function AgentSharePage() {
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
                     {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
+                    {apaDownloadStatus === 'done' ? 'APA citation downloaded.' : ''}
                     {bibtexDownloadStatus === 'done' ? 'BibTeX citation downloaded.' : ''}
                     {risDownloadStatus === 'done' ? 'RIS citation downloaded.' : ''}
                     {cslJsonDownloadStatus === 'done' ? 'CSL-JSON citation downloaded.' : ''}

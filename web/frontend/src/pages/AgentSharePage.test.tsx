@@ -6,6 +6,7 @@ import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
 import { copyJsonToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
+  downloadApaFile,
   downloadBibtexFile,
   downloadCsvFile,
   downloadCslJsonFile,
@@ -37,6 +38,7 @@ vi.mock('../lib/clipboard', () => ({
 }));
 
 vi.mock('../lib/downloadTextFile', () => ({
+  downloadApaFile: vi.fn(),
   downloadBibtexFile: vi.fn(),
   downloadCsvFile: vi.fn(),
   downloadCslJsonFile: vi.fn(),
@@ -133,6 +135,7 @@ describe('AgentSharePage', () => {
     vi.mocked(copyJsonToClipboard).mockResolvedValue(true);
     vi.mocked(downloadJsonFile).mockReturnValue(true);
     vi.mocked(downloadMarkdownFile).mockReturnValue(true);
+    vi.mocked(downloadApaFile).mockReturnValue(true);
     vi.mocked(downloadBibtexFile).mockReturnValue(true);
     vi.mocked(downloadCsvFile).mockReturnValue(true);
     vi.mocked(downloadCslJsonFile).mockReturnValue(true);
@@ -808,6 +811,37 @@ describe('AgentSharePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Download .json' }));
     expect(await screen.findByText(/could not download the JSON report/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'JSON download failed' })).toBeInTheDocument();
+  });
+
+  it('downloads the public APA citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download APA' }));
+
+    expect(await screen.findByText('APA downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadApaFile).mock.calls[0] ?? [];
+    expect(content).toContain(
+      'Arena. (2026, August 14). Shareable research [AI-generated research report]. Arena.',
+    );
+    expect(content).toContain(window.location.href);
+    expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));
+    expect(filename).toEqual(expect.stringContaining('-apa'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the APA download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadApaFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download APA' }));
+
+    expect(await screen.findByText(/could not download the APA citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'APA download failed' })).toBeInTheDocument();
   });
 
   it('downloads the public BibTeX citation without the report body or share token', async () => {

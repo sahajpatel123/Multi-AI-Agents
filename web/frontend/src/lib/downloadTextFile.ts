@@ -202,6 +202,26 @@ export function downloadRisFile(
 }
 
 /**
+ * Download a plain-text citation with a dated filename. Keeping this wrapper
+ * beside the structured citation exports gives bibliography users a file they
+ * can attach or edit without duplicating filename safety in the page.
+ */
+export function downloadApaFile(
+  content: string,
+  filenameStem: string,
+  opts?: { dated?: boolean; date?: Date },
+): boolean {
+  const dated = opts?.dated !== false;
+  const stem = dated
+    ? withDownloadDate(filenameStem, opts?.date, 'arena-export')
+    : sanitizeDownloadFilename(filenameStem, 'arena-export');
+  return downloadTextFile(content, {
+    filename: `${stem}.txt`,
+    mimeType: 'text/plain;charset=utf-8',
+  });
+}
+
+/**
  * Trigger client-side download of a Blob (e.g. CSV file from backend stream).
  * Safe no-op when document/window is unavailable.
  */
