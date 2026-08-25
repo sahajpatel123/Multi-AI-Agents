@@ -8,6 +8,7 @@ import { copyJsonToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
   downloadApaFile,
   downloadBibtexFile,
+  downloadChicagoFile,
   downloadCsvFile,
   downloadCslJsonFile,
   downloadJsonFile,
@@ -40,6 +41,7 @@ vi.mock('../lib/clipboard', () => ({
 vi.mock('../lib/downloadTextFile', () => ({
   downloadApaFile: vi.fn(),
   downloadBibtexFile: vi.fn(),
+  downloadChicagoFile: vi.fn(),
   downloadCsvFile: vi.fn(),
   downloadCslJsonFile: vi.fn(),
   downloadJsonFile: vi.fn(),
@@ -137,6 +139,7 @@ describe('AgentSharePage', () => {
     vi.mocked(downloadMarkdownFile).mockReturnValue(true);
     vi.mocked(downloadApaFile).mockReturnValue(true);
     vi.mocked(downloadBibtexFile).mockReturnValue(true);
+    vi.mocked(downloadChicagoFile).mockReturnValue(true);
     vi.mocked(downloadCsvFile).mockReturnValue(true);
     vi.mocked(downloadCslJsonFile).mockReturnValue(true);
     vi.mocked(downloadRisFile).mockReturnValue(true);
@@ -339,6 +342,35 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/could not copy the APA citation/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy APA failed' })).toBeInTheDocument();
+  });
+
+  it('copies a Chicago citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Chicago' }));
+
+    expect(await screen.findByText('Chicago copied')).toBeInTheDocument();
+    const [chicago] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
+    expect(chicago).toContain(
+      'Arena. “Shareable research.” Arena Agent report. August 14, 2026.',
+    );
+    expect(chicago).toContain(window.location.href);
+    expect(chicago).not.toContain('Yes, with a token and a public page.');
+    expect(chicago).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when copying the Chicago citation fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Chicago' }));
+
+    expect(await screen.findByText(/could not copy the Chicago citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy Chicago failed' })).toBeInTheDocument();
   });
 
   it('copies a BibTeX citation without the report body or share token', async () => {
@@ -842,6 +874,37 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText(/could not download the APA citation/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'APA download failed' })).toBeInTheDocument();
+  });
+
+  it('downloads a public Chicago citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download Chicago' }));
+
+    expect(await screen.findByText('Chicago downloaded')).toBeInTheDocument();
+    const [content, filename] = vi.mocked(downloadChicagoFile).mock.calls[0] ?? [];
+    expect(content).toContain(
+      'Arena. “Shareable research.” Arena Agent report. August 14, 2026.',
+    );
+    expect(content).toContain(window.location.href);
+    expect(filename).toEqual(expect.stringContaining('agent-share-citation-'));
+    expect(filename).toEqual(expect.stringContaining('-chicago'));
+    expect(content).not.toContain('Yes, with a token and a public page.');
+    expect(content).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when the Chicago download fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(downloadChicagoFile).mockReturnValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download Chicago' }));
+
+    expect(await screen.findByText(/could not download the Chicago citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chicago download failed' })).toBeInTheDocument();
   });
 
   it('downloads the public BibTeX citation without the report body or share token', async () => {

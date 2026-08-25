@@ -12,6 +12,7 @@ import { copyJsonToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
   downloadApaFile,
   downloadBibtexFile,
+  downloadChicagoFile,
   downloadCsvFile,
   downloadCslJsonFile,
   downloadJsonFile,
@@ -21,6 +22,7 @@ import {
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { formatAgentReportBibtex } from '../lib/agentReportBibtex';
 import { formatAgentReportApa } from '../lib/agentReportApa';
+import { formatAgentReportChicago } from '../lib/agentReportChicago';
 import { formatAgentReportCitation } from '../lib/agentReportCitation';
 import { formatAgentReportCslJson } from '../lib/agentReportCslJson';
 import { formatAgentReportMla } from '../lib/agentReportMla';
@@ -91,6 +93,7 @@ export function AgentSharePage() {
   const [cslJsonCopyStatus, setCslJsonCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [citationCopyStatus, setCitationCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [apaCopyStatus, setApaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [chicagoCopyStatus, setChicagoCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [mlaCopyStatus, setMlaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [risCopyStatus, setRisCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [sourceCopyStatus, setSourceCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -100,6 +103,8 @@ export function AgentSharePage() {
   const [jsonDownloadFeedbackKey, setJsonDownloadFeedbackKey] = useState(0);
   const [apaDownloadStatus, setApaDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [apaDownloadFeedbackKey, setApaDownloadFeedbackKey] = useState(0);
+  const [chicagoDownloadStatus, setChicagoDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [chicagoDownloadFeedbackKey, setChicagoDownloadFeedbackKey] = useState(0);
   const [bibtexDownloadStatus, setBibtexDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [bibtexDownloadFeedbackKey, setBibtexDownloadFeedbackKey] = useState(0);
   const [risDownloadStatus, setRisDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -115,6 +120,7 @@ export function AgentSharePage() {
   const [cslJsonCopyError, setCslJsonCopyError] = useState<string | null>(null);
   const [citationCopyError, setCitationCopyError] = useState<string | null>(null);
   const [apaCopyError, setApaCopyError] = useState<string | null>(null);
+  const [chicagoCopyError, setChicagoCopyError] = useState<string | null>(null);
   const [mlaCopyError, setMlaCopyError] = useState<string | null>(null);
   const [risCopyError, setRisCopyError] = useState<string | null>(null);
   const [sourceCopyError, setSourceCopyError] = useState<string | null>(null);
@@ -122,6 +128,7 @@ export function AgentSharePage() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [jsonDownloadError, setJsonDownloadError] = useState<string | null>(null);
   const [apaDownloadError, setApaDownloadError] = useState<string | null>(null);
+  const [chicagoDownloadError, setChicagoDownloadError] = useState<string | null>(null);
   const [bibtexDownloadError, setBibtexDownloadError] = useState<string | null>(null);
   const [risDownloadError, setRisDownloadError] = useState<string | null>(null);
   const [cslJsonDownloadError, setCslJsonDownloadError] = useState<string | null>(null);
@@ -132,6 +139,7 @@ export function AgentSharePage() {
   const [cslJsonCopyInFlight, setCslJsonCopyInFlight] = useState(false);
   const [citationCopyInFlight, setCitationCopyInFlight] = useState(false);
   const [apaCopyInFlight, setApaCopyInFlight] = useState(false);
+  const [chicagoCopyInFlight, setChicagoCopyInFlight] = useState(false);
   const [mlaCopyInFlight, setMlaCopyInFlight] = useState(false);
   const [risCopyInFlight, setRisCopyInFlight] = useState(false);
   const [sourceCopyInFlight, setSourceCopyInFlight] = useState(false);
@@ -146,6 +154,8 @@ export function AgentSharePage() {
   const citationCopyRequestRef = useRef(0);
   const apaCopyBusyRef = useRef(false);
   const apaCopyRequestRef = useRef(0);
+  const chicagoCopyBusyRef = useRef(false);
+  const chicagoCopyRequestRef = useRef(0);
   const mlaCopyBusyRef = useRef(false);
   const mlaCopyRequestRef = useRef(0);
   const risCopyBusyRef = useRef(false);
@@ -175,6 +185,9 @@ export function AgentSharePage() {
     apaCopyRequestRef.current += 1;
     apaCopyBusyRef.current = false;
     setApaCopyInFlight(false);
+    chicagoCopyRequestRef.current += 1;
+    chicagoCopyBusyRef.current = false;
+    setChicagoCopyInFlight(false);
     mlaCopyRequestRef.current += 1;
     mlaCopyBusyRef.current = false;
     setMlaCopyInFlight(false);
@@ -194,6 +207,7 @@ export function AgentSharePage() {
     setCslJsonCopyStatus('idle');
     setCitationCopyStatus('idle');
     setApaCopyStatus('idle');
+    setChicagoCopyStatus('idle');
     setMlaCopyStatus('idle');
     setRisCopyStatus('idle');
     setSourceCopyStatus('idle');
@@ -203,6 +217,8 @@ export function AgentSharePage() {
     setJsonDownloadFeedbackKey(0);
     setApaDownloadStatus('idle');
     setApaDownloadFeedbackKey(0);
+    setChicagoDownloadStatus('idle');
+    setChicagoDownloadFeedbackKey(0);
     setBibtexDownloadStatus('idle');
     setBibtexDownloadFeedbackKey(0);
     setRisDownloadStatus('idle');
@@ -217,6 +233,7 @@ export function AgentSharePage() {
     setCslJsonCopyError(null);
     setCitationCopyError(null);
     setApaCopyError(null);
+    setChicagoCopyError(null);
     setMlaCopyError(null);
     setRisCopyError(null);
     setSourceCopyError(null);
@@ -224,6 +241,7 @@ export function AgentSharePage() {
     setDownloadError(null);
     setJsonDownloadError(null);
     setApaDownloadError(null);
+    setChicagoDownloadError(null);
     setBibtexDownloadError(null);
     setRisDownloadError(null);
     setCslJsonDownloadError(null);
@@ -256,6 +274,7 @@ export function AgentSharePage() {
       cslJsonCopyRequestRef.current += 1;
       citationCopyRequestRef.current += 1;
       apaCopyRequestRef.current += 1;
+      chicagoCopyRequestRef.current += 1;
       mlaCopyRequestRef.current += 1;
       risCopyRequestRef.current += 1;
       sourceCopyRequestRef.current += 1;
@@ -338,6 +357,19 @@ export function AgentSharePage() {
     () =>
       report
         ? formatAgentReportApa({
+            title: report.title,
+            question: report.question,
+            url: citationUrl,
+            sharedAt: report.sharedAt,
+          })
+        : '',
+    [citationUrl, report],
+  );
+
+  const chicagoText = useMemo(
+    () =>
+      report
+        ? formatAgentReportChicago({
             title: report.title,
             question: report.question,
             url: citationUrl,
@@ -460,6 +492,16 @@ export function AgentSharePage() {
   }, [apaCopyStatus]);
 
   useEffect(() => {
+    if (chicagoCopyStatus === 'idle') return;
+    const hold = chicagoCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setChicagoCopyStatus('idle');
+      setChicagoCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [chicagoCopyStatus]);
+
+  useEffect(() => {
     if (mlaCopyStatus === 'idle') return;
     const hold = mlaCopyStatus === 'failed' ? 2800 : 1600;
     const t = window.setTimeout(() => {
@@ -518,6 +560,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [apaDownloadFeedbackKey, apaDownloadStatus]);
+
+  useEffect(() => {
+    if (chicagoDownloadStatus === 'idle') return;
+    const hold = chicagoDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => {
+      setChicagoDownloadStatus('idle');
+      setChicagoDownloadError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [chicagoDownloadFeedbackKey, chicagoDownloadStatus]);
 
   useEffect(() => {
     if (bibtexDownloadStatus === 'idle') return;
@@ -747,6 +799,34 @@ export function AgentSharePage() {
     }
   };
 
+  const handleCopyChicago = async () => {
+    if (chicagoCopyBusyRef.current || !chicagoText) return;
+    chicagoCopyBusyRef.current = true;
+    setChicagoCopyInFlight(true);
+    const requestId = ++chicagoCopyRequestRef.current;
+    setChicagoCopyStatus('idle');
+    setChicagoCopyError(null);
+    try {
+      const ok = await copyToClipboard(chicagoText);
+      if (chicagoCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setChicagoCopyStatus('copied');
+      } else {
+        setChicagoCopyStatus('failed');
+        setChicagoCopyError('Could not copy the Chicago citation — copy it manually instead.');
+      }
+    } catch {
+      if (chicagoCopyRequestRef.current !== requestId) return;
+      setChicagoCopyStatus('failed');
+      setChicagoCopyError('Could not copy the Chicago citation — copy it manually instead.');
+    } finally {
+      if (chicagoCopyRequestRef.current === requestId) {
+        chicagoCopyBusyRef.current = false;
+        setChicagoCopyInFlight(false);
+      }
+    }
+  };
+
   const handleCopyMla = async () => {
     if (mlaCopyBusyRef.current || !mlaText) return;
     mlaCopyBusyRef.current = true;
@@ -876,6 +956,20 @@ export function AgentSharePage() {
     } else {
       setApaDownloadStatus('failed');
       setApaDownloadError('Could not download the APA citation — try Copy APA instead.');
+    }
+  };
+
+  const handleDownloadChicago = () => {
+    if (!report || !chicagoText) return;
+    setChicagoDownloadError(null);
+    setChicagoDownloadFeedbackKey((current) => current + 1);
+    const stem = `agent-share-citation-${(report.title || report.question || 'report').slice(0, 40)}-chicago`;
+    const ok = downloadChicagoFile(chicagoText, stem);
+    if (ok) {
+      setChicagoDownloadStatus('done');
+    } else {
+      setChicagoDownloadStatus('failed');
+      setChicagoDownloadError('Could not download the Chicago citation — try Copy Chicago instead.');
     }
   };
 
@@ -1164,6 +1258,11 @@ export function AgentSharePage() {
                       {apaCopyError}
                     </p>
                   ) : null}
+                  {chicagoCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {chicagoCopyError}
+                    </p>
+                  ) : null}
                   {mlaCopyError ? (
                     <p className="share-take__error" role="alert">
                       {mlaCopyError}
@@ -1187,6 +1286,11 @@ export function AgentSharePage() {
                   {apaDownloadError ? (
                     <p className="share-take__error" role="alert">
                       {apaDownloadError}
+                    </p>
+                  ) : null}
+                  {chicagoDownloadError ? (
+                    <p className="share-take__error" role="alert">
+                      {chicagoDownloadError}
                     </p>
                   ) : null}
                   {bibtexDownloadError ? (
@@ -1280,6 +1384,31 @@ export function AgentSharePage() {
                         : apaDownloadStatus === 'failed'
                           ? 'APA download failed'
                           : 'Download APA'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${chicagoCopyStatus === 'copied' ? ' is-success' : ''}${chicagoCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyChicago()}
+                      disabled={chicagoCopyInFlight}
+                    >
+                      {chicagoCopyInFlight
+                        ? 'Copying…'
+                        : chicagoCopyStatus === 'copied'
+                          ? 'Chicago copied'
+                          : chicagoCopyStatus === 'failed'
+                            ? 'Copy Chicago failed'
+                            : 'Copy Chicago'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${chicagoDownloadStatus === 'done' ? ' is-success' : ''}${chicagoDownloadStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={handleDownloadChicago}
+                    >
+                      {chicagoDownloadStatus === 'done'
+                        ? 'Chicago downloaded'
+                        : chicagoDownloadStatus === 'failed'
+                          ? 'Chicago download failed'
+                          : 'Download Chicago'}
                     </button>
                     <button
                       type="button"
@@ -1443,6 +1572,7 @@ export function AgentSharePage() {
                     {copyStatus === 'copied' ? 'Report copied to clipboard. ' : ''}
                     {citationCopyStatus === 'copied' ? 'Citation copied to clipboard. ' : ''}
                     {apaCopyStatus === 'copied' ? 'APA citation copied to clipboard. ' : ''}
+                    {chicagoCopyStatus === 'copied' ? 'Chicago citation copied to clipboard. ' : ''}
                     {mlaCopyStatus === 'copied' ? 'MLA citation copied to clipboard. ' : ''}
                     {bibtexCopyStatus === 'copied' ? 'BibTeX citation copied to clipboard. ' : ''}
                     {cslJsonCopyStatus === 'copied' ? 'CSL-JSON citation copied to clipboard. ' : ''}
@@ -1451,6 +1581,7 @@ export function AgentSharePage() {
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
                     {jsonDownloadStatus === 'done' ? 'Report downloaded as JSON.' : ''}
                     {apaDownloadStatus === 'done' ? 'APA citation downloaded.' : ''}
+                    {chicagoDownloadStatus === 'done' ? 'Chicago citation downloaded.' : ''}
                     {bibtexDownloadStatus === 'done' ? 'BibTeX citation downloaded.' : ''}
                     {risDownloadStatus === 'done' ? 'RIS citation downloaded.' : ''}
                     {cslJsonDownloadStatus === 'done' ? 'CSL-JSON citation downloaded.' : ''}
