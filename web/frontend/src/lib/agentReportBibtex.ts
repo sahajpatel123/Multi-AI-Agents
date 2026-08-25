@@ -31,6 +31,10 @@ function safePublicUrl(raw: string | null | undefined): string {
     const url = new URL(value);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
     if (url.username || url.password) return '';
+    // Keep the entry stable rather than preserving tracking parameters or
+    // fragment-only client state, matching the other citation exports.
+    url.search = '';
+    url.hash = '';
     return url.href;
   } catch {
     return '';

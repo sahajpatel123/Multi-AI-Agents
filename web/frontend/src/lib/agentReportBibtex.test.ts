@@ -33,7 +33,18 @@ describe('formatAgentReportBibtex', () => {
     expect(bibtex).toContain(
       'note = {Arena Agent report. Question: Can \\$this \\& that \\#work? \\textasciitilde{}yes \\textasciicircum{}no},',
     );
-    expect(bibtex).toContain('url = {https://arena.example/report?q=a\\&b=1},');
+    expect(bibtex).toContain('url = {https://arena.example/report},');
+  });
+
+  it('strips tracking state from URLs', () => {
+    const bibtex = formatAgentReportBibtex({
+      title: 'Tracked URL',
+      url: 'https://arena.example/share/agent/public-token?utm_source=copy#draft',
+    });
+
+    expect(bibtex).toContain('url = {https://arena.example/share/agent/public-token},');
+    expect(bibtex).not.toContain('utm_source');
+    expect(bibtex).not.toContain('#draft');
   });
 
   it('omits unsafe URLs and falls back to a misc entry', () => {

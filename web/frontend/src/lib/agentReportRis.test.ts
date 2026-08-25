@@ -38,6 +38,13 @@ describe('formatAgentReportRis', () => {
     expect(ris).toContain('TY  - ELEC\n');
   });
 
+  it('removes invisible directional marks from fields', () => {
+    const ris = formatAgentReportRis({ title: 'A‮mode report' });
+
+    expect(ris).toContain('TI  - A mode report');
+    expect(ris).not.toMatch(/[\u202a-\u202e]/);
+  });
+
   it('omits credential-bearing URLs', () => {
     const ris = formatAgentReportRis({
       title: 'Private URL',

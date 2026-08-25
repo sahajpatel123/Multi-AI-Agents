@@ -29,6 +29,13 @@ describe('formatAgentReportMla', () => {
     expect(result).not.toContain('javascript:');
   });
 
+  it('removes invisible directional marks from titles', () => {
+    const result = formatAgentReportMla({ title: 'A‮mode report' });
+
+    expect(result).toContain('“A mode report.”');
+    expect(result).not.toMatch(/[\u202a-\u202e]/);
+  });
+
   it('rejects credential-bearing URLs and falls back to the question', () => {
     const result = formatAgentReportMla({
       title: null,
