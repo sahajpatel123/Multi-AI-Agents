@@ -640,6 +640,11 @@ describe('AgentSharePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy references' }));
 
     expect(await screen.findByText('References copied')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'BibTeX, RIS, CSL-JSON, and EndNote XML citations copied to clipboard.',
+      ),
+    ).toBeInTheDocument();
     const [bundle] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
     expect(bundle).toContain('BibTeX\n@online{');
     expect(bundle).toContain('RIS\nTY  - ELEC');

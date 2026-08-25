@@ -2405,7 +2405,7 @@ export function AgentSharePage() {
                     {vancouverCopyStatus === 'copied' ? 'Vancouver citation copied to clipboard. ' : ''}
                     {bibtexCopyStatus === 'copied' ? 'BibTeX citation copied to clipboard. ' : ''}
                     {cslJsonCopyStatus === 'copied' ? 'CSL-JSON citation copied to clipboard. ' : ''}
-                    {referenceBundleCopyStatus === 'copied' ? 'BibTeX, RIS, and CSL-JSON citations copied to clipboard. ' : ''}
+                    {referenceBundleCopyStatus === 'copied' ? 'BibTeX, RIS, CSL-JSON, and EndNote XML citations copied to clipboard. ' : ''}
                     {sourceCopyStatus === 'copied' ? 'Sources copied to clipboard. ' : ''}
                     {linkStatus === 'copied' ? 'Link copied to clipboard. ' : ''}
                     {downloadStatus === 'done' ? 'Report downloaded as markdown.' : ''}
