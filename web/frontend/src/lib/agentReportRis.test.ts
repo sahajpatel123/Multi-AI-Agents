@@ -48,6 +48,18 @@ describe('formatAgentReportRis', () => {
     expect(ris).not.toContain('UR  -');
   });
 
+  it('strips tracking parameters and fragments from public URLs', () => {
+    const ris = formatAgentReportRis({
+      title: 'Stable URL',
+      url: 'https://arena.example/share/agent/public-token?utm_source=copy&session=private#draft',
+    });
+
+    expect(ris).toContain('UR  - https://arena.example/share/agent/public-token');
+    expect(ris).not.toContain('utm_source');
+    expect(ris).not.toContain('session=private');
+    expect(ris).not.toContain('#draft');
+  });
+
   it('omits impossible shared dates instead of emitting misleading metadata', () => {
     const ris = formatAgentReportRis({
       title: 'Undated report',
