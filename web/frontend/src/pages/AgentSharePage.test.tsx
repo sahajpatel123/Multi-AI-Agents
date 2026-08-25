@@ -366,6 +366,35 @@ describe('AgentSharePage', () => {
     expect(screen.getByRole('button', { name: 'Copy BibTeX failed' })).toBeInTheDocument();
   });
 
+  it('copies a RIS citation without the report body or share token', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy RIS' }));
+
+    expect(await screen.findByText('RIS copied')).toBeInTheDocument();
+    const [ris] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
+    expect(ris).toContain('TY  - ELEC');
+    expect(ris).toContain('TI  - Shareable research');
+    expect(ris).toContain('DA  - 2026/08/14');
+    expect(ris).toContain('Question: Is this report shareable?');
+    expect(ris).not.toContain('Yes, with a token and a public page.');
+    expect(ris).not.toContain('tok_1234567890abcdef');
+  });
+
+  it('shows an honest error when copying the RIS citation fails', async () => {
+    vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    renderShare();
+    await screen.findByText('Is this report shareable?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy RIS' }));
+
+    expect(await screen.findByText(/could not copy the RIS citation/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy RIS failed' })).toBeInTheDocument();
+  });
+
   it('copies a CSL-JSON citation without the report body or share token', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
     renderShare();

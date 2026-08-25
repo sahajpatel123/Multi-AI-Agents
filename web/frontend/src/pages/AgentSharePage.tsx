@@ -91,6 +91,7 @@ export function AgentSharePage() {
   const [citationCopyStatus, setCitationCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [apaCopyStatus, setApaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [mlaCopyStatus, setMlaCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [risCopyStatus, setRisCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [sourceCopyStatus, setSourceCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -112,6 +113,7 @@ export function AgentSharePage() {
   const [citationCopyError, setCitationCopyError] = useState<string | null>(null);
   const [apaCopyError, setApaCopyError] = useState<string | null>(null);
   const [mlaCopyError, setMlaCopyError] = useState<string | null>(null);
+  const [risCopyError, setRisCopyError] = useState<string | null>(null);
   const [sourceCopyError, setSourceCopyError] = useState<string | null>(null);
   const [linkCopyError, setLinkCopyError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -127,6 +129,7 @@ export function AgentSharePage() {
   const [citationCopyInFlight, setCitationCopyInFlight] = useState(false);
   const [apaCopyInFlight, setApaCopyInFlight] = useState(false);
   const [mlaCopyInFlight, setMlaCopyInFlight] = useState(false);
+  const [risCopyInFlight, setRisCopyInFlight] = useState(false);
   const [sourceCopyInFlight, setSourceCopyInFlight] = useState(false);
   const [linkCopyInFlight, setLinkCopyInFlight] = useState(false);
   const [nativeShareInFlight, setNativeShareInFlight] = useState(false);
@@ -141,6 +144,8 @@ export function AgentSharePage() {
   const apaCopyRequestRef = useRef(0);
   const mlaCopyBusyRef = useRef(false);
   const mlaCopyRequestRef = useRef(0);
+  const risCopyBusyRef = useRef(false);
+  const risCopyRequestRef = useRef(0);
   const sourceCopyBusyRef = useRef(false);
   const sourceCopyRequestRef = useRef(0);
   const linkCopyBusyRef = useRef(false);
@@ -169,6 +174,9 @@ export function AgentSharePage() {
     mlaCopyRequestRef.current += 1;
     mlaCopyBusyRef.current = false;
     setMlaCopyInFlight(false);
+    risCopyRequestRef.current += 1;
+    risCopyBusyRef.current = false;
+    setRisCopyInFlight(false);
     sourceCopyRequestRef.current += 1;
     sourceCopyBusyRef.current = false;
     setSourceCopyInFlight(false);
@@ -183,6 +191,7 @@ export function AgentSharePage() {
     setCitationCopyStatus('idle');
     setApaCopyStatus('idle');
     setMlaCopyStatus('idle');
+    setRisCopyStatus('idle');
     setSourceCopyStatus('idle');
     setLinkStatus('idle');
     setDownloadStatus('idle');
@@ -203,6 +212,7 @@ export function AgentSharePage() {
     setCitationCopyError(null);
     setApaCopyError(null);
     setMlaCopyError(null);
+    setRisCopyError(null);
     setSourceCopyError(null);
     setLinkCopyError(null);
     setDownloadError(null);
@@ -240,6 +250,7 @@ export function AgentSharePage() {
       citationCopyRequestRef.current += 1;
       apaCopyRequestRef.current += 1;
       mlaCopyRequestRef.current += 1;
+      risCopyRequestRef.current += 1;
       sourceCopyRequestRef.current += 1;
     };
   }, [token]);
@@ -450,6 +461,16 @@ export function AgentSharePage() {
     }, hold);
     return () => window.clearTimeout(t);
   }, [mlaCopyStatus]);
+
+  useEffect(() => {
+    if (risCopyStatus === 'idle') return;
+    const hold = risCopyStatus === 'failed' ? 2800 : 1600;
+    const t = window.setTimeout(() => {
+      setRisCopyStatus('idle');
+      setRisCopyError(null);
+    }, hold);
+    return () => window.clearTimeout(t);
+  }, [risCopyStatus]);
 
   useEffect(() => {
     if (sourceCopyStatus === 'idle') return;
@@ -733,6 +754,34 @@ export function AgentSharePage() {
       if (mlaCopyRequestRef.current === requestId) {
         mlaCopyBusyRef.current = false;
         setMlaCopyInFlight(false);
+      }
+    }
+  };
+
+  const handleCopyRis = async () => {
+    if (risCopyBusyRef.current || !risText) return;
+    risCopyBusyRef.current = true;
+    setRisCopyInFlight(true);
+    const requestId = ++risCopyRequestRef.current;
+    setRisCopyStatus('idle');
+    setRisCopyError(null);
+    try {
+      const ok = await copyToClipboard(risText);
+      if (risCopyRequestRef.current !== requestId) return;
+      if (ok) {
+        setRisCopyStatus('copied');
+      } else {
+        setRisCopyStatus('failed');
+        setRisCopyError('Could not copy the RIS citation — try Download .ris instead.');
+      }
+    } catch {
+      if (risCopyRequestRef.current !== requestId) return;
+      setRisCopyStatus('failed');
+      setRisCopyError('Could not copy the RIS citation — try Download .ris instead.');
+    } finally {
+      if (risCopyRequestRef.current === requestId) {
+        risCopyBusyRef.current = false;
+        setRisCopyInFlight(false);
       }
     }
   };
@@ -1089,6 +1138,11 @@ export function AgentSharePage() {
                       {mlaCopyError}
                     </p>
                   ) : null}
+                  {risCopyError ? (
+                    <p className="share-take__error" role="alert">
+                      {risCopyError}
+                    </p>
+                  ) : null}
                   {downloadError ? (
                     <p className="share-take__error" role="alert">
                       {downloadError}
@@ -1206,7 +1260,21 @@ export function AgentSharePage() {
                           ? 'BibTeX copied'
                           : bibtexCopyStatus === 'failed'
                             ? 'Copy BibTeX failed'
-                            : 'Copy BibTeX'}
+                          : 'Copy BibTeX'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${risCopyStatus === 'copied' ? ' is-success' : ''}${risCopyStatus === 'failed' ? ' is-error' : ''}`}
+                      onClick={() => void handleCopyRis()}
+                      disabled={risCopyInFlight}
+                    >
+                      {risCopyInFlight
+                        ? 'Copying…'
+                        : risCopyStatus === 'copied'
+                          ? 'RIS copied'
+                          : risCopyStatus === 'failed'
+                            ? 'Copy RIS failed'
+                            : 'Copy RIS'}
                     </button>
                     <button
                       type="button"
