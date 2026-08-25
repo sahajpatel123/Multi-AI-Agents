@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { AgentSharePage } from './AgentSharePage';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
 import { useAuth } from '../hooks/useAuth';
-import { copyToClipboard } from '../lib/clipboard';
+import { copyJsonToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
   downloadBibtexFile,
   downloadCsvFile,
@@ -32,6 +32,7 @@ vi.mock('../hooks/useAuth', () => ({
 }));
 
 vi.mock('../lib/clipboard', () => ({
+  copyJsonToClipboard: vi.fn(),
   copyToClipboard: vi.fn(),
 }));
 
@@ -129,6 +130,7 @@ describe('AgentSharePage', () => {
       isLoading: false,
     }));
     vi.mocked(copyToClipboard).mockResolvedValue(true);
+    vi.mocked(copyJsonToClipboard).mockResolvedValue(true);
     vi.mocked(downloadJsonFile).mockReturnValue(true);
     vi.mocked(downloadMarkdownFile).mockReturnValue(true);
     vi.mocked(downloadBibtexFile).mockReturnValue(true);
@@ -372,26 +374,28 @@ describe('AgentSharePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy CSL-JSON' }));
 
     expect(await screen.findByText('CSL-JSON copied')).toBeInTheDocument();
-    const [cslJson] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
+    const [cslJson] = vi.mocked(copyJsonToClipboard).mock.calls[0] ?? [];
     const [item] = JSON.parse(cslJson ?? '[]') as Array<Record<string, unknown>>;
     expect(item).toMatchObject({
       type: 'webpage',
       title: 'Shareable research',
       publisher: 'Arena',
     });
+    expect(copyJsonToClipboard).toHaveBeenCalledWith(cslJson);
+    expect(copyToClipboard).not.toHaveBeenCalled();
     expect(cslJson).not.toContain('Yes, with a token and a public page.');
     expect(cslJson).not.toContain('tok_1234567890abcdef');
   });
 
   it('shows an honest error when copying the CSL-JSON citation fails', async () => {
     vi.mocked(getPublicAgentReport).mockResolvedValueOnce(report());
-    vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+    vi.mocked(copyJsonToClipboard).mockResolvedValueOnce(false);
     renderShare();
     await screen.findByText('Is this report shareable?');
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy CSL-JSON' }));
 
-    expect(await screen.findByText(/could not copy the CSL-JSON citation/i)).toBeInTheDocument();
+    expect(await screen.findByText(/try Download \.csl\.json instead/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy CSL-JSON failed' })).toBeInTheDocument();
   });
 
@@ -885,7 +889,7 @@ describe('AgentSharePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Download .csl.json' }));
 
-    expect(await screen.findByText(/could not download the CSL-JSON citation/i)).toBeInTheDocument();
+    expect(await screen.findByText(/try Copy CSL-JSON instead/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'CSL-JSON download failed' })).toBeInTheDocument();
   });
 

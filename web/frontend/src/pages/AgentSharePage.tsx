@@ -8,7 +8,7 @@ import MicroLoader from '../components/MicroLoader';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { ReadAloudButton } from '../components/ReadAloudButton';
 import { ApiError, getPublicAgentReport, type PublicAgentReport } from '../api';
-import { copyToClipboard } from '../lib/clipboard';
+import { copyJsonToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
   downloadBibtexFile,
   downloadCsvFile,
@@ -661,18 +661,18 @@ export function AgentSharePage() {
     setCslJsonCopyStatus('idle');
     setCslJsonCopyError(null);
     try {
-      const ok = await copyToClipboard(cslJsonText);
+      const ok = await copyJsonToClipboard(cslJsonText);
       if (cslJsonCopyRequestRef.current !== requestId) return;
       if (ok) {
         setCslJsonCopyStatus('copied');
       } else {
         setCslJsonCopyStatus('failed');
-        setCslJsonCopyError('Could not copy the CSL-JSON citation — copy it manually instead.');
+        setCslJsonCopyError('Could not copy the CSL-JSON citation — try Download .csl.json instead.');
       }
     } catch {
       if (cslJsonCopyRequestRef.current !== requestId) return;
       setCslJsonCopyStatus('failed');
-      setCslJsonCopyError('Could not copy the CSL-JSON citation — copy it manually instead.');
+      setCslJsonCopyError('Could not copy the CSL-JSON citation — try Download .csl.json instead.');
     } finally {
       if (cslJsonCopyRequestRef.current === requestId) {
         cslJsonCopyBusyRef.current = false;
@@ -824,7 +824,7 @@ export function AgentSharePage() {
       setCslJsonDownloadStatus('done');
     } else {
       setCslJsonDownloadStatus('failed');
-      setCslJsonDownloadError('Could not download the CSL-JSON citation — try Download .ris instead.');
+      setCslJsonDownloadError('Could not download the CSL-JSON citation — try Copy CSL-JSON instead.');
     }
   };
 
