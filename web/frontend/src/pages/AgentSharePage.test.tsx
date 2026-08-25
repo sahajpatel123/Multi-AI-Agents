@@ -248,7 +248,7 @@ describe('AgentSharePage', () => {
 
     expect(await screen.findByText('Citation copied')).toBeInTheDocument();
     const [citation] = vi.mocked(copyToClipboard).mock.calls[0] ?? [];
-    expect(citation).toContain(`[Shareable research](${window.location.href})`);
+    expect(citation).toContain(`[Shareable research](<${window.location.href}>)`);
     expect(citation).toContain('Question: Is this report shareable?');
     expect(citation).toContain('Shared: 2026-08-14');
     expect(citation).not.toContain('Yes, with a token and a public page.');

@@ -19,8 +19,16 @@ function citationDate(raw: string | null | undefined): string {
   return isoDate || value;
 }
 
-function escapeMarkdownLabel(value: string): string {
-  return value.replace(/[\\[\]]/g, '\\$&');
+function escapeMarkdownText(value: string): string {
+  // Citation fields come from the public report payload. Escape inline
+  // Markdown controls so a pasted citation remains one attribution block
+  // even when a question or title contains formatting-like text.
+  return value
+    .replace(/[\\`*_<>~]/g, '\\$&')
+    .split('[')
+    .join('\\[')
+    .split(']')
+    .join('\\]');
 }
 
 function safePublicUrl(raw: string | null | undefined): string {
@@ -29,6 +37,9 @@ function safePublicUrl(raw: string | null | undefined): string {
   try {
     const url = new URL(value);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    // Never copy credentials into a citation, even if this helper is reused
+    // with a URL other than the current browser location.
+    if (url.username || url.password) return '';
     return url.href;
   } catch {
     return '';
@@ -46,12 +57,12 @@ export function formatAgentReportCitation(opts: {
   const url = safePublicUrl(opts.url);
   const date = citationDate(opts.sharedAt);
   const firstLine = url
-    ? `[${escapeMarkdownLabel(title)}](${url}) — Arena Agent report.`
-    : `**${title}** — Arena Agent report.`;
+    ? `[${escapeMarkdownText(title)}](<${url}>) — Arena Agent report.`
+    : `**${escapeMarkdownText(title)}** — Arena Agent report.`;
   const lines = [firstLine];
 
-  if (question && question !== title) lines.push(`Question: ${question}`);
-  if (date) lines.push(`Shared: ${date}`);
+  if (question && question !== title) lines.push(`Question: ${escapeMarkdownText(question)}`);
+  if (date) lines.push(`Shared: ${escapeMarkdownText(date)}`);
 
   return `${lines.join('\n')}\n`;
 }
