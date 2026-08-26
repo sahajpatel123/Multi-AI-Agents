@@ -22,6 +22,7 @@ import {
   createAgentTaskShare,
   crossPollinateAgentAnswer,
   deleteAgentTask,
+  exportAgentTasksJsonl,
   exportAgentTaskCsv,
   exportAgentTaskPdf,
   exportAgentTaskMarkdown,
@@ -857,10 +858,15 @@ export function AgentPage() {
     useState<'idle' | 'done' | 'failed'>('idle');
   const [historyJsonDownloadStatus, setHistoryJsonDownloadStatus] =
     useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyJsonlDownloadStatus, setHistoryJsonlDownloadStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed'
+  >('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
   const historyCsvDownloadTimerRef = useRef<number | null>(null);
   const historyJsonDownloadTimerRef = useRef<number | null>(null);
+  const historyJsonlDownloadTimerRef = useRef<number | null>(null);
+  const historyJsonlDownloadBusyRef = useRef(false);
   const [roomsCopyStatus, setRoomsCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [roomsDownloadStatus, setRoomsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [roomLinkCopyStatus, setRoomLinkCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -2897,6 +2903,10 @@ export function AgentPage() {
       if (historyJsonDownloadTimerRef.current != null) {
         window.clearTimeout(historyJsonDownloadTimerRef.current);
       }
+      if (historyJsonlDownloadTimerRef.current != null) {
+        window.clearTimeout(historyJsonlDownloadTimerRef.current);
+      }
+      historyJsonlDownloadBusyRef.current = false;
       if (roomsCopyTimerRef.current != null) {
         window.clearTimeout(roomsCopyTimerRef.current);
       }
@@ -3151,6 +3161,40 @@ export function AgentPage() {
     historyJsonDownloadTimerRef.current = window.setTimeout(() => {
       setHistoryJsonDownloadStatus('idle');
       historyJsonDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadFullHistoryJsonl = async () => {
+    if (historyJsonlDownloadBusyRef.current || taskHistory.length === 0) return;
+    if (historyJsonlDownloadTimerRef.current != null) {
+      window.clearTimeout(historyJsonlDownloadTimerRef.current);
+      historyJsonlDownloadTimerRef.current = null;
+    }
+    historyJsonlDownloadBusyRef.current = true;
+    setHistoryJsonlDownloadStatus('busy');
+    let outcome: 'done' | 'failed' = 'failed';
+    try {
+      const blob = await exportAgentTasksJsonl();
+      const ok = downloadBlobFile(blob, `${withDownloadDate('agent-research-history')}.jsonl`);
+      outcome = ok ? 'done' : 'failed';
+      setHistoryJsonlDownloadStatus(outcome);
+      if (!ok) {
+        setToastMessage('Could not download full history JSONL — try again.');
+      }
+    } catch (err) {
+      setHistoryJsonlDownloadStatus(outcome);
+      setToastMessage(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not download full history JSONL — try again.',
+      );
+    } finally {
+      historyJsonlDownloadBusyRef.current = false;
+    }
+    const hold = motionDuration(outcome === 'failed' ? 2800 : 2000);
+    historyJsonlDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryJsonlDownloadStatus('idle');
+      historyJsonlDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -5011,6 +5055,48 @@ export function AgentPage() {
                       : historyJsonDownloadStatus === 'failed'
                         ? 'Failed'
                         : 'JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void downloadFullHistoryJsonl()}
+                    disabled={historyJsonlDownloadStatus === 'busy'}
+                    title="Download all retained Agent tasks as newline-delimited JSON"
+                    aria-label={
+                      historyJsonlDownloadStatus === 'busy'
+                        ? 'Exporting full history as JSONL'
+                        : historyJsonlDownloadStatus === 'done'
+                          ? 'Full history JSONL downloaded'
+                          : historyJsonlDownloadStatus === 'failed'
+                            ? 'Full history JSONL download failed'
+                            : 'Download full history as JSONL'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyJsonlDownloadStatus === 'failed'
+                          ? '#D85A30'
+                          : historyJsonlDownloadStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor: historyJsonlDownloadStatus === 'busy' ? 'wait' : 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                      opacity: historyJsonlDownloadStatus === 'busy' ? 0.65 : 1,
+                    }}
+                  >
+                    {historyJsonlDownloadStatus === 'busy'
+                      ? 'Exporting…'
+                      : historyJsonlDownloadStatus === 'done'
+                        ? 'Downloaded'
+                        : historyJsonlDownloadStatus === 'failed'
+                          ? 'Failed'
+                          : 'JSONL'}
                   </button>
                 </div>
               ) : null}

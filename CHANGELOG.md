@@ -86,6 +86,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Agent history can now be exported as full retained-task JSONL from the
+  sidebar. The streaming export stays separate from the paginated, filtered
+  view, downloads a dated file, and locks its action while the request is in
+  flight so large histories remain useful to command-line tools without
+  pretending the visible page is the whole archive
 - Watchlist bulk actions now have a "Select visible" control that selects or
   clears only the watches in the current filtered view, preserving selections
   outside that view as filters change

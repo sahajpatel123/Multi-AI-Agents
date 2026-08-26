@@ -3169,6 +3169,25 @@ export async function getAgentHistory(page: number = 1, perPage: number = 200): 
   return data;
 }
 
+/**
+ * Download the caller's full retained Agent task history as newline-delimited
+ * JSON. JSONL is intentionally kept separate from the paginated history read:
+ * the backend streams every retained row so command-line tools can consume a
+ * large history without the browser assembling one giant JSON document.
+ */
+export async function exportAgentTasksJsonl(): Promise<Blob> {
+  const response = await apiFetch('/api/agent/tasks/export.jsonl');
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export Agent history as JSONL'), response),
+      response.status,
+      err,
+    );
+  }
+  return response.blob();
+}
+
 export type AgentWatchlistItem = {
   id: string;
   question: string;
