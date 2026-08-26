@@ -17,7 +17,12 @@ import {
   copyMarkdownToClipboard,
   copyToClipboard,
 } from '../lib/clipboard';
-import { downloadCsvFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
+import {
+  downloadCsvFile,
+  downloadHtmlFile,
+  downloadJsonFile,
+  downloadMarkdownFile,
+} from '../lib/downloadTextFile';
 import {
   applyAbsoluteDocumentTitle,
   applyDocumentTitle,
@@ -39,6 +44,7 @@ import {
   buildShareTakeJsonPayload,
   formatShareRoundCsv,
 } from '../lib/shareExport';
+import { formatArenaShareHtml } from '../lib/shareHtml';
 import { saveSharedArenaPrompt } from '../lib/sharePrompt';
 import track from '../utils/track';
 import '../styles/share-landing.css';
@@ -104,6 +110,7 @@ export function SharePage() {
   const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<DownloadStatus>('idle');
   const [csvDownloadStatus, setCsvDownloadStatus] = useState<DownloadStatus>('idle');
+  const [htmlDownloadStatus, setHtmlDownloadStatus] = useState<DownloadStatus>('idle');
   const [promptExpanded, setPromptExpanded] = useState(false);
   const copyPromptRequestRef = useRef(0);
   const copyRoundTakeRequestRef = useRef(0);
@@ -187,6 +194,7 @@ export function SharePage() {
     setMarkdownDownloadStatus('idle');
     setJsonDownloadStatus('idle');
     setCsvDownloadStatus('idle');
+    setHtmlDownloadStatus('idle');
   }, [shareParamsKey]);
 
   useEffect(() => {
@@ -437,6 +445,35 @@ export function SharePage() {
       setJsonDownloadStatus('failed');
       setCopyError('Could not download JSON — try Download .md instead.');
       window.setTimeout(() => setJsonDownloadStatus('idle'), 2800);
+    }
+  };
+
+  const handleDownloadHtml = () => {
+    setCopyError(null);
+    const shareUrl = pageUrl || (typeof window !== 'undefined' ? window.location.href : '');
+    const html = isRound && round
+      ? formatArenaShareHtml({
+          round,
+          resolveAgentName: (id) => resolveAgent(id).name,
+          shareUrl,
+        })
+      : formatArenaShareHtml({
+          agentName: agent.name,
+          prompt,
+          response: response || agent.oneLiner,
+          shareUrl,
+        });
+    const stem = isRound
+      ? 'arena-share-round'
+      : `arena-share-${(agent.name || 'take').slice(0, 40)}`;
+    const ok = downloadHtmlFile(html, stem);
+    if (ok) {
+      setHtmlDownloadStatus('done');
+      window.setTimeout(() => setHtmlDownloadStatus('idle'), 2000);
+    } else {
+      setHtmlDownloadStatus('failed');
+      setCopyError('Could not download HTML — try Download .md instead.');
+      window.setTimeout(() => setHtmlDownloadStatus('idle'), 2800);
     }
   };
 
@@ -846,6 +883,17 @@ export function SharePage() {
                     }}
                   >
                     {copyingJson ? 'Copying…' : copied === 'json' ? 'JSON copied' : 'Copy .json'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`arena-btn arena-btn--secondary arena-btn--sm${htmlDownloadStatus === 'done' ? ' is-success' : ''}`}
+                    onClick={handleDownloadHtml}
+                  >
+                    {htmlDownloadStatus === 'done'
+                      ? 'Downloaded'
+                      : htmlDownloadStatus === 'failed'
+                        ? 'Download failed'
+                        : 'Download .html'}
                   </button>
                   {isRound ? (
                     <>

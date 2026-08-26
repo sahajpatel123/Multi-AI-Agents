@@ -6,7 +6,7 @@
  * when it is opened directly from the Downloads folder.
  */
 
-function escapeHtml(raw: string | null | undefined): string {
+export function escapeHtml(raw: string | null | undefined): string {
   return String(raw ?? '').replace(/[&<>"']/g, (character) => {
     switch (character) {
       case '&':
@@ -32,7 +32,7 @@ function singleLine(raw: string | null | undefined, fallback = ''): string {
     .trim();
 }
 
-function safeHttpUrl(raw: string | null | undefined): string | null {
+export function safeHttpUrl(raw: string | null | undefined): string | null {
   const value = singleLine(raw);
   if (!value || value.endsWith('…')) return null;
   try {
@@ -98,7 +98,7 @@ function inlineMarkdown(raw: string): string {
   return escaped;
 }
 
-function renderMarkdown(markdown: string | null | undefined): string {
+export function renderMarkdown(markdown: string | null | undefined): string {
   const lines = String(markdown ?? '').replace(/\r\n?/g, '\n').split('\n');
   const blocks: string[] = [];
   let paragraph: string[] = [];

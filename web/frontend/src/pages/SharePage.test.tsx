@@ -8,6 +8,7 @@ import { SHARED_PROMPT_STORAGE_KEY } from '../lib/sharePrompt';
 
 const {
   downloadCsvFileMock,
+  downloadHtmlFileMock,
   downloadJsonFileMock,
   downloadMarkdownFileMock,
   copyCsvToClipboardMock,
@@ -18,6 +19,7 @@ const {
   trackMock,
 } = vi.hoisted(() => ({
   downloadCsvFileMock: vi.fn(() => true),
+  downloadHtmlFileMock: vi.fn(() => true),
   downloadJsonFileMock: vi.fn(() => true),
   downloadMarkdownFileMock: vi.fn(() => true),
   copyCsvToClipboardMock: vi.fn().mockResolvedValue(true),
@@ -60,6 +62,7 @@ vi.mock('../lib/downloadTextFile', async (importOriginal) => {
   return {
     ...actual,
     downloadCsvFile: downloadCsvFileMock,
+    downloadHtmlFile: downloadHtmlFileMock,
     downloadJsonFile: downloadJsonFileMock,
     downloadMarkdownFile: downloadMarkdownFileMock,
   };
@@ -100,6 +103,8 @@ describe('SharePage', () => {
     trackMock.mockClear();
     downloadCsvFileMock.mockClear();
     downloadCsvFileMock.mockReturnValue(true);
+    downloadHtmlFileMock.mockClear();
+    downloadHtmlFileMock.mockReturnValue(true);
     downloadJsonFileMock.mockClear();
     downloadJsonFileMock.mockReturnValue(true);
     downloadMarkdownFileMock.mockClear();
@@ -145,6 +150,29 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /print \/ save pdf/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download \.json/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy \.json/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /download \.html/i })).toBeInTheDocument();
+  });
+
+  it('downloads a standalone HTML document for a shared round', () => {
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&winner=philosopher' +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.') +
+      '&t1=' +
+      encodeURIComponent('philosopher|87|Enough is when desire ends.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /download \.html/i }));
+
+    expect(downloadHtmlFileMock).toHaveBeenCalledTimes(1);
+    const [content, filename] = downloadHtmlFileMock.mock.calls[0] as [string, string];
+    expect(content).toContain('<!doctype html>');
+    expect(content).toContain('Four minds. One question.');
+    expect(content).toContain('The Philosopher');
+    expect(content).toContain('Arena winner');
+    expect(filename).toBe('arena-share-round');
   });
 
   it('downloads a structured JSON payload for a single shared take', () => {
