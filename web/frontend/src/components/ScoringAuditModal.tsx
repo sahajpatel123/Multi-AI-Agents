@@ -85,8 +85,14 @@ function summaryPromptLine(snippet: string): string {
 function buildScoringAuditSummary(
   sessionId: string,
   audits: ScoringAuditRound[],
+  totalCount: number,
   nameFor: (id: string) => string,
 ): string {
+  const roundCount = audits.length;
+  const roundLabel =
+    totalCount > roundCount
+      ? `showing ${roundCount} of ${totalCount} rounds`
+      : `${roundCount} ${roundCount === 1 ? 'round' : 'rounds'}`;
   const lines = audits.map((round) => {
     const ranked = Object.entries(round.scores || {})
       .map(([agentId, score]) => ({ agentId, score }))
@@ -108,7 +114,7 @@ function buildScoringAuditSummary(
   });
   return [
     'Arena scoring audit',
-    `${sessionId} · ${audits.length} ${audits.length === 1 ? 'round' : 'rounds'}`,
+    `${sessionId} · ${roundLabel}`,
     '',
     ...lines,
   ].join('\n');
@@ -343,7 +349,12 @@ export function ScoringAuditModal({
     setCopyStatus({ format: 'summary', state: 'copying' });
     setExportError(null);
     try {
-      const text = buildScoringAuditSummary(sessionId, data.audits, nameFor);
+      const text = buildScoringAuditSummary(
+        sessionId,
+        data.audits,
+        data.total_count,
+        nameFor,
+      );
       const copied = await copyToClipboard(text);
       if (copyRunRef.current !== runId) return;
       if (copied) {

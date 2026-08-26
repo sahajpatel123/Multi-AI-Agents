@@ -562,6 +562,31 @@ describe('ScoringAuditModal', () => {
     );
   });
 
+  it('marks summaries that omit older rounds from a truncated session', async () => {
+    fetchScoringAuditMock.mockResolvedValue({
+      ...auditResponse,
+      audit_count: 1,
+      total_count: 3,
+    });
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as summary/i }),
+    );
+
+    await waitFor(() => {
+      expect(copyToClipboardMock).toHaveBeenCalledWith(
+        [
+          'Arena scoring audit',
+          'session-1 · showing 1 of 3 rounds',
+          '',
+          'Should we launch? → The Analyst (87/100) vs The Philosopher 74',
+        ].join('\n'),
+      );
+    });
+  });
+
   it('surfaces a summary clipboard failure instead of claiming it was copied', async () => {
     fetchScoringAuditMock.mockResolvedValue(auditResponse);
     copyToClipboardMock.mockResolvedValue(false);
