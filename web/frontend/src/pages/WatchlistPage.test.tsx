@@ -2,7 +2,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { WatchlistPage } from './WatchlistPage';
-import { ApiError, type AgentWatchlistItem } from '../api';
+import {
+  ApiError,
+  type AgentWatchlistBulkDeleteResult,
+  type AgentWatchlistItem,
+} from '../api';
 import { copyToClipboard } from '../lib/clipboard';
 import {
   downloadBlobFile,
@@ -530,6 +534,74 @@ describe('WatchlistPage', () => {
     expect(
       screen.getByText('Will the monsoon affect Indian agriculture exports?'),
     ).toBeInTheDocument();
+  });
+
+  it('locks selection and other watch mutations while bulk removal is in flight', async () => {
+    let resolveDelete:
+      | ((result: AgentWatchlistBulkDeleteResult) => void)
+      | undefined;
+    deleteAgentWatchlistBulkMock.mockImplementation(
+      () =>
+        new Promise<AgentWatchlistBulkDeleteResult>((resolve) => {
+          resolveDelete = resolve;
+        }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Select all 2 visible watches' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove 2 selected watches' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm remove 2 selected watches' }),
+    );
+
+    await waitFor(() => {
+      expect(deleteAgentWatchlistBulkMock).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      screen.getByRole('checkbox', { name: 'Deselect all 2 visible watches' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'Deselect "How is the Indian IPO market evolving?" for bulk actions',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Run 2 selected watches now' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Run now: How is the Indian IPO market evolving?' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Pause all 1 active watch' }),
+    ).toBeDisabled();
+
+    // The ref-level guard and disabled controls together prevent a rapid
+    // confirm or checkbox event from starting a second mutation.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm remove 2 selected watches' }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Deselect all 2 visible watches' }),
+    );
+    expect(deleteAgentWatchlistBulkMock).toHaveBeenCalledTimes(1);
+
+    resolveDelete?.({
+      success: true,
+      requested: 2,
+      deleted: 2,
+      deleted_ids: ['item-1', 'item-2'],
+      skipped_ids: [],
+      active_count: 0,
+      total: 0,
+    });
+    expect(await screen.findByText('Removed 2 selected watches.')).toBeInTheDocument();
   });
 
   it('surfaces bulk remove failures without dropping the selection', async () => {

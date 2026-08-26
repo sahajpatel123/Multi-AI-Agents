@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Watchlist bulk removal now locks visible selection and every other watch
+  mutation until the destructive request settles, preventing a rapid second
+  action from racing the deletion or changing the confirmed selection
 - Watchlist manual re-checks now serialize with each other: while a selected
   burst is starting, card-level run, pause, cadence, edit, duplicate, and
   delete controls stay locked so a stale item update cannot race the new task;

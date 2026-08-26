@@ -249,6 +249,8 @@ export function WatchlistPage() {
   const selectedRunBusyRef = useRef(false);
   /** Serializes card and bulk manual runs so one request cannot race another. */
   const manualRunBusyRef = useRef(false);
+  /** Closes the render gap while a destructive bulk removal is in flight. */
+  const bulkDeleteBusyRef = useRef(false);
   const statsDownloadBusyRef = useRef(false);
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
@@ -500,7 +502,7 @@ export function WatchlistPage() {
   }, []);
 
   const onToggle = async (item: AgentWatchlistItem) => {
-    if (manualRunBusyRef.current) return;
+    if (manualRunBusyRef.current || bulkDeleteBusyRef.current) return;
     try {
       setError(null);
       setBulkNotice(null);
@@ -518,6 +520,7 @@ export function WatchlistPage() {
   const onCadence = async (item: AgentWatchlistItem, hours: WatchlistIntervalHours) => {
     if (
       manualRunBusyRef.current ||
+      bulkDeleteBusyRef.current ||
       item.interval_hours === hours ||
       cadenceBusyId === item.id
     ) return;
@@ -534,7 +537,11 @@ export function WatchlistPage() {
   };
 
   const onRunNow = async (item: AgentWatchlistItem) => {
-    if (manualRunBusyRef.current || runNowBusyId === item.id) return;
+    if (
+      manualRunBusyRef.current ||
+      bulkDeleteBusyRef.current ||
+      runNowBusyId === item.id
+    ) return;
     manualRunBusyRef.current = true;
     setRunNowBusyId(item.id);
     setError(null);
@@ -555,6 +562,7 @@ export function WatchlistPage() {
   const onRunAllNow = async () => {
     if (
       manualRunBusyRef.current ||
+      bulkDeleteBusyRef.current ||
       runAllBusyRef.current ||
       runAllBusy ||
       selectedRunBusyRef.current ||
@@ -597,6 +605,7 @@ export function WatchlistPage() {
   const onRunSelectedNow = async () => {
     if (
       manualRunBusyRef.current ||
+      bulkDeleteBusyRef.current ||
       selectedRunBusyRef.current ||
       selectedRunBusy ||
       runAllBusyRef.current ||
@@ -651,7 +660,11 @@ export function WatchlistPage() {
   };
 
   const onDuplicate = async (item: AgentWatchlistItem) => {
-    if (manualRunBusyRef.current || duplicateBusyId === item.id) return;
+    if (
+      manualRunBusyRef.current ||
+      bulkDeleteBusyRef.current ||
+      duplicateBusyId === item.id
+    ) return;
     setDuplicateBusyId(item.id);
     setError(null);
     setBulkNotice(null);
@@ -673,7 +686,7 @@ export function WatchlistPage() {
   };
 
   const onDelete = async (id: string) => {
-    if (manualRunBusyRef.current) return;
+    if (manualRunBusyRef.current || bulkDeleteBusyRef.current) return;
     try {
       setError(null);
       setBulkNotice(null);
@@ -696,6 +709,7 @@ export function WatchlistPage() {
   };
 
   const toggleSelected = (id: string) => {
+    if (manualRunBusyRef.current || bulkDeleteBusyRef.current) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -710,12 +724,18 @@ export function WatchlistPage() {
   };
 
   const onBulkDeleteSelected = async () => {
-    if (manualRunBusyRef.current || bulkDeleteBusy || selectedIds.size === 0) return;
+    if (
+      manualRunBusyRef.current ||
+      bulkDeleteBusy ||
+      bulkDeleteBusyRef.current ||
+      selectedIds.size === 0
+    ) return;
     if (!bulkDeleteArmed) {
       setBulkDeleteArmed(true);
       return;
     }
     const ids = [...selectedIds];
+    bulkDeleteBusyRef.current = true;
     setBulkDeleteBusy(true);
     setError(null);
     setBulkNotice(null);
@@ -759,6 +779,7 @@ export function WatchlistPage() {
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Bulk delete failed');
     } finally {
+      bulkDeleteBusyRef.current = false;
       setBulkDeleteBusy(false);
     }
   };
@@ -800,7 +821,7 @@ export function WatchlistPage() {
   };
 
   const onBulkStatusChange = async (action: 'pause_all' | 'resume_all') => {
-    if (manualRunBusyRef.current || bulkBusy) return;
+    if (manualRunBusyRef.current || bulkDeleteBusyRef.current || bulkBusy) return;
     setBulkBusy(action);
     setError(null);
     setBulkNotice(null);
@@ -830,6 +851,7 @@ export function WatchlistPage() {
 
   const pausedCount = Math.max(0, totalCount - activeCount);
   const manualRunBusy = runAllBusy || selectedRunBusy || runNowBusyId !== null;
+  const watchlistActionBusy = manualRunBusy || bulkDeleteBusy;
 
   const bodyMode = watchlistBodyMode({
     loading,
@@ -894,7 +916,11 @@ export function WatchlistPage() {
   }, [allVisibleSelected, someVisibleSelected]);
 
   const toggleVisibleSelection = () => {
-    if (manualRunBusyRef.current || filteredItems.length === 0) return;
+    if (
+      manualRunBusyRef.current ||
+      bulkDeleteBusyRef.current ||
+      filteredItems.length === 0
+    ) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       const clearVisible = filteredItems.every((item) => next.has(item.id));
@@ -1696,7 +1722,7 @@ export function WatchlistPage() {
             <button
               type="button"
               onClick={() => void onRunAllNow()}
-              disabled={manualRunBusy || activeCount === 0}
+              disabled={watchlistActionBusy || activeCount === 0}
               title={
                 activeCount === 0
                   ? 'No active watches to run'
@@ -1715,7 +1741,7 @@ export function WatchlistPage() {
             <button
               type="button"
               onClick={() => void onBulkStatusChange('pause_all')}
-              disabled={bulkBusy !== null || manualRunBusy || activeCount === 0}
+              disabled={bulkBusy !== null || watchlistActionBusy || activeCount === 0}
               title={
                 activeCount === 0
                   ? 'No active watches to pause'
@@ -1733,7 +1759,7 @@ export function WatchlistPage() {
             <button
               type="button"
               onClick={() => void onBulkStatusChange('resume_all')}
-              disabled={bulkBusy !== null || manualRunBusy || pausedCount === 0}
+              disabled={bulkBusy !== null || watchlistActionBusy || pausedCount === 0}
               title={
                 pausedCount === 0
                   ? 'No paused watches to resume'
@@ -1753,7 +1779,7 @@ export function WatchlistPage() {
                 <button
                   type="button"
                   onClick={() => void onRunSelectedNow()}
-                  disabled={manualRunBusy}
+                  disabled={watchlistActionBusy}
                   title={
                     selectedRunBusy
                       ? 'Starting selected watch re-checks…'
@@ -1767,7 +1793,7 @@ export function WatchlistPage() {
                 <button
                   type="button"
                   onClick={() => void onBulkDeleteSelected()}
-                  disabled={bulkDeleteBusy || manualRunBusy}
+                  disabled={watchlistActionBusy}
                   title={
                     bulkDeleteArmed
                       ? `Confirm removing ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'}`
@@ -2120,7 +2146,7 @@ export function WatchlistPage() {
                         ref={selectVisibleRef}
                         type="checkbox"
                         checked={allVisibleSelected}
-                        disabled={manualRunBusy}
+                        disabled={watchlistActionBusy}
                         onChange={toggleVisibleSelection}
                         aria-label={
                           allVisibleSelected
@@ -2445,7 +2471,7 @@ export function WatchlistPage() {
                     <input
                       type="checkbox"
                       checked={selectedIds.has(item.id)}
-                      disabled={manualRunBusy}
+                      disabled={watchlistActionBusy}
                       onChange={() => toggleSelected(item.id)}
                       aria-label={
                         selectedIds.has(item.id)
@@ -2504,7 +2530,7 @@ export function WatchlistPage() {
                             role="radio"
                             aria-checked={selected}
                             aria-label={short}
-                            disabled={busy || manualRunBusy}
+                            disabled={busy || watchlistActionBusy}
                             onClick={() => void onCadence(item, hours)}
                             className={[
                               'watchlist-item__cadence-pill',
@@ -2523,7 +2549,7 @@ export function WatchlistPage() {
                       <button
                         type="button"
                         onClick={(e) => openEdit(item, e.currentTarget)}
-                        disabled={manualRunBusy}
+                        disabled={watchlistActionBusy}
                         title="Edit the watched question and expertise settings"
                         aria-label={`Edit watch: ${item.question.slice(0, 80) || 'watched question'}`}
                         className="watchlist-link"
@@ -2533,7 +2559,7 @@ export function WatchlistPage() {
                       <button
                         type="button"
                         onClick={() => void onRunNow(item)}
-                        disabled={manualRunBusy}
+                        disabled={watchlistActionBusy}
                         title="Start an immediate re-check now"
                         aria-label={`Run now: ${item.question.slice(0, 80) || 'watched question'}`}
                         className="watchlist-link watchlist-link--accent"
@@ -2543,7 +2569,7 @@ export function WatchlistPage() {
                       <button
                         type="button"
                         onClick={() => void onDuplicate(item)}
-                        disabled={manualRunBusy || duplicateBusyId === item.id}
+                        disabled={watchlistActionBusy || duplicateBusyId === item.id}
                         title="Duplicate this watch as a paused copy"
                         aria-label={`Duplicate watch: ${item.question.slice(0, 80) || 'watched question'}`}
                         className="watchlist-link"
@@ -3025,7 +3051,7 @@ export function WatchlistPage() {
                       aria-checked={item.is_active}
                       aria-label={item.is_active ? 'Pause watch' : 'Resume watch'}
                       onClick={() => void onToggle(item)}
-                      disabled={manualRunBusy}
+                      disabled={watchlistActionBusy}
                       className={[
                         'watchlist-toggle',
                         item.is_active ? 'watchlist-toggle--on' : '',
@@ -3045,7 +3071,7 @@ export function WatchlistPage() {
                         }
                         setPendingDeleteId(item.id);
                       }}
-                      disabled={manualRunBusy}
+                      disabled={watchlistActionBusy}
                       aria-label={
                         pendingDeleteId === item.id
                           ? 'Confirm remove from watchlist'
