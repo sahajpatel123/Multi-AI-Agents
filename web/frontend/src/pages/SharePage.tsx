@@ -11,7 +11,7 @@ import { isCollapsiblePrompt } from '../lib/collapsiblePrompt';
 import { PERSONAS } from '../data/personas';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
-import { copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
+import { copyJsonToClipboard, copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
 import { downloadCsvFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import {
   applyAbsoluteDocumentTitle,
@@ -87,7 +87,7 @@ export function SharePage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [copied, setCopied] = useState<
-    'take' | 'answer' | 'prompt' | 'link' | 'winner' | null
+    'take' | 'answer' | 'prompt' | 'link' | 'winner' | 'json' | null
   >(null);
   const [copiedRoundTakeIndex, setCopiedRoundTakeIndex] = useState<number | null>(null);
   const [copyingRoundTakeIndex, setCopyingRoundTakeIndex] = useState<number | null>(null);
@@ -101,6 +101,7 @@ export function SharePage() {
   const copyPromptRequestRef = useRef(0);
   const copyRoundTakeRequestRef = useRef(0);
   const copyWinnerRequestRef = useRef(0);
+  const copyJsonRequestRef = useRef(0);
   const copyRoundTakePendingRef = useRef(false);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
@@ -160,6 +161,7 @@ export function SharePage() {
     copyPromptRequestRef.current += 1;
     copyRoundTakeRequestRef.current += 1;
     copyWinnerRequestRef.current += 1;
+    copyJsonRequestRef.current += 1;
     copyRoundTakePendingRef.current = false;
     setCopied(null);
     setCopiedRoundTakeIndex(null);
@@ -410,6 +412,38 @@ export function SharePage() {
       setJsonDownloadStatus('failed');
       setCopyError('Could not download JSON — try Download .md instead.');
       window.setTimeout(() => setJsonDownloadStatus('idle'), 2800);
+    }
+  };
+
+  const handleCopyJson = async () => {
+    const requestId = ++copyJsonRequestRef.current;
+    setCopied(null);
+    setCopyError(null);
+    const shareUrl = pageUrl || (typeof window !== 'undefined' ? window.location.href : '');
+    const payload = isRound && round
+      ? buildShareRoundJsonPayload({
+          round,
+          resolveAgentName: (id) => resolveAgent(id).name,
+          shareUrl,
+        })
+      : buildShareTakeJsonPayload({
+          agentId,
+          agentName: agent.name,
+          prompt,
+          response: response || agent.oneLiner,
+          shareUrl,
+        });
+    try {
+      const ok = await copyJsonToClipboard(`${JSON.stringify(payload, null, 2)}\n`);
+      if (copyJsonRequestRef.current !== requestId) return;
+      if (ok) {
+        setCopied('json');
+      } else {
+        setCopyError('Could not copy JSON — try Download .json instead.');
+      }
+    } catch {
+      if (copyJsonRequestRef.current !== requestId) return;
+      setCopyError('Could not copy JSON — try Download .json instead.');
     }
   };
 
@@ -728,6 +762,16 @@ export function SharePage() {
                       : jsonDownloadStatus === 'failed'
                         ? 'Download failed'
                         : 'Download .json'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'json' ? ' is-success' : ''}`}
+                    title="Copy the structured share payload as JSON"
+                    onClick={() => {
+                      void handleCopyJson();
+                    }}
+                  >
+                    {copied === 'json' ? 'JSON copied' : 'Copy .json'}
                   </button>
                   {isRound ? (
                     <button

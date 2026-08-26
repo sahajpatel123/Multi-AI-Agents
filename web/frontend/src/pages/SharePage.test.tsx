@@ -10,6 +10,7 @@ const {
   downloadCsvFileMock,
   downloadJsonFileMock,
   downloadMarkdownFileMock,
+  copyJsonToClipboardMock,
   copyToClipboardMock,
   navigateMock,
   setRedirectIntentMock,
@@ -18,6 +19,7 @@ const {
   downloadCsvFileMock: vi.fn(() => true),
   downloadJsonFileMock: vi.fn(() => true),
   downloadMarkdownFileMock: vi.fn(() => true),
+  copyJsonToClipboardMock: vi.fn().mockResolvedValue(true),
   copyToClipboardMock: vi.fn().mockResolvedValue(true),
   navigateMock: vi.fn(),
   setRedirectIntentMock: vi.fn(),
@@ -45,6 +47,7 @@ vi.mock('../hooks/useAuth', () => ({
 vi.mock('../utils/track', () => ({ default: trackMock }));
 
 vi.mock('../lib/clipboard', () => ({
+  copyJsonToClipboard: copyJsonToClipboardMock,
   copyMarkdownToClipboard: vi.fn().mockResolvedValue(true),
   copyToClipboard: copyToClipboardMock,
 }));
@@ -98,6 +101,8 @@ describe('SharePage', () => {
     downloadJsonFileMock.mockReturnValue(true);
     downloadMarkdownFileMock.mockClear();
     downloadMarkdownFileMock.mockReturnValue(true);
+    copyJsonToClipboardMock.mockClear();
+    copyJsonToClipboardMock.mockResolvedValue(true);
     copyToClipboardMock.mockClear();
     copyToClipboardMock.mockResolvedValue(true);
     vi.mocked(copyMarkdownToClipboard).mockClear();
@@ -134,6 +139,7 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /print \/ save pdf/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download \.json/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy \.json/i })).toBeInTheDocument();
   });
 
   it('downloads a structured JSON payload for a single shared take', () => {
@@ -177,6 +183,68 @@ describe('SharePage', () => {
     expect(content).toContain('"Should we ship today?","philosopher","The Philosopher","87","yes"');
     expect(filename).toBe('arena-share-round');
     expect(screen.getByRole('button', { name: /downloaded/i })).toHaveTextContent('Downloaded');
+  });
+
+  it('copies a machine-readable JSON payload for a shared take', async () => {
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the **smallest** honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy \.json/i }));
+
+    await waitFor(() => expect(copyJsonToClipboardMock).toHaveBeenCalledTimes(1));
+    const [content] = copyJsonToClipboardMock.mock.calls[0] as [string];
+    expect(JSON.parse(content)).toMatchObject({
+      schema_version: 1,
+      kind: 'take',
+      agent: { id: 'agent_1', name: 'The Analyst' },
+      response: 'Ship the **smallest** honest slice.',
+    });
+    expect(screen.getByRole('button', { name: /json copied/i })).toHaveTextContent('JSON copied');
+  });
+
+  it('copies the full machine-readable JSON payload for a shared round', async () => {
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&winner=philosopher' +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.') +
+      '&t1=' +
+      encodeURIComponent('philosopher|87|Enough is when desire ends.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy \.json/i }));
+
+    await waitFor(() => expect(copyJsonToClipboardMock).toHaveBeenCalledTimes(1));
+    const [content] = copyJsonToClipboardMock.mock.calls[0] as [string];
+    expect(JSON.parse(content)).toMatchObject({
+      kind: 'round',
+      winner_agent_id: 'philosopher',
+      takes: [
+        { agent_id: 'analyst', agent_name: 'The Analyst', score: 84 },
+        { agent_id: 'philosopher', agent_name: 'The Philosopher', score: 87 },
+      ],
+    });
+  });
+
+  it('surfaces a structured JSON copy failure', async () => {
+    copyJsonToClipboardMock.mockResolvedValueOnce(false);
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy \.json/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /could not copy json.*download \.json/i,
+    );
   });
 
   it('keeps the CSV share URL current when the shared round changes in place', () => {
