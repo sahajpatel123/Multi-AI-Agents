@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Public shared rounds: download every shared take as a spreadsheet-ready CSV with scores and winner flags',
       '[NEW] Public shared takes: copy just the answer as Markdown without the surrounding share wrapper, ready to paste into notes or docs',
       '[NEW] Shared Agent reports: copy BibTeX, RIS, and CSL-JSON together as one labeled reference-manager bundle',
       '[NEW] Shared Agent reports: download BibTeX, RIS, and CSL-JSON together as one labeled reference-manager bundle',

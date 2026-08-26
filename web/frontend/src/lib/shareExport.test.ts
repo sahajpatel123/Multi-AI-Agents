@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildShareRoundJsonPayload, buildShareTakeJsonPayload } from './shareExport';
+import {
+  buildShareRoundJsonPayload,
+  buildShareTakeJsonPayload,
+  formatShareRoundCsv,
+} from './shareExport';
 
 describe('shareExport', () => {
   it('keeps a single take structured without altering Markdown', () => {
@@ -45,5 +49,29 @@ describe('shareExport', () => {
       ],
       share_url: null,
     });
+  });
+
+  it('formats a formula-safe, spreadsheet-ready round CSV', () => {
+    const csv = formatShareRoundCsv({
+      round: {
+        prompt: '  =ship("today")',
+        winnerAgentId: 'agent_2',
+        takes: [
+          { agentId: 'agent_1', oneLiner: 'Use "the smallest" slice.', score: 101.4 },
+          { agentId: 'agent_2', oneLiner: 'Wait\nfor evidence.', score: Number.NaN },
+        ],
+      },
+      resolveAgentName: (id) => (id === 'agent_1' ? 'The Analyst' : '=The Philosopher'),
+      shareUrl: 'https://arena.example/share?round=1',
+    });
+
+    expect(csv.startsWith('\uFEFF"prompt","agent_id","agent_name","score","winner"')).toBe(
+      true,
+    );
+    expect(csv).toContain('"\'=ship(""today"")"');
+    expect(csv).toContain('"agent_1","The Analyst","100","no","Use ""the smallest"" slice."');
+    expect(csv).toContain('"agent_2","\'=The Philosopher","","yes","Wait\nfor evidence."');
+    expect(csv).toContain('"https://arena.example/share?round=1"');
+    expect(csv.endsWith('\r\n')).toBe(true);
   });
 });

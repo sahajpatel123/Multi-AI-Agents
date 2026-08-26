@@ -7,6 +7,7 @@ import { copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
 import { SHARED_PROMPT_STORAGE_KEY } from '../lib/sharePrompt';
 
 const {
+  downloadCsvFileMock,
   downloadJsonFileMock,
   downloadMarkdownFileMock,
   copyToClipboardMock,
@@ -14,6 +15,7 @@ const {
   setRedirectIntentMock,
   trackMock,
 } = vi.hoisted(() => ({
+  downloadCsvFileMock: vi.fn(() => true),
   downloadJsonFileMock: vi.fn(() => true),
   downloadMarkdownFileMock: vi.fn(() => true),
   copyToClipboardMock: vi.fn().mockResolvedValue(true),
@@ -51,6 +53,7 @@ vi.mock('../lib/downloadTextFile', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/downloadTextFile')>();
   return {
     ...actual,
+    downloadCsvFile: downloadCsvFileMock,
     downloadJsonFile: downloadJsonFileMock,
     downloadMarkdownFile: downloadMarkdownFileMock,
   };
@@ -89,6 +92,8 @@ describe('SharePage', () => {
     navigateMock.mockClear();
     setRedirectIntentMock.mockClear();
     trackMock.mockClear();
+    downloadCsvFileMock.mockClear();
+    downloadCsvFileMock.mockReturnValue(true);
     downloadJsonFileMock.mockClear();
     downloadJsonFileMock.mockReturnValue(true);
     downloadMarkdownFileMock.mockClear();
@@ -150,6 +155,45 @@ describe('SharePage', () => {
       response: 'Ship the **smallest** honest slice.',
     });
     expect(filename).toBe('arena-share-The Analyst');
+  });
+
+  it('downloads a spreadsheet-ready CSV for a shared round', () => {
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&winner=philosopher' +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.') +
+      '&t1=' +
+      encodeURIComponent('philosopher|87|Enough is when desire ends.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /download \.csv/i }));
+
+    expect(downloadCsvFileMock).toHaveBeenCalledTimes(1);
+    const [content, filename] = downloadCsvFileMock.mock.calls[0] as [string, string];
+    expect(content).toContain('\uFEFF"prompt","agent_id","agent_name","score","winner"');
+    expect(content).toContain('"Should we ship today?","analyst","The Analyst","84","no"');
+    expect(content).toContain('"Should we ship today?","philosopher","The Philosopher","87","yes"');
+    expect(filename).toBe('arena-share-round');
+    expect(screen.getByRole('button', { name: /downloaded/i })).toHaveTextContent('Downloaded');
+  });
+
+  it('surfaces a shared-round CSV download failure', () => {
+    downloadCsvFileMock.mockReturnValueOnce(false);
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /download \.csv/i }));
+
+    expect(screen.getByRole('button', { name: /download failed/i })).toHaveTextContent(
+      'Download failed',
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not download csv/i);
   });
 
   it('keeps Markdown and JSON download feedback independent', () => {

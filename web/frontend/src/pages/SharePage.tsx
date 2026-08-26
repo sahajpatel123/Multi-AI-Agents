@@ -12,7 +12,7 @@ import { PERSONAS } from '../data/personas';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
-import { downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadCsvFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import {
   applyAbsoluteDocumentTitle,
   applyDocumentTitle,
@@ -29,7 +29,11 @@ import {
   parseRoundShareUrl,
   type RoundShareTake,
 } from '../lib/roundShare';
-import { buildShareRoundJsonPayload, buildShareTakeJsonPayload } from '../lib/shareExport';
+import {
+  buildShareRoundJsonPayload,
+  buildShareTakeJsonPayload,
+  formatShareRoundCsv,
+} from '../lib/shareExport';
 import { saveSharedArenaPrompt } from '../lib/sharePrompt';
 import track from '../utils/track';
 import '../styles/share-landing.css';
@@ -91,6 +95,7 @@ export function SharePage() {
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<DownloadStatus>('idle');
+  const [csvDownloadStatus, setCsvDownloadStatus] = useState<DownloadStatus>('idle');
   const [promptExpanded, setPromptExpanded] = useState(false);
   const copyPromptRequestRef = useRef(0);
   const copyRoundTakeRequestRef = useRef(0);
@@ -161,6 +166,9 @@ export function SharePage() {
     setCopyingWinner(false);
     setCopyError(null);
     setPromptExpanded(false);
+    setMarkdownDownloadStatus('idle');
+    setJsonDownloadStatus('idle');
+    setCsvDownloadStatus('idle');
   }, [shareParamsKey]);
 
   useEffect(() => {
@@ -401,6 +409,26 @@ export function SharePage() {
       setJsonDownloadStatus('failed');
       setCopyError('Could not download JSON — try Download .md instead.');
       window.setTimeout(() => setJsonDownloadStatus('idle'), 2800);
+    }
+  };
+
+  const handleDownloadCsv = () => {
+    if (!isRound || !round) return;
+    setCopyError(null);
+    const shareUrl = pageUrl || (typeof window !== 'undefined' ? window.location.href : '');
+    const csv = formatShareRoundCsv({
+      round,
+      resolveAgentName: (id) => resolveAgent(id).name,
+      shareUrl,
+    });
+    const ok = downloadCsvFile(csv, 'arena-share-round');
+    if (ok) {
+      setCsvDownloadStatus('done');
+      window.setTimeout(() => setCsvDownloadStatus('idle'), 2000);
+    } else {
+      setCsvDownloadStatus('failed');
+      setCopyError('Could not download CSV — try Download .json instead.');
+      window.setTimeout(() => setCsvDownloadStatus('idle'), 2800);
     }
   };
 
@@ -700,6 +728,19 @@ export function SharePage() {
                         ? 'Download failed'
                         : 'Download .json'}
                   </button>
+                  {isRound ? (
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${csvDownloadStatus === 'done' ? ' is-success' : ''}`}
+                      onClick={handleDownloadCsv}
+                    >
+                      {csvDownloadStatus === 'done'
+                        ? 'Downloaded'
+                        : csvDownloadStatus === 'failed'
+                          ? 'Download failed'
+                          : 'Download .csv'}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="arena-btn arena-btn--secondary arena-btn--sm"
