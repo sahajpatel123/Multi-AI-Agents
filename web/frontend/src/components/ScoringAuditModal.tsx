@@ -67,6 +67,21 @@ function formatAuditTime(iso: string | null): string {
  * runner-up per round. Built entirely from already-fetched data so copying
  * stays instant and works even when export endpoints are unavailable.
  */
+const SUMMARY_PROMPT_MAX_CHARS = 120;
+
+/**
+ * Prompts are stored verbatim server-side (up to 200 chars, newlines
+ * included), so collapse whitespace runs and cap the length to keep every
+ * round on one compact digest line.
+ */
+function summaryPromptLine(snippet: string): string {
+  const collapsed = snippet.replace(/\s+/g, ' ').trim();
+  if (!collapsed) return '(no prompt captured)';
+  return collapsed.length > SUMMARY_PROMPT_MAX_CHARS
+    ? `${collapsed.slice(0, SUMMARY_PROMPT_MAX_CHARS)}…`
+    : collapsed;
+}
+
 function buildScoringAuditSummary(
   sessionId: string,
   audits: ScoringAuditRound[],
@@ -80,7 +95,7 @@ function buildScoringAuditSummary(
     const winnerName = winnerId ? nameFor(winnerId) : 'Unknown';
     const runnerUp = ranked.find((entry) => entry.agentId !== winnerId);
     const parts = [
-      `${round.prompt_snippet || '(no prompt captured)'}`,
+      summaryPromptLine(round.prompt_snippet),
       `→ ${winnerName}${round.winner_score != null ? ` (${round.winner_score}/100)` : ''}`,
     ];
     if (runnerUp) {

@@ -511,6 +511,57 @@ describe('ScoringAuditModal', () => {
     expect(digest).toContain('session-1 · 2 rounds');
   });
 
+  it('collapses and caps prompts so each round stays on one summary line', async () => {
+    const rawPrompt =
+      'Should   we\nlaunch\nnow,\t\tor wait for the quarterly numbers and the revised forecast before deciding anything at all about the public roadmap?';
+    const collapsed = rawPrompt.replace(/\s+/g, ' ').trim();
+    expect(collapsed.length).toBeGreaterThan(120);
+    fetchScoringAuditMock.mockResolvedValue({
+      ...auditResponse,
+      audit_count: 1,
+      total_count: 1,
+      audits: [{ ...auditResponse.audits[0], id: 9, prompt_snippet: rawPrompt }],
+    });
+    renderModal();
+
+    expect(await screen.findByText(/Should/)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as summary/i }),
+    );
+
+    await waitFor(() => {
+      expect(copyToClipboardMock).toHaveBeenCalledTimes(1);
+    });
+    const digest = copyToClipboardMock.mock.calls[0]?.[0] ?? '';
+    const roundLines = digest.split('\n').slice(3);
+    expect(roundLines).toEqual([
+      `${collapsed.slice(0, 120)}… → The Analyst (87/100) vs The Philosopher 74`,
+    ]);
+  });
+
+  it('digests whitespace-only prompts as no prompt captured', async () => {
+    fetchScoringAuditMock.mockResolvedValue({
+      ...auditResponse,
+      audits: [{ ...auditResponse.audits[0], prompt_snippet: '  \n\t ' }],
+    });
+    renderModal();
+
+    const summaryButton = await screen.findByRole('button', {
+      name: /copy scoring audit as summary/i,
+    });
+    await waitFor(() => {
+      expect(summaryButton).toBeEnabled();
+    });
+    fireEvent.click(summaryButton);
+
+    await waitFor(() => {
+      expect(copyToClipboardMock).toHaveBeenCalledTimes(1);
+    });
+    expect(copyToClipboardMock.mock.calls[0]?.[0] ?? '').toContain(
+      '(no prompt captured) → The Analyst',
+    );
+  });
+
   it('surfaces a summary clipboard failure instead of claiming it was copied', async () => {
     fetchScoringAuditMock.mockResolvedValue(auditResponse);
     copyToClipboardMock.mockResolvedValue(false);
