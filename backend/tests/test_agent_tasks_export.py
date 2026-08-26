@@ -4,6 +4,7 @@ from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
 import json
+from datetime import timedelta
 
 import pytest
 
@@ -103,6 +104,35 @@ async def test_export_jsonl_empty_state_returns_empty_body(app_client, make_user
     user = make_user(email="export-empty@test.com", tier=UserTier.PRO)
     headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
     res = await app_client.get("/api/agent/tasks/export.jsonl", headers=headers)
+    assert res.status_code == 200
+    assert res.text == ""
+
+
+@pytest.mark.asyncio
+async def test_export_jsonl_defaults_to_tier_retention_and_allows_override(
+    app_client, db_session, make_user
+):
+    """The UI's full-history export must match the caller's history window."""
+    user = make_user(email="export-retention@test.com", tier=UserTier.PRO)
+    older_task = _make_task(suffix=1, user_id=user.id)
+    older_task.created_at = utcnow_naive() - timedelta(days=31)
+    db_session.add(older_task)
+    db_session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+
+    # Pro history is retained for 365 days, so the task is included when the
+    # client uses the endpoint's tier-aware default.
+    res = await app_client.get("/api/agent/tasks/export.jsonl", headers=headers)
+    assert res.status_code == 200
+    assert [json.loads(line)["task_id"] for line in res.text.splitlines()] == [
+        "task-export-1"
+    ]
+
+    # Callers can still request a narrower archive explicitly.
+    res = await app_client.get(
+        "/api/agent/tasks/export.jsonl?retention_days=30", headers=headers
+    )
     assert res.status_code == 200
     assert res.text == ""
 

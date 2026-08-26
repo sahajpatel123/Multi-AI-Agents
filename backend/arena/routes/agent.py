@@ -4675,7 +4675,15 @@ async def export_feedback_markdown(
 
 @router.get("/tasks/export.jsonl")
 async def export_tasks_jsonl(
-    retention_days: int = Query(30, ge=1, le=365),
+    retention_days: int | None = Query(
+        None,
+        ge=1,
+        le=365,
+        description=(
+            "Optional retention window in days. When omitted, use the "
+            "caller's tier-specific Agent history retention window."
+        ),
+    ),
     search: str | None = Query(None, max_length=100),
     feedback: str | None = Query(
         None,
@@ -4689,7 +4697,9 @@ async def export_tasks_jsonl(
 ):
     """Stream caller agent tasks as newline-delimited JSON.
 
-    Same auth and filter contract as /api/agent/history. Output is
+    Same auth and filter contract as /api/agent/history. When no retention
+    window is supplied, use the caller's tier-specific history window so the
+    download contains all history visible to that caller. Output is
     ``application/x-ndjson`` so generic JSONL clients (jq -c, log
     shippers) can ingest it line-by-line. Rows are yielded newest-first
     in 100-row batches to bound memory on both server and client.
@@ -4704,10 +4714,16 @@ async def export_tasks_jsonl(
         window_seconds=3600,
         message="Too many task exports. Limit is 30 per hour.",
     )
+    tier = normalize_tier(get_tier_str(user))
+    effective_retention_days = (
+        retention_days
+        if retention_days is not None
+        else AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
+    )
     rows = iter_user_task_export(
         db=db,
         user_id=user.id,
-        retention_days=retention_days,
+        retention_days=effective_retention_days,
         search=search,
         feedback=feedback,
     )
