@@ -86,6 +86,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Agent history can now copy the current filtered view as structured JSON
+  directly to the clipboard, preserving the same filter note and stable field
+  names as its JSON download for quick handoff to scripts and notebooks
 - Agent history can now be exported as full retained-task JSONL from the
   sidebar. The streaming export stays separate from the paginated, filtered
   view, downloads a dated file, and locks its action while the request is in

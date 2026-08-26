@@ -141,6 +141,7 @@ import {
   formatAgentHistoryItemCopy,
   formatAgentHistoryJson,
 } from '../lib/agentHistoryExport';
+import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
 import {
   AGENT_HISTORY_SORT_OPTIONS,
   agentHistorySortLabel,
@@ -858,6 +859,8 @@ export function AgentPage() {
     useState<'idle' | 'done' | 'failed'>('idle');
   const [historyJsonDownloadStatus, setHistoryJsonDownloadStatus] =
     useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyJsonCopyStatus, setHistoryJsonCopyStatus] =
+    useState<'idle' | 'copied' | 'failed'>('idle');
   const [historyJsonlDownloadStatus, setHistoryJsonlDownloadStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed'
   >('idle');
@@ -865,6 +868,7 @@ export function AgentPage() {
   const historyDownloadTimerRef = useRef<number | null>(null);
   const historyCsvDownloadTimerRef = useRef<number | null>(null);
   const historyJsonDownloadTimerRef = useRef<number | null>(null);
+  const historyJsonCopyTimerRef = useRef<number | null>(null);
   const historyJsonlDownloadTimerRef = useRef<number | null>(null);
   const historyJsonlDownloadBusyRef = useRef(false);
   const [roomsCopyStatus, setRoomsCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -2903,6 +2907,9 @@ export function AgentPage() {
       if (historyJsonDownloadTimerRef.current != null) {
         window.clearTimeout(historyJsonDownloadTimerRef.current);
       }
+      if (historyJsonCopyTimerRef.current != null) {
+        window.clearTimeout(historyJsonCopyTimerRef.current);
+      }
       if (historyJsonlDownloadTimerRef.current != null) {
         window.clearTimeout(historyJsonlDownloadTimerRef.current);
       }
@@ -3161,6 +3168,26 @@ export function AgentPage() {
     historyJsonDownloadTimerRef.current = window.setTimeout(() => {
       setHistoryJsonDownloadStatus('idle');
       historyJsonDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const copyFilteredHistoryJson = async () => {
+    const ok = await copyAgentHistoryJson({
+      items: filteredTaskHistory.map(toHistoryExportItem),
+      totalCount: taskHistory.length,
+      filterNote: buildHistoryFilterNote(),
+    });
+    if (historyJsonCopyTimerRef.current != null) {
+      window.clearTimeout(historyJsonCopyTimerRef.current);
+    }
+    setHistoryJsonCopyStatus(ok ? 'copied' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not copy history JSON — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historyJsonCopyTimerRef.current = window.setTimeout(() => {
+      setHistoryJsonCopyStatus('idle');
+      historyJsonCopyTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -5055,6 +5082,42 @@ export function AgentPage() {
                       : historyJsonDownloadStatus === 'failed'
                         ? 'Failed'
                         : 'JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyFilteredHistoryJson()}
+                    title="Copy the current history view as JSON"
+                    aria-label={
+                      historyJsonCopyStatus === 'copied'
+                        ? 'History JSON copied'
+                        : historyJsonCopyStatus === 'failed'
+                          ? 'History JSON copy failed'
+                          : 'Copy research history as JSON'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyJsonCopyStatus === 'failed'
+                          ? '#D85A30'
+                          : historyJsonCopyStatus === 'copied'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {historyJsonCopyStatus === 'copied'
+                      ? 'Copied'
+                      : historyJsonCopyStatus === 'failed'
+                        ? 'Failed'
+                        : 'Copy JSON'}
                   </button>
                   <button
                     type="button"
