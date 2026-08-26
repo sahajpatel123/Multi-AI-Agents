@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router-dom';
 import { SharePage } from './SharePage';
 import { useAuth } from '../hooks/useAuth';
 import { copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
@@ -71,6 +71,15 @@ function renderShare(search: string) {
         <Route path="/share" element={<SharePage />} />
       </Routes>
     </MemoryRouter>,
+  );
+}
+
+function ChangeShare({ search }: { search: string }) {
+  const [, setSearchParams] = useSearchParams();
+  return (
+    <button type="button" onClick={() => setSearchParams(new URLSearchParams(search))}>
+      Change share
+    </button>
   );
 }
 
@@ -246,6 +255,54 @@ describe('SharePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /copy question/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not copy the question/i);
+  });
+
+  it('does not apply a stale question-copy result after navigating to another shared take', async () => {
+    let finishCopy: ((ok: boolean) => void) | undefined;
+    copyToClipboardMock.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishCopy = resolve;
+        }),
+    );
+    const currentSearch =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    const nextSearch =
+      '?agent=agent_2&prompt=' +
+      encodeURIComponent('What should I test next?') +
+      '&response=' +
+      encodeURIComponent('Test the riskiest assumption.');
+
+    render(
+      <MemoryRouter initialEntries={[`/share${currentSearch}`]}>
+        <Routes>
+          <Route
+            path="/share"
+            element={
+              <>
+                <SharePage />
+                <ChangeShare search={nextSearch} />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /copy question/i }));
+    fireEvent.click(screen.getByRole('button', { name: /change share/i }));
+    expect(await screen.findByText('What should I test next?')).toBeInTheDocument();
+
+    await act(async () => {
+      finishCopy?.(true);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: /copy question/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /question copied/i })).not.toBeInTheDocument();
   });
 
   it('preserves URL escapes inside answer Markdown when copying', async () => {

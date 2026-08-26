@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
@@ -83,6 +83,7 @@ export function SharePage() {
   const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<DownloadStatus>('idle');
   const [promptExpanded, setPromptExpanded] = useState(false);
+  const copyPromptRequestRef = useRef(0);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
   const prompt = sanitizeParam(params.get('prompt'));
@@ -91,6 +92,7 @@ export function SharePage() {
   const round = useMemo(() => parseRoundShareUrl(params), [params]);
   const roundRequested = params.get('round') === '1';
   const isRound = round !== null;
+  const shareParamsKey = params.toString();
 
   const hasContent = roundRequested ? Boolean(round) : Boolean(response || prompt);
   const displayPrompt = isRound && round ? round.prompt : prompt;
@@ -125,8 +127,14 @@ export function SharePage() {
   }, []);
 
   useEffect(() => {
+    // A SharePage can stay mounted while the query string changes. Clear
+    // action feedback for the new payload and invalidate any clipboard
+    // result that was started for the previous question.
+    copyPromptRequestRef.current += 1;
+    setCopied(null);
+    setCopyError(null);
     setPromptExpanded(false);
-  }, [displayPrompt]);
+  }, [shareParamsKey]);
 
   useEffect(() => {
     if (!copied) return;
@@ -192,16 +200,19 @@ export function SharePage() {
   const handleCopyPrompt = async () => {
     const question = displayPrompt.trim();
     if (!question) return;
+    const requestId = ++copyPromptRequestRef.current;
     setCopied(null);
     setCopyError(null);
     try {
       const ok = await copyToClipboard(question);
+      if (copyPromptRequestRef.current !== requestId) return;
       if (ok) {
         setCopied('prompt');
       } else {
         setCopyError('Could not copy the question — select it manually.');
       }
     } catch {
+      if (copyPromptRequestRef.current !== requestId) return;
       setCopyError('Could not copy the question — select it manually.');
     }
   };
