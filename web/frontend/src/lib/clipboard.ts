@@ -134,3 +134,33 @@ export async function copyJsonToClipboard(text: string): Promise<boolean> {
 
   return copyToClipboard(text);
 }
+
+/**
+ * Copy an HTML report with both rich and plain-text representations. Rich
+ * editors can preserve the formatted share, while ordinary fields receive a
+ * readable fallback instead of the full document markup.
+ */
+export async function copyHtmlToClipboard(html: string, plainText = html): Promise<boolean> {
+  if (!html) return false;
+  const fallbackText = plainText || html;
+
+  try {
+    if (
+      typeof ClipboardItem !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      navigator.clipboard?.write
+    ) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html;charset=utf-8' }),
+          'text/plain': new Blob([fallbackText], { type: 'text/plain' }),
+        }),
+      ]);
+      return true;
+    }
+  } catch {
+    /* fall through to the generic text copy path */
+  }
+
+  return copyToClipboard(fallbackText);
+}

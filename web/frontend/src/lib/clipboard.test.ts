@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   copyCsvToClipboard,
+  copyHtmlToClipboard,
   copyJsonToClipboard,
   copyMarkdownToClipboard,
   copyToClipboard,
@@ -163,5 +164,35 @@ describe('copyToClipboard', () => {
 
     expect(await copyJsonToClipboard('{"rows":[]}')).toBe(true);
     expect(writeText).toHaveBeenCalledWith('{"rows":[]}');
+  });
+
+  it('writes rich HTML and a plain-text fallback through ClipboardItem', async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { write } });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        data: Record<string, Blob>;
+
+        constructor(data: Record<string, Blob>) {
+          this.data = data;
+        }
+      },
+    );
+
+    expect(await copyHtmlToClipboard('<strong>Arena</strong>', 'Arena')).toBe(true);
+    expect(write).toHaveBeenCalledTimes(1);
+    const item = write.mock.calls[0][0][0] as { data: Record<string, Blob> };
+    expectBlob(item.data['text/html']);
+    expectBlob(item.data['text/plain']);
+  });
+
+  it('falls back to the readable text when rich HTML clipboard support is unavailable', async () => {
+    vi.stubGlobal('ClipboardItem', undefined);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+
+    expect(await copyHtmlToClipboard('<strong>Arena</strong>', 'Arena')).toBe(true);
+    expect(writeText).toHaveBeenCalledWith('Arena');
   });
 });

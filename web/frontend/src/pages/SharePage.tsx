@@ -13,6 +13,7 @@ import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import {
   copyCsvToClipboard,
+  copyHtmlToClipboard,
   copyJsonToClipboard,
   copyMarkdownToClipboard,
   copyToClipboard,
@@ -98,13 +99,14 @@ export function SharePage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [copied, setCopied] = useState<
-    'take' | 'answer' | 'prompt' | 'link' | 'winner' | 'json' | 'csv' | null
+    'take' | 'answer' | 'prompt' | 'link' | 'winner' | 'json' | 'csv' | 'html' | null
   >(null);
   const [copiedRoundTakeIndex, setCopiedRoundTakeIndex] = useState<number | null>(null);
   const [copyingRoundTakeIndex, setCopyingRoundTakeIndex] = useState<number | null>(null);
   const [copyingWinner, setCopyingWinner] = useState(false);
   const [copyingJson, setCopyingJson] = useState(false);
   const [copyingCsv, setCopyingCsv] = useState(false);
+  const [copyingHtml, setCopyingHtml] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
@@ -118,8 +120,10 @@ export function SharePage() {
   const copyWinnerRequestRef = useRef(0);
   const copyJsonRequestRef = useRef(0);
   const copyCsvRequestRef = useRef(0);
+  const copyHtmlRequestRef = useRef(0);
   const copyJsonPendingRef = useRef(false);
   const copyCsvPendingRef = useRef(false);
+  const copyHtmlPendingRef = useRef(false);
   const copyRoundTakePendingRef = useRef(false);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
@@ -181,6 +185,7 @@ export function SharePage() {
     copyWinnerRequestRef.current += 1;
     copyJsonRequestRef.current += 1;
     copyCsvRequestRef.current += 1;
+    copyHtmlRequestRef.current += 1;
     copyRoundTakePendingRef.current = false;
     setCopied(null);
     setCopiedRoundTakeIndex(null);
@@ -188,8 +193,10 @@ export function SharePage() {
     setCopyingWinner(false);
     setCopyingJson(false);
     setCopyingCsv(false);
+    setCopyingHtml(false);
     copyJsonPendingRef.current = false;
     copyCsvPendingRef.current = false;
+    copyHtmlPendingRef.current = false;
     setCopyError(null);
     setPromptExpanded(false);
     setMarkdownDownloadStatus('idle');
@@ -205,6 +212,8 @@ export function SharePage() {
     return () => {
       copyCsvRequestRef.current += 1;
       copyCsvPendingRef.current = false;
+      copyHtmlRequestRef.current += 1;
+      copyHtmlPendingRef.current = false;
     };
   }, []);
 
@@ -558,6 +567,58 @@ export function SharePage() {
     }
   };
 
+  const handleCopyHtml = async () => {
+    if (copyHtmlPendingRef.current) return;
+    copyHtmlPendingRef.current = true;
+    const requestId = ++copyHtmlRequestRef.current;
+    setCopied(null);
+    setCopyingHtml(true);
+    setCopyError(null);
+    const shareUrl = pageUrl || (typeof window !== 'undefined' ? window.location.href : '');
+    const html = isRound && round
+      ? formatArenaShareHtml({
+          round,
+          resolveAgentName: (id) => resolveAgent(id).name,
+          shareUrl,
+        })
+      : formatArenaShareHtml({
+          agentName: agent.name,
+          prompt,
+          response: response || agent.oneLiner,
+          shareUrl,
+        });
+    const plainText = isRound && round
+      ? formatRoundShareText({
+          prompt: round.prompt,
+          takes: round.takes,
+          resolveAgentName: (id) => resolveAgent(id).name,
+          shareUrl: shareUrl || undefined,
+        })
+      : buildShareTakeClipboardText({
+          agentName: agent.name,
+          prompt,
+          response: response || agent.oneLiner,
+          shareUrl: shareUrl || undefined,
+        });
+    try {
+      const ok = await copyHtmlToClipboard(html, plainText);
+      if (copyHtmlRequestRef.current !== requestId) return;
+      if (ok) {
+        setCopied('html');
+      } else {
+        setCopyError('Could not copy HTML — try Download .html instead.');
+      }
+    } catch {
+      if (copyHtmlRequestRef.current !== requestId) return;
+      setCopyError('Could not copy HTML — try Download .html instead.');
+    } finally {
+      if (copyHtmlRequestRef.current === requestId) {
+        copyHtmlPendingRef.current = false;
+        setCopyingHtml(false);
+      }
+    }
+  };
+
   const handleDownloadCsv = () => {
     if (!isRound || !round) return;
     setCopyError(null);
@@ -892,6 +953,25 @@ export function SharePage() {
                     }}
                   >
                     {copyingJson ? 'Copying…' : copied === 'json' ? 'JSON copied' : 'Copy .json'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'html' ? ' is-success' : ''}`}
+                    disabled={copyingHtml}
+                    aria-busy={copyingHtml || undefined}
+                    aria-label={
+                      copyingHtml
+                        ? 'Copying HTML'
+                        : copied === 'html'
+                          ? 'HTML copied'
+                          : 'Copy .html'
+                    }
+                    title="Copy the formatted share as rich HTML"
+                    onClick={() => {
+                      void handleCopyHtml();
+                    }}
+                  >
+                    {copyingHtml ? 'Copying…' : copied === 'html' ? 'HTML copied' : 'Copy .html'}
                   </button>
                   <button
                     type="button"

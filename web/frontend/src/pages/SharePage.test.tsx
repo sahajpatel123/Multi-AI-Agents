@@ -12,6 +12,7 @@ const {
   downloadJsonFileMock,
   downloadMarkdownFileMock,
   copyCsvToClipboardMock,
+  copyHtmlToClipboardMock,
   copyJsonToClipboardMock,
   copyToClipboardMock,
   navigateMock,
@@ -23,6 +24,7 @@ const {
   downloadJsonFileMock: vi.fn(() => true),
   downloadMarkdownFileMock: vi.fn(() => true),
   copyCsvToClipboardMock: vi.fn().mockResolvedValue(true),
+  copyHtmlToClipboardMock: vi.fn().mockResolvedValue(true),
   copyJsonToClipboardMock: vi.fn().mockResolvedValue(true),
   copyToClipboardMock: vi.fn().mockResolvedValue(true),
   navigateMock: vi.fn(),
@@ -52,6 +54,7 @@ vi.mock('../utils/track', () => ({ default: trackMock }));
 
 vi.mock('../lib/clipboard', () => ({
   copyCsvToClipboard: copyCsvToClipboardMock,
+  copyHtmlToClipboard: copyHtmlToClipboardMock,
   copyJsonToClipboard: copyJsonToClipboardMock,
   copyMarkdownToClipboard: vi.fn().mockResolvedValue(true),
   copyToClipboard: copyToClipboardMock,
@@ -111,6 +114,8 @@ describe('SharePage', () => {
     downloadMarkdownFileMock.mockReturnValue(true);
     copyCsvToClipboardMock.mockClear();
     copyCsvToClipboardMock.mockResolvedValue(true);
+    copyHtmlToClipboardMock.mockClear();
+    copyHtmlToClipboardMock.mockResolvedValue(true);
     copyJsonToClipboardMock.mockClear();
     copyJsonToClipboardMock.mockResolvedValue(true);
     copyToClipboardMock.mockClear();
@@ -151,6 +156,26 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /download \.json/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy \.json/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download \.html/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy \.html/i })).toBeInTheDocument();
+  });
+
+  it('copies a shared take as rich HTML with a readable fallback', async () => {
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the **smallest** honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy \.html/i }));
+
+    await waitFor(() => expect(copyHtmlToClipboardMock).toHaveBeenCalledTimes(1));
+    const [html, plainText] = copyHtmlToClipboardMock.mock.calls[0] as [string, string];
+    expect(html).toContain('<strong>smallest</strong>');
+    expect(html).toContain('<!doctype html>');
+    expect(plainText).toContain('The Analyst · Arena');
+    expect(plainText).toContain('Should I ship today?');
+    expect(screen.getByRole('button', { name: /html copied/i })).toHaveTextContent('HTML copied');
   });
 
   it('downloads a standalone HTML document for a shared round', () => {
