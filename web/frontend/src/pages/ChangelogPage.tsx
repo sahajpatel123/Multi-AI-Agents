@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Public shared takes: copy just the answer as Markdown without the surrounding share wrapper, ready to paste into notes or docs',
       '[NEW] Shared Agent reports: copy BibTeX, RIS, and CSL-JSON together as one labeled reference-manager bundle',
       '[NEW] Shared Agent reports: download BibTeX, RIS, and CSL-JSON together as one labeled reference-manager bundle',
       '[NEW] Shared Agent reports: reference-manager bundles now include EndNote XML for portable bibliography imports',

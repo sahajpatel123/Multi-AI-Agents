@@ -11,7 +11,7 @@ import { isCollapsiblePrompt } from '../lib/collapsiblePrompt';
 import { PERSONAS } from '../data/personas';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
-import { copyToClipboard } from '../lib/clipboard';
+import { copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import {
   applyAbsoluteDocumentTitle,
@@ -80,7 +80,7 @@ export function SharePage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const [copied, setCopied] = useState<'take' | 'link' | null>(null);
+  const [copied, setCopied] = useState<'take' | 'answer' | 'link' | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -188,6 +188,22 @@ export function SharePage() {
       setCopied('link');
     } else {
       setCopyError('Could not copy the link. Long-press the address bar instead.');
+    }
+  };
+
+  const handleCopyAnswer = async () => {
+    if (isRound) return;
+    setCopied(null);
+    setCopyError(null);
+    try {
+      const ok = await copyMarkdownToClipboard(response || agent.oneLiner);
+      if (ok) {
+        setCopied('answer');
+      } else {
+        setCopyError('Could not copy the answer — select the text manually.');
+      }
+    } catch {
+      setCopyError('Could not copy the answer — select the text manually.');
     }
   };
 
@@ -447,6 +463,17 @@ export function SharePage() {
                         ? 'Copy round'
                         : 'Copy take'}
                   </button>
+                  {!isRound ? (
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'answer' ? ' is-success' : ''}`}
+                      onClick={() => {
+                        void handleCopyAnswer();
+                      }}
+                    >
+                      {copied === 'answer' ? 'Answer copied' : 'Copy answer'}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}`}

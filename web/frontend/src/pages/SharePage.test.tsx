@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { SharePage } from './SharePage';
 import { useAuth } from '../hooks/useAuth';
+import { copyMarkdownToClipboard } from '../lib/clipboard';
 import { SHARED_PROMPT_STORAGE_KEY } from '../lib/sharePrompt';
 
 const { navigateMock, setRedirectIntentMock, trackMock } = vi.hoisted(() => ({
@@ -31,6 +32,11 @@ vi.mock('../hooks/useAuth', () => ({
 
 vi.mock('../utils/track', () => ({ default: trackMock }));
 
+vi.mock('../lib/clipboard', () => ({
+  copyMarkdownToClipboard: vi.fn().mockResolvedValue(true),
+  copyToClipboard: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock('../components/Navbar', () => ({
   Navbar: () => <div data-testid="navbar" />,
 }));
@@ -55,6 +61,7 @@ describe('SharePage', () => {
     navigateMock.mockClear();
     setRedirectIntentMock.mockClear();
     trackMock.mockClear();
+    vi.mocked(copyMarkdownToClipboard).mockResolvedValue(true);
     vi.mocked(useAuth).mockImplementation(() => ({
       isAuthenticated: false,
       user: null,
@@ -82,6 +89,7 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /try this in arena/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /read this take aloud/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy take/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy answer/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /print \/ save pdf/i })).toBeInTheDocument();
   });
@@ -104,6 +112,49 @@ describe('SharePage', () => {
     } finally {
       Object.defineProperty(window, 'print', { configurable: true, value: originalPrint });
     }
+  });
+
+  it('copies a single shared answer as Markdown without the take wrapper', async () => {
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the **smallest** honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy answer/i }));
+
+    await waitFor(() =>
+      expect(copyMarkdownToClipboard).toHaveBeenCalledWith(
+        'Ship the **smallest** honest slice.',
+      ),
+    );
+    expect(screen.getByRole('button', { name: /answer copied/i })).toBeInTheDocument();
+  });
+
+  it('surfaces answer-copy failures', async () => {
+    vi.mocked(copyMarkdownToClipboard).mockResolvedValueOnce(false);
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy answer/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not copy the answer/i);
+  });
+
+  it('does not offer answer-only copy for a shared round', () => {
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.');
+    renderShare(qs);
+
+    expect(screen.queryByRole('button', { name: /copy answer/i })).not.toBeInTheDocument();
   });
 
   it('prints a shared round with a collapsed long question', () => {
