@@ -176,6 +176,104 @@ describe('SharePage', () => {
     expect(plainText).toContain('The Analyst · Arena');
     expect(plainText).toContain('Should I ship today?');
     expect(screen.getByRole('button', { name: /html copied/i })).toHaveTextContent('HTML copied');
+    expect(screen.getByRole('status')).toHaveTextContent('HTML copied to the clipboard.');
+  });
+
+  it('prevents duplicate HTML copy requests while the clipboard is pending', async () => {
+    let finishCopy: ((ok: boolean) => void) | undefined;
+    const pendingCopy = new Promise<boolean>((resolve) => {
+      finishCopy = resolve;
+    });
+    copyHtmlToClipboardMock.mockImplementationOnce(() => pendingCopy);
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    const button = screen.getByRole('button', { name: /copy \.html/i });
+    fireEvent.click(button);
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('Copying…');
+    expect(screen.getByRole('status')).toHaveTextContent('Copying HTML to the clipboard.');
+    fireEvent.click(button);
+    expect(copyHtmlToClipboardMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishCopy?.(true);
+      await pendingCopy;
+    });
+
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveTextContent('HTML copied');
+    expect(screen.getByRole('status')).toHaveTextContent('HTML copied to the clipboard.');
+  });
+
+  it('surfaces a shared-take HTML copy failure', async () => {
+    copyHtmlToClipboardMock.mockResolvedValueOnce(false);
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy \.html/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /could not copy html.*download \.html/i,
+    );
+  });
+
+  it('does not apply a stale HTML copy result after navigating to another shared take', async () => {
+    let finishCopy: ((ok: boolean) => void) | undefined;
+    copyHtmlToClipboardMock.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishCopy = resolve;
+        }),
+    );
+    const currentSearch =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    const nextSearch =
+      '?agent=agent_2&prompt=' +
+      encodeURIComponent('What should I test next?') +
+      '&response=' +
+      encodeURIComponent('Test the riskiest assumption.');
+
+    render(
+      <MemoryRouter initialEntries={[`/share${currentSearch}`]}>
+        <Routes>
+          <Route
+            path="/share"
+            element={
+              <>
+                <SharePage />
+                <ChangeShare search={nextSearch} />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /copy \.html/i }));
+    fireEvent.click(screen.getByRole('button', { name: /change share/i }));
+    expect(await screen.findByText('What should I test next?')).toBeInTheDocument();
+
+    await act(async () => {
+      finishCopy?.(true);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: /copy \.html/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /html copied/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(/^$/);
   });
 
   it('downloads a standalone HTML document for a shared round', () => {
