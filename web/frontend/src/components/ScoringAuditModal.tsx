@@ -11,6 +11,7 @@ import {
   copyCsvToClipboard,
   copyJsonToClipboard,
   copyMarkdownToClipboard,
+  copyToClipboard,
 } from '../lib/clipboard';
 import {
   AGENTS,
@@ -32,12 +33,18 @@ interface ScoringAuditModalProps {
 }
 
 type ScoringAuditExportFormat = 'csv' | 'json' | 'md';
-type ScoringAuditCopyFormat = 'csv' | 'json' | 'markdown';
+type ScoringAuditCopyFormat = 'csv' | 'json' | 'markdown' | 'summary';
 type CopyStatus = { format: ScoringAuditCopyFormat; state: 'copying' | 'copied' };
 const COPY_FEEDBACK_MS = 1800;
 
 function copyFormatLabel(format: ScoringAuditCopyFormat): string {
-  return format === 'csv' ? 'CSV' : format === 'json' ? 'JSON' : 'Markdown';
+  return format === 'csv'
+    ? 'CSV'
+    : format === 'json'
+      ? 'JSON'
+      : format === 'summary'
+        ? 'Summary'
+        : 'Markdown';
 }
 
 function agentDisplayName(agentId: string): string {
@@ -53,6 +60,43 @@ function formatAuditTime(iso: string | null): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
+}
+
+/**
+ * Compact plain-text digest of every audited round — winner, score, and
+ * runner-up per round. Built entirely from already-fetched data so copying
+ * stays instant and works even when export endpoints are unavailable.
+ */
+function buildScoringAuditSummary(
+  sessionId: string,
+  audits: ScoringAuditRound[],
+  nameFor: (id: string) => string,
+): string {
+  const lines = audits.map((round) => {
+    const ranked = Object.entries(round.scores || {})
+      .map(([agentId, score]) => ({ agentId, score }))
+      .sort((a, b) => b.score - a.score);
+    const winnerId = round.winner_agent_id || round.winner_persona_id || '';
+    const winnerName = winnerId ? nameFor(winnerId) : 'Unknown';
+    const runnerUp = ranked.find((entry) => entry.agentId !== winnerId);
+    const parts = [
+      `${round.prompt_snippet || '(no prompt captured)'}`,
+      `→ ${winnerName}${round.winner_score != null ? ` (${round.winner_score}/100)` : ''}`,
+    ];
+    if (runnerUp) {
+      parts.push(`vs ${nameFor(runnerUp.agentId)} ${runnerUp.score}`);
+    }
+    if (round.fallback_used) {
+      parts.push('(judge fallback)');
+    }
+    return parts.join(' ');
+  });
+  return [
+    'Arena scoring audit',
+    `${sessionId} · ${audits.length} ${audits.length === 1 ? 'round' : 'rounds'}`,
+    '',
+    ...lines,
+  ].join('\n');
 }
 
 export function ScoringAuditModal({
@@ -277,6 +321,35 @@ export function ScoringAuditModal({
     }
   }, [copyingFormat, data, exporting, sessionId]);
 
+  const handleCopySummary = useCallback(async () => {
+    if (!data || data.audits.length === 0 || exporting || copyingFormat) return;
+    const runId = ++copyRunRef.current;
+    setCopyingFormat('summary');
+    setCopyStatus({ format: 'summary', state: 'copying' });
+    setExportError(null);
+    try {
+      const text = buildScoringAuditSummary(sessionId, data.audits, nameFor);
+      const copied = await copyToClipboard(text);
+      if (copyRunRef.current !== runId) return;
+      if (copied) {
+        setCopyStatus({ format: 'summary', state: 'copied' });
+      } else {
+        setCopyStatus(null);
+        setExportError('Could not copy the scoring audit summary — try again.');
+      }
+    } catch (err) {
+      if (copyRunRef.current !== runId) return;
+      setCopyStatus(null);
+      setExportError(
+        err instanceof Error
+          ? err.message
+          : 'Could not copy the scoring audit summary — try again.',
+      );
+    } finally {
+      if (copyRunRef.current === runId) setCopyingFormat(null);
+    }
+  }, [copyingFormat, data, exporting, nameFor, sessionId]);
+
   const handleCopyJson = useCallback(async () => {
     if (!data || data.audits.length === 0 || exporting || copyingFormat) return;
     const runId = ++copyRunRef.current;
@@ -404,6 +477,16 @@ export function ScoringAuditModal({
             aria-label={copyAriaLabel('csv')}
           >
             {copyLabel('csv')}
+          </button>
+          <button
+            type="button"
+            className="sa-export sa-copy"
+            onClick={() => void handleCopySummary()}
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingFormat !== null}
+            aria-busy={copyingFormat === 'summary' || undefined}
+            aria-label={copyAriaLabel('summary')}
+          >
+            {copyLabel('summary')}
           </button>
           <button
             ref={closeRef}

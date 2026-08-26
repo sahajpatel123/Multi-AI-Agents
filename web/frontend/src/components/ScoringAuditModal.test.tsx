@@ -13,6 +13,7 @@ import {
   copyCsvToClipboard,
   copyJsonToClipboard,
   copyMarkdownToClipboard,
+  copyToClipboard,
 } from '../lib/clipboard';
 import { ScoringAuditModal } from './ScoringAuditModal';
 
@@ -42,6 +43,7 @@ vi.mock('../lib/clipboard', () => ({
   copyCsvToClipboard: vi.fn(),
   copyJsonToClipboard: vi.fn(),
   copyMarkdownToClipboard: vi.fn(),
+  copyToClipboard: vi.fn(),
 }));
 
 const fetchScoringAuditMock = vi.mocked(fetchScoringAudit);
@@ -52,6 +54,7 @@ const downloadBlobFileMock = vi.mocked(downloadBlobFile);
 const copyCsvToClipboardMock = vi.mocked(copyCsvToClipboard);
 const copyJsonToClipboardMock = vi.mocked(copyJsonToClipboard);
 const copyMarkdownToClipboardMock = vi.mocked(copyMarkdownToClipboard);
+const copyToClipboardMock = vi.mocked(copyToClipboard);
 const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
 const COPY_FEEDBACK_MS = 1800;
 
@@ -110,9 +113,11 @@ describe('ScoringAuditModal', () => {
     copyCsvToClipboardMock.mockReset();
     copyJsonToClipboardMock.mockReset();
     copyMarkdownToClipboardMock.mockReset();
+    copyToClipboardMock.mockReset();
     copyCsvToClipboardMock.mockResolvedValue(true);
     copyJsonToClipboardMock.mockResolvedValue(true);
     copyMarkdownToClipboardMock.mockResolvedValue(true);
+    copyToClipboardMock.mockResolvedValue(true);
   });
 
   it('fetches and renders per-round scores, criteria, and confidence', async () => {
@@ -174,6 +179,9 @@ describe('ScoringAuditModal', () => {
     ).toBeDisabled();
     expect(
       screen.getByRole('button', { name: /copy scoring audit as csv/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /copy scoring audit as summary/i }),
     ).toBeDisabled();
   });
 
@@ -413,6 +421,110 @@ describe('ScoringAuditModal', () => {
       'JSON copied to the clipboard.',
     );
     expect(downloadBlobFileMock).not.toHaveBeenCalled();
+  });
+
+  it('copies a compact summary with the winner and runner-up for each round', async () => {
+    fetchScoringAuditMock.mockResolvedValue({
+      ...auditResponse,
+      audits: [
+        auditResponse.audits[0],
+        {
+          ...auditResponse.audits[0],
+          id: 2,
+          prompt_snippet: 'Which path is safer?',
+          winner_agent_id: 'agent_2',
+          winner_persona_id: 'philosopher',
+          winner_score: 91,
+          scores: { agent_1: 78, agent_2: 91 },
+          fallback_used: true,
+        },
+      ],
+      audit_count: 2,
+      total_count: 2,
+    });
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as summary/i }),
+    );
+
+    await waitFor(() => {
+      expect(copyToClipboardMock).toHaveBeenCalledWith(
+        [
+          'Arena scoring audit',
+          'session-1 · 2 rounds',
+          '',
+          'Should we launch? → The Analyst (87/100) vs The Philosopher 74',
+          'Which path is safer? → The Philosopher (91/100) vs The Analyst 78 (judge fallback)',
+        ].join('\n'),
+      );
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Summary copied to the clipboard.',
+    );
+    expect(exportScoringAuditCsvMock).not.toHaveBeenCalled();
+    expect(exportScoringAuditJsonMock).not.toHaveBeenCalled();
+    expect(exportScoringAuditMarkdownMock).not.toHaveBeenCalled();
+    expect(downloadBlobFileMock).not.toHaveBeenCalled();
+  });
+
+  it('digests empty rounds as unknown without inventing data', async () => {
+    fetchScoringAuditMock.mockResolvedValue({
+      ...auditResponse,
+      audit_count: 2,
+      total_count: 2,
+      audits: [
+        { ...auditResponse.audits[0], id: 7, fallback_used: true },
+        {
+          id: 8,
+          prompt_snippet: '',
+          prompt_category: null,
+          winner_agent_id: null,
+          winner_persona_id: null,
+          winner_score: null,
+          scores: {},
+          criteria_breakdown: null,
+          confidence_values: null,
+          persona_ids_used: [],
+          scoring_duration_ms: null,
+          fallback_used: false,
+          created_at: null,
+        },
+      ],
+    });
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as summary/i }),
+    );
+
+    await waitFor(() => {
+      expect(copyToClipboardMock).toHaveBeenCalledTimes(1);
+    });
+    const digest = copyToClipboardMock.mock.calls[0]?.[0] ?? '';
+    expect(digest).toContain(
+      'Should we launch? → The Analyst (87/100) vs The Philosopher 74 (judge fallback)',
+    );
+    expect(digest).toContain('(no prompt captured) → Unknown');
+    expect(digest).toContain('session-1 · 2 rounds');
+  });
+
+  it('surfaces a summary clipboard failure instead of claiming it was copied', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    copyToClipboardMock.mockResolvedValue(false);
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as summary/i }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not copy the scoring audit summary',
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('surfaces a JSON clipboard failure instead of claiming it was copied', async () => {
