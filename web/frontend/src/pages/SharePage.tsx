@@ -77,7 +77,7 @@ export function SharePage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const [copied, setCopied] = useState<'take' | 'answer' | 'link' | null>(null);
+  const [copied, setCopied] = useState<'take' | 'answer' | 'prompt' | 'link' | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
@@ -186,6 +186,23 @@ export function SharePage() {
       setCopied('link');
     } else {
       setCopyError('Could not copy the link. Long-press the address bar instead.');
+    }
+  };
+
+  const handleCopyPrompt = async () => {
+    const question = displayPrompt.trim();
+    if (!question) return;
+    setCopied(null);
+    setCopyError(null);
+    try {
+      const ok = await copyToClipboard(question);
+      if (ok) {
+        setCopied('prompt');
+      } else {
+        setCopyError('Could not copy the question — select it manually.');
+      }
+    } catch {
+      setCopyError('Could not copy the question — select it manually.');
     }
   };
 
@@ -500,6 +517,17 @@ export function SharePage() {
                       }}
                     >
                       {copied === 'answer' ? 'Answer copied' : 'Copy answer'}
+                    </button>
+                  ) : null}
+                  {displayPrompt ? (
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'prompt' ? ' is-success' : ''}`}
+                      onClick={() => {
+                        void handleCopyPrompt();
+                      }}
+                    >
+                      {copied === 'prompt' ? 'Question copied' : 'Copy question'}
                     </button>
                   ) : null}
                   <button

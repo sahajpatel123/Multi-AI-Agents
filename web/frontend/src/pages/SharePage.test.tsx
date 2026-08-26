@@ -3,18 +3,20 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { SharePage } from './SharePage';
 import { useAuth } from '../hooks/useAuth';
-import { copyMarkdownToClipboard } from '../lib/clipboard';
+import { copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
 import { SHARED_PROMPT_STORAGE_KEY } from '../lib/sharePrompt';
 
 const {
   downloadJsonFileMock,
   downloadMarkdownFileMock,
+  copyToClipboardMock,
   navigateMock,
   setRedirectIntentMock,
   trackMock,
 } = vi.hoisted(() => ({
   downloadJsonFileMock: vi.fn(() => true),
   downloadMarkdownFileMock: vi.fn(() => true),
+  copyToClipboardMock: vi.fn().mockResolvedValue(true),
   navigateMock: vi.fn(),
   setRedirectIntentMock: vi.fn(),
   trackMock: vi.fn(),
@@ -42,7 +44,7 @@ vi.mock('../utils/track', () => ({ default: trackMock }));
 
 vi.mock('../lib/clipboard', () => ({
   copyMarkdownToClipboard: vi.fn().mockResolvedValue(true),
-  copyToClipboard: vi.fn().mockResolvedValue(true),
+  copyToClipboard: copyToClipboardMock,
 }));
 
 vi.mock('../lib/downloadTextFile', async (importOriginal) => {
@@ -82,6 +84,8 @@ describe('SharePage', () => {
     downloadJsonFileMock.mockReturnValue(true);
     downloadMarkdownFileMock.mockClear();
     downloadMarkdownFileMock.mockReturnValue(true);
+    copyToClipboardMock.mockClear();
+    copyToClipboardMock.mockResolvedValue(true);
     vi.mocked(copyMarkdownToClipboard).mockResolvedValue(true);
     vi.mocked(useAuth).mockImplementation(() => ({
       isAuthenticated: false,
@@ -111,6 +115,7 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /read this take aloud/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy take/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy answer/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy question/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /print \/ save pdf/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download \.json/i })).toBeInTheDocument();
@@ -213,6 +218,34 @@ describe('SharePage', () => {
       ),
     );
     expect(screen.getByRole('button', { name: /answer copied/i })).toBeInTheDocument();
+  });
+
+  it('copies the question without the surrounding shared take', async () => {
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy question/i }));
+
+    await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith('Should I ship today?'));
+    expect(screen.getByRole('button', { name: /question copied/i })).toBeInTheDocument();
+  });
+
+  it('surfaces question-copy failures', async () => {
+    copyToClipboardMock.mockResolvedValueOnce(false);
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy question/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not copy the question/i);
   });
 
   it('preserves URL escapes inside answer Markdown when copying', async () => {
@@ -335,6 +368,8 @@ describe('SharePage', () => {
     expect(screen.getByText('Arena winner')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /read this round aloud/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy round/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /copy question/i }));
+    expect(copyToClipboardMock).toHaveBeenCalledWith('Should we ship today?');
     fireEvent.click(screen.getByRole('button', { name: /download \.json/i }));
     expect(downloadJsonFileMock).toHaveBeenCalledTimes(1);
     const [content] = downloadJsonFileMock.mock.calls[0] as [string, string];
