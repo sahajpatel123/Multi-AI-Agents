@@ -9,7 +9,11 @@ import {
 } from '../api';
 import type { ScoringAuditResponse } from '../types';
 import { downloadBlobFile } from '../lib/downloadTextFile';
-import { copyCsvToClipboard, copyMarkdownToClipboard } from '../lib/clipboard';
+import {
+  copyCsvToClipboard,
+  copyJsonToClipboard,
+  copyMarkdownToClipboard,
+} from '../lib/clipboard';
 import { ScoringAuditModal } from './ScoringAuditModal';
 
 vi.mock('../api', async () => {
@@ -36,6 +40,7 @@ vi.mock('../lib/downloadTextFile', async () => {
 
 vi.mock('../lib/clipboard', () => ({
   copyCsvToClipboard: vi.fn(),
+  copyJsonToClipboard: vi.fn(),
   copyMarkdownToClipboard: vi.fn(),
 }));
 
@@ -45,6 +50,7 @@ const exportScoringAuditJsonMock = vi.mocked(exportScoringAuditJson);
 const exportScoringAuditMarkdownMock = vi.mocked(exportScoringAuditMarkdown);
 const downloadBlobFileMock = vi.mocked(downloadBlobFile);
 const copyCsvToClipboardMock = vi.mocked(copyCsvToClipboard);
+const copyJsonToClipboardMock = vi.mocked(copyJsonToClipboard);
 const copyMarkdownToClipboardMock = vi.mocked(copyMarkdownToClipboard);
 const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
 const COPY_FEEDBACK_MS = 1800;
@@ -102,8 +108,10 @@ describe('ScoringAuditModal', () => {
     exportScoringAuditMarkdownMock.mockReset();
     downloadBlobFileMock.mockReset();
     copyCsvToClipboardMock.mockReset();
+    copyJsonToClipboardMock.mockReset();
     copyMarkdownToClipboardMock.mockReset();
     copyCsvToClipboardMock.mockResolvedValue(true);
+    copyJsonToClipboardMock.mockResolvedValue(true);
     copyMarkdownToClipboardMock.mockResolvedValue(true);
   });
 
@@ -157,6 +165,9 @@ describe('ScoringAuditModal', () => {
     ).toBeDisabled();
     expect(
       screen.getByRole('button', { name: /export scoring audit as markdown/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /copy scoring audit as json/i }),
     ).toBeDisabled();
     expect(
       screen.getByRole('button', { name: /copy scoring audit as markdown/i }),
@@ -381,6 +392,48 @@ describe('ScoringAuditModal', () => {
     expect(downloadBlobFileMock).not.toHaveBeenCalled();
   });
 
+  it('copies the visible rounds as JSON without downloading a file', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    const json = '{"session_id":"session-1","audits":[]}';
+    exportScoringAuditJsonMock.mockResolvedValue(
+      { text: async () => json } as unknown as Blob,
+    );
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as json/i }),
+    );
+
+    await waitFor(() => {
+      expect(exportScoringAuditJsonMock).toHaveBeenCalledWith('session-1', 1);
+      expect(copyJsonToClipboardMock).toHaveBeenCalledWith(json);
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'JSON copied to the clipboard.',
+    );
+    expect(downloadBlobFileMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a JSON clipboard failure instead of claiming it was copied', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    copyJsonToClipboardMock.mockResolvedValue(false);
+    exportScoringAuditJsonMock.mockResolvedValue(
+      { text: async () => '{"audits":[]}' } as unknown as Blob,
+    );
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as json/i }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not copy the scoring audit JSON',
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('resets successful CSV copy feedback so the action label stays discoverable', async () => {
     vi.useFakeTimers();
     try {
@@ -471,6 +524,9 @@ describe('ScoringAuditModal', () => {
     expect(
       screen.getByRole('button', { name: /copy scoring audit as markdown/i }),
     ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /copy scoring audit as json/i }),
+    ).toBeDisabled();
 
     finishCopy?.(true);
     await waitFor(() => {
@@ -513,6 +569,9 @@ describe('ScoringAuditModal', () => {
     ).toBeDisabled();
     expect(
       screen.getByRole('button', { name: /export scoring audit as markdown/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /copy scoring audit as json/i }),
     ).toBeDisabled();
 
     finishCopy?.(true);

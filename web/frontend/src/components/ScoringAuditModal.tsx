@@ -7,7 +7,11 @@ import {
   fetchScoringAudit,
 } from '../api';
 import { downloadBlobFile, sanitizeDownloadFilename } from '../lib/downloadTextFile';
-import { copyCsvToClipboard, copyMarkdownToClipboard } from '../lib/clipboard';
+import {
+  copyCsvToClipboard,
+  copyJsonToClipboard,
+  copyMarkdownToClipboard,
+} from '../lib/clipboard';
 import {
   AGENTS,
   type ScoringAuditConfidence,
@@ -28,9 +32,13 @@ interface ScoringAuditModalProps {
 }
 
 type ScoringAuditExportFormat = 'csv' | 'json' | 'md';
-type ScoringAuditCopyFormat = 'csv' | 'markdown';
+type ScoringAuditCopyFormat = 'csv' | 'json' | 'markdown';
 type CopyStatus = { format: ScoringAuditCopyFormat; state: 'copying' | 'copied' };
 const COPY_FEEDBACK_MS = 1800;
+
+function copyFormatLabel(format: ScoringAuditCopyFormat): string {
+  return format === 'csv' ? 'CSV' : format === 'json' ? 'JSON' : 'Markdown';
+}
 
 function agentDisplayName(agentId: string): string {
   const normalized = agentId.replace(/-/g, '_');
@@ -265,8 +273,38 @@ export function ScoringAuditModal({
     }
   }, [copyingFormat, data, exporting, sessionId]);
 
+  const handleCopyJson = useCallback(async () => {
+    if (!data || data.audits.length === 0 || exporting || copyingFormat) return;
+    const runId = ++copyRunRef.current;
+    setCopyingFormat('json');
+    setCopyStatus({ format: 'json', state: 'copying' });
+    setExportError(null);
+    try {
+      const blob = await exportScoringAuditJson(sessionId, data.audit_count);
+      if (copyRunRef.current !== runId) return;
+      const copied = await copyJsonToClipboard(await blob.text());
+      if (copyRunRef.current !== runId) return;
+      if (copied) {
+        setCopyStatus({ format: 'json', state: 'copied' });
+      } else {
+        setCopyStatus(null);
+        setExportError('Could not copy the scoring audit JSON — try again.');
+      }
+    } catch (err) {
+      if (copyRunRef.current !== runId) return;
+      setCopyStatus(null);
+      setExportError(
+        err instanceof Error
+          ? err.message
+          : 'Could not copy the scoring audit JSON — try again.',
+      );
+    } finally {
+      if (copyRunRef.current === runId) setCopyingFormat(null);
+    }
+  }, [copyingFormat, data, exporting, sessionId]);
+
   const copyLabel = (format: ScoringAuditCopyFormat): string => {
-    const label = format === 'csv' ? 'CSV' : 'Markdown';
+    const label = copyFormatLabel(format);
     if (copyStatus?.format === format && copyStatus.state === 'copied') {
       return `Copied ${label}`;
     }
@@ -275,7 +313,7 @@ export function ScoringAuditModal({
   };
 
   const copyAriaLabel = (format: ScoringAuditCopyFormat): string => {
-    const label = format === 'csv' ? 'CSV' : 'Markdown';
+    const label = copyFormatLabel(format);
     return copyStatus?.format === format && copyStatus.state === 'copied'
       ? `${label} copied`
       : `Copy scoring audit as ${label}`;
@@ -320,6 +358,16 @@ export function ScoringAuditModal({
             aria-label="Export scoring audit as JSON"
           >
             {exporting === 'json' ? 'Exporting…' : 'Export JSON'}
+          </button>
+          <button
+            type="button"
+            className="sa-export sa-copy"
+            onClick={() => void handleCopyJson()}
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingFormat !== null}
+            aria-busy={copyingFormat === 'json' || undefined}
+            aria-label={copyAriaLabel('json')}
+          >
+            {copyLabel('json')}
           </button>
           <button
             type="button"
@@ -371,8 +419,8 @@ export function ScoringAuditModal({
           {copyStatus ? (
             <p className="sa-copy-notice" role="status" aria-live="polite">
               {copyStatus.state === 'copying'
-                ? `Copying ${copyStatus.format === 'csv' ? 'CSV' : 'Markdown'} to the clipboard.`
-                : `${copyStatus.format === 'csv' ? 'CSV' : 'Markdown'} copied to the clipboard.`}
+                ? `Copying ${copyFormatLabel(copyStatus.format)} to the clipboard.`
+                : `${copyFormatLabel(copyStatus.format)} copied to the clipboard.`}
             </p>
           ) : null}
           {loading ? (
