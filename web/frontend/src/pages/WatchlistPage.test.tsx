@@ -406,12 +406,12 @@ describe('WatchlistPage', () => {
 
     fireEvent.click(
       screen.getByRole('checkbox', {
-        name: 'Select "How is the Indian IPO market evolving?" for bulk remove',
+        name: 'Select "How is the Indian IPO market evolving?" for bulk actions',
       }),
     );
     fireEvent.click(
       screen.getByRole('checkbox', {
-        name: 'Select "Will the monsoon affect Indian agriculture exports?" for bulk remove',
+        name: 'Select "Will the monsoon affect Indian agriculture exports?" for bulk actions',
       }),
     );
 
@@ -471,12 +471,12 @@ describe('WatchlistPage', () => {
 
     fireEvent.click(
       screen.getByRole('checkbox', {
-        name: 'Select "How is the Indian IPO market evolving?" for bulk remove',
+        name: 'Select "How is the Indian IPO market evolving?" for bulk actions',
       }),
     );
     fireEvent.click(
       screen.getByRole('checkbox', {
-        name: 'Select "Will the monsoon affect Indian agriculture exports?" for bulk remove',
+        name: 'Select "Will the monsoon affect Indian agriculture exports?" for bulk actions',
       }),
     );
     fireEvent.click(
@@ -510,7 +510,7 @@ describe('WatchlistPage', () => {
 
     fireEvent.click(
       screen.getByRole('checkbox', {
-        name: 'Select "How is the Indian IPO market evolving?" for bulk remove',
+        name: 'Select "How is the Indian IPO market evolving?" for bulk actions',
       }),
     );
     fireEvent.click(
@@ -556,7 +556,7 @@ describe('WatchlistPage', () => {
 
     fireEvent.click(
       screen.getByRole('checkbox', {
-        name: 'Select "How is the Indian IPO market evolving?" for bulk remove',
+        name: 'Select "How is the Indian IPO market evolving?" for bulk actions',
       }),
     );
     fireEvent.click(
@@ -580,10 +580,10 @@ describe('WatchlistPage', () => {
     });
 
     const firstCheckbox = screen.getByRole('checkbox', {
-      name: 'Select "How is the Indian IPO market evolving?" for bulk remove',
+      name: 'Select "How is the Indian IPO market evolving?" for bulk actions',
     });
     const secondCheckbox = screen.getByRole('checkbox', {
-      name: 'Select "Will the monsoon affect Indian agriculture exports?" for bulk remove',
+      name: 'Select "Will the monsoon affect Indian agriculture exports?" for bulk actions',
     });
     fireEvent.click(firstCheckbox);
     fireEvent.click(secondCheckbox);
@@ -643,6 +643,35 @@ describe('WatchlistPage', () => {
       await screen.findByText('Started 1 re-check.'),
     ).toBeInTheDocument();
     expect(screen.getByText(/Run 4 times/)).toBeInTheDocument();
+  });
+
+  it('runs only the selected watches, including a paused watch', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Select "How is the Indian IPO market evolving?" for bulk actions',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Select "Will the monsoon affect Indian agriculture exports?" for bulk actions',
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Run 2 selected watches now' }),
+    );
+
+    await waitFor(() => {
+      expect(postAgentWatchlistRunMock).toHaveBeenCalledTimes(2);
+    });
+    expect(postAgentWatchlistRunMock).toHaveBeenNthCalledWith(1, 'item-1');
+    expect(postAgentWatchlistRunMock).toHaveBeenNthCalledWith(2, 'item-2');
+    expect(await screen.findByText('Started 2 re-checks.')).toBeInTheDocument();
   });
 
   it('summarizes watches that are already re-checking', async () => {

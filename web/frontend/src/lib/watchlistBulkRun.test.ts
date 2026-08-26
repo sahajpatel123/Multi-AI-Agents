@@ -3,6 +3,7 @@ import { ApiError, type AgentWatchlistItem } from '../api';
 import {
   formatWatchlistBulkRunNotice,
   runActiveWatchlistItems,
+  runSelectedWatchlistItems,
 } from './watchlistBulkRun';
 
 function watch(
@@ -44,6 +45,28 @@ describe('runActiveWatchlistItems', () => {
       failed: [],
     });
     expect(runner).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs exactly the selected watches, including paused ones', async () => {
+    const runner = vi.fn().mockResolvedValue({ task_id: 'task' });
+    const result = await runSelectedWatchlistItems(
+      [
+        watch('a'),
+        watch('paused', { is_active: false }),
+        watch('b'),
+      ],
+      new Set(['paused', 'b']),
+      runner,
+      1,
+    );
+
+    expect(result).toEqual({
+      started: ['paused', 'b'],
+      skipped: [],
+      failed: [],
+    });
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(runner.mock.calls.map(([item]) => item.id)).toEqual(['paused', 'b']);
   });
 
   it('skips watches already re-checking (409)', async () => {

@@ -57,6 +57,7 @@ import {
 import {
   formatWatchlistBulkRunNotice,
   runActiveWatchlistItems,
+  runSelectedWatchlistItems,
 } from '../lib/watchlistBulkRun';
 import {
   WATCHLIST_INTERVALS,
@@ -147,6 +148,8 @@ export function WatchlistPage() {
   const [bulkBusy, setBulkBusy] = useState<'pause_all' | 'resume_all' | null>(null);
   const [runAllNotice, setRunAllNotice] = useState<string | null>(null);
   const [runAllBusy, setRunAllBusy] = useState(false);
+  const [selectedRunNotice, setSelectedRunNotice] = useState<string | null>(null);
+  const [selectedRunBusy, setSelectedRunBusy] = useState(false);
   const [cadenceBusyId, setCadenceBusyId] = useState<string | null>(null);
   const [runNowBusyId, setRunNowBusyId] = useState<string | null>(null);
   const [duplicateBusyId, setDuplicateBusyId] = useState<string | null>(null);
@@ -242,6 +245,7 @@ export function WatchlistPage() {
     runAllNow: (() => void) | null;
   } | null>(null);
   const runAllBusyRef = useRef(false);
+  const selectedRunBusyRef = useRef(false);
   const statsDownloadBusyRef = useRef(false);
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
@@ -539,12 +543,19 @@ export function WatchlistPage() {
   };
 
   const onRunAllNow = async () => {
-    if (runAllBusyRef.current || runAllBusy || activeCount === 0) return;
+    if (
+      runAllBusyRef.current ||
+      runAllBusy ||
+      selectedRunBusyRef.current ||
+      selectedRunBusy ||
+      activeCount === 0
+    ) return;
     // The ref guards against a double click / repeated Shift+R landing
     // before React re-renders with `runAllBusy` true.
     runAllBusyRef.current = true;
     setRunAllBusy(true);
     setRunAllNotice(null);
+    setSelectedRunNotice(null);
     setError(null);
     setBulkNotice(null);
     try {
@@ -567,6 +578,59 @@ export function WatchlistPage() {
     } finally {
       runAllBusyRef.current = false;
       setRunAllBusy(false);
+    }
+  };
+
+  const onRunSelectedNow = async () => {
+    if (
+      selectedRunBusyRef.current ||
+      selectedRunBusy ||
+      runAllBusyRef.current ||
+      runAllBusy ||
+      selectedIds.size === 0
+    ) return;
+
+    const selectedSnapshot = new Set(selectedIds);
+    const selectedItems = items.filter((item) => selectedSnapshot.has(item.id));
+    if (selectedItems.length === 0) {
+      setSelectedIds(new Set());
+      setSelectedRunNotice('No selected watches remain.');
+      return;
+    }
+
+    // The ref closes the gap between the click and React's next render, just
+    // as the all-active action does. A snapshot keeps a checkbox change from
+    // altering the burst that the user already started.
+    selectedRunBusyRef.current = true;
+    setSelectedRunBusy(true);
+    setSelectedRunNotice(null);
+    setRunAllNotice(null);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      const result = await runSelectedWatchlistItems(
+        items,
+        selectedSnapshot,
+        async (item) => {
+          const started = await postAgentWatchlistRun(item.id);
+          setItems((prev) =>
+            prev.map((x) => (x.id === item.id ? started.item : x)),
+          );
+        },
+      );
+      setSelectedRunNotice(formatWatchlistBulkRunNotice(result));
+      if (result.started.length > 0) {
+        void refreshStats();
+      }
+    } catch (e) {
+      setSelectedRunNotice(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not run the selected watches — check your connection and try again.',
+      );
+    } finally {
+      selectedRunBusyRef.current = false;
+      setSelectedRunBusy(false);
     }
   };
 
@@ -625,6 +689,7 @@ export function WatchlistPage() {
       return next;
     });
     setBulkDeleteArmed(false);
+    setSelectedRunNotice(null);
   };
 
   const onBulkDeleteSelected = async () => {
@@ -637,6 +702,7 @@ export function WatchlistPage() {
     setBulkDeleteBusy(true);
     setError(null);
     setBulkNotice(null);
+    setSelectedRunNotice(null);
     try {
       const result = await deleteAgentWatchlistBulk(ids);
       setItems((prev) => prev.filter((x) => !result.deleted_ids.includes(x.id)));
@@ -1585,7 +1651,7 @@ export function WatchlistPage() {
             <button
               type="button"
               onClick={() => void onRunAllNow()}
-              disabled={runAllBusy || activeCount === 0}
+              disabled={runAllBusy || selectedRunBusy || activeCount === 0}
               title={
                 activeCount === 0
                   ? 'No active watches to run'
@@ -1638,33 +1704,49 @@ export function WatchlistPage() {
               {bulkBusy === 'resume_all' ? 'Resuming…' : `Resume paused (${pausedCount})`}
             </button>
             {selectedIds.size > 0 ? (
-              <button
-                type="button"
-                onClick={() => void onBulkDeleteSelected()}
-                disabled={bulkDeleteBusy}
-                title={
-                  bulkDeleteArmed
-                    ? `Confirm removing ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'}`
-                    : `Remove ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'}`
-                }
-                aria-label={
-                  bulkDeleteArmed
-                    ? `Confirm remove ${selectedIds.size} selected watches`
-                    : `Remove ${selectedIds.size} selected watches`
-                }
-                className={[
-                  'watchlist-header-btn',
-                  bulkDeleteArmed ? 'watchlist-header-btn--danger' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                {bulkDeleteBusy
-                  ? 'Removing…'
-                  : bulkDeleteArmed
-                    ? `Remove ${selectedIds.size}?`
-                    : `Remove selected (${selectedIds.size})`}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => void onRunSelectedNow()}
+                  disabled={selectedRunBusy || runAllBusy}
+                  title={
+                    selectedRunBusy
+                      ? 'Starting selected watch re-checks…'
+                      : `Run ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'} now`
+                  }
+                  aria-label={`Run ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'} now`}
+                  className="watchlist-header-btn"
+                >
+                  {selectedRunBusy ? 'Starting…' : `Run selected (${selectedIds.size})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onBulkDeleteSelected()}
+                  disabled={bulkDeleteBusy || selectedRunBusy || runAllBusy}
+                  title={
+                    bulkDeleteArmed
+                      ? `Confirm removing ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'}`
+                      : `Remove ${selectedIds.size} selected watch${selectedIds.size === 1 ? '' : 'es'}`
+                  }
+                  aria-label={
+                    bulkDeleteArmed
+                      ? `Confirm remove ${selectedIds.size} selected watches`
+                      : `Remove ${selectedIds.size} selected watches`
+                  }
+                  className={[
+                    'watchlist-header-btn',
+                    bulkDeleteArmed ? 'watchlist-header-btn--danger' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {bulkDeleteBusy
+                    ? 'Removing…'
+                    : bulkDeleteArmed
+                      ? `Remove ${selectedIds.size}?`
+                      : `Remove selected (${selectedIds.size})`}
+                </button>
+              </>
             ) : null}
             <button
               type="button"
@@ -1869,6 +1951,11 @@ export function WatchlistPage() {
         {runAllNotice ? (
           <p role="status" className="watchlist-page__bulk-notice">
             {runAllNotice}
+          </p>
+        ) : null}
+        {selectedRunNotice ? (
+          <p role="status" className="watchlist-page__bulk-notice">
+            {selectedRunNotice}
           </p>
         ) : null}
 
@@ -2291,11 +2378,12 @@ export function WatchlistPage() {
                     <input
                       type="checkbox"
                       checked={selectedIds.has(item.id)}
+                      disabled={selectedRunBusy}
                       onChange={() => toggleSelected(item.id)}
                       aria-label={
                         selectedIds.has(item.id)
-                          ? `Deselect "${item.question}" for bulk remove`
-                          : `Select "${item.question}" for bulk remove`
+                          ? `Deselect "${item.question}" for bulk actions`
+                          : `Select "${item.question}" for bulk actions`
                       }
                     />
                   </label>

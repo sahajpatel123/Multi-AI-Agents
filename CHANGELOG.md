@@ -79,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Watchlist selections can now be re-checked on demand: select any mix of
+  active and paused watches and use "Run selected" to start only those
+  questions, with the same bounded concurrency, rate-limit handling, and
+  honest per-burst outcome summary as the existing Run all action
 - Completed runs can now be marked for accuracy, not just rated: an
   Accurate / Partially accurate / Inaccurate control sits beside the
   calibration rating on every finished answer — wired to the feedback

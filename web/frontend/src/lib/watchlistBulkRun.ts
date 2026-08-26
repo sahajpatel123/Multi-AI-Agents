@@ -1,4 +1,4 @@
-/** Orchestrates "run all active watches now" for the Agent Watchlist. */
+/** Orchestrates bounded immediate re-check bursts for the Agent Watchlist. */
 
 import { ApiError, type AgentWatchlistItem } from '../api';
 
@@ -24,6 +24,45 @@ const DEFAULT_CONCURRENCY = 3;
 /**
  * Start an immediate re-check for every active watch.
  *
+ * This is the all-active convenience wrapper. Selected runs use the same
+ * limiter-aware worker below so both actions report identical outcomes.
+ */
+export function runActiveWatchlistItems(
+  items: readonly AgentWatchlistItem[],
+  runOne: WatchlistRunOne,
+  concurrency: number = DEFAULT_CONCURRENCY,
+): Promise<WatchlistBulkRunResult> {
+  return runWatchlistItems(
+    items.filter((item) => item.is_active),
+    runOne,
+    concurrency,
+  );
+}
+
+/**
+ * Start an immediate re-check for exactly the selected watches.
+ *
+ * Paused watches are valid here: a manual run advances their latest result
+ * without changing their paused schedule. Keeping selection separate from
+ * the active-only wrapper lets the UI offer targeted runs without silently
+ * dropping a paused item the user deliberately chose.
+ */
+export function runSelectedWatchlistItems(
+  items: readonly AgentWatchlistItem[],
+  selectedIds: ReadonlySet<string>,
+  runOne: WatchlistRunOne,
+  concurrency: number = DEFAULT_CONCURRENCY,
+): Promise<WatchlistBulkRunResult> {
+  return runWatchlistItems(
+    items.filter((item) => selectedIds.has(item.id)),
+    runOne,
+    concurrency,
+  );
+}
+
+/**
+ * Run a bounded burst of candidate watches.
+ *
  * The backend bounds manual runs at 12/hour/user (shared scope), so a burst
  * past the cap must stop instead of hammering the API: once a 429 arrives,
  * queued watches are skipped as `rate_limited` and no further requests fire.
@@ -32,12 +71,12 @@ const DEFAULT_CONCURRENCY = 3;
  * just "this watch cannot run right now" become skips, while unexpected
  * failures are reported verbatim.
  */
-export async function runActiveWatchlistItems(
+async function runWatchlistItems(
   items: readonly AgentWatchlistItem[],
   runOne: WatchlistRunOne,
   concurrency: number = DEFAULT_CONCURRENCY,
 ): Promise<WatchlistBulkRunResult> {
-  const active = items.filter((item) => item.is_active);
+  const candidates = items;
   const started: string[] = [];
   const skipped: Array<{ id: string; reason: WatchlistRunSkipReason }> = [];
   const failed: Array<{ id: string; message: string }> = [];
@@ -50,8 +89,8 @@ export async function runActiveWatchlistItems(
     while (true) {
       if (stopReason) return;
       const index = nextIndex();
-      if (index >= active.length) return;
-      const item = active[index];
+      if (index >= candidates.length) return;
+      const item = candidates[index];
       attempted.add(item.id);
       try {
         await runOne(item);
@@ -74,12 +113,12 @@ export async function runActiveWatchlistItems(
     }
   };
 
-  const workerCount = Math.max(1, Math.min(concurrency, active.length));
+  const workerCount = Math.max(1, Math.min(concurrency, candidates.length));
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
   // Watches that were still queued when the burst was cut off never got a
   // request; report them honestly with the reason that stopped the burst.
-  for (const item of active) {
+  for (const item of candidates) {
     if (!attempted.has(item.id)) {
       skipped.push({ id: item.id, reason: stopReason ?? 'rate_limited' });
     }
