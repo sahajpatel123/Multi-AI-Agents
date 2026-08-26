@@ -28,6 +28,7 @@ interface ScoringAuditModalProps {
 }
 
 type ScoringAuditExportFormat = 'csv' | 'json' | 'md';
+type MarkdownCopyStatus = 'copying' | 'copied';
 
 function agentDisplayName(agentId: string): string {
   const normalized = agentId.replace(/-/g, '_');
@@ -56,7 +57,7 @@ export function ScoringAuditModal({
   const [retryKey, setRetryKey] = useState(0);
   const [exporting, setExporting] = useState<ScoringAuditExportFormat | null>(null);
   const [copyingMarkdown, setCopyingMarkdown] = useState(false);
-  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<MarkdownCopyStatus | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
@@ -80,7 +81,7 @@ export function ScoringAuditModal({
     setNotFound(false);
     setData(null);
     setCopyingMarkdown(false);
-    setCopyNotice(null);
+    setCopyStatus(null);
     setExportError(null);
     copyRunRef.current += 1;
 
@@ -168,7 +169,7 @@ export function ScoringAuditModal({
   const handleExport = useCallback(async (format: ScoringAuditExportFormat) => {
     if (!data || exporting || copyingMarkdown) return;
     setExporting(format);
-    setCopyNotice(null);
+    setCopyStatus(null);
     setExportError(null);
     try {
       const blob = format === 'json'
@@ -200,7 +201,7 @@ export function ScoringAuditModal({
     if (!data || data.audits.length === 0 || exporting || copyingMarkdown) return;
     const runId = ++copyRunRef.current;
     setCopyingMarkdown(true);
-    setCopyNotice(null);
+    setCopyStatus('copying');
     setExportError(null);
     try {
       const blob = await exportScoringAuditMarkdown(sessionId, data.audit_count);
@@ -208,12 +209,14 @@ export function ScoringAuditModal({
       const copied = await copyMarkdownToClipboard(await blob.text());
       if (copyRunRef.current !== runId) return;
       if (copied) {
-        setCopyNotice('Markdown copied to the clipboard.');
+        setCopyStatus('copied');
       } else {
+        setCopyStatus(null);
         setExportError('Could not copy the scoring audit Markdown — try again.');
       }
     } catch (err) {
       if (copyRunRef.current !== runId) return;
+      setCopyStatus(null);
       setExportError(
         err instanceof Error
           ? err.message
@@ -248,7 +251,7 @@ export function ScoringAuditModal({
             type="button"
             className="sa-export"
             onClick={() => void handleExport('csv')}
-            disabled={!data || data.audits.length === 0 || exporting !== null}
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingMarkdown}
             aria-busy={exporting === 'csv' || undefined}
             aria-label="Export scoring audit as CSV"
           >
@@ -258,7 +261,7 @@ export function ScoringAuditModal({
             type="button"
             className="sa-export"
             onClick={() => void handleExport('json')}
-            disabled={!data || data.audits.length === 0 || exporting !== null}
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingMarkdown}
             aria-busy={exporting === 'json' || undefined}
             aria-label="Export scoring audit as JSON"
           >
@@ -280,9 +283,15 @@ export function ScoringAuditModal({
             onClick={() => void handleCopyMarkdown()}
             disabled={!data || data.audits.length === 0 || exporting !== null || copyingMarkdown}
             aria-busy={copyingMarkdown || undefined}
-            aria-label="Copy scoring audit as Markdown"
+            aria-label={
+              copyStatus === 'copied' ? 'Markdown copied' : 'Copy scoring audit as Markdown'
+            }
           >
-            {copyingMarkdown ? 'Copying…' : copyNotice ? 'Copied Markdown' : 'Copy Markdown'}
+            {copyStatus === 'copying'
+              ? 'Copying…'
+              : copyStatus === 'copied'
+                ? 'Copied Markdown'
+                : 'Copy Markdown'}
           </button>
           <button
             ref={closeRef}
@@ -301,9 +310,11 @@ export function ScoringAuditModal({
               {exportError}
             </p>
           ) : null}
-          {copyNotice ? (
-            <p className="sa-copy-notice" role="status">
-              {copyNotice}
+          {copyStatus ? (
+            <p className="sa-copy-notice" role="status" aria-live="polite">
+              {copyStatus === 'copying'
+                ? 'Copying Markdown to the clipboard.'
+                : 'Markdown copied to the clipboard.'}
             </p>
           ) : null}
           {loading ? (

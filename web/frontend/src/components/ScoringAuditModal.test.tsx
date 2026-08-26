@@ -153,6 +153,9 @@ describe('ScoringAuditModal', () => {
     expect(
       screen.getByRole('button', { name: /export scoring audit as markdown/i }),
     ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /copy scoring audit as markdown/i }),
+    ).toBeDisabled();
   });
 
   it('treats a 404 audit_not_found response as an empty state instead of an error', async () => {
@@ -345,6 +348,49 @@ describe('ScoringAuditModal', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not copy/i);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('disables every export while Markdown copy is pending and announces progress', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    const markdown = '# Arena — scoring audit\n';
+    exportScoringAuditMarkdownMock.mockResolvedValue(
+      { text: async () => markdown } as unknown as Blob,
+    );
+    let finishCopy: ((ok: boolean) => void) | undefined;
+    const pendingCopy = new Promise<boolean>((resolve) => {
+      finishCopy = resolve;
+    });
+    copyMarkdownToClipboardMock.mockReturnValue(pendingCopy);
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    const copyButton = screen.getByRole('button', {
+      name: /copy scoring audit as markdown/i,
+    });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => expect(copyMarkdownToClipboardMock).toHaveBeenCalledWith(markdown));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Copying Markdown to the clipboard.',
+    );
+    expect(copyButton).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /export scoring audit as csv/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /export scoring audit as json/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /export scoring audit as markdown/i }),
+    ).toBeDisabled();
+
+    finishCopy?.(true);
+    await waitFor(() => {
+      expect(copyButton).toBeEnabled();
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Markdown copied to the clipboard.',
+      );
+    });
   });
 
   it('surfaces a browser-blocked download instead of claiming success', async () => {
