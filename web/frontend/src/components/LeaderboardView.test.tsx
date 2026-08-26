@@ -3,6 +3,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { SessionTurn } from '../types';
 import { LeaderboardView } from './LeaderboardView';
 
+const downloadCsvFileMock = vi.hoisted(() => vi.fn(() => true));
+
+vi.mock('../lib/downloadTextFile', () => ({
+  downloadCsvFile: downloadCsvFileMock,
+  downloadMarkdownFile: vi.fn(() => true),
+}));
+
 const mockPanel = vi.hoisted(() => [
   { id: 'agent_1', name: 'The Analyst', color: '#5ED8FF' },
   { id: 'agent_2', name: 'The Pragmatist', color: '#D7F64A' },
@@ -58,6 +65,20 @@ const turns: SessionTurn[] = [
 describe('LeaderboardView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('downloads the leaderboard and visible prompts as CSV', () => {
+    render(<LeaderboardView turns={turns} onBack={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download leaderboard as CSV' }));
+
+    expect(downloadCsvFileMock).toHaveBeenCalledTimes(1);
+    expect(downloadCsvFileMock.mock.calls[0][0]).toContain('"record_type"');
+    expect(downloadCsvFileMock.mock.calls[0][0]).toContain('"Should we launch now?"');
+    expect(downloadCsvFileMock.mock.calls[0][1]).toBe('arena-session-leaderboard');
+    expect(screen.getByRole('button', { name: 'Leaderboard CSV downloaded' })).toHaveTextContent(
+      'Downloaded',
+    );
   });
 
   it('filters session prompts as the user searches', () => {

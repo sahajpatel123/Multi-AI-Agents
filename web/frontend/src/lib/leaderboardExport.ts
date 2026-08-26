@@ -77,3 +77,80 @@ export function formatLeaderboardExport(opts: {
   lines.push('_Shared from Arena_');
   return lines.join('\n').trim() + '\n';
 }
+
+/**
+ * Spreadsheet-ready export for the session leaderboard.
+ *
+ * Ranking and prompt rows share one rectangular schema so the file remains
+ * easy to filter after opening in a spreadsheet. User- and model-controlled
+ * text is quoted and neutralized against spreadsheet formula injection.
+ */
+export function formatLeaderboardCsv(opts: {
+  rows: LeaderboardExportRow[];
+  turns?: LeaderboardExportTurn[];
+}): string {
+  const csvFormulaPrefixes: readonly string[] = ['=', '+', '-', '@', '\t', '\r'];
+
+  const csvSafe = (value: string | number | boolean | null | undefined): string => {
+    const raw = value == null ? '' : String(value);
+    const firstSignificant = raw.trimStart()[0] || '';
+    return csvFormulaPrefixes.includes(firstSignificant) ? `'${raw}` : raw;
+  };
+
+  const csvCell = (value: string | number | boolean | null | undefined): string =>
+    `"${csvSafe(value).replace(/"/g, '""')}"`;
+
+  const rows = [...(opts.rows || [])].sort((a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins;
+    return b.percentage - a.percentage;
+  });
+  const headers = [
+    'record_type',
+    'rank',
+    'mind',
+    'wins',
+    'share_percent',
+    'prompt',
+    'winner',
+    'take',
+  ];
+  const lines: string[] = [headers.map(csvCell).join(',')];
+
+  rows.forEach((row, index) => {
+    lines.push(
+      [
+        'ranking',
+        index + 1,
+        (row.name || 'Mind').trim() || 'Mind',
+        Math.max(0, Math.floor(row.wins || 0)),
+        Number.isFinite(row.percentage) ? Number(row.percentage.toFixed(3)) : 0,
+        '',
+        '',
+        '',
+      ]
+        .map(csvCell)
+        .join(','),
+    );
+  });
+
+  (opts.turns || []).forEach((turn) => {
+    lines.push(
+      [
+        'prompt',
+        '',
+        '',
+        '',
+        '',
+        (turn.prompt || '').trim() || '(no prompt)',
+        (turn.winnerName || 'Mind').trim() || 'Mind',
+        (turn.fullTake || turn.oneLiner || '').trim(),
+      ]
+        .map(csvCell)
+        .join(','),
+    );
+  });
+
+  // BOM + CRLF keeps Unicode prompts legible in Excel and follows RFC 4180
+  // conventions used by the other Arena CSV exports.
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
+}

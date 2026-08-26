@@ -10,8 +10,8 @@ import {
 } from '../lib/arenaTakeClipboard';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
-import { formatLeaderboardExport } from '../lib/leaderboardExport';
+import { downloadCsvFile, downloadMarkdownFile } from '../lib/downloadTextFile';
+import { formatLeaderboardCsv, formatLeaderboardExport } from '../lib/leaderboardExport';
 import { ScoringAuditModal } from './ScoringAuditModal';
 import {
   LEADERBOARD_MIND_ALL,
@@ -57,6 +57,7 @@ export function LeaderboardView({
   const [visible, setVisible] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [csvDownloadFeedback, setCsvDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
   const [expandedTurnId, setExpandedTurnId] = useState<string | null>(null);
   const [mindFilter, setMindFilter] = useState<LeaderboardMindFilter>(LEADERBOARD_MIND_ALL);
   const [promptQuery, setPromptQuery] = useState('');
@@ -145,6 +146,13 @@ export function LeaderboardView({
     const t = window.setTimeout(() => setDownloadFeedback('idle'), hold > 0 ? hold : 0);
     return () => window.clearTimeout(t);
   }, [downloadFeedback]);
+
+  useEffect(() => {
+    if (csvDownloadFeedback === 'idle') return;
+    const hold = motionDuration(csvDownloadFeedback === 'done' ? 1600 : 2400);
+    const t = window.setTimeout(() => setCsvDownloadFeedback('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [csvDownloadFeedback]);
 
   // Escape returns to Arena (skip when a modal dialog is open).
   useEffect(() => {
@@ -288,6 +296,24 @@ export function LeaderboardView({
     setDownloadFeedback(ok ? 'done' : 'failed');
   };
 
+  const handleCsvDownload = () => {
+    const csv = formatLeaderboardCsv({
+      rows: leaderboard.map((r) => ({
+        name: r.name,
+        wins: r.wins,
+        percentage: r.percentage,
+      })),
+      turns: filteredTurnSummaries.map((t) => ({
+        prompt: t.prompt,
+        winnerName: t.winnerName,
+        oneLiner: t.oneLiner,
+        fullTake: t.fullTake,
+      })),
+    });
+    const ok = downloadCsvFile(csv, 'arena-session-leaderboard');
+    setCsvDownloadFeedback(ok ? 'done' : 'failed');
+  };
+
   const copyPromptRow = async (t: (typeof turnSummaries)[number]) => {
     const md = formatLeaderboardPromptCopy({
       prompt: t.prompt,
@@ -383,6 +409,36 @@ export function LeaderboardView({
                   ? 'Download failed'
                   : 'Download .md'}
             </button>
+            <button
+              type="button"
+              onClick={handleCsvDownload}
+              disabled={!hasData}
+              className={`lb-ghost-btn${
+                csvDownloadFeedback === 'done'
+                  ? ' lb-ghost-btn--ok'
+                  : csvDownloadFeedback === 'failed'
+                    ? ' lb-ghost-btn--err'
+                    : ''
+              }`}
+              title={
+                hasData
+                  ? 'Download rankings and visible session prompts as CSV'
+                  : 'Prompt first to build rankings'
+              }
+              aria-label={
+                csvDownloadFeedback === 'done'
+                  ? 'Leaderboard CSV downloaded'
+                  : csvDownloadFeedback === 'failed'
+                    ? 'Leaderboard CSV download failed'
+                    : 'Download leaderboard as CSV'
+              }
+            >
+              {csvDownloadFeedback === 'done'
+                ? 'Downloaded'
+                : csvDownloadFeedback === 'failed'
+                  ? 'Download failed'
+                  : 'Download .csv'}
+            </button>
             {sessionId && scoringAuditEnabled ? (
               <button
                 type="button"
@@ -398,13 +454,15 @@ export function LeaderboardView({
         <p className="lb-hero__lede">
           {leaderboardLede}
         </p>
-        {copyFeedback === 'failed' || downloadFeedback === 'failed' || rowCopyStatus === 'failed' ? (
+        {copyFeedback === 'failed' || downloadFeedback === 'failed' || csvDownloadFeedback === 'failed' || rowCopyStatus === 'failed' ? (
           <p role="alert" className="lb-alert">
             Could not{' '}
             {copyFeedback === 'failed'
               ? 'copy session'
               : downloadFeedback === 'failed'
-                ? 'download'
+                ? 'download markdown'
+                : csvDownloadFeedback === 'failed'
+                  ? 'download CSV'
                 : 'copy prompt'}{' '}
             — try again or select text manually.
           </p>
