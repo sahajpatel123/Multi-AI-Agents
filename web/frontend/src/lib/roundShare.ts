@@ -61,31 +61,48 @@ function decodeScore(raw: string): number | undefined {
  * shortened (by take length, take count, then prompt length) when the
  * encoded URL would exceed the share budget — multi-byte text expands
  * several times over once URL-encoded, so raw character caps alone are not
- * enough.
+ * enough. When takes are dropped, an explicitly selected winner is retained
+ * whenever its answer can still fit in the compacted link.
  */
 export function buildRoundShareUrl(input: RoundShareInput): string {
   const origin = (input.origin || (typeof window !== 'undefined' ? window.location.origin : '')).replace(
     /\/$/,
     '',
   );
+  const winnerAgentId = clip(input.winnerAgentId || '', ROUND_SHARE_MAX_AGENT_LEN);
 
   const build = (promptLen: number, takeLen: number, maxTakes: number): string => {
     const params = new URLSearchParams();
     params.set('round', '1');
     params.set('prompt', clip(input.prompt, promptLen));
-    if (input.winnerAgentId) {
-      params.set('winner', clip(input.winnerAgentId, ROUND_SHARE_MAX_AGENT_LEN));
+    if (winnerAgentId) {
+      params.set('winner', winnerAgentId);
     }
-    input.takes
+    const candidates = input.takes
       .filter(
         (take) =>
           clip(take.agentId, ROUND_SHARE_MAX_AGENT_LEN) ||
           clip(take.oneLiner, takeLen),
-      )
-      .slice(0, maxTakes)
-      .forEach((take, index) => {
-        params.set(`t${index}`, encodeTake(take, takeLen));
-      });
+      );
+    const selected = candidates.slice(0, maxTakes);
+    if (winnerAgentId && maxTakes > 0) {
+      const winner = candidates.find(
+        (take) =>
+          clip(take.agentId, ROUND_SHARE_MAX_AGENT_LEN) === winnerAgentId &&
+          Boolean(clip(take.oneLiner, takeLen)),
+      );
+      const selectedWinner = selected.some(
+        (take) =>
+          clip(take.agentId, ROUND_SHARE_MAX_AGENT_LEN) === winnerAgentId &&
+          Boolean(clip(take.oneLiner, takeLen)),
+      );
+      if (winner && !selectedWinner) {
+        selected[selected.length - 1] = winner;
+      }
+    }
+    selected.forEach((take, index) => {
+      params.set(`t${index}`, encodeTake(take, takeLen));
+    });
     return `${origin}/share?${params.toString()}`;
   };
 

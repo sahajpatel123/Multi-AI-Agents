@@ -94,6 +94,23 @@ describe('buildRoundShareUrl', () => {
     expect(parsed).not.toBeNull();
     expect(parsed?.takes.length).toBeGreaterThan(0);
   });
+
+  it('retains the selected winner when compacting an oversized round', () => {
+    const url = buildRoundShareUrl({
+      origin: 'https://arena.app',
+      prompt: 'p'.repeat(250),
+      winnerAgentId: 'a3',
+      takes: Array.from({ length: 4 }, (_, i) => ({
+        agentId: `a${i}`,
+        oneLiner: '🙂'.repeat(120),
+        score: 90,
+      })),
+    });
+    const parsed = parseRoundShareUrl(new URL(url).searchParams);
+    expect(url.length).toBeLessThanOrEqual(ROUND_SHARE_MAX_URL_LEN);
+    expect(parsed?.winnerAgentId).toBe('a3');
+    expect(parsed?.takes.some((take) => take.agentId === 'a3' && take.oneLiner)).toBe(true);
+  });
 });
 
 describe('parseRoundShareUrl', () => {
