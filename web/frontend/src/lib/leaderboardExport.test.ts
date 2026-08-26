@@ -99,4 +99,18 @@ describe('formatLeaderboardCsv', () => {
     expect(csv).toContain('"ranking","1","\'=HYPERLINK(""https://evil.test"")","1","100"');
     expect(csv).toContain('"prompt","","","","","\'=1+1","The ""Analyst""","First line\nSecond line"');
   });
+
+  it('keeps malformed leaderboard metrics finite and within display bounds', () => {
+    const csv = formatLeaderboardCsv({
+      rows: [
+        { name: 'Overconfident', wins: Infinity, percentage: 125 },
+        { name: 'Broken', wins: NaN, percentage: -10 },
+      ],
+    });
+
+    expect(csv).not.toContain('Infinity');
+    expect(csv).not.toContain('NaN');
+    expect(csv).toContain('"ranking","1","Overconfident","0","100"');
+    expect(csv).toContain('"ranking","2","Broken","0","0"');
+  });
 });

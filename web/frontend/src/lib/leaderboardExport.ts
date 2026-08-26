@@ -14,6 +14,26 @@ export type LeaderboardExportTurn = {
   fullTake?: string;
 };
 
+const CSV_FORMULA_PREFIXES: readonly string[] = ['=', '+', '-', '@', '\t', '\r'];
+
+function normalizeLeaderboardWins(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function normalizeLeaderboardPercentage(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Number(value.toFixed(3))));
+}
+
+function compareLeaderboardRows(a: LeaderboardExportRow, b: LeaderboardExportRow): number {
+  const winsDifference = normalizeLeaderboardWins(b.wins) - normalizeLeaderboardWins(a.wins);
+  if (winsDifference !== 0) return winsDifference;
+  return (
+    normalizeLeaderboardPercentage(b.percentage) -
+    normalizeLeaderboardPercentage(a.percentage)
+  );
+}
+
 export function formatLeaderboardExport(opts: {
   rows: LeaderboardExportRow[];
   totalPrompts: number;
@@ -89,21 +109,16 @@ export function formatLeaderboardCsv(opts: {
   rows: LeaderboardExportRow[];
   turns?: LeaderboardExportTurn[];
 }): string {
-  const csvFormulaPrefixes: readonly string[] = ['=', '+', '-', '@', '\t', '\r'];
-
   const csvSafe = (value: string | number | boolean | null | undefined): string => {
     const raw = value == null ? '' : String(value);
     const firstSignificant = raw.trimStart()[0] || '';
-    return csvFormulaPrefixes.includes(firstSignificant) ? `'${raw}` : raw;
+    return CSV_FORMULA_PREFIXES.includes(firstSignificant) ? `'${raw}` : raw;
   };
 
   const csvCell = (value: string | number | boolean | null | undefined): string =>
     `"${csvSafe(value).replace(/"/g, '""')}"`;
 
-  const rows = [...(opts.rows || [])].sort((a, b) => {
-    if (b.wins !== a.wins) return b.wins - a.wins;
-    return b.percentage - a.percentage;
-  });
+  const rows = [...(opts.rows || [])].sort(compareLeaderboardRows);
   const headers = [
     'record_type',
     'rank',
@@ -122,8 +137,8 @@ export function formatLeaderboardCsv(opts: {
         'ranking',
         index + 1,
         (row.name || 'Mind').trim() || 'Mind',
-        Math.max(0, Math.floor(row.wins || 0)),
-        Number.isFinite(row.percentage) ? Number(row.percentage.toFixed(3)) : 0,
+        normalizeLeaderboardWins(row.wins),
+        normalizeLeaderboardPercentage(row.percentage),
         '',
         '',
         '',
