@@ -231,6 +231,36 @@ describe('SharePage', () => {
     });
   });
 
+  it('prevents duplicate structured JSON copy requests while clipboard is pending', async () => {
+    let finishCopy: ((ok: boolean) => void) | undefined;
+    const pendingCopy = new Promise<boolean>((resolve) => {
+      finishCopy = resolve;
+    });
+    copyJsonToClipboardMock.mockImplementationOnce(() => pendingCopy);
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    const button = screen.getByRole('button', { name: /copy \.json/i });
+    fireEvent.click(button);
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('Copying…');
+    fireEvent.click(button);
+    expect(copyJsonToClipboardMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishCopy?.(true);
+      await pendingCopy;
+    });
+
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveTextContent('JSON copied');
+  });
+
   it('surfaces a structured JSON copy failure', async () => {
     copyJsonToClipboardMock.mockResolvedValueOnce(false);
     const qs =

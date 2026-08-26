@@ -92,6 +92,7 @@ export function SharePage() {
   const [copiedRoundTakeIndex, setCopiedRoundTakeIndex] = useState<number | null>(null);
   const [copyingRoundTakeIndex, setCopyingRoundTakeIndex] = useState<number | null>(null);
   const [copyingWinner, setCopyingWinner] = useState(false);
+  const [copyingJson, setCopyingJson] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
@@ -102,6 +103,7 @@ export function SharePage() {
   const copyRoundTakeRequestRef = useRef(0);
   const copyWinnerRequestRef = useRef(0);
   const copyJsonRequestRef = useRef(0);
+  const copyJsonPendingRef = useRef(false);
   const copyRoundTakePendingRef = useRef(false);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
@@ -167,6 +169,8 @@ export function SharePage() {
     setCopiedRoundTakeIndex(null);
     setCopyingRoundTakeIndex(null);
     setCopyingWinner(false);
+    setCopyingJson(false);
+    copyJsonPendingRef.current = false;
     setCopyError(null);
     setPromptExpanded(false);
     setMarkdownDownloadStatus('idle');
@@ -416,8 +420,11 @@ export function SharePage() {
   };
 
   const handleCopyJson = async () => {
+    if (copyJsonPendingRef.current) return;
+    copyJsonPendingRef.current = true;
     const requestId = ++copyJsonRequestRef.current;
     setCopied(null);
+    setCopyingJson(true);
     setCopyError(null);
     const shareUrl = pageUrl || (typeof window !== 'undefined' ? window.location.href : '');
     const payload = isRound && round
@@ -444,6 +451,11 @@ export function SharePage() {
     } catch {
       if (copyJsonRequestRef.current !== requestId) return;
       setCopyError('Could not copy JSON — try Download .json instead.');
+    } finally {
+      if (copyJsonRequestRef.current === requestId) {
+        copyJsonPendingRef.current = false;
+        setCopyingJson(false);
+      }
     }
   };
 
@@ -766,12 +778,21 @@ export function SharePage() {
                   <button
                     type="button"
                     className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'json' ? ' is-success' : ''}`}
+                    disabled={copyingJson}
+                    aria-busy={copyingJson || undefined}
+                    aria-label={
+                      copyingJson
+                        ? 'Copying JSON'
+                        : copied === 'json'
+                          ? 'JSON copied'
+                          : 'Copy .json'
+                    }
                     title="Copy the structured share payload as JSON"
                     onClick={() => {
                       void handleCopyJson();
                     }}
                   >
-                    {copied === 'json' ? 'JSON copied' : 'Copy .json'}
+                    {copyingJson ? 'Copying…' : copied === 'json' ? 'JSON copied' : 'Copy .json'}
                   </button>
                   {isRound ? (
                     <button
