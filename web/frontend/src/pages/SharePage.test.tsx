@@ -179,6 +179,44 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /downloaded/i })).toHaveTextContent('Downloaded');
   });
 
+  it('keeps the CSV share URL current when the shared round changes in place', () => {
+    const currentSearch =
+      '?round=1&prompt=' +
+      encodeURIComponent('First question') +
+      '&t0=' +
+      encodeURIComponent('analyst|84|First answer.');
+    const nextSearch =
+      '?round=1&prompt=' +
+      encodeURIComponent('Second question') +
+      '&winner=philosopher' +
+      '&t0=' +
+      encodeURIComponent('philosopher|91|Second answer.');
+
+    render(
+      <MemoryRouter initialEntries={[`/share${currentSearch}`]}>
+        <Routes>
+          <Route
+            path="/share"
+            element={
+              <>
+                <SharePage />
+                <ChangeShare search={nextSearch} />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /change share/i }));
+    fireEvent.click(screen.getByRole('button', { name: /download \.csv/i }));
+
+    const [content] = downloadCsvFileMock.mock.calls[0] as [string, string];
+    expect(content).toContain('"Second question","philosopher","The Philosopher","91","yes"');
+    expect(content).toContain('"http://localhost:3000/share?round=1&prompt=Second+question');
+    expect(content).not.toContain('First+question');
+  });
+
   it('surfaces a shared-round CSV download failure', () => {
     downloadCsvFileMock.mockReturnValueOnce(false);
     const qs =

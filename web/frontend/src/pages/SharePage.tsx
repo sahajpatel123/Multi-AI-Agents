@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { EmptyState } from '../components/EmptyState';
@@ -83,6 +83,7 @@ function resolveAgent(agentId: string): { name: string; color: string; oneLiner:
  */
 export function SharePage() {
   const [params] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [copied, setCopied] = useState<
@@ -145,8 +146,8 @@ export function SharePage() {
 
   const pageUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
-    return window.location.href;
-  }, []);
+    return `${window.location.origin}${location.pathname}${location.search}${location.hash}`;
+  }, [location.hash, location.pathname, location.search]);
 
   useEffect(() => {
     setNativeShareAvailable(canUseNativeShare());
