@@ -175,6 +175,33 @@ describe('SharePage', () => {
     expect(filename).toBe('arena-share-round');
   });
 
+  it('restarts HTML download feedback for a repeated download', () => {
+    vi.useFakeTimers();
+    try {
+      const qs =
+        '?agent=agent_1&prompt=' +
+        encodeURIComponent('Should I ship today?') +
+        '&response=' +
+        encodeURIComponent('Ship the smallest honest slice.');
+      renderShare(qs);
+
+      const button = screen.getByRole('button', { name: /download \.html/i });
+      fireEvent.click(button);
+      expect(button).toHaveTextContent('Downloaded');
+
+      act(() => vi.advanceTimersByTime(1500));
+      fireEvent.click(button);
+      act(() => vi.advanceTimersByTime(1000));
+      expect(button).toHaveTextContent('Downloaded');
+
+      act(() => vi.advanceTimersByTime(1000));
+      expect(button).toHaveTextContent('Download .html');
+      expect(downloadHtmlFileMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('downloads a structured JSON payload for a single shared take', () => {
     const qs =
       '?agent=agent_1&prompt=' +

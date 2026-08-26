@@ -111,6 +111,7 @@ export function SharePage() {
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<DownloadStatus>('idle');
   const [csvDownloadStatus, setCsvDownloadStatus] = useState<DownloadStatus>('idle');
   const [htmlDownloadStatus, setHtmlDownloadStatus] = useState<DownloadStatus>('idle');
+  const [htmlDownloadFeedbackKey, setHtmlDownloadFeedbackKey] = useState(0);
   const [promptExpanded, setPromptExpanded] = useState(false);
   const copyPromptRequestRef = useRef(0);
   const copyRoundTakeRequestRef = useRef(0);
@@ -218,6 +219,13 @@ export function SharePage() {
     const t = window.setTimeout(() => setCopiedRoundTakeIndex(null), 1600);
     return () => window.clearTimeout(t);
   }, [copiedRoundTakeIndex]);
+
+  useEffect(() => {
+    if (htmlDownloadStatus === 'idle') return;
+    const hold = htmlDownloadStatus === 'failed' ? 2800 : 2000;
+    const t = window.setTimeout(() => setHtmlDownloadStatus('idle'), hold);
+    return () => window.clearTimeout(t);
+  }, [htmlDownloadFeedbackKey, htmlDownloadStatus]);
 
   const goTry = () => {
     // Hand the shared question to the next Arena mount so "Try this in
@@ -450,6 +458,9 @@ export function SharePage() {
 
   const handleDownloadHtml = () => {
     setCopyError(null);
+    // A repeated synchronous download can keep the same status value. Bump a
+    // separate key so its feedback window always starts from this attempt.
+    setHtmlDownloadFeedbackKey((current) => current + 1);
     const shareUrl = pageUrl || (typeof window !== 'undefined' ? window.location.href : '');
     const html = isRound && round
       ? formatArenaShareHtml({
@@ -469,11 +480,9 @@ export function SharePage() {
     const ok = downloadHtmlFile(html, stem);
     if (ok) {
       setHtmlDownloadStatus('done');
-      window.setTimeout(() => setHtmlDownloadStatus('idle'), 2000);
     } else {
       setHtmlDownloadStatus('failed');
       setCopyError('Could not download HTML — try Download .md instead.');
-      window.setTimeout(() => setHtmlDownloadStatus('idle'), 2800);
     }
   };
 
