@@ -7,7 +7,7 @@ import {
   fetchScoringAudit,
 } from '../api';
 import { downloadBlobFile, sanitizeDownloadFilename } from '../lib/downloadTextFile';
-import { copyMarkdownToClipboard } from '../lib/clipboard';
+import { copyCsvToClipboard, copyMarkdownToClipboard } from '../lib/clipboard';
 import {
   AGENTS,
   type ScoringAuditConfidence,
@@ -28,7 +28,8 @@ interface ScoringAuditModalProps {
 }
 
 type ScoringAuditExportFormat = 'csv' | 'json' | 'md';
-type MarkdownCopyStatus = 'copying' | 'copied';
+type ScoringAuditCopyFormat = 'csv' | 'markdown';
+type CopyStatus = { format: ScoringAuditCopyFormat; state: 'copying' | 'copied' };
 
 function agentDisplayName(agentId: string): string {
   const normalized = agentId.replace(/-/g, '_');
@@ -56,8 +57,8 @@ export function ScoringAuditModal({
   const [notFound, setNotFound] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const [exporting, setExporting] = useState<ScoringAuditExportFormat | null>(null);
-  const [copyingMarkdown, setCopyingMarkdown] = useState(false);
-  const [copyStatus, setCopyStatus] = useState<MarkdownCopyStatus | null>(null);
+  const [copyingFormat, setCopyingFormat] = useState<ScoringAuditCopyFormat | null>(null);
+  const [copyStatus, setCopyStatus] = useState<CopyStatus | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
@@ -80,7 +81,7 @@ export function ScoringAuditModal({
     setError(null);
     setNotFound(false);
     setData(null);
-    setCopyingMarkdown(false);
+    setCopyingFormat(null);
     setCopyStatus(null);
     setExportError(null);
     copyRunRef.current += 1;
@@ -167,7 +168,7 @@ export function ScoringAuditModal({
   );
 
   const handleExport = useCallback(async (format: ScoringAuditExportFormat) => {
-    if (!data || exporting || copyingMarkdown) return;
+    if (!data || exporting || copyingFormat) return;
     setExporting(format);
     setCopyStatus(null);
     setExportError(null);
@@ -195,13 +196,13 @@ export function ScoringAuditModal({
     } finally {
       setExporting(null);
     }
-  }, [copyingMarkdown, data, exporting, sessionId]);
+  }, [copyingFormat, data, exporting, sessionId]);
 
   const handleCopyMarkdown = useCallback(async () => {
-    if (!data || data.audits.length === 0 || exporting || copyingMarkdown) return;
+    if (!data || data.audits.length === 0 || exporting || copyingFormat) return;
     const runId = ++copyRunRef.current;
-    setCopyingMarkdown(true);
-    setCopyStatus('copying');
+    setCopyingFormat('markdown');
+    setCopyStatus({ format: 'markdown', state: 'copying' });
     setExportError(null);
     try {
       const blob = await exportScoringAuditMarkdown(sessionId, data.audit_count);
@@ -209,7 +210,7 @@ export function ScoringAuditModal({
       const copied = await copyMarkdownToClipboard(await blob.text());
       if (copyRunRef.current !== runId) return;
       if (copied) {
-        setCopyStatus('copied');
+        setCopyStatus({ format: 'markdown', state: 'copied' });
       } else {
         setCopyStatus(null);
         setExportError('Could not copy the scoring audit Markdown — try again.');
@@ -223,9 +224,55 @@ export function ScoringAuditModal({
           : 'Could not copy the scoring audit Markdown — try again.',
       );
     } finally {
-      if (copyRunRef.current === runId) setCopyingMarkdown(false);
+      if (copyRunRef.current === runId) setCopyingFormat(null);
     }
-  }, [copyingMarkdown, data, exporting, sessionId]);
+  }, [copyingFormat, data, exporting, sessionId]);
+
+  const handleCopyCsv = useCallback(async () => {
+    if (!data || data.audits.length === 0 || exporting || copyingFormat) return;
+    const runId = ++copyRunRef.current;
+    setCopyingFormat('csv');
+    setCopyStatus({ format: 'csv', state: 'copying' });
+    setExportError(null);
+    try {
+      const blob = await exportScoringAuditCsv(sessionId, data.audit_count);
+      if (copyRunRef.current !== runId) return;
+      const copied = await copyCsvToClipboard(await blob.text());
+      if (copyRunRef.current !== runId) return;
+      if (copied) {
+        setCopyStatus({ format: 'csv', state: 'copied' });
+      } else {
+        setCopyStatus(null);
+        setExportError('Could not copy the scoring audit CSV — try again.');
+      }
+    } catch (err) {
+      if (copyRunRef.current !== runId) return;
+      setCopyStatus(null);
+      setExportError(
+        err instanceof Error
+          ? err.message
+          : 'Could not copy the scoring audit CSV — try again.',
+      );
+    } finally {
+      if (copyRunRef.current === runId) setCopyingFormat(null);
+    }
+  }, [copyingFormat, data, exporting, sessionId]);
+
+  const copyLabel = (format: ScoringAuditCopyFormat): string => {
+    const label = format === 'csv' ? 'CSV' : 'Markdown';
+    if (copyStatus?.format === format && copyStatus.state === 'copied') {
+      return `Copied ${label}`;
+    }
+    if (copyingFormat === format) return 'Copying…';
+    return `Copy ${label}`;
+  };
+
+  const copyAriaLabel = (format: ScoringAuditCopyFormat): string => {
+    const label = format === 'csv' ? 'CSV' : 'Markdown';
+    return copyStatus?.format === format && copyStatus.state === 'copied'
+      ? `${label} copied`
+      : `Copy scoring audit as ${label}`;
+  };
 
   return (
     <div
@@ -251,7 +298,7 @@ export function ScoringAuditModal({
             type="button"
             className="sa-export"
             onClick={() => void handleExport('csv')}
-            disabled={!data || data.audits.length === 0 || exporting !== null || copyingMarkdown}
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingFormat !== null}
             aria-busy={exporting === 'csv' || undefined}
             aria-label="Export scoring audit as CSV"
           >
@@ -261,7 +308,7 @@ export function ScoringAuditModal({
             type="button"
             className="sa-export"
             onClick={() => void handleExport('json')}
-            disabled={!data || data.audits.length === 0 || exporting !== null || copyingMarkdown}
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingFormat !== null}
             aria-busy={exporting === 'json' || undefined}
             aria-label="Export scoring audit as JSON"
           >
@@ -271,7 +318,7 @@ export function ScoringAuditModal({
             type="button"
             className="sa-export"
             onClick={() => void handleExport('md')}
-            disabled={!data || data.audits.length === 0 || exporting !== null || copyingMarkdown}
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingFormat !== null}
             aria-busy={exporting === 'md' || undefined}
             aria-label="Export scoring audit as Markdown"
           >
@@ -281,17 +328,21 @@ export function ScoringAuditModal({
             type="button"
             className="sa-export sa-copy"
             onClick={() => void handleCopyMarkdown()}
-            disabled={!data || data.audits.length === 0 || exporting !== null || copyingMarkdown}
-            aria-busy={copyingMarkdown || undefined}
-            aria-label={
-              copyStatus === 'copied' ? 'Markdown copied' : 'Copy scoring audit as Markdown'
-            }
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingFormat !== null}
+            aria-busy={copyingFormat === 'markdown' || undefined}
+            aria-label={copyAriaLabel('markdown')}
           >
-            {copyStatus === 'copying'
-              ? 'Copying…'
-              : copyStatus === 'copied'
-                ? 'Copied Markdown'
-                : 'Copy Markdown'}
+            {copyLabel('markdown')}
+          </button>
+          <button
+            type="button"
+            className="sa-export sa-copy"
+            onClick={() => void handleCopyCsv()}
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingFormat !== null}
+            aria-busy={copyingFormat === 'csv' || undefined}
+            aria-label={copyAriaLabel('csv')}
+          >
+            {copyLabel('csv')}
           </button>
           <button
             ref={closeRef}
@@ -312,9 +363,9 @@ export function ScoringAuditModal({
           ) : null}
           {copyStatus ? (
             <p className="sa-copy-notice" role="status" aria-live="polite">
-              {copyStatus === 'copying'
-                ? 'Copying Markdown to the clipboard.'
-                : 'Markdown copied to the clipboard.'}
+              {copyStatus.state === 'copying'
+                ? `Copying ${copyStatus.format === 'csv' ? 'CSV' : 'Markdown'} to the clipboard.`
+                : `${copyStatus.format === 'csv' ? 'CSV' : 'Markdown'} copied to the clipboard.`}
             </p>
           ) : null}
           {loading ? (

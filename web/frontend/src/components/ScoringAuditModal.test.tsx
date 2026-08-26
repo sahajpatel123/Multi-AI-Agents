@@ -9,7 +9,7 @@ import {
 } from '../api';
 import type { ScoringAuditResponse } from '../types';
 import { downloadBlobFile } from '../lib/downloadTextFile';
-import { copyMarkdownToClipboard } from '../lib/clipboard';
+import { copyCsvToClipboard, copyMarkdownToClipboard } from '../lib/clipboard';
 import { ScoringAuditModal } from './ScoringAuditModal';
 
 vi.mock('../api', async () => {
@@ -35,6 +35,7 @@ vi.mock('../lib/downloadTextFile', async () => {
 });
 
 vi.mock('../lib/clipboard', () => ({
+  copyCsvToClipboard: vi.fn(),
   copyMarkdownToClipboard: vi.fn(),
 }));
 
@@ -43,6 +44,7 @@ const exportScoringAuditCsvMock = vi.mocked(exportScoringAuditCsv);
 const exportScoringAuditJsonMock = vi.mocked(exportScoringAuditJson);
 const exportScoringAuditMarkdownMock = vi.mocked(exportScoringAuditMarkdown);
 const downloadBlobFileMock = vi.mocked(downloadBlobFile);
+const copyCsvToClipboardMock = vi.mocked(copyCsvToClipboard);
 const copyMarkdownToClipboardMock = vi.mocked(copyMarkdownToClipboard);
 const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
 
@@ -98,7 +100,9 @@ describe('ScoringAuditModal', () => {
     exportScoringAuditJsonMock.mockReset();
     exportScoringAuditMarkdownMock.mockReset();
     downloadBlobFileMock.mockReset();
+    copyCsvToClipboardMock.mockReset();
     copyMarkdownToClipboardMock.mockReset();
+    copyCsvToClipboardMock.mockResolvedValue(true);
     copyMarkdownToClipboardMock.mockResolvedValue(true);
   });
 
@@ -155,6 +159,9 @@ describe('ScoringAuditModal', () => {
     ).toBeDisabled();
     expect(
       screen.getByRole('button', { name: /copy scoring audit as markdown/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /copy scoring audit as csv/i }),
     ).toBeDisabled();
   });
 
@@ -348,6 +355,94 @@ describe('ScoringAuditModal', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not copy/i);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('copies the visible rounds as spreadsheet-aware CSV without downloading a file', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    const csv = 'round,prompt_snippet\r\n1,Should we launch?\r\n';
+    exportScoringAuditCsvMock.mockResolvedValue(
+      { text: async () => csv } as unknown as Blob,
+    );
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as csv/i }),
+    );
+
+    await waitFor(() => {
+      expect(exportScoringAuditCsvMock).toHaveBeenCalledWith('session-1', 1);
+      expect(copyCsvToClipboardMock).toHaveBeenCalledWith(csv);
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'CSV copied to the clipboard.',
+    );
+    expect(downloadBlobFileMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a CSV clipboard failure instead of claiming it was copied', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    copyCsvToClipboardMock.mockResolvedValue(false);
+    exportScoringAuditCsvMock.mockResolvedValue(
+      { text: async () => 'round,prompt_snippet\r\n' } as unknown as Blob,
+    );
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as csv/i }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not copy the scoring audit CSV',
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('disables every export while CSV copy is pending and announces progress', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    const csv = 'round,prompt_snippet\r\n1,Should we launch?\r\n';
+    exportScoringAuditCsvMock.mockResolvedValue(
+      { text: async () => csv } as unknown as Blob,
+    );
+    let finishCopy: ((ok: boolean) => void) | undefined;
+    const pendingCopy = new Promise<boolean>((resolve) => {
+      finishCopy = resolve;
+    });
+    copyCsvToClipboardMock.mockReturnValue(pendingCopy);
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    const copyButton = screen.getByRole('button', {
+      name: /copy scoring audit as csv/i,
+    });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => expect(copyCsvToClipboardMock).toHaveBeenCalledWith(csv));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Copying CSV to the clipboard.',
+    );
+    expect(copyButton).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /export scoring audit as csv/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /export scoring audit as json/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /export scoring audit as markdown/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /copy scoring audit as markdown/i }),
+    ).toBeDisabled();
+
+    finishCopy?.(true);
+    await waitFor(() => {
+      expect(copyButton).toBeEnabled();
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'CSV copied to the clipboard.',
+      );
+    });
   });
 
   it('disables every export while Markdown copy is pending and announces progress', async () => {

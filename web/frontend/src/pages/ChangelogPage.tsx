@@ -123,6 +123,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Pro scoring audit: open the session leaderboard and inspect how the judge scored every mind per round (scores, criteria, confidence, fallback flags)',
       '[NEW] Pro scoring audit: download the visible rounds as a human-readable Markdown report for notes, docs, and issue threads',
       '[NEW] Pro scoring audit: copy the visible Markdown report directly to the clipboard for notes, docs, and issue threads',
+      '[NEW] Pro scoring audit: copy the visible rounds as spreadsheet-aware CSV directly to the clipboard',
       '[IMPROVED] Scoring audit modal: empty sessions show a clear empty state instead of a load error, with a focus trap, background scroll lock, and focus restore',
       '[NEW] Room board: Copy question / Copy answer on each task card',
       '[NEW] Room board confidence filter chips + per-card confidence badge',
