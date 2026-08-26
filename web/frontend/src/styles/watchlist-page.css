@@ -290,6 +290,27 @@
   flex-wrap: wrap;
 }
 
+.watchlist-page__select-visible {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #8c7355;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.watchlist-page__select-visible input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #b85c38;
+}
+
+.watchlist-page__select-visible input:disabled {
+  cursor: not-allowed;
+}
+
 .watchlist-page__sort-select {
   font-size: 12px;
   font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;

@@ -331,6 +331,39 @@ describe('WatchlistPage', () => {
     ).toHaveAttribute('aria-label', 'Sort watchlist');
   });
 
+  it('selects and clears only the watches currently visible', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Select all 2 visible watches' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Select all 2 visible watches' }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Run 2 selected watches now' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Active' }));
+    expect(
+      await screen.findByRole('checkbox', { name: 'Deselect all 1 visible watches' }),
+    ).toBeChecked();
+
+    // Clearing the filtered view must leave the paused selection intact so
+    // bulk actions remain predictable when the filter changes.
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Deselect all 1 visible watches' }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Run 1 selected watch now' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'Select "How is the Indian IPO market evolving?" for bulk actions',
+      }),
+    ).not.toBeChecked();
+  });
+
   it('renders the item card with BEM classes', async () => {
     const { container } = renderPage();
     await waitFor(() => {

@@ -83,6 +83,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Watchlist bulk actions now have a "Select visible" control that selects or
+  clears only the watches in the current filtered view, preserving selections
+  outside that view as filters change
 - Watchlist selections can now be re-checked on demand: select any mix of
   active and paused watches and use "Run selected" to start only those
   questions, with the same bounded concurrency, rate-limit handling, and

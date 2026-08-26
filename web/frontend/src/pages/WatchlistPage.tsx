@@ -231,6 +231,7 @@ export function WatchlistPage() {
   const loadMoreEpochRef = useRef(0);
   const errorRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const selectVisibleRef = useRef<HTMLInputElement | null>(null);
   const editQuestionRef = useRef<HTMLTextAreaElement | null>(null);
   const editDialogRef = useRef<HTMLDivElement | null>(null);
   const editTriggerRef = useRef<HTMLElement | null>(null);
@@ -882,6 +883,33 @@ export function WatchlistPage() {
     expertiseFilter,
     domainFilter,
   ]);
+
+  const allVisibleSelected =
+    filteredItems.length > 0 && filteredItems.every((item) => selectedIds.has(item.id));
+  const someVisibleSelected = filteredItems.some((item) => selectedIds.has(item.id));
+
+  useEffect(() => {
+    if (!selectVisibleRef.current) return;
+    selectVisibleRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+  }, [allVisibleSelected, someVisibleSelected]);
+
+  const toggleVisibleSelection = () => {
+    if (manualRunBusyRef.current || filteredItems.length === 0) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const clearVisible = filteredItems.every((item) => next.has(item.id));
+      filteredItems.forEach((item) => {
+        if (clearVisible) {
+          next.delete(item.id);
+        } else {
+          next.add(item.id);
+        }
+      });
+      return next;
+    });
+    setBulkDeleteArmed(false);
+    setSelectedRunNotice(null);
+  };
 
   const scoreFilterUseful = useMemo(
     () =>
@@ -2086,6 +2114,28 @@ export function WatchlistPage() {
                   })}
                 </div>
                 <div className="watchlist-page__filters-controls">
+                  {filteredItems.length > 0 ? (
+                    <label className="watchlist-page__select-visible">
+                      <input
+                        ref={selectVisibleRef}
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        disabled={manualRunBusy}
+                        onChange={toggleVisibleSelection}
+                        aria-label={
+                          allVisibleSelected
+                            ? `Deselect all ${filteredItems.length} visible watches`
+                            : `Select all ${filteredItems.length} visible watches`
+                        }
+                        title={
+                          allVisibleSelected
+                            ? 'Clear selection for the visible watches'
+                            : 'Select all watches currently visible'
+                        }
+                      />
+                      <span>{allVisibleSelected ? 'Clear visible' : 'Select visible'}</span>
+                    </label>
+                  ) : null}
                   <select
                     value={listSort}
                     onChange={(e) => setListSort(e.target.value as WatchlistSort)}
