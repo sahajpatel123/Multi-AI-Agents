@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LEADERBOARD_MIND_ALL,
   filterLeaderboardTurnsByMind,
+  filterLeaderboardTurnsByQuery,
   formatLeaderboardPromptCopy,
   leaderboardMindFilterLabel,
   leaderboardMindFilterUseful,
@@ -30,6 +31,41 @@ describe('filterLeaderboardTurnsByMind', () => {
     const copy = TURNS.map((t) => ({ ...t }));
     filterLeaderboardTurnsByMind(TURNS, 'agent_1');
     expect(TURNS).toEqual(copy);
+  });
+});
+
+describe('filterLeaderboardTurnsByQuery', () => {
+  const searchableTurns = [
+    {
+      turnId: '1',
+      winnerId: 'agent_1',
+      prompt: 'Should we launch now?',
+      winnerName: 'The Analyst',
+      oneLiner: 'Ship the smallest honest slice.',
+    },
+    {
+      turnId: '2',
+      winnerId: 'agent_2',
+      prompt: 'How should we price the product?',
+      winnerName: 'The Pragmatist',
+      oneLiner: 'Test willingness to pay before scaling.',
+    },
+  ];
+
+  it('matches prompt, winner, and answer text case-insensitively', () => {
+    expect(filterLeaderboardTurnsByQuery(searchableTurns, 'LAUNCH').map((t) => t.turnId)).toEqual([
+      '1',
+    ]);
+    expect(filterLeaderboardTurnsByQuery(searchableTurns, 'pragmatist')).toHaveLength(1);
+    expect(filterLeaderboardTurnsByQuery(searchableTurns, 'willingness to pay')).toHaveLength(1);
+  });
+
+  it('requires every search term and keeps the original list unchanged', () => {
+    const original = searchableTurns.map((turn) => ({ ...turn }));
+    expect(filterLeaderboardTurnsByQuery(searchableTurns, 'launch analyst')).toHaveLength(1);
+    expect(filterLeaderboardTurnsByQuery(searchableTurns, 'launch pricing')).toHaveLength(0);
+    expect(filterLeaderboardTurnsByQuery(searchableTurns, '   ')).toHaveLength(2);
+    expect(searchableTurns).toEqual(original);
   });
 });
 

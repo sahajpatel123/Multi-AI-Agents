@@ -16,6 +16,7 @@ import { ScoringAuditModal } from './ScoringAuditModal';
 import {
   LEADERBOARD_MIND_ALL,
   filterLeaderboardTurnsByMind,
+  filterLeaderboardTurnsByQuery,
   formatLeaderboardPromptCopy,
   leaderboardMindFilterLabel,
   leaderboardMindFilterUseful,
@@ -57,6 +58,7 @@ export function LeaderboardView({
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
   const [expandedTurnId, setExpandedTurnId] = useState<string | null>(null);
   const [mindFilter, setMindFilter] = useState<LeaderboardMindFilter>(LEADERBOARD_MIND_ALL);
+  const [promptQuery, setPromptQuery] = useState('');
   const [rowCopyStatus, setRowCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [auditOpen, setAuditOpen] = useState(false);
 
@@ -192,10 +194,29 @@ export function LeaderboardView({
     }
   }, [mindFilter, turnSummaries]);
 
-  const filteredTurnSummaries = useMemo(
+  const mindFilteredTurnSummaries = useMemo(
     () => filterLeaderboardTurnsByMind(turnSummaries, mindFilter),
     [turnSummaries, mindFilter],
   );
+
+  const filteredTurnSummaries = useMemo(
+    () => filterLeaderboardTurnsByQuery(mindFilteredTurnSummaries, promptQuery),
+    [mindFilteredTurnSummaries, promptQuery],
+  );
+
+  const hasPromptQuery = promptQuery.trim().length > 0;
+
+  // A search is useful within one session, but should never hide a new
+  // session's prompts when the leaderboard is reused in place.
+  useEffect(() => {
+    setPromptQuery('');
+    setMindFilter(LEADERBOARD_MIND_ALL);
+    setExpandedTurnId(null);
+  }, [sessionId]);
+
+  useEffect(() => {
+    setExpandedTurnId(null);
+  }, [mindFilter, promptQuery]);
 
   const mindFilterName = useMemo(
     () =>
@@ -205,6 +226,22 @@ export function LeaderboardView({
       }),
     [mindFilter, leaderboard],
   );
+
+  const leaderboardLede = (() => {
+    if (!hasData) return 'Win rates will appear once you start prompting';
+    if (mindFilter !== LEADERBOARD_MIND_ALL && hasPromptQuery) {
+      return `Showing ${filteredTurnSummaries.length} prompt${filteredTurnSummaries.length === 1 ? '' : 's'} won by ${mindFilterName} matching “${promptQuery.trim()}”`;
+    }
+    if (mindFilter !== LEADERBOARD_MIND_ALL) {
+      return `Showing wins by ${mindFilterName} · ${filteredTurnSummaries.length} of ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'}`;
+    }
+    if (hasPromptQuery) {
+      return `Showing ${filteredTurnSummaries.length} of ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'} matching “${promptQuery.trim()}”`;
+    }
+    return `Based on ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'} in this session${
+      mindFilterUseful ? ' · click a mind to filter prompts' : ''
+    }`;
+  })();
 
   useEffect(() => {
     if (rowCopyStatus === 'idle') return;
@@ -252,7 +289,6 @@ export function LeaderboardView({
 
   const toggleMindFilter = (agentId: string) => {
     setMindFilter((prev) => (prev === agentId ? LEADERBOARD_MIND_ALL : agentId));
-    setExpandedTurnId(null);
   };
 
   const reduceMotion = prefersReducedMotion();
@@ -348,13 +384,7 @@ export function LeaderboardView({
           </div>
         </div>
         <p className="lb-hero__lede">
-          {hasData
-            ? mindFilter !== LEADERBOARD_MIND_ALL
-              ? `Showing wins by ${mindFilterName} · ${filteredTurnSummaries.length} of ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'}`
-              : `Based on ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'} in this session${
-                  mindFilterUseful ? ' · click a mind to filter prompts' : ''
-                }`
-            : 'Win rates will appear once you start prompting'}
+          {leaderboardLede}
         </p>
         {copyFeedback === 'failed' || downloadFeedback === 'failed' || rowCopyStatus === 'failed' ? (
           <p role="alert" className="lb-alert">
@@ -467,30 +497,67 @@ export function LeaderboardView({
           <div className="lb-prompts__head">
             <div className="lb-prompts__label">
               Session prompts
-              {mindFilter !== LEADERBOARD_MIND_ALL
+              {mindFilter !== LEADERBOARD_MIND_ALL || hasPromptQuery
                 ? ` · ${filteredTurnSummaries.length}/${turnSummaries.length}`
                 : ''}
             </div>
-            {mindFilter !== LEADERBOARD_MIND_ALL ? (
-              <button
-                type="button"
-                className="lb-text-btn"
-                onClick={() => setMindFilter(LEADERBOARD_MIND_ALL)}
-              >
-                Show all minds
-              </button>
-            ) : null}
+            <div className="lb-prompts__tools">
+              <label className="lb-prompt-search">
+                <span className="lb-prompt-search__label">Find</span>
+                <input
+                  type="search"
+                  value={promptQuery}
+                  onChange={(event) => setPromptQuery(event.target.value)}
+                  placeholder="Search prompts or takes…"
+                  aria-label="Search session prompts"
+                />
+                {hasPromptQuery ? (
+                  <button
+                    type="button"
+                    className="lb-prompt-search__clear"
+                    onClick={() => setPromptQuery('')}
+                    aria-label="Clear session prompt search"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </label>
+              {mindFilter !== LEADERBOARD_MIND_ALL ? (
+                <button
+                  type="button"
+                  className="lb-text-btn"
+                  onClick={() => setMindFilter(LEADERBOARD_MIND_ALL)}
+                >
+                  Show all minds
+                </button>
+              ) : null}
+            </div>
           </div>
           {filteredTurnSummaries.length === 0 ? (
             <div className="lb-prompts__empty">
-              No prompts won by {mindFilterName} in this session.
-              <button
-                type="button"
-                className="lb-text-btn"
-                onClick={() => setMindFilter(LEADERBOARD_MIND_ALL)}
-              >
-                Show all prompts
-              </button>
+              {hasPromptQuery
+                ? `No prompts match “${promptQuery.trim()}”${
+                    mindFilter !== LEADERBOARD_MIND_ALL ? ` for ${mindFilterName}` : ''
+                  }.`
+                : `No prompts won by ${mindFilterName} in this session.`}
+              {hasPromptQuery ? (
+                <button
+                  type="button"
+                  className="lb-text-btn"
+                  onClick={() => setPromptQuery('')}
+                >
+                  Clear search
+                </button>
+              ) : null}
+              {mindFilter !== LEADERBOARD_MIND_ALL ? (
+                <button
+                  type="button"
+                  className="lb-text-btn"
+                  onClick={() => setMindFilter(LEADERBOARD_MIND_ALL)}
+                >
+                  Show all prompts
+                </button>
+              ) : null}
             </div>
           ) : (
             <div className="lb-prompts__list">

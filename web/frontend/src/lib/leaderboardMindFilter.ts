@@ -12,6 +12,13 @@ export type LeaderboardMindTurn = {
   winnerId?: string | null;
 };
 
+export type LeaderboardSearchTurn = LeaderboardMindTurn & {
+  prompt?: string | null;
+  winnerName?: string | null;
+  oneLiner?: string | null;
+  fullTake?: string | null;
+};
+
 /** Filter turns by winner id. Does not mutate the input. */
 export function filterLeaderboardTurnsByMind<T extends LeaderboardMindTurn>(
   turns: T[],
@@ -20,6 +27,33 @@ export function filterLeaderboardTurnsByMind<T extends LeaderboardMindTurn>(
   const list = turns || [];
   if (!mindId || mindId === LEADERBOARD_MIND_ALL) return [...list];
   return list.filter((t) => (t.winnerId || '') === mindId);
+}
+
+/**
+ * Search session prompts without mutating the source list. Every search term
+ * must match somewhere in the prompt, winning mind, or answer text, so a
+ * query like "launch analyst" can find a prompt and its winner together.
+ */
+export function filterLeaderboardTurnsByQuery<T extends LeaderboardSearchTurn>(
+  turns: T[],
+  query: string,
+): T[] {
+  const list = turns || [];
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return [...list];
+
+  return list.filter((turn) => {
+    const haystack = [
+      turn.prompt,
+      turn.winnerName,
+      turn.oneLiner,
+      turn.fullTake,
+    ]
+      .filter((value): value is string => typeof value === 'string')
+      .join(' ')
+      .toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  });
 }
 
 export function leaderboardMindFilterLabel(

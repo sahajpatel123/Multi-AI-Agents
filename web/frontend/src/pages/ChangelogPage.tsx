@@ -15,6 +15,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Arena leaderboard: search session prompts by question, winning mind, or answer text; Copy session and Download .md honor the combined view',
       '[NEW] Public shared rounds: copy spreadsheet-ready CSV directly into table-aware apps, with a plain-text fallback',
       '[NEW] Public shared rounds: download every shared take as a spreadsheet-ready CSV with scores and winner flags',
       '[NEW] Public shared takes: copy just the answer as Markdown without the surrounding share wrapper, ready to paste into notes or docs',

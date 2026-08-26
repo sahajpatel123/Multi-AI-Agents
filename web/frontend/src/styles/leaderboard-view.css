@@ -455,6 +455,80 @@
   flex-wrap: wrap;
 }
 
+.lb-prompts__tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex: 1 1 280px;
+}
+
+.lb-prompt-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: min(280px, 100%);
+  border: 0.5px solid var(--lb-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--lb-soft);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.lb-prompt-search:focus-within {
+  border-color: rgba(196, 149, 106, 0.7);
+  box-shadow: 0 0 0 3px rgba(196, 149, 106, 0.1);
+}
+
+.lb-prompt-search__label {
+  padding-left: 12px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lb-muted);
+  pointer-events: none;
+}
+
+.lb-prompt-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 7px 32px 7px 8px;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--lb-ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.lb-prompt-search input::placeholder {
+  color: #b4aaa0;
+}
+
+.lb-prompt-search__clear {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--lb-muted);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lb-prompt-search__clear:hover {
+  background: var(--lb-warm);
+  color: var(--lb-ink);
+}
+
 .lb-prompts__label {
   display: inline-flex;
   align-items: center;
@@ -484,6 +558,18 @@
   text-underline-offset: 2px;
   padding: 0;
   transition: color 150ms ease;
+}
+
+@media (max-width: 520px) {
+  .lb-prompts__tools {
+    justify-content: stretch;
+    flex-basis: 100%;
+  }
+
+  .lb-prompt-search {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -712,6 +798,7 @@
   .lb-ghost-btn,
   .agent-row,
   .lb-prompt-card,
+  .lb-prompt-search,
   .lb-empty__cta,
   .agent-row__pct {
     transition: none !important;
