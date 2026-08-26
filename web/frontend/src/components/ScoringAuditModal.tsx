@@ -7,6 +7,7 @@ import {
   fetchScoringAudit,
 } from '../api';
 import { downloadBlobFile, sanitizeDownloadFilename } from '../lib/downloadTextFile';
+import { copyMarkdownToClipboard } from '../lib/clipboard';
 import {
   AGENTS,
   type ScoringAuditConfidence,
@@ -54,9 +55,12 @@ export function ScoringAuditModal({
   const [notFound, setNotFound] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const [exporting, setExporting] = useState<ScoringAuditExportFormat | null>(null);
+  const [copyingMarkdown, setCopyingMarkdown] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const copyRunRef = useRef(0);
   const titleId = useId();
 
   useEffect(() => {
@@ -75,7 +79,10 @@ export function ScoringAuditModal({
     setError(null);
     setNotFound(false);
     setData(null);
+    setCopyingMarkdown(false);
+    setCopyNotice(null);
     setExportError(null);
+    copyRunRef.current += 1;
 
     void fetchScoringAudit(sessionId)
       .then((result) => {
@@ -96,6 +103,7 @@ export function ScoringAuditModal({
 
     return () => {
       cancelled = true;
+      copyRunRef.current += 1;
     };
   }, [sessionId, retryKey]);
 
@@ -158,8 +166,9 @@ export function ScoringAuditModal({
   );
 
   const handleExport = useCallback(async (format: ScoringAuditExportFormat) => {
-    if (!data || exporting) return;
+    if (!data || exporting || copyingMarkdown) return;
     setExporting(format);
+    setCopyNotice(null);
     setExportError(null);
     try {
       const blob = format === 'json'
@@ -185,7 +194,35 @@ export function ScoringAuditModal({
     } finally {
       setExporting(null);
     }
-  }, [data, exporting, sessionId]);
+  }, [copyingMarkdown, data, exporting, sessionId]);
+
+  const handleCopyMarkdown = useCallback(async () => {
+    if (!data || data.audits.length === 0 || exporting || copyingMarkdown) return;
+    const runId = ++copyRunRef.current;
+    setCopyingMarkdown(true);
+    setCopyNotice(null);
+    setExportError(null);
+    try {
+      const blob = await exportScoringAuditMarkdown(sessionId, data.audit_count);
+      if (copyRunRef.current !== runId) return;
+      const copied = await copyMarkdownToClipboard(await blob.text());
+      if (copyRunRef.current !== runId) return;
+      if (copied) {
+        setCopyNotice('Markdown copied to the clipboard.');
+      } else {
+        setExportError('Could not copy the scoring audit Markdown — try again.');
+      }
+    } catch (err) {
+      if (copyRunRef.current !== runId) return;
+      setExportError(
+        err instanceof Error
+          ? err.message
+          : 'Could not copy the scoring audit Markdown — try again.',
+      );
+    } finally {
+      if (copyRunRef.current === runId) setCopyingMarkdown(false);
+    }
+  }, [copyingMarkdown, data, exporting, sessionId]);
 
   return (
     <div
@@ -231,11 +268,21 @@ export function ScoringAuditModal({
             type="button"
             className="sa-export"
             onClick={() => void handleExport('md')}
-            disabled={!data || data.audits.length === 0 || exporting !== null}
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingMarkdown}
             aria-busy={exporting === 'md' || undefined}
             aria-label="Export scoring audit as Markdown"
           >
             {exporting === 'md' ? 'Exporting…' : 'Export Markdown'}
+          </button>
+          <button
+            type="button"
+            className="sa-export sa-copy"
+            onClick={() => void handleCopyMarkdown()}
+            disabled={!data || data.audits.length === 0 || exporting !== null || copyingMarkdown}
+            aria-busy={copyingMarkdown || undefined}
+            aria-label="Copy scoring audit as Markdown"
+          >
+            {copyingMarkdown ? 'Copying…' : copyNotice ? 'Copied Markdown' : 'Copy Markdown'}
           </button>
           <button
             ref={closeRef}
@@ -252,6 +299,11 @@ export function ScoringAuditModal({
           {exportError ? (
             <p className="sa-export-error" role="alert">
               {exportError}
+            </p>
+          ) : null}
+          {copyNotice ? (
+            <p className="sa-copy-notice" role="status">
+              {copyNotice}
             </p>
           ) : null}
           {loading ? (

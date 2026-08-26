@@ -28,9 +28,15 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 20px 22px 14px;
   border-bottom: 1px solid #e8e0d8;
+}
+
+.sa-header__copy {
+  min-width: 180px;
+  flex: 1 1 220px;
 }
 
 .sa-header h2 {
@@ -88,6 +94,10 @@
   border-color: #c4956a;
 }
 
+.sa-copy {
+  color: #765a3c;
+}
+
 .sa-export:disabled {
   cursor: wait;
   opacity: 0.55;
@@ -100,6 +110,16 @@
   border-radius: 8px;
   background: #fdf1ec;
   color: #9a3f26;
+  font-size: 12px;
+}
+
+.sa-copy-notice {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 0.5px solid #b8cdbb;
+  border-radius: 8px;
+  background: #f1f8f1;
+  color: #35613d;
   font-size: 12px;
 }
 

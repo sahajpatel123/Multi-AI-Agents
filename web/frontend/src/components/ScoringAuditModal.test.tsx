@@ -9,6 +9,7 @@ import {
 } from '../api';
 import type { ScoringAuditResponse } from '../types';
 import { downloadBlobFile } from '../lib/downloadTextFile';
+import { copyMarkdownToClipboard } from '../lib/clipboard';
 import { ScoringAuditModal } from './ScoringAuditModal';
 
 vi.mock('../api', async () => {
@@ -33,11 +34,16 @@ vi.mock('../lib/downloadTextFile', async () => {
   return { ...actual, downloadBlobFile: vi.fn() };
 });
 
+vi.mock('../lib/clipboard', () => ({
+  copyMarkdownToClipboard: vi.fn(),
+}));
+
 const fetchScoringAuditMock = vi.mocked(fetchScoringAudit);
 const exportScoringAuditCsvMock = vi.mocked(exportScoringAuditCsv);
 const exportScoringAuditJsonMock = vi.mocked(exportScoringAuditJson);
 const exportScoringAuditMarkdownMock = vi.mocked(exportScoringAuditMarkdown);
 const downloadBlobFileMock = vi.mocked(downloadBlobFile);
+const copyMarkdownToClipboardMock = vi.mocked(copyMarkdownToClipboard);
 const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
 
 const auditResponse: ScoringAuditResponse = {
@@ -92,6 +98,8 @@ describe('ScoringAuditModal', () => {
     exportScoringAuditJsonMock.mockReset();
     exportScoringAuditMarkdownMock.mockReset();
     downloadBlobFileMock.mockReset();
+    copyMarkdownToClipboardMock.mockReset();
+    copyMarkdownToClipboardMock.mockResolvedValue(true);
   });
 
   it('fetches and renders per-round scores, criteria, and confidence', async () => {
@@ -297,6 +305,46 @@ describe('ScoringAuditModal', () => {
       blob,
       'arena-scoring-audit-session-1.md',
     );
+  });
+
+  it('copies the visible rounds as Markdown without downloading a file', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    const markdown = '# Arena — scoring audit\n\n| Winner | Score |\n| --- | --- |\n';
+    exportScoringAuditMarkdownMock.mockResolvedValue(
+      { text: async () => markdown } as unknown as Blob,
+    );
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as markdown/i }),
+    );
+
+    await waitFor(() => {
+      expect(exportScoringAuditMarkdownMock).toHaveBeenCalledWith('session-1', 1);
+      expect(copyMarkdownToClipboardMock).toHaveBeenCalledWith(markdown);
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Markdown copied to the clipboard.',
+    );
+    expect(downloadBlobFileMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a clipboard failure instead of claiming Markdown was copied', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    copyMarkdownToClipboardMock.mockResolvedValue(false);
+    exportScoringAuditMarkdownMock.mockResolvedValue(
+      { text: async () => '# Arena — scoring audit\n' } as unknown as Blob,
+    );
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as markdown/i }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not copy/i);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('surfaces a browser-blocked download instead of claiming success', async () => {
