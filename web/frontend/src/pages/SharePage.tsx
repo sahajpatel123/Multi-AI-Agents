@@ -24,7 +24,11 @@ import {
   canUseNativeShare,
   invokeNativeShare,
 } from '../lib/shareUrl';
-import { formatRoundShareText, parseRoundShareUrl } from '../lib/roundShare';
+import {
+  formatRoundShareText,
+  parseRoundShareUrl,
+  type RoundShareTake,
+} from '../lib/roundShare';
 import { buildShareRoundJsonPayload, buildShareTakeJsonPayload } from '../lib/shareExport';
 import { saveSharedArenaPrompt } from '../lib/sharePrompt';
 import track from '../utils/track';
@@ -78,12 +82,14 @@ export function SharePage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [copied, setCopied] = useState<'take' | 'answer' | 'prompt' | 'link' | null>(null);
+  const [copiedRoundTakeIndex, setCopiedRoundTakeIndex] = useState<number | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
   const [jsonDownloadStatus, setJsonDownloadStatus] = useState<DownloadStatus>('idle');
   const [promptExpanded, setPromptExpanded] = useState(false);
   const copyPromptRequestRef = useRef(0);
+  const copyRoundTakeRequestRef = useRef(0);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
   const prompt = sanitizeParam(params.get('prompt'));
@@ -131,7 +137,9 @@ export function SharePage() {
     // action feedback for the new payload and invalidate any clipboard
     // result that was started for the previous question.
     copyPromptRequestRef.current += 1;
+    copyRoundTakeRequestRef.current += 1;
     setCopied(null);
+    setCopiedRoundTakeIndex(null);
     setCopyError(null);
     setPromptExpanded(false);
   }, [shareParamsKey]);
@@ -141,6 +149,12 @@ export function SharePage() {
     const t = window.setTimeout(() => setCopied(null), 1600);
     return () => window.clearTimeout(t);
   }, [copied]);
+
+  useEffect(() => {
+    if (copiedRoundTakeIndex === null) return;
+    const t = window.setTimeout(() => setCopiedRoundTakeIndex(null), 1600);
+    return () => window.clearTimeout(t);
+  }, [copiedRoundTakeIndex]);
 
   const goTry = () => {
     // Hand the shared question to the next Arena mount so "Try this in
@@ -230,6 +244,26 @@ export function SharePage() {
       }
     } catch {
       setCopyError('Could not copy the answer — select the text manually.');
+    }
+  };
+
+  const handleCopyRoundTake = async (take: RoundShareTake, index: number) => {
+    if (!isRound || !take.oneLiner) return;
+    const requestId = ++copyRoundTakeRequestRef.current;
+    setCopied(null);
+    setCopiedRoundTakeIndex(null);
+    setCopyError(null);
+    try {
+      const ok = await copyMarkdownToClipboard(take.oneLiner);
+      if (copyRoundTakeRequestRef.current !== requestId) return;
+      if (ok) {
+        setCopiedRoundTakeIndex(index);
+      } else {
+        setCopyError('Could not copy this answer — select the text manually.');
+      }
+    } catch {
+      if (copyRoundTakeRequestRef.current !== requestId) return;
+      setCopyError('Could not copy this answer — select the text manually.');
     }
   };
 
@@ -430,6 +464,24 @@ export function SharePage() {
                             question={round.prompt || undefined}
                           />
                         </div>
+                        {take.oneLiner ? (
+                          <div className="share-take__answer-actions">
+                            <button
+                              type="button"
+                              className={`arena-btn arena-btn--secondary arena-btn--sm${copiedRoundTakeIndex === index ? ' is-success' : ''}`}
+                              aria-label={
+                                copiedRoundTakeIndex === index
+                                  ? `${takeAgent.name} answer copied`
+                                  : `Copy ${takeAgent.name} answer`
+                              }
+                              onClick={() => {
+                                void handleCopyRoundTake(take, index);
+                              }}
+                            >
+                              {copiedRoundTakeIndex === index ? 'Answer copied' : 'Copy answer'}
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </article>
                   );

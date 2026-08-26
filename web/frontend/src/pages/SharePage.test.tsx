@@ -331,7 +331,7 @@ describe('SharePage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not copy the answer/i);
   });
 
-  it('does not offer answer-only copy for a shared round', () => {
+  it('offers an answer-only copy control for each shared round take', () => {
     const qs =
       '?round=1&prompt=' +
       encodeURIComponent('Should we ship today?') +
@@ -339,7 +339,41 @@ describe('SharePage', () => {
       encodeURIComponent('analyst|84|Ship the smallest honest slice.');
     renderShare(qs);
 
-    expect(screen.queryByRole('button', { name: /copy answer/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy the analyst answer/i })).toHaveTextContent(
+      'Copy answer',
+    );
+    expect(screen.queryByRole('button', { name: 'Copy answer' })).not.toBeInTheDocument();
+  });
+
+  it('copies an individual shared round take as Markdown', async () => {
+    const answer = 'Ship the **smallest** honest slice.';
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&t0=' +
+      encodeURIComponent(`analyst|84|${answer}`);
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy the analyst answer/i }));
+
+    await waitFor(() => expect(copyMarkdownToClipboard).toHaveBeenCalledWith(answer));
+    expect(screen.getByRole('button', { name: /the analyst answer copied/i })).toHaveTextContent(
+      'Answer copied',
+    );
+  });
+
+  it('surfaces individual round take copy failures', async () => {
+    vi.mocked(copyMarkdownToClipboard).mockResolvedValueOnce(false);
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy the analyst answer/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not copy this answer/i);
   });
 
   it('prints a shared round with a collapsed long question', () => {
@@ -425,6 +459,8 @@ describe('SharePage', () => {
     expect(screen.getByText('Arena winner')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /read this round aloud/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy round/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy the analyst answer/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy the philosopher answer/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /copy question/i }));
     expect(copyToClipboardMock).toHaveBeenCalledWith('Should we ship today?');
     fireEvent.click(screen.getByRole('button', { name: /download \.json/i }));

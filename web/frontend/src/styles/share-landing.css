@@ -284,6 +284,16 @@
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
 }
 
+.share-take__answer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.share-take__answer-actions .arena-btn {
+  border-radius: 999px;
+}
+
 .share-take__fallback {
   margin: 0;
   font-size: 14px;
@@ -511,6 +521,7 @@
   .share-landing--agent .site-footer,
   .share-landing--agent .share-landing__orbs,
   .share-landing--agent .share-take__tools,
+  .share-landing--agent .share-take__answer-actions,
   .share-landing--agent .share-take__sources-copy,
   .share-landing--agent .share-take__ctas,
   .share-landing--agent .share-take__status,
@@ -654,6 +665,7 @@
   .share-landing:not(.share-landing--agent) .site-footer,
   .share-landing:not(.share-landing--agent) .share-landing__orbs,
   .share-landing:not(.share-landing--agent) .share-take--tools,
+  .share-landing:not(.share-landing--agent) .share-take__answer-actions,
   .share-landing:not(.share-landing--agent) .share-landing__minds {
     display: none !important;
   }
