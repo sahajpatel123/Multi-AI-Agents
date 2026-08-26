@@ -1204,6 +1204,31 @@ def _markdown_cell(value) -> str:
     return s.replace("|", "\\|").replace("\r", " ").replace("\n", " ")
 
 
+def _scoring_audit_markdown_text(value) -> str:
+    """Escape audit values before placing them in Markdown prose or tables.
+
+    Prompt snippets and persisted ids can contain user- or model-controlled
+    Markdown characters. Keep the report readable while preventing a prompt
+    from changing the report's structure when it is rendered elsewhere.
+    """
+    if value is None:
+        return ""
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("|", "\\|")
+        .replace("`", "\\`")
+        .replace("*", "\\*")
+        .replace("_", "\\_")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("<", "\\<")
+        .replace(">", "\\>")
+        .replace("\r", " ")
+        .replace("\n", " ")
+    )
+
+
 @router.get("/analytics/activity/export.md")
 async def analytics_activity_markdown(
     user: UserResponse = Depends(get_current_user_required),
@@ -4368,6 +4393,177 @@ async def analytics_scoring_audit_json(
     return Response(
         content=json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n",
         media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/scoring-audit/{session_id}/export.md")
+async def analytics_scoring_audit_markdown(
+    session_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=200,
+        description="Max number of round audits exported, newest kept last.",
+    ),
+) -> Response:
+    """Markdown download of the per-round scoring audit for one session.
+
+    The report is deliberately built from the same ownership-scoped payload
+    as the live modal and CSV/JSON exports. It is intended for notes, docs,
+    and issue threads, so it keeps the round ordering and includes an
+    explicit fallback-scores note rather than presenting provisional scores
+    as ordinary judge results.
+    """
+    _require_scoring_audit_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_scoring_audit_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many scoring audit Markdown exports. Limit is 60 per hour.",
+    )
+
+    payload = await _build_scoring_audit_detail(
+        session_id=session_id,
+        user=user,
+        db=db,
+        limit=limit,
+    )
+
+    import math
+    import re
+
+    lines = [
+        "# Arena — scoring audit",
+        "",
+        f"**Session:** {_scoring_audit_markdown_text(payload['session_id'])}",
+        f"**Rounds:** showing {payload['audit_count']} of {payload['total_count']} "
+        "(newest rounds, chronological order)",
+        "",
+        "_Fallback-scored rounds are marked as provisional because the judge "
+        "model was unavailable._",
+        "",
+        "## Rounds",
+        "",
+    ]
+
+    for round_no, audit in enumerate(payload["audits"], start=1):
+        winner = audit["winner_persona_id"] or audit["winner_agent_id"] or "Unknown"
+        winner_score = audit["winner_score"] if audit["winner_score"] is not None else "—"
+        prompt = audit["prompt_snippet"] or "(no prompt captured)"
+        fallback = "yes — provisional fallback scores" if audit["fallback_used"] else "no"
+
+        lines.extend(
+            [
+                f"### Round {round_no}",
+                "",
+                f"- **Scored at (UTC):** {_scoring_audit_markdown_text(audit['created_at'] or '—')}",
+                f"- **Prompt:** {_scoring_audit_markdown_text(prompt)}",
+                f"- **Winner:** {_scoring_audit_markdown_text(winner)} "
+                f"({_scoring_audit_markdown_text(winner_score)})",
+                f"- **Fallback scores:** {_scoring_audit_markdown_text(fallback)}",
+            ]
+        )
+        if audit["prompt_category"]:
+            lines.append(
+                f"- **Category:** "
+                f"{_scoring_audit_markdown_text(audit['prompt_category'])}"
+            )
+        if audit["persona_ids_used"]:
+            panel = ", ".join(str(persona_id) for persona_id in audit["persona_ids_used"])
+            lines.append(f"- **Panel:** {_scoring_audit_markdown_text(panel)}")
+
+        confidence_by_agent: dict[str, object] = {}
+        for entry in audit["confidence_values"] or []:
+            if not isinstance(entry, dict) or entry.get("agent_id") is None:
+                continue
+            confidence_by_agent[str(entry["agent_id"])] = entry.get("confidence")
+
+        score_entries = list((str(agent_id), score) for agent_id, score in (audit["scores"] or {}).items())
+
+        def numeric_score(value) -> float:
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                return float("-inf")
+            return parsed if math.isfinite(parsed) else float("-inf")
+
+        score_entries.sort(key=lambda entry: (-numeric_score(entry[1]), entry[0]))
+        if score_entries:
+            lines.extend(
+                [
+                    "",
+                    "#### Scores",
+                    "",
+                    "| Mind | Score | Confidence |",
+                    "| --- | ---: | ---: |",
+                ]
+            )
+            for agent_id, score in score_entries:
+                confidence = confidence_by_agent.get(agent_id)
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            _scoring_audit_markdown_text(agent_id),
+                            _scoring_audit_markdown_text(score),
+                            _scoring_audit_markdown_text(
+                                confidence if confidence is not None else "—"
+                            ),
+                        ]
+                    )
+                    + " |"
+                )
+
+        criteria_rows = []
+        for agent_id, criteria in (audit["criteria_breakdown"] or {}).items():
+            if not isinstance(criteria, dict):
+                continue
+            for criterion, score in criteria.items():
+                criteria_rows.append((str(agent_id), str(criterion), score))
+        if criteria_rows:
+            lines.extend(
+                [
+                    "",
+                    "#### Criteria breakdown",
+                    "",
+                    "| Mind | Criterion | Score |",
+                    "| --- | --- | ---: |",
+                ]
+            )
+            for agent_id, criterion, score in criteria_rows:
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            _scoring_audit_markdown_text(agent_id),
+                            _scoring_audit_markdown_text(criterion),
+                            _scoring_audit_markdown_text(score),
+                        ]
+                    )
+                    + " |"
+                )
+
+        if audit["scoring_duration_ms"] is not None:
+            lines.append(
+                f"- **Scoring duration:** "
+                f"{_scoring_audit_markdown_text(audit['scoring_duration_ms'])} ms"
+            )
+        lines.append("")
+
+    lines.extend(["---", "_Exported from Arena_", ""])
+    safe_sid = re.sub(r"[^A-Za-z0-9._-]", "_", payload["session_id"])
+    filename = f"arena-scoring-audit-{safe_sid}.md"
+    return Response(
+        content="\n".join(lines),
+        media_type="text/markdown; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-store",

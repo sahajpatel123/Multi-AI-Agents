@@ -4,6 +4,7 @@ import {
   ApiError,
   exportScoringAuditCsv,
   exportScoringAuditJson,
+  exportScoringAuditMarkdown,
   fetchScoringAudit,
 } from '../api';
 import type { ScoringAuditResponse } from '../types';
@@ -17,6 +18,7 @@ vi.mock('../api', async () => {
     fetchScoringAudit: vi.fn(),
     exportScoringAuditCsv: vi.fn(),
     exportScoringAuditJson: vi.fn(),
+    exportScoringAuditMarkdown: vi.fn(),
   };
 });
 
@@ -34,6 +36,7 @@ vi.mock('../lib/downloadTextFile', async () => {
 const fetchScoringAuditMock = vi.mocked(fetchScoringAudit);
 const exportScoringAuditCsvMock = vi.mocked(exportScoringAuditCsv);
 const exportScoringAuditJsonMock = vi.mocked(exportScoringAuditJson);
+const exportScoringAuditMarkdownMock = vi.mocked(exportScoringAuditMarkdown);
 const downloadBlobFileMock = vi.mocked(downloadBlobFile);
 const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
 
@@ -87,6 +90,7 @@ describe('ScoringAuditModal', () => {
     fetchScoringAuditMock.mockReset();
     exportScoringAuditCsvMock.mockReset();
     exportScoringAuditJsonMock.mockReset();
+    exportScoringAuditMarkdownMock.mockReset();
     downloadBlobFileMock.mockReset();
   });
 
@@ -137,6 +141,9 @@ describe('ScoringAuditModal', () => {
     ).toBeDisabled();
     expect(
       screen.getByRole('button', { name: /export scoring audit as json/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /export scoring audit as markdown/i }),
     ).toBeDisabled();
   });
 
@@ -269,6 +276,26 @@ describe('ScoringAuditModal', () => {
     expect(downloadBlobFileMock).toHaveBeenCalledWith(
       blob,
       'arena-scoring-audit-session-1.json',
+    );
+  });
+
+  it('exports the visible rounds as Markdown', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    const blob = new Blob(['# Arena — scoring audit\n'], {
+      type: 'text/markdown',
+    });
+    exportScoringAuditMarkdownMock.mockResolvedValue(blob);
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /export scoring audit as markdown/i }));
+
+    await waitFor(() => {
+      expect(exportScoringAuditMarkdownMock).toHaveBeenCalledWith('session-1', 1);
+    });
+    expect(downloadBlobFileMock).toHaveBeenCalledWith(
+      blob,
+      'arena-scoring-audit-session-1.md',
     );
   });
 

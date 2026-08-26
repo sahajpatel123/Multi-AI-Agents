@@ -3,6 +3,7 @@ import {
   ApiError,
   exportScoringAuditCsv,
   exportScoringAuditJson,
+  exportScoringAuditMarkdown,
   fetchScoringAudit,
 } from '../api';
 import { downloadBlobFile, sanitizeDownloadFilename } from '../lib/downloadTextFile';
@@ -25,7 +26,7 @@ interface ScoringAuditModalProps {
   personaNameResolver?: (personaId: string) => string | undefined;
 }
 
-type ScoringAuditExportFormat = 'csv' | 'json';
+type ScoringAuditExportFormat = 'csv' | 'json' | 'md';
 
 function agentDisplayName(agentId: string): string {
   const normalized = agentId.replace(/-/g, '_');
@@ -163,7 +164,9 @@ export function ScoringAuditModal({
     try {
       const blob = format === 'json'
         ? await exportScoringAuditJson(sessionId, data.audit_count)
-        : await exportScoringAuditCsv(sessionId, data.audit_count);
+        : format === 'md'
+          ? await exportScoringAuditMarkdown(sessionId, data.audit_count)
+          : await exportScoringAuditCsv(sessionId, data.audit_count);
       const accepted = downloadBlobFile(
         blob,
         `arena-scoring-audit-${sanitizeDownloadFilename(sessionId, 'session')}.${format}`,
@@ -177,7 +180,7 @@ export function ScoringAuditModal({
       setExportError(
         err instanceof Error
           ? err.message
-          : `Could not export the scoring audit as ${format.toUpperCase()}.`,
+          : `Could not export the scoring audit as ${format === 'md' ? 'Markdown' : format.toUpperCase()}.`,
       );
     } finally {
       setExporting(null);
@@ -223,6 +226,16 @@ export function ScoringAuditModal({
             aria-label="Export scoring audit as JSON"
           >
             {exporting === 'json' ? 'Exporting…' : 'Export JSON'}
+          </button>
+          <button
+            type="button"
+            className="sa-export"
+            onClick={() => void handleExport('md')}
+            disabled={!data || data.audits.length === 0 || exporting !== null}
+            aria-busy={exporting === 'md' || undefined}
+            aria-label="Export scoring audit as Markdown"
+          >
+            {exporting === 'md' ? 'Exporting…' : 'Export Markdown'}
           </button>
           <button
             ref={closeRef}

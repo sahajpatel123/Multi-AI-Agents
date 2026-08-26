@@ -121,6 +121,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Arena: Re-run round — replay the same prompt from the header for fresh takes',
       '[NEW] Agent: copy or download a completed answer (Shift+C / Shift+D) and download the full JSON report (Shift+J)',
       '[NEW] Pro scoring audit: open the session leaderboard and inspect how the judge scored every mind per round (scores, criteria, confidence, fallback flags)',
+      '[NEW] Pro scoring audit: download the visible rounds as a human-readable Markdown report for notes, docs, and issue threads',
       '[IMPROVED] Scoring audit modal: empty sessions show a clear empty state instead of a load error, with a focus trap, background scroll lock, and focus restore',
       '[NEW] Room board: Copy question / Copy answer on each task card',
       '[NEW] Room board confidence filter chips + per-card confidence badge',
