@@ -106,6 +106,28 @@ describe('SharePage', () => {
     }
   });
 
+  it('prints a shared round with a collapsed long question', () => {
+    const print = vi.fn();
+    const originalPrint = window.print;
+    Object.defineProperty(window, 'print', { configurable: true, value: print });
+
+    try {
+      const longPrompt = 'p'.repeat(200);
+      const qs =
+        '?round=1&prompt=' +
+        encodeURIComponent(longPrompt) +
+        '&t0=' +
+        encodeURIComponent('analyst|84|Ship the smallest honest slice.');
+      renderShare(qs);
+
+      expect(screen.getByText(longPrompt).className).toContain('is-clamped');
+      fireEvent.click(screen.getByRole('button', { name: /print \/ save pdf/i }));
+      expect(print).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'print', { configurable: true, value: originalPrint });
+    }
+  });
+
   it('records a shared take listen as an agent event', () => {
     const qs =
       '?agent=agent_1&prompt=' +
