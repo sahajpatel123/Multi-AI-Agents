@@ -81,9 +81,12 @@ export function SharePage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const [copied, setCopied] = useState<'take' | 'answer' | 'prompt' | 'link' | null>(null);
+  const [copied, setCopied] = useState<
+    'take' | 'answer' | 'prompt' | 'link' | 'winner' | null
+  >(null);
   const [copiedRoundTakeIndex, setCopiedRoundTakeIndex] = useState<number | null>(null);
   const [copyingRoundTakeIndex, setCopyingRoundTakeIndex] = useState<number | null>(null);
+  const [copyingWinner, setCopyingWinner] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
@@ -91,6 +94,7 @@ export function SharePage() {
   const [promptExpanded, setPromptExpanded] = useState(false);
   const copyPromptRequestRef = useRef(0);
   const copyRoundTakeRequestRef = useRef(0);
+  const copyWinnerRequestRef = useRef(0);
   const copyRoundTakePendingRef = useRef(false);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
@@ -100,6 +104,15 @@ export function SharePage() {
   const round = useMemo(() => parseRoundShareUrl(params), [params]);
   const roundRequested = params.get('round') === '1';
   const isRound = round !== null;
+  const winnerTake = useMemo(
+    () =>
+      isRound && round?.winnerAgentId
+        ? round.takes.find(
+            (take) => take.agentId === round.winnerAgentId && Boolean(take.oneLiner),
+          )
+        : undefined,
+    [isRound, round],
+  );
   const shareParamsKey = params.toString();
 
   const hasContent = roundRequested ? Boolean(round) : Boolean(response || prompt);
@@ -140,10 +153,12 @@ export function SharePage() {
     // result that was started for the previous question.
     copyPromptRequestRef.current += 1;
     copyRoundTakeRequestRef.current += 1;
+    copyWinnerRequestRef.current += 1;
     copyRoundTakePendingRef.current = false;
     setCopied(null);
     setCopiedRoundTakeIndex(null);
     setCopyingRoundTakeIndex(null);
+    setCopyingWinner(false);
     setCopyError(null);
     setPromptExpanded(false);
   }, [shareParamsKey]);
@@ -274,6 +289,33 @@ export function SharePage() {
       if (copyRoundTakeRequestRef.current === requestId) {
         copyRoundTakePendingRef.current = false;
         setCopyingRoundTakeIndex(null);
+      }
+    }
+  };
+
+  const handleCopyWinner = async () => {
+    if (!isRound || !winnerTake || copyRoundTakePendingRef.current) return;
+    copyRoundTakePendingRef.current = true;
+    const requestId = ++copyWinnerRequestRef.current;
+    setCopied(null);
+    setCopiedRoundTakeIndex(null);
+    setCopyingWinner(true);
+    setCopyError(null);
+    try {
+      const ok = await copyMarkdownToClipboard(winnerTake.oneLiner);
+      if (copyWinnerRequestRef.current !== requestId) return;
+      if (ok) {
+        setCopied('winner');
+      } else {
+        setCopyError('Could not copy the winning answer — select the text manually.');
+      }
+    } catch {
+      if (copyWinnerRequestRef.current !== requestId) return;
+      setCopyError('Could not copy the winning answer — select the text manually.');
+    } finally {
+      if (copyWinnerRequestRef.current === requestId) {
+        copyRoundTakePendingRef.current = false;
+        setCopyingWinner(false);
       }
     }
   };
@@ -480,7 +522,7 @@ export function SharePage() {
                             <button
                               type="button"
                               className={`arena-btn arena-btn--secondary arena-btn--sm${copiedRoundTakeIndex === index ? ' is-success' : ''}`}
-                              disabled={copyingRoundTakeIndex !== null}
+                              disabled={copyingRoundTakeIndex !== null || copyingWinner}
                               aria-busy={copyingRoundTakeIndex === index || undefined}
                               aria-label={
                                 copyingRoundTakeIndex === index
@@ -599,6 +641,30 @@ export function SharePage() {
                       }}
                     >
                       {copied === 'answer' ? 'Answer copied' : 'Copy answer'}
+                    </button>
+                  ) : null}
+                  {isRound && winnerTake ? (
+                    <button
+                      type="button"
+                      className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'winner' ? ' is-success' : ''}`}
+                      disabled={copyingRoundTakeIndex !== null || copyingWinner}
+                      aria-busy={copyingWinner || undefined}
+                      aria-label={
+                        copyingWinner
+                          ? 'Copying winning answer'
+                          : copied === 'winner'
+                            ? 'Winning answer copied'
+                            : 'Copy winner answer'
+                      }
+                      onClick={() => {
+                        void handleCopyWinner();
+                      }}
+                    >
+                      {copyingWinner
+                        ? 'Copying…'
+                        : copied === 'winner'
+                          ? 'Winner copied'
+                          : 'Copy winner'}
                     </button>
                   ) : null}
                   {displayPrompt ? (

@@ -363,6 +363,38 @@ describe('SharePage', () => {
     );
   });
 
+  it('offers a winner-only copy action for a shared round', async () => {
+    const answer = 'Enough is when the evidence settles.';
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&winner=philosopher' +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.') +
+      '&t1=' +
+      encodeURIComponent(`philosopher|87|${answer}`);
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy winner answer/i }));
+
+    await waitFor(() => expect(copyMarkdownToClipboard).toHaveBeenCalledWith(answer));
+    expect(
+      screen.getByRole('button', { name: /winning answer copied/i }),
+    ).toHaveTextContent('Winner copied');
+  });
+
+  it('does not offer winner copy when the winner is absent from the round', () => {
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&winner=missing' +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.');
+    renderShare(qs);
+
+    expect(screen.queryByRole('button', { name: /copy winner answer/i })).not.toBeInTheDocument();
+  });
+
   it('prevents duplicate round-take copy requests while clipboard is pending', async () => {
     let finishCopy: ((ok: boolean) => void) | undefined;
     const pendingCopy = new Promise<boolean>((resolve) => {
