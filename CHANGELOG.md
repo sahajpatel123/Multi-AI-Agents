@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Watchlist manual re-checks now serialize with each other: while a selected
+  burst is starting, card-level run, pause, cadence, edit, duplicate, and
+  delete controls stay locked so a stale item update cannot race the new task;
+  the same guard covers Run all and individual Run now actions
 - Accuracy verdicts can explain themselves now: choosing a verdict
   reveals an optional note (1,000 characters, saved explicitly with a
   dirty-aware "Note saved" marker that disappears the moment the text

@@ -674,6 +674,78 @@ describe('WatchlistPage', () => {
     expect(await screen.findByText('Started 2 re-checks.')).toBeInTheDocument();
   });
 
+  it('locks overlapping manual mutations while selected runs are starting', async () => {
+    let resolveRun:
+      | ((value: {
+          success: boolean;
+          task_id: string;
+          message: string;
+          item: AgentWatchlistItem;
+        }) => void)
+      | undefined;
+    postAgentWatchlistRunMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Select "How is the Indian IPO market evolving?" for bulk actions',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Run 1 selected watch now' }),
+    );
+
+    await waitFor(() => {
+      expect(postAgentWatchlistRunMock).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      screen.getByRole('button', {
+        name: 'Run now: How is the Indian IPO market evolving?',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', {
+        name: 'Run now: Will the monsoon affect Indian agriculture exports?',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Run all 1 active watch now' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Pause all 1 active watch' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Pause watch' })).toBeDisabled();
+
+    // The keyboard shortcut can arrive before the disabled button is painted;
+    // the ref-level guard must still prevent a second burst.
+    fireEvent.keyDown(window, { key: 'R', shiftKey: true });
+    expect(postAgentWatchlistRunMock).toHaveBeenCalledTimes(1);
+
+    resolveRun?.({
+      success: true,
+      task_id: 'task-selected',
+      message: 'Watch re-check started',
+      item: { ...baseItem, run_count: 4, latest_task_id: 'task-selected' },
+    });
+
+    expect(
+      await screen.findByText('Started 1 re-check.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: 'Run now: How is the Indian IPO market evolving?',
+      }),
+    ).not.toBeDisabled();
+  });
+
   it('summarizes watches that are already re-checking', async () => {
     getAgentWatchlistMock.mockResolvedValue({
       items: [
