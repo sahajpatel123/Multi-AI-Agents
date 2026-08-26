@@ -11,7 +11,12 @@ import { isCollapsiblePrompt } from '../lib/collapsiblePrompt';
 import { PERSONAS } from '../data/personas';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
-import { copyJsonToClipboard, copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
+import {
+  copyCsvToClipboard,
+  copyJsonToClipboard,
+  copyMarkdownToClipboard,
+  copyToClipboard,
+} from '../lib/clipboard';
 import { downloadCsvFile, downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import {
   applyAbsoluteDocumentTitle,
@@ -87,12 +92,13 @@ export function SharePage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [copied, setCopied] = useState<
-    'take' | 'answer' | 'prompt' | 'link' | 'winner' | 'json' | null
+    'take' | 'answer' | 'prompt' | 'link' | 'winner' | 'json' | 'csv' | null
   >(null);
   const [copiedRoundTakeIndex, setCopiedRoundTakeIndex] = useState<number | null>(null);
   const [copyingRoundTakeIndex, setCopyingRoundTakeIndex] = useState<number | null>(null);
   const [copyingWinner, setCopyingWinner] = useState(false);
   const [copyingJson, setCopyingJson] = useState(false);
+  const [copyingCsv, setCopyingCsv] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
@@ -103,7 +109,9 @@ export function SharePage() {
   const copyRoundTakeRequestRef = useRef(0);
   const copyWinnerRequestRef = useRef(0);
   const copyJsonRequestRef = useRef(0);
+  const copyCsvRequestRef = useRef(0);
   const copyJsonPendingRef = useRef(false);
+  const copyCsvPendingRef = useRef(false);
   const copyRoundTakePendingRef = useRef(false);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
@@ -164,13 +172,16 @@ export function SharePage() {
     copyRoundTakeRequestRef.current += 1;
     copyWinnerRequestRef.current += 1;
     copyJsonRequestRef.current += 1;
+    copyCsvRequestRef.current += 1;
     copyRoundTakePendingRef.current = false;
     setCopied(null);
     setCopiedRoundTakeIndex(null);
     setCopyingRoundTakeIndex(null);
     setCopyingWinner(false);
     setCopyingJson(false);
+    setCopyingCsv(false);
     copyJsonPendingRef.current = false;
+    copyCsvPendingRef.current = false;
     setCopyError(null);
     setPromptExpanded(false);
     setMarkdownDownloadStatus('idle');
@@ -455,6 +466,38 @@ export function SharePage() {
       if (copyJsonRequestRef.current === requestId) {
         copyJsonPendingRef.current = false;
         setCopyingJson(false);
+      }
+    }
+  };
+
+  const handleCopyCsv = async () => {
+    if (!isRound || !round || copyCsvPendingRef.current) return;
+    copyCsvPendingRef.current = true;
+    const requestId = ++copyCsvRequestRef.current;
+    setCopied(null);
+    setCopyingCsv(true);
+    setCopyError(null);
+    const shareUrl = pageUrl || (typeof window !== 'undefined' ? window.location.href : '');
+    const csv = formatShareRoundCsv({
+      round,
+      resolveAgentName: (id) => resolveAgent(id).name,
+      shareUrl,
+    });
+    try {
+      const ok = await copyCsvToClipboard(csv);
+      if (copyCsvRequestRef.current !== requestId) return;
+      if (ok) {
+        setCopied('csv');
+      } else {
+        setCopyError('Could not copy CSV — try Download .csv instead.');
+      }
+    } catch {
+      if (copyCsvRequestRef.current !== requestId) return;
+      setCopyError('Could not copy CSV — try Download .csv instead.');
+    } finally {
+      if (copyCsvRequestRef.current === requestId) {
+        copyCsvPendingRef.current = false;
+        setCopyingCsv(false);
       }
     }
   };
@@ -795,17 +838,38 @@ export function SharePage() {
                     {copyingJson ? 'Copying…' : copied === 'json' ? 'JSON copied' : 'Copy .json'}
                   </button>
                   {isRound ? (
-                    <button
-                      type="button"
-                      className={`arena-btn arena-btn--secondary arena-btn--sm${csvDownloadStatus === 'done' ? ' is-success' : ''}`}
-                      onClick={handleDownloadCsv}
-                    >
-                      {csvDownloadStatus === 'done'
-                        ? 'Downloaded'
-                        : csvDownloadStatus === 'failed'
-                          ? 'Download failed'
-                          : 'Download .csv'}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className={`arena-btn arena-btn--secondary arena-btn--sm${csvDownloadStatus === 'done' ? ' is-success' : ''}`}
+                        onClick={handleDownloadCsv}
+                      >
+                        {csvDownloadStatus === 'done'
+                          ? 'Downloaded'
+                          : csvDownloadStatus === 'failed'
+                            ? 'Download failed'
+                            : 'Download .csv'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'csv' ? ' is-success' : ''}`}
+                        disabled={copyingCsv}
+                        aria-busy={copyingCsv || undefined}
+                        aria-label={
+                          copyingCsv
+                            ? 'Copying CSV'
+                            : copied === 'csv'
+                              ? 'CSV copied'
+                              : 'Copy .csv'
+                        }
+                        title="Copy the spreadsheet-ready round CSV"
+                        onClick={() => {
+                          void handleCopyCsv();
+                        }}
+                      >
+                        {copyingCsv ? 'Copying…' : copied === 'csv' ? 'CSV copied' : 'Copy .csv'}
+                      </button>
+                    </>
                   ) : null}
                   <button
                     type="button"

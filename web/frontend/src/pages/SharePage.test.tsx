@@ -10,6 +10,7 @@ const {
   downloadCsvFileMock,
   downloadJsonFileMock,
   downloadMarkdownFileMock,
+  copyCsvToClipboardMock,
   copyJsonToClipboardMock,
   copyToClipboardMock,
   navigateMock,
@@ -19,6 +20,7 @@ const {
   downloadCsvFileMock: vi.fn(() => true),
   downloadJsonFileMock: vi.fn(() => true),
   downloadMarkdownFileMock: vi.fn(() => true),
+  copyCsvToClipboardMock: vi.fn().mockResolvedValue(true),
   copyJsonToClipboardMock: vi.fn().mockResolvedValue(true),
   copyToClipboardMock: vi.fn().mockResolvedValue(true),
   navigateMock: vi.fn(),
@@ -47,6 +49,7 @@ vi.mock('../hooks/useAuth', () => ({
 vi.mock('../utils/track', () => ({ default: trackMock }));
 
 vi.mock('../lib/clipboard', () => ({
+  copyCsvToClipboard: copyCsvToClipboardMock,
   copyJsonToClipboard: copyJsonToClipboardMock,
   copyMarkdownToClipboard: vi.fn().mockResolvedValue(true),
   copyToClipboard: copyToClipboardMock,
@@ -101,6 +104,8 @@ describe('SharePage', () => {
     downloadJsonFileMock.mockReturnValue(true);
     downloadMarkdownFileMock.mockClear();
     downloadMarkdownFileMock.mockReturnValue(true);
+    copyCsvToClipboardMock.mockClear();
+    copyCsvToClipboardMock.mockResolvedValue(true);
     copyJsonToClipboardMock.mockClear();
     copyJsonToClipboardMock.mockResolvedValue(true);
     copyToClipboardMock.mockClear();
@@ -183,6 +188,73 @@ describe('SharePage', () => {
     expect(content).toContain('"Should we ship today?","philosopher","The Philosopher","87","yes"');
     expect(filename).toBe('arena-share-round');
     expect(screen.getByRole('button', { name: /downloaded/i })).toHaveTextContent('Downloaded');
+  });
+
+  it('copies a spreadsheet-ready CSV for a shared round', async () => {
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&winner=philosopher' +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.') +
+      '&t1=' +
+      encodeURIComponent('philosopher|87|Enough is when desire ends.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy \.csv/i }));
+
+    await waitFor(() => expect(copyCsvToClipboardMock).toHaveBeenCalledTimes(1));
+    const [content] = copyCsvToClipboardMock.mock.calls[0] as [string];
+    expect(content).toContain('\uFEFF"prompt","agent_id","agent_name","score","winner"');
+    expect(content).toContain('"Should we ship today?","analyst","The Analyst","84","no"');
+    expect(content).toContain('"Should we ship today?","philosopher","The Philosopher","87","yes"');
+    expect(screen.getByRole('button', { name: /csv copied/i })).toHaveTextContent('CSV copied');
+  });
+
+  it('prevents duplicate CSV copy requests while the clipboard is pending', async () => {
+    let finishCopy: ((ok: boolean) => void) | undefined;
+    const pendingCopy = new Promise<boolean>((resolve) => {
+      finishCopy = resolve;
+    });
+    copyCsvToClipboardMock.mockImplementationOnce(() => pendingCopy);
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.');
+    renderShare(qs);
+
+    const button = screen.getByRole('button', { name: /copy \.csv/i });
+    fireEvent.click(button);
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('Copying…');
+    fireEvent.click(button);
+    expect(copyCsvToClipboardMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishCopy?.(true);
+      await pendingCopy;
+    });
+
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveTextContent('CSV copied');
+  });
+
+  it('surfaces a shared-round CSV copy failure', async () => {
+    copyCsvToClipboardMock.mockResolvedValueOnce(false);
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy \.csv/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /could not copy csv.*download \.csv/i,
+    );
   });
 
   it('copies a machine-readable JSON payload for a shared take', async () => {
