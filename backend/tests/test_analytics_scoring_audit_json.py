@@ -90,6 +90,44 @@ async def test_scoring_audit_json_keeps_newest_limit_and_sanitizes_filename(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("extension", "scope"),
+    [
+        ("csv", "analytics_scoring_audit_csv"),
+        ("json", "analytics_scoring_audit_json"),
+    ],
+)
+async def test_scoring_audit_exports_use_only_their_own_rate_limit_scope(
+    app_client, make_user, db_session, monkeypatch, extension, scope
+):
+    """Downloads must not consume the interactive detail-read budget."""
+    from arena.core import rate_limits
+
+    user = make_user(email=f"audit-scope-{extension}@test.com", tier=UserTier.PRO)
+    sid = str(uuid.uuid4())
+    _seed_audit(db_session, user_id=user.id, session_id=sid)
+    db_session.commit()
+
+    keys: list[str] = []
+    real_hit = rate_limits.rate_limiter.hit
+
+    def recording_hit(key, *, limit, window_seconds, message):
+        keys.append(key)
+        return real_hit(key, limit=limit, window_seconds=window_seconds, message=message)
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", recording_hit)
+
+    response = await app_client.get(
+        f"/api/analytics/scoring-audit/{sid}/export.{extension}",
+        headers=_pro_headers(user),
+    )
+
+    assert response.status_code == 200, response.text
+    user_keys = [key for key in keys if key.startswith("user:")]
+    assert user_keys == [f"user:{scope}:{user.id}"]
+
+
+@pytest.mark.asyncio
 async def test_scoring_audit_json_preserves_pro_gate_and_ownership(
     app_client, make_user, db_session
 ):
@@ -112,3 +150,27 @@ async def test_scoring_audit_json_preserves_pro_gate_and_ownership(
     )
     assert hidden.status_code == 404
     assert hidden.json()["detail"]["error"] == "audit_not_found"
+
+
+@pytest.mark.asyncio
+async def test_scoring_audit_export_gate_runs_before_export_rate_limit(
+    app_client, make_user, monkeypatch
+):
+    """Rejected tiers must not burn the export bucket."""
+    from arena.core import rate_limits
+
+    keys: list[str] = []
+
+    def recording_hit(key, *, limit, window_seconds, message):
+        keys.append(key)
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", recording_hit)
+
+    user = make_user(email="json-audit-gate-order@test.com", tier=UserTier.FREE)
+    response = await app_client.get(
+        "/api/analytics/scoring-audit/unknown/export.json",
+        headers=_pro_headers(user),
+    )
+
+    assert response.status_code == 403
+    assert [key for key in keys if key.startswith("user:")] == []

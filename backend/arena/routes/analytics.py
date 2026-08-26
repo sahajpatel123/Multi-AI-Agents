@@ -4057,19 +4057,38 @@ async def analytics_persona_stats_by_category_markdown(
     )
 
 
-@router.get("/analytics/scoring-audit/{session_id}")
-async def analytics_scoring_audit_detail(
+def _require_scoring_audit_access(user: UserResponse) -> None:
+    """Raise the shared scoring-audit entitlement error when access is absent."""
+    if not _scoring_audit_allowed(user):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Scoring audit requires a Pro subscription.",
+                "upgrade_required": "pro",
+            },
+        )
+
+
+def _enforce_scoring_audit_read_limit(user: UserResponse) -> None:
+    """Throttle interactive audit reads without affecting file exports."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_scoring_audit",
+        limit=120,
+        window_seconds=3600,
+        message="Too many scoring audit reads. Limit is 120 per hour.",
+    )
+
+
+async def _build_scoring_audit_detail(
+    *,
     session_id: str,
-    user: UserResponse = Depends(get_current_user_required),
-    db: Session = Depends(get_db),
-    limit: int = Query(
-        50,
-        ge=1,
-        le=200,
-        description="Max number of round audits returned, newest kept last.",
-    ),
+    user: UserResponse,
+    db: Session,
+    limit: int,
 ) -> dict:
-    """Per-round scoring audit detail for the caller (Pro feature).
+    """Build the ownership-scoped audit payload shared by all read formats.
 
     The Scorer persists a ScoringAudit row for every Arena exchange: each
     mind's score, the winner, self-reported confidence, the criteria
@@ -4088,24 +4107,6 @@ async def analytics_scoring_audit_detail(
     ``total_count`` reports the full session length so clients can tell
     when truncation happened.
     """
-    if not _scoring_audit_allowed(user):
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error": "feature_not_allowed",
-                "message": "Scoring audit requires a Pro subscription.",
-                "upgrade_required": "pro",
-            },
-        )
-
-    enforce_user_rate_limit(
-        user.id,
-        scope="analytics_scoring_audit",
-        limit=120,
-        window_seconds=3600,
-        message="Too many scoring audit reads. Limit is 120 per hour.",
-    )
-
     sid = session_id.strip()
     base_filters = (
         ScoringAudit.session_id == sid,
@@ -4171,6 +4172,29 @@ async def analytics_scoring_audit_detail(
     }
 
 
+@router.get("/analytics/scoring-audit/{session_id}")
+async def analytics_scoring_audit_detail(
+    session_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=200,
+        description="Max number of round audits returned, newest kept last.",
+    ),
+) -> dict:
+    """Per-round scoring audit detail for the caller (Pro feature)."""
+    _require_scoring_audit_access(user)
+    _enforce_scoring_audit_read_limit(user)
+    return await _build_scoring_audit_detail(
+        session_id=session_id,
+        user=user,
+        db=db,
+        limit=limit,
+    )
+
+
 @router.get("/analytics/scoring-audit/{session_id}/export.csv")
 async def analytics_scoring_audit_csv(
     session_id: str,
@@ -4185,12 +4209,12 @@ async def analytics_scoring_audit_csv(
 ) -> Response:
     """CSV export of the per-round scoring audit for one session (Pro).
 
-    Reuses the JSON detail route so the export and the API response cannot
-    drift: same ownership scoping (other users' sessions and unknown
-    sessions both 404), same Pro gate, same newest-kept-last windowing, and
-    the same legacy-row coercion. The CSV adds one row per audit round,
-    oldest-first, with nested JSON payloads flattened into compact JSON
-    cells so spreadsheets can still join on round numbers.
+    Shares the detail endpoint's payload builder so the export and API
+    response cannot drift: same ownership scoping (other users' sessions and
+    unknown sessions both 404), same Pro gate, same newest-kept-last
+    windowing, and the same legacy-row coercion. The CSV adds one row per
+    audit round, oldest-first, with nested JSON payloads flattened into
+    compact JSON cells so spreadsheets can still join on round numbers.
 
     Follows the same defenses as the other CSV exports: its own per-user
     rate limit, RFC 4180 quoting with ``\\r\\n`` line endings, formula-
@@ -4199,6 +4223,7 @@ async def analytics_scoring_audit_csv(
     it is embedded in the attachment filename so a crafted id cannot inject
     header bytes.
     """
+    _require_scoring_audit_access(user)
     enforce_user_rate_limit(
         user.id,
         scope="analytics_scoring_audit_csv",
@@ -4207,7 +4232,7 @@ async def analytics_scoring_audit_csv(
         message="Too many scoring audit exports. Limit is 60 per hour.",
     )
 
-    payload = await analytics_scoring_audit_detail(
+    payload = await _build_scoring_audit_detail(
         session_id=session_id,
         user=user,
         db=db,
@@ -4313,11 +4338,13 @@ async def analytics_scoring_audit_json(
 ) -> Response:
     """JSON download of the per-round scoring audit for one session (Pro).
 
-    The export deliberately reuses the detail route so ownership checks,
-    add-on entitlements, newest-kept-last windowing, and legacy-row coercion
-    stay identical to the modal's live view. A separate rate-limit scope
-    keeps a file download from consuming the interactive read budget.
+    The export deliberately shares the detail endpoint's payload builder so
+    ownership checks, add-on entitlements, newest-kept-last windowing, and
+    legacy-row coercion stay identical to the modal's live view. A separate
+    rate-limit scope keeps a file download from consuming the interactive
+    read budget.
     """
+    _require_scoring_audit_access(user)
     enforce_user_rate_limit(
         user.id,
         scope="analytics_scoring_audit_json",
@@ -4326,7 +4353,7 @@ async def analytics_scoring_audit_json(
         message="Too many scoring audit JSON exports. Limit is 60 per hour.",
     )
 
-    payload = await analytics_scoring_audit_detail(
+    payload = await _build_scoring_audit_detail(
         session_id=session_id,
         user=user,
         db=db,
