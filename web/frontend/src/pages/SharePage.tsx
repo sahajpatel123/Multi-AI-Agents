@@ -12,7 +12,7 @@ import { PERSONAS } from '../data/personas';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { copyMarkdownToClipboard, copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadJsonFile, downloadMarkdownFile } from '../lib/downloadTextFile';
 import {
   applyAbsoluteDocumentTitle,
   applyDocumentTitle,
@@ -25,6 +25,7 @@ import {
   invokeNativeShare,
 } from '../lib/shareUrl';
 import { formatRoundShareText, parseRoundShareUrl } from '../lib/roundShare';
+import { buildShareRoundJsonPayload, buildShareTakeJsonPayload } from '../lib/shareExport';
 import { saveSharedArenaPrompt } from '../lib/sharePrompt';
 import track from '../utils/track';
 import '../styles/share-landing.css';
@@ -256,6 +257,36 @@ export function SharePage() {
     }
   };
 
+  const handleDownloadJson = () => {
+    setCopyError(null);
+    const shareUrl = pageUrl || (typeof window !== 'undefined' ? window.location.href : '');
+    const payload = isRound && round
+      ? buildShareRoundJsonPayload({
+          round,
+          resolveAgentName: (id) => resolveAgent(id).name,
+          shareUrl,
+        })
+      : buildShareTakeJsonPayload({
+          agentId,
+          agentName: agent.name,
+          prompt,
+          response: response || agent.oneLiner,
+          shareUrl,
+        });
+    const stem = isRound
+      ? 'arena-share-round'
+      : `arena-share-${(agent.name || 'take').slice(0, 40)}`;
+    const ok = downloadJsonFile(`${JSON.stringify(payload, null, 2)}\n`, stem);
+    if (ok) {
+      setDownloadStatus('done');
+      window.setTimeout(() => setDownloadStatus('idle'), 2000);
+    } else {
+      setDownloadStatus('failed');
+      setCopyError('Could not download JSON — try Download .md instead.');
+      window.setTimeout(() => setDownloadStatus('idle'), 2800);
+    }
+  };
+
   const handlePrintShare = () => {
     if (!hasContent || typeof window === 'undefined' || typeof window.print !== 'function') return;
     window.print();
@@ -479,6 +510,17 @@ export function SharePage() {
                       : downloadStatus === 'failed'
                         ? 'Download failed'
                         : 'Download .md'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}`}
+                    onClick={handleDownloadJson}
+                  >
+                    {downloadStatus === 'done'
+                      ? 'Downloaded'
+                      : downloadStatus === 'failed'
+                        ? 'Download failed'
+                        : 'Download .json'}
                   </button>
                   <button
                     type="button"

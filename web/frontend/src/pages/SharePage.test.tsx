@@ -6,7 +6,8 @@ import { useAuth } from '../hooks/useAuth';
 import { copyMarkdownToClipboard } from '../lib/clipboard';
 import { SHARED_PROMPT_STORAGE_KEY } from '../lib/sharePrompt';
 
-const { navigateMock, setRedirectIntentMock, trackMock } = vi.hoisted(() => ({
+const { downloadJsonFileMock, navigateMock, setRedirectIntentMock, trackMock } = vi.hoisted(() => ({
+  downloadJsonFileMock: vi.fn(() => true),
   navigateMock: vi.fn(),
   setRedirectIntentMock: vi.fn(),
   trackMock: vi.fn(),
@@ -37,6 +38,11 @@ vi.mock('../lib/clipboard', () => ({
   copyToClipboard: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock('../lib/downloadTextFile', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/downloadTextFile')>();
+  return { ...actual, downloadJsonFile: downloadJsonFileMock };
+});
+
 vi.mock('../components/Navbar', () => ({
   Navbar: () => <div data-testid="navbar" />,
 }));
@@ -61,6 +67,8 @@ describe('SharePage', () => {
     navigateMock.mockClear();
     setRedirectIntentMock.mockClear();
     trackMock.mockClear();
+    downloadJsonFileMock.mockClear();
+    downloadJsonFileMock.mockReturnValue(true);
     vi.mocked(copyMarkdownToClipboard).mockResolvedValue(true);
     vi.mocked(useAuth).mockImplementation(() => ({
       isAuthenticated: false,
@@ -92,6 +100,28 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /copy answer/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /print \/ save pdf/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /download \.json/i })).toBeInTheDocument();
+  });
+
+  it('downloads a structured JSON payload for a single shared take', () => {
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the **smallest** honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /download \.json/i }));
+
+    expect(downloadJsonFileMock).toHaveBeenCalledTimes(1);
+    const [content, filename] = downloadJsonFileMock.mock.calls[0] as [string, string];
+    expect(JSON.parse(content)).toMatchObject({
+      schema_version: 1,
+      kind: 'take',
+      agent: { id: 'agent_1', name: 'The Analyst' },
+      response: 'Ship the **smallest** honest slice.',
+    });
+    expect(filename).toBe('arena-share-The Analyst');
   });
 
   it('opens the browser print dialog for a shared take', () => {
@@ -252,6 +282,17 @@ describe('SharePage', () => {
     expect(screen.getByText('Arena winner')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /read this round aloud/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy round/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /download \.json/i }));
+    expect(downloadJsonFileMock).toHaveBeenCalledTimes(1);
+    const [content] = downloadJsonFileMock.mock.calls[0] as [string, string];
+    expect(JSON.parse(content)).toMatchObject({
+      kind: 'round',
+      winner_agent_id: 'philosopher',
+      takes: [
+        { agent_id: 'analyst', agent_name: 'The Analyst', score: 84 },
+        { agent_id: 'philosopher', agent_name: 'The Philosopher', score: 87 },
+      ],
+    });
   });
 
   it('expands and collapses a long shared round prompt', () => {
