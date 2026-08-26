@@ -434,6 +434,31 @@ describe('ScoringAuditModal', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
+  it('does not copy JSON after the modal closes while the export body is read', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    let finishText: ((text: string) => void) | undefined;
+    const pendingText = new Promise<string>((resolve) => {
+      finishText = resolve;
+    });
+    exportScoringAuditJsonMock.mockResolvedValue({ text: () => pendingText } as unknown as Blob);
+    const { unmount } = renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy scoring audit as json/i }),
+    );
+    await waitFor(() => {
+      expect(exportScoringAuditJsonMock).toHaveBeenCalledWith('session-1', 1);
+    });
+
+    unmount();
+    await act(async () => {
+      finishText?.('{"session_id":"session-1","audits":[]}');
+    });
+
+    expect(copyJsonToClipboardMock).not.toHaveBeenCalled();
+  });
+
   it('resets successful CSV copy feedback so the action label stays discoverable', async () => {
     vi.useFakeTimers();
     try {

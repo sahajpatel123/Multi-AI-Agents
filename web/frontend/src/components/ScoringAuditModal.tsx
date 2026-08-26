@@ -222,7 +222,9 @@ export function ScoringAuditModal({
     try {
       const blob = await exportScoringAuditMarkdown(sessionId, data.audit_count);
       if (copyRunRef.current !== runId) return;
-      const copied = await copyMarkdownToClipboard(await blob.text());
+      const text = await blob.text();
+      if (copyRunRef.current !== runId) return;
+      const copied = await copyMarkdownToClipboard(text);
       if (copyRunRef.current !== runId) return;
       if (copied) {
         setCopyStatus({ format: 'markdown', state: 'copied' });
@@ -252,7 +254,9 @@ export function ScoringAuditModal({
     try {
       const blob = await exportScoringAuditCsv(sessionId, data.audit_count);
       if (copyRunRef.current !== runId) return;
-      const copied = await copyCsvToClipboard(await blob.text());
+      const text = await blob.text();
+      if (copyRunRef.current !== runId) return;
+      const copied = await copyCsvToClipboard(text);
       if (copyRunRef.current !== runId) return;
       if (copied) {
         setCopyStatus({ format: 'csv', state: 'copied' });
@@ -282,7 +286,9 @@ export function ScoringAuditModal({
     try {
       const blob = await exportScoringAuditJson(sessionId, data.audit_count);
       if (copyRunRef.current !== runId) return;
-      const copied = await copyJsonToClipboard(await blob.text());
+      const text = await blob.text();
+      if (copyRunRef.current !== runId) return;
+      const copied = await copyJsonToClipboard(text);
       if (copyRunRef.current !== runId) return;
       if (copied) {
         setCopyStatus({ format: 'json', state: 'copied' });
