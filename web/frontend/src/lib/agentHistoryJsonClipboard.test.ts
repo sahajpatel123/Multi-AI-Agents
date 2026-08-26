@@ -52,4 +52,10 @@ describe('copyAgentHistoryJson', () => {
 
     await expect(copyAgentHistoryJson({ items: [] })).resolves.toBe(false);
   });
+
+  it('converts an unexpected clipboard exception into a refusal', async () => {
+    vi.mocked(copyJsonToClipboard).mockRejectedValueOnce(new Error('clipboard unavailable'));
+
+    await expect(copyAgentHistoryJson({ items: [] })).resolves.toBe(false);
+  });
 });

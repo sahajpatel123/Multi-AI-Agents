@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Improved
+- Agent history JSON clipboard copying now locks repeat activation, reports an
+  in-flight state, and ignores late clipboard completions after reset or unmount
 - Watchlist bulk removal now locks visible selection and every other watch
   mutation until the destructive request settles, preventing a rapid second
   action from racing the deletion or changing the confirmed selection
