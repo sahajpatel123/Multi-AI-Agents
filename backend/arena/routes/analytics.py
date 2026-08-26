@@ -1208,8 +1208,9 @@ def _scoring_audit_markdown_text(value) -> str:
     """Escape audit values before placing them in Markdown prose or tables.
 
     Prompt snippets and persisted ids can contain user- or model-controlled
-    Markdown characters. Keep the report readable while preventing a prompt
-    from changing the report's structure when it is rendered elsewhere.
+    Markdown characters, including GitHub-style strikethrough delimiters.
+    Keep the report readable while preventing a prompt from changing the
+    report's structure when it is rendered elsewhere.
     """
     if value is None:
         return ""
@@ -1219,6 +1220,7 @@ def _scoring_audit_markdown_text(value) -> str:
         .replace("|", "\\|")
         .replace("`", "\\`")
         .replace("*", "\\*")
+        .replace("~", "\\~")
         .replace("_", "\\_")
         .replace("[", "\\[")
         .replace("]", "\\]")

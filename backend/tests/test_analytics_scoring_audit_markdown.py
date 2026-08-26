@@ -59,7 +59,7 @@ async def test_scoring_audit_markdown_matches_visible_rounds_and_escapes_cells(
         user_id=user.id,
         session_id=sid,
         hours_ago=1,
-        prompt="newer | [round]\nwith a second line",
+        prompt="newer | [round] ~~struck~~\nwith a second line",
         fallback_used=True,
     )
     db_session.commit()
@@ -78,7 +78,7 @@ async def test_scoring_audit_markdown_matches_visible_rounds_and_escapes_cells(
     assert response.headers["x-content-type-options"] == "nosniff"
     assert "**Rounds:** showing 1 of 2" in response.text
     assert "older round" not in response.text
-    assert "newer \\| \\[round\\] with a second line" in response.text
+    assert "newer \\| \\[round\\] \\~\\~struck\\~\\~ with a second line" in response.text
     assert "- **Fallback scores:** yes — provisional fallback scores" in response.text
     assert "| Mind | Score | Confidence |" in response.text
     assert "| agent-1 | 87 | 82 |" in response.text

@@ -95,6 +95,7 @@ async def test_scoring_audit_json_keeps_newest_limit_and_sanitizes_filename(
     [
         ("csv", "analytics_scoring_audit_csv"),
         ("json", "analytics_scoring_audit_json"),
+        ("md", "analytics_scoring_audit_markdown"),
     ],
 )
 async def test_scoring_audit_exports_use_only_their_own_rate_limit_scope(
