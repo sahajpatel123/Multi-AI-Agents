@@ -4299,6 +4299,56 @@ async def analytics_scoring_audit_csv(
     )
 
 
+@router.get("/analytics/scoring-audit/{session_id}/export.json")
+async def analytics_scoring_audit_json(
+    session_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=200,
+        description="Max number of round audits exported, newest kept last.",
+    ),
+) -> Response:
+    """JSON download of the per-round scoring audit for one session (Pro).
+
+    The export deliberately reuses the detail route so ownership checks,
+    add-on entitlements, newest-kept-last windowing, and legacy-row coercion
+    stay identical to the modal's live view. A separate rate-limit scope
+    keeps a file download from consuming the interactive read budget.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_scoring_audit_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many scoring audit JSON exports. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_scoring_audit_detail(
+        session_id=session_id,
+        user=user,
+        db=db,
+        limit=limit,
+    )
+
+    import json
+    import re
+
+    safe_sid = re.sub(r"[^A-Za-z0-9._-]", "_", payload["session_id"])
+    filename = f"arena-scoring-audit-{safe_sid}.json"
+    return Response(
+        content=json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n",
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/admin/routes")
 async def admin_routes_summary(
     user: UserResponse = Depends(get_current_user_required),

@@ -5796,6 +5796,24 @@ export async function exportScoringAuditCsv(
   return response.blob();
 }
 
+export async function exportScoringAuditJson(
+  sessionId: string,
+  limit = 50,
+): Promise<Blob> {
+  const response = await apiFetch(
+    `/api/analytics/scoring-audit/${encodeURIComponent(sessionId)}/export.json?limit=${encodeURIComponent(String(limit))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export scoring audit JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return response.blob();
+}
+
 // ─── Export presets ─────────────────────────────────────────────────────────
 // Saved-response export configurations the backend persists per user
 // (routes/export_presets.py): reusable filter+format bundles with a dry-run

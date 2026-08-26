@@ -1,13 +1,23 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { ApiError, exportScoringAuditCsv, fetchScoringAudit } from '../api';
+import {
+  ApiError,
+  exportScoringAuditCsv,
+  exportScoringAuditJson,
+  fetchScoringAudit,
+} from '../api';
 import type { ScoringAuditResponse } from '../types';
 import { downloadBlobFile } from '../lib/downloadTextFile';
 import { ScoringAuditModal } from './ScoringAuditModal';
 
 vi.mock('../api', async () => {
   const actual = await vi.importActual<typeof import('../api')>('../api');
-  return { ...actual, fetchScoringAudit: vi.fn(), exportScoringAuditCsv: vi.fn() };
+  return {
+    ...actual,
+    fetchScoringAudit: vi.fn(),
+    exportScoringAuditCsv: vi.fn(),
+    exportScoringAuditJson: vi.fn(),
+  };
 });
 
 vi.mock('./MicroLoader', () => ({
@@ -23,6 +33,7 @@ vi.mock('../lib/downloadTextFile', async () => {
 
 const fetchScoringAuditMock = vi.mocked(fetchScoringAudit);
 const exportScoringAuditCsvMock = vi.mocked(exportScoringAuditCsv);
+const exportScoringAuditJsonMock = vi.mocked(exportScoringAuditJson);
 const downloadBlobFileMock = vi.mocked(downloadBlobFile);
 const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
 
@@ -75,6 +86,7 @@ describe('ScoringAuditModal', () => {
   beforeEach(() => {
     fetchScoringAuditMock.mockReset();
     exportScoringAuditCsvMock.mockReset();
+    exportScoringAuditJsonMock.mockReset();
     downloadBlobFileMock.mockReset();
   });
 
@@ -122,6 +134,9 @@ describe('ScoringAuditModal', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /export scoring audit as csv/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /export scoring audit as json/i }),
     ).toBeDisabled();
   });
 
@@ -235,6 +250,26 @@ describe('ScoringAuditModal', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Export failed');
     expect(downloadBlobFileMock).not.toHaveBeenCalled();
+  });
+
+  it('exports the visible rounds as JSON', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    const blob = new Blob(['{"session_id":"session-1"}\n'], {
+      type: 'application/json',
+    });
+    exportScoringAuditJsonMock.mockResolvedValue(blob);
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /export scoring audit as json/i }));
+
+    await waitFor(() => {
+      expect(exportScoringAuditJsonMock).toHaveBeenCalledWith('session-1', 1);
+    });
+    expect(downloadBlobFileMock).toHaveBeenCalledWith(
+      blob,
+      'arena-scoring-audit-session-1.json',
+    );
   });
 
   it('surfaces a browser-blocked download instead of claiming success', async () => {

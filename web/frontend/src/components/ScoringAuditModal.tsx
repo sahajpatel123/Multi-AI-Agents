@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ApiError, exportScoringAuditCsv, fetchScoringAudit } from '../api';
+import {
+  ApiError,
+  exportScoringAuditCsv,
+  exportScoringAuditJson,
+  fetchScoringAudit,
+} from '../api';
 import { downloadBlobFile, sanitizeDownloadFilename } from '../lib/downloadTextFile';
 import {
   AGENTS,
@@ -19,6 +24,8 @@ interface ScoringAuditModalProps {
   /** Resolves persona ids (e.g. "analyst") to display names from the user's panel. */
   personaNameResolver?: (personaId: string) => string | undefined;
 }
+
+type ScoringAuditExportFormat = 'csv' | 'json';
 
 function agentDisplayName(agentId: string): string {
   const normalized = agentId.replace(/-/g, '_');
@@ -45,7 +52,7 @@ export function ScoringAuditModal({
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<ScoringAuditExportFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
@@ -149,15 +156,17 @@ export function ScoringAuditModal({
     [personaNameResolver],
   );
 
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(async (format: ScoringAuditExportFormat) => {
     if (!data || exporting) return;
-    setExporting(true);
+    setExporting(format);
     setExportError(null);
     try {
-      const blob = await exportScoringAuditCsv(sessionId, data.audit_count);
+      const blob = format === 'json'
+        ? await exportScoringAuditJson(sessionId, data.audit_count)
+        : await exportScoringAuditCsv(sessionId, data.audit_count);
       const accepted = downloadBlobFile(
         blob,
-        `arena-scoring-audit-${sanitizeDownloadFilename(sessionId, 'session')}.csv`,
+        `arena-scoring-audit-${sanitizeDownloadFilename(sessionId, 'session')}.${format}`,
       );
       if (!accepted) {
         setExportError(
@@ -168,10 +177,10 @@ export function ScoringAuditModal({
       setExportError(
         err instanceof Error
           ? err.message
-          : 'Could not export the scoring audit as CSV.',
+          : `Could not export the scoring audit as ${format.toUpperCase()}.`,
       );
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   }, [data, exporting, sessionId]);
 
@@ -198,11 +207,22 @@ export function ScoringAuditModal({
           <button
             type="button"
             className="sa-export"
-            onClick={() => void handleExport()}
-            disabled={!data || data.audits.length === 0 || exporting}
+            onClick={() => void handleExport('csv')}
+            disabled={!data || data.audits.length === 0 || exporting !== null}
+            aria-busy={exporting === 'csv' || undefined}
             aria-label="Export scoring audit as CSV"
           >
-            {exporting ? 'Exporting…' : 'Export CSV'}
+            {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
+          </button>
+          <button
+            type="button"
+            className="sa-export"
+            onClick={() => void handleExport('json')}
+            disabled={!data || data.audits.length === 0 || exporting !== null}
+            aria-busy={exporting === 'json' || undefined}
+            aria-label="Export scoring audit as JSON"
+          >
+            {exporting === 'json' ? 'Exporting…' : 'Export JSON'}
           </button>
           <button
             ref={closeRef}
