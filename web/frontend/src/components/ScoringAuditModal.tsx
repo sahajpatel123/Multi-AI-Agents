@@ -30,6 +30,7 @@ interface ScoringAuditModalProps {
 type ScoringAuditExportFormat = 'csv' | 'json' | 'md';
 type ScoringAuditCopyFormat = 'csv' | 'markdown';
 type CopyStatus = { format: ScoringAuditCopyFormat; state: 'copying' | 'copied' };
+const COPY_FEEDBACK_MS = 1800;
 
 function agentDisplayName(agentId: string): string {
   const normalized = agentId.replace(/-/g, '_');
@@ -108,6 +109,12 @@ export function ScoringAuditModal({
       copyRunRef.current += 1;
     };
   }, [sessionId, retryKey]);
+
+  useEffect(() => {
+    if (!copyStatus || copyStatus.state !== 'copied') return;
+    const timeoutId = window.setTimeout(() => setCopyStatus(null), COPY_FEEDBACK_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [copyStatus]);
 
   // Lock background scroll while the modal is open.
   useEffect(() => {

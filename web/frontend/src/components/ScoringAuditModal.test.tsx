@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
   ApiError,
   exportScoringAuditCsv,
@@ -47,6 +47,7 @@ const downloadBlobFileMock = vi.mocked(downloadBlobFile);
 const copyCsvToClipboardMock = vi.mocked(copyCsvToClipboard);
 const copyMarkdownToClipboardMock = vi.mocked(copyMarkdownToClipboard);
 const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+const COPY_FEEDBACK_MS = 1800;
 
 const auditResponse: ScoringAuditResponse = {
   session_id: 'session-1',
@@ -378,6 +379,41 @@ describe('ScoringAuditModal', () => {
       'CSV copied to the clipboard.',
     );
     expect(downloadBlobFileMock).not.toHaveBeenCalled();
+  });
+
+  it('resets successful CSV copy feedback so the action label stays discoverable', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchScoringAuditMock.mockResolvedValue(auditResponse);
+      exportScoringAuditCsvMock.mockResolvedValue(
+        { text: async () => 'round,prompt_snippet\r\n1,Should we launch?\r\n' } as unknown as Blob,
+      );
+      renderModal();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(screen.getByText('Should we launch?')).toBeInTheDocument();
+      fireEvent.click(
+        screen.getByRole('button', { name: /copy scoring audit as csv/i }),
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'CSV copied to the clipboard.',
+      );
+      expect(screen.getByRole('button', { name: 'CSV copied' })).toBeEnabled();
+
+      act(() => vi.advanceTimersByTime(COPY_FEEDBACK_MS));
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /copy scoring audit as csv/i }),
+      ).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('surfaces a CSV clipboard failure instead of claiming it was copied', async () => {
