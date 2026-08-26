@@ -6,8 +6,15 @@ import { useAuth } from '../hooks/useAuth';
 import { copyMarkdownToClipboard } from '../lib/clipboard';
 import { SHARED_PROMPT_STORAGE_KEY } from '../lib/sharePrompt';
 
-const { downloadJsonFileMock, navigateMock, setRedirectIntentMock, trackMock } = vi.hoisted(() => ({
+const {
+  downloadJsonFileMock,
+  downloadMarkdownFileMock,
+  navigateMock,
+  setRedirectIntentMock,
+  trackMock,
+} = vi.hoisted(() => ({
   downloadJsonFileMock: vi.fn(() => true),
+  downloadMarkdownFileMock: vi.fn(() => true),
   navigateMock: vi.fn(),
   setRedirectIntentMock: vi.fn(),
   trackMock: vi.fn(),
@@ -40,7 +47,11 @@ vi.mock('../lib/clipboard', () => ({
 
 vi.mock('../lib/downloadTextFile', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/downloadTextFile')>();
-  return { ...actual, downloadJsonFile: downloadJsonFileMock };
+  return {
+    ...actual,
+    downloadJsonFile: downloadJsonFileMock,
+    downloadMarkdownFile: downloadMarkdownFileMock,
+  };
 });
 
 vi.mock('../components/Navbar', () => ({
@@ -69,6 +80,8 @@ describe('SharePage', () => {
     trackMock.mockClear();
     downloadJsonFileMock.mockClear();
     downloadJsonFileMock.mockReturnValue(true);
+    downloadMarkdownFileMock.mockClear();
+    downloadMarkdownFileMock.mockReturnValue(true);
     vi.mocked(copyMarkdownToClipboard).mockResolvedValue(true);
     vi.mocked(useAuth).mockImplementation(() => ({
       isAuthenticated: false,
@@ -122,6 +135,46 @@ describe('SharePage', () => {
       response: 'Ship the **smallest** honest slice.',
     });
     expect(filename).toBe('arena-share-The Analyst');
+  });
+
+  it('keeps Markdown and JSON download feedback independent', () => {
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    const markdownButton = screen.getByRole('button', { name: /download \.md/i });
+    const jsonButton = screen.getByRole('button', { name: /download \.json/i });
+
+    fireEvent.click(markdownButton);
+
+    expect(markdownButton).toHaveTextContent('Downloaded');
+    expect(jsonButton).toHaveTextContent('Download .json');
+
+    fireEvent.click(jsonButton);
+
+    expect(markdownButton).toHaveTextContent('Downloaded');
+    expect(jsonButton).toHaveTextContent('Downloaded');
+  });
+
+  it('keeps a JSON download failure from changing the Markdown control', () => {
+    downloadJsonFileMock.mockReturnValueOnce(false);
+    const qs =
+      '?agent=agent_1&prompt=' +
+      encodeURIComponent('Should I ship today?') +
+      '&response=' +
+      encodeURIComponent('Ship the smallest honest slice.');
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /download \.json/i }));
+
+    expect(screen.getByRole('button', { name: /download failed/i })).toHaveTextContent(
+      'Download failed',
+    );
+    expect(screen.getByRole('button', { name: /download \.md/i })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not download json/i);
   });
 
   it('opens the browser print dialog for a shared take', () => {

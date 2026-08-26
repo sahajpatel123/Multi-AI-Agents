@@ -31,6 +31,7 @@ import track from '../utils/track';
 import '../styles/share-landing.css';
 
 const MAX_PARAM_LEN = 2000;
+type DownloadStatus = 'idle' | 'done' | 'failed';
 
 function sanitizeParam(raw: string | null, max = MAX_PARAM_LEN): string {
   if (!raw) return '';
@@ -79,7 +80,8 @@ export function SharePage() {
   const [copied, setCopied] = useState<'take' | 'answer' | 'link' | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
-  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
+  const [jsonDownloadStatus, setJsonDownloadStatus] = useState<DownloadStatus>('idle');
   const [promptExpanded, setPromptExpanded] = useState(false);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
@@ -230,12 +232,12 @@ export function SharePage() {
       });
       const ok = downloadMarkdownFile(`${text}\n`, 'arena-share-round');
       if (ok) {
-        setDownloadStatus('done');
-        window.setTimeout(() => setDownloadStatus('idle'), 2000);
+        setMarkdownDownloadStatus('done');
+        window.setTimeout(() => setMarkdownDownloadStatus('idle'), 2000);
       } else {
-        setDownloadStatus('failed');
+        setMarkdownDownloadStatus('failed');
         setCopyError('Could not download — try Copy round instead.');
-        window.setTimeout(() => setDownloadStatus('idle'), 2800);
+        window.setTimeout(() => setMarkdownDownloadStatus('idle'), 2800);
       }
       return;
     }
@@ -248,12 +250,12 @@ export function SharePage() {
     const stem = `arena-share-${(agent.name || 'take').slice(0, 40)}`;
     const ok = downloadMarkdownFile(`${text}\n`, stem);
     if (ok) {
-      setDownloadStatus('done');
-      window.setTimeout(() => setDownloadStatus('idle'), 2000);
+      setMarkdownDownloadStatus('done');
+      window.setTimeout(() => setMarkdownDownloadStatus('idle'), 2000);
     } else {
-      setDownloadStatus('failed');
+      setMarkdownDownloadStatus('failed');
       setCopyError('Could not download — try Copy take instead.');
-      window.setTimeout(() => setDownloadStatus('idle'), 2800);
+      window.setTimeout(() => setMarkdownDownloadStatus('idle'), 2800);
     }
   };
 
@@ -278,12 +280,12 @@ export function SharePage() {
       : `arena-share-${(agent.name || 'take').slice(0, 40)}`;
     const ok = downloadJsonFile(`${JSON.stringify(payload, null, 2)}\n`, stem);
     if (ok) {
-      setDownloadStatus('done');
-      window.setTimeout(() => setDownloadStatus('idle'), 2000);
+      setJsonDownloadStatus('done');
+      window.setTimeout(() => setJsonDownloadStatus('idle'), 2000);
     } else {
-      setDownloadStatus('failed');
+      setJsonDownloadStatus('failed');
       setCopyError('Could not download JSON — try Download .md instead.');
-      window.setTimeout(() => setDownloadStatus('idle'), 2800);
+      window.setTimeout(() => setJsonDownloadStatus('idle'), 2800);
     }
   };
 
@@ -502,23 +504,23 @@ export function SharePage() {
                   ) : null}
                   <button
                     type="button"
-                    className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}`}
+                    className={`arena-btn arena-btn--secondary arena-btn--sm${markdownDownloadStatus === 'done' ? ' is-success' : ''}`}
                     onClick={handleDownloadTake}
                   >
-                    {downloadStatus === 'done'
+                    {markdownDownloadStatus === 'done'
                       ? 'Downloaded'
-                      : downloadStatus === 'failed'
+                      : markdownDownloadStatus === 'failed'
                         ? 'Download failed'
                         : 'Download .md'}
                   </button>
                   <button
                     type="button"
-                    className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}`}
+                    className={`arena-btn arena-btn--secondary arena-btn--sm${jsonDownloadStatus === 'done' ? ' is-success' : ''}`}
                     onClick={handleDownloadJson}
                   >
-                    {downloadStatus === 'done'
+                    {jsonDownloadStatus === 'done'
                       ? 'Downloaded'
-                      : downloadStatus === 'failed'
+                      : jsonDownloadStatus === 'failed'
                         ? 'Download failed'
                         : 'Download .json'}
                   </button>
