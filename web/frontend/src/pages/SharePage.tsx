@@ -190,6 +190,16 @@ export function SharePage() {
   }, [shareParamsKey]);
 
   useEffect(() => {
+    // Clipboard writes cannot be cancelled. Invalidate a pending CSV write
+    // when the page leaves the tree so its eventual result cannot publish
+    // feedback into an unmounted share view.
+    return () => {
+      copyCsvRequestRef.current += 1;
+      copyCsvPendingRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!copied) return;
     const t = window.setTimeout(() => setCopied(null), 1600);
     return () => window.clearTimeout(t);
@@ -899,6 +909,14 @@ export function SharePage() {
                     </button>
                   ) : null}
                 </div>
+
+                <span className="share-take__status" role="status" aria-live="polite">
+                  {copyingCsv
+                    ? 'Copying round CSV to the clipboard.'
+                    : copied === 'csv'
+                      ? 'Round CSV copied to the clipboard.'
+                      : ''}
+                </span>
 
                 <div className="share-take__ctas">
                   <MotionButton type="button" variant="primary" size="md" onClick={goTry}>

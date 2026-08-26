@@ -229,6 +229,7 @@ describe('SharePage', () => {
 
     expect(button).toBeDisabled();
     expect(button).toHaveTextContent('Copying…');
+    expect(screen.getByRole('status')).toHaveTextContent('Copying round CSV to the clipboard.');
     fireEvent.click(button);
     expect(copyCsvToClipboardMock).toHaveBeenCalledTimes(1);
 
@@ -239,6 +240,7 @@ describe('SharePage', () => {
 
     expect(button).not.toBeDisabled();
     expect(button).toHaveTextContent('CSV copied');
+    expect(screen.getByRole('status')).toHaveTextContent('Round CSV copied to the clipboard.');
   });
 
   it('surfaces a shared-round CSV copy failure', async () => {
