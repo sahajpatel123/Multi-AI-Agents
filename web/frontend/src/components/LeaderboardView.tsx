@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import { AGENTS, type SessionTurn } from '../types';
 import { AgentAnswerMarkdown } from './AgentAnswerMarkdown';
@@ -35,6 +35,7 @@ interface LeaderboardViewProps {
 
 const RANK_LABELS = ['#1', '#2', '#3', '#4'];
 const AGENT_SLOT_IDS = ['agent_1', 'agent_2', 'agent_3', 'agent_4'] as const;
+const LEADERBOARD_QUERY_MAX_LENGTH = 120;
 
 type LeaderboardRow = {
   agent_id: string;
@@ -59,6 +60,8 @@ export function LeaderboardView({
   const [expandedTurnId, setExpandedTurnId] = useState<string | null>(null);
   const [mindFilter, setMindFilter] = useState<LeaderboardMindFilter>(LEADERBOARD_MIND_ALL);
   const [promptQuery, setPromptQuery] = useState('');
+  const promptSearchId = useId();
+  const promptSearchInputRef = useRef<HTMLInputElement>(null);
   const [rowCopyStatus, setRowCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [auditOpen, setAuditOpen] = useState(false);
 
@@ -205,6 +208,15 @@ export function LeaderboardView({
   );
 
   const hasPromptQuery = promptQuery.trim().length > 0;
+
+  const promptSearchStatus = hasPromptQuery
+    ? `${filteredTurnSummaries.length} of ${mindFilteredTurnSummaries.length} session prompts match “${promptQuery.trim()}”.`
+    : '';
+
+  const clearPromptSearch = () => {
+    setPromptQuery('');
+    promptSearchInputRef.current?.focus();
+  };
 
   // A search is useful within one session, but should never hide a new
   // session's prompts when the leaderboard is reused in place.
@@ -502,26 +514,31 @@ export function LeaderboardView({
                 : ''}
             </div>
             <div className="lb-prompts__tools">
-              <label className="lb-prompt-search">
-                <span className="lb-prompt-search__label">Find</span>
+              <div className="lb-prompt-search">
+                <label className="lb-prompt-search__label" htmlFor={promptSearchId}>
+                  Find
+                </label>
                 <input
+                  id={promptSearchId}
+                  ref={promptSearchInputRef}
                   type="search"
                   value={promptQuery}
                   onChange={(event) => setPromptQuery(event.target.value)}
                   placeholder="Search prompts or takes…"
                   aria-label="Search session prompts"
+                  maxLength={LEADERBOARD_QUERY_MAX_LENGTH}
                 />
                 {hasPromptQuery ? (
                   <button
                     type="button"
                     className="lb-prompt-search__clear"
-                    onClick={() => setPromptQuery('')}
+                    onClick={clearPromptSearch}
                     aria-label="Clear session prompt search"
                   >
                     ×
                   </button>
                 ) : null}
-              </label>
+              </div>
               {mindFilter !== LEADERBOARD_MIND_ALL ? (
                 <button
                   type="button"
@@ -533,6 +550,9 @@ export function LeaderboardView({
               ) : null}
             </div>
           </div>
+          <span className="lb-prompt-search__status" role="status" aria-live="polite">
+            {promptSearchStatus}
+          </span>
           {filteredTurnSummaries.length === 0 ? (
             <div className="lb-prompts__empty">
               {hasPromptQuery
@@ -544,7 +564,7 @@ export function LeaderboardView({
                 <button
                   type="button"
                   className="lb-text-btn"
-                  onClick={() => setPromptQuery('')}
+                  onClick={clearPromptSearch}
                 >
                   Clear search
                 </button>

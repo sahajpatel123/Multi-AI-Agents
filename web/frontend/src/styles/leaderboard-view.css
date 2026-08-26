@@ -486,7 +486,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--lb-muted);
-  pointer-events: none;
+  cursor: text;
 }
 
 .lb-prompt-search input {
@@ -512,8 +512,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -527,6 +527,23 @@
 .lb-prompt-search__clear:hover {
   background: var(--lb-warm);
   color: var(--lb-ink);
+}
+
+.lb-prompt-search__clear:focus-visible {
+  outline: 2px solid var(--lb-accent);
+  outline-offset: 1px;
+}
+
+.lb-prompt-search__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .lb-prompts__label {

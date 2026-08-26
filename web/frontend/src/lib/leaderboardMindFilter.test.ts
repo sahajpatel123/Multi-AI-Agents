@@ -60,6 +60,17 @@ describe('filterLeaderboardTurnsByQuery', () => {
     expect(filterLeaderboardTurnsByQuery(searchableTurns, 'willingness to pay')).toHaveLength(1);
   });
 
+  it('matches diacritics-insensitively for easier keyboard search', () => {
+    const turnsWithDiacritics = [
+      {
+        ...searchableTurns[0],
+        prompt: 'Should we launch the café pilot?',
+      },
+    ];
+
+    expect(filterLeaderboardTurnsByQuery(turnsWithDiacritics, 'CAFE')).toHaveLength(1);
+  });
+
   it('requires every search term and keeps the original list unchanged', () => {
     const original = searchableTurns.map((turn) => ({ ...turn }));
     expect(filterLeaderboardTurnsByQuery(searchableTurns, 'launch analyst')).toHaveLength(1);

@@ -74,6 +74,9 @@ describe('LeaderboardView', () => {
     expect(
       screen.getByText('Showing 1 of 2 prompts matching “willingness pragmatist”'),
     ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '1 of 2 session prompts match “willingness pragmatist”.',
+    );
   });
 
   it('clears the search and restores the full session view', () => {
@@ -84,7 +87,24 @@ describe('LeaderboardView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear session prompt search' }));
 
     expect((search as HTMLInputElement).value).toBe('');
+    expect(search).toHaveFocus();
     expect(screen.getByText('Should we launch now?')).toBeInTheDocument();
+    expect(screen.getByText('How should we price the product?')).toBeInTheDocument();
+  });
+
+  it('resets the search when the leaderboard switches sessions', () => {
+    const { rerender } = render(
+      <LeaderboardView turns={turns} onBack={vi.fn()} sessionId="session-1" />,
+    );
+    const search = screen.getByRole('searchbox', { name: 'Search session prompts' });
+
+    fireEvent.change(search, { target: { value: 'launch' } });
+    rerender(
+      <LeaderboardView turns={[turns[1]]} onBack={vi.fn()} sessionId="session-2" />,
+    );
+
+    const nextSearch = screen.getByRole('searchbox', { name: 'Search session prompts' });
+    expect((nextSearch as HTMLInputElement).value).toBe('');
     expect(screen.getByText('How should we price the product?')).toBeInTheDocument();
   });
 });

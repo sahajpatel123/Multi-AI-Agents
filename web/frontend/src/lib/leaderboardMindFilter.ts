@@ -19,6 +19,16 @@ export type LeaderboardSearchTurn = LeaderboardMindTurn & {
   fullTake?: string | null;
 };
 
+/** Normalize user-entered search text without changing the source content. */
+function normalizeLeaderboardSearchText(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Filter turns by winner id. Does not mutate the input. */
 export function filterLeaderboardTurnsByMind<T extends LeaderboardMindTurn>(
   turns: T[],
@@ -39,7 +49,7 @@ export function filterLeaderboardTurnsByQuery<T extends LeaderboardSearchTurn>(
   query: string,
 ): T[] {
   const list = turns || [];
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const terms = normalizeLeaderboardSearchText(query).split(' ').filter(Boolean);
   if (terms.length === 0) return [...list];
 
   return list.filter((turn) => {
@@ -50,9 +60,9 @@ export function filterLeaderboardTurnsByQuery<T extends LeaderboardSearchTurn>(
       turn.fullTake,
     ]
       .filter((value): value is string => typeof value === 'string')
-      .join(' ')
-      .toLowerCase();
-    return terms.every((term) => haystack.includes(term));
+      .join(' ');
+    const normalizedHaystack = normalizeLeaderboardSearchText(haystack);
+    return terms.every((term) => normalizedHaystack.includes(term));
   });
 }
 
