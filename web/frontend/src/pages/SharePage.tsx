@@ -83,6 +83,7 @@ export function SharePage() {
   const { isAuthenticated } = useAuth();
   const [copied, setCopied] = useState<'take' | 'answer' | 'prompt' | 'link' | null>(null);
   const [copiedRoundTakeIndex, setCopiedRoundTakeIndex] = useState<number | null>(null);
+  const [copyingRoundTakeIndex, setCopyingRoundTakeIndex] = useState<number | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [markdownDownloadStatus, setMarkdownDownloadStatus] = useState<DownloadStatus>('idle');
@@ -90,6 +91,7 @@ export function SharePage() {
   const [promptExpanded, setPromptExpanded] = useState(false);
   const copyPromptRequestRef = useRef(0);
   const copyRoundTakeRequestRef = useRef(0);
+  const copyRoundTakePendingRef = useRef(false);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
   const prompt = sanitizeParam(params.get('prompt'));
@@ -138,8 +140,10 @@ export function SharePage() {
     // result that was started for the previous question.
     copyPromptRequestRef.current += 1;
     copyRoundTakeRequestRef.current += 1;
+    copyRoundTakePendingRef.current = false;
     setCopied(null);
     setCopiedRoundTakeIndex(null);
+    setCopyingRoundTakeIndex(null);
     setCopyError(null);
     setPromptExpanded(false);
   }, [shareParamsKey]);
@@ -248,10 +252,12 @@ export function SharePage() {
   };
 
   const handleCopyRoundTake = async (take: RoundShareTake, index: number) => {
-    if (!isRound || !take.oneLiner) return;
+    if (!isRound || !take.oneLiner || copyRoundTakePendingRef.current) return;
+    copyRoundTakePendingRef.current = true;
     const requestId = ++copyRoundTakeRequestRef.current;
     setCopied(null);
     setCopiedRoundTakeIndex(null);
+    setCopyingRoundTakeIndex(index);
     setCopyError(null);
     try {
       const ok = await copyMarkdownToClipboard(take.oneLiner);
@@ -264,6 +270,11 @@ export function SharePage() {
     } catch {
       if (copyRoundTakeRequestRef.current !== requestId) return;
       setCopyError('Could not copy this answer — select the text manually.');
+    } finally {
+      if (copyRoundTakeRequestRef.current === requestId) {
+        copyRoundTakePendingRef.current = false;
+        setCopyingRoundTakeIndex(null);
+      }
     }
   };
 
@@ -469,8 +480,12 @@ export function SharePage() {
                             <button
                               type="button"
                               className={`arena-btn arena-btn--secondary arena-btn--sm${copiedRoundTakeIndex === index ? ' is-success' : ''}`}
+                              disabled={copyingRoundTakeIndex !== null}
+                              aria-busy={copyingRoundTakeIndex === index || undefined}
                               aria-label={
-                                copiedRoundTakeIndex === index
+                                copyingRoundTakeIndex === index
+                                  ? `Copying ${takeAgent.name} answer`
+                                  : copiedRoundTakeIndex === index
                                   ? `${takeAgent.name} answer copied`
                                   : `Copy ${takeAgent.name} answer`
                               }
@@ -478,7 +493,11 @@ export function SharePage() {
                                 void handleCopyRoundTake(take, index);
                               }}
                             >
-                              {copiedRoundTakeIndex === index ? 'Answer copied' : 'Copy answer'}
+                              {copyingRoundTakeIndex === index
+                                ? 'Copying…'
+                                : copiedRoundTakeIndex === index
+                                  ? 'Answer copied'
+                                  : 'Copy answer'}
                             </button>
                           </div>
                         ) : null}

@@ -95,6 +95,7 @@ describe('SharePage', () => {
     downloadMarkdownFileMock.mockReturnValue(true);
     copyToClipboardMock.mockClear();
     copyToClipboardMock.mockResolvedValue(true);
+    vi.mocked(copyMarkdownToClipboard).mockClear();
     vi.mocked(copyMarkdownToClipboard).mockResolvedValue(true);
     vi.mocked(useAuth).mockImplementation(() => ({
       isAuthenticated: false,
@@ -360,6 +361,44 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /the analyst answer copied/i })).toHaveTextContent(
       'Answer copied',
     );
+  });
+
+  it('prevents duplicate round-take copy requests while clipboard is pending', async () => {
+    let finishCopy: ((ok: boolean) => void) | undefined;
+    const pendingCopy = new Promise<boolean>((resolve) => {
+      finishCopy = resolve;
+    });
+    vi.mocked(copyMarkdownToClipboard).mockImplementationOnce(() => pendingCopy);
+    const qs =
+      '?round=1&prompt=' +
+      encodeURIComponent('Should we ship today?') +
+      '&t0=' +
+      encodeURIComponent('analyst|84|Ship the smallest honest slice.') +
+      '&t1=' +
+      encodeURIComponent('philosopher|87|Enough is when desire ends.');
+    renderShare(qs);
+
+    const analystButton = screen.getByRole('button', { name: /copy the analyst answer/i });
+    const philosopherButton = screen.getByRole('button', { name: /copy the philosopher answer/i });
+    fireEvent.click(analystButton);
+
+    expect(analystButton).toBeDisabled();
+    expect(analystButton).toHaveTextContent('Copying…');
+    expect(philosopherButton).toBeDisabled();
+    fireEvent.click(analystButton);
+    fireEvent.click(philosopherButton);
+    expect(copyMarkdownToClipboard).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishCopy?.(true);
+      await pendingCopy;
+    });
+
+    expect(screen.getByRole('button', { name: /the analyst answer copied/i })).toHaveTextContent(
+      'Answer copied',
+    );
+    expect(analystButton).not.toBeDisabled();
+    expect(philosopherButton).not.toBeDisabled();
   });
 
   it('surfaces individual round take copy failures', async () => {
