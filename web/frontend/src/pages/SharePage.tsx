@@ -34,15 +34,10 @@ const MAX_PARAM_LEN = 2000;
 function sanitizeParam(raw: string | null, max = MAX_PARAM_LEN): string {
   if (!raw) return '';
   try {
-    // React Router already decodes once; tolerate double-encoding.
-    let value = raw;
-    if (/%[0-9A-Fa-f]{2}/.test(value)) {
-      try {
-        value = decodeURIComponent(value);
-      } catch {
-        /* keep as-is */
-      }
-    }
+    // React Router/URLSearchParams already decodes the query value once.
+    // Decode no further: `%20` can be intentional content inside a Markdown
+    // URL, and a second decode would silently change the answer being copied.
+    const value = raw;
     // Strip embedded NUL bytes — they break URL parsers downstream and aren't
     // a legitimate character in any user-authored share text.
     // eslint-disable-next-line no-control-regex

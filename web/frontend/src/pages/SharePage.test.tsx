@@ -132,6 +132,18 @@ describe('SharePage', () => {
     expect(screen.getByRole('button', { name: /answer copied/i })).toBeInTheDocument();
   });
 
+  it('preserves URL escapes inside answer Markdown when copying', async () => {
+    const answer = 'Use [the encoded path](https://example.test/files/%20) as written.';
+    const qs =
+      '?agent=agent_1&response=' +
+      encodeURIComponent(answer);
+    renderShare(qs);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy answer/i }));
+
+    await waitFor(() => expect(copyMarkdownToClipboard).toHaveBeenCalledWith(answer));
+  });
+
   it('surfaces answer-copy failures', async () => {
     vi.mocked(copyMarkdownToClipboard).mockResolvedValueOnce(false);
     const qs =
