@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Agent history Markdown exports now escape user/API-controlled formatting
+  characters so copied or downloaded snapshots remain structurally safe
 - Bulk Agent history deletion now reconciles already-missing selections in the
   current tab immediately, keeping stale rows and local pins from lingering
 

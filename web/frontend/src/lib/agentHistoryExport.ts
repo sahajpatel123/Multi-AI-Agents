@@ -24,6 +24,24 @@ function displayTitle(item: AgentHistoryExportItem): string {
   return 'Untitled research';
 }
 
+const MARKDOWN_ESCAPE_PATTERN = /([\\`*_{}[\]()#+!>|~<\-=])/g;
+
+/**
+ * Escape user- and model-controlled text before placing it in Markdown.
+ * Without this, a copied history title or question could inject headings,
+ * links, HTML, list items, or thematic breaks into the exported snapshot.
+ */
+function escapeMarkdown(text: string): string {
+  return text.replace(MARKDOWN_ESCAPE_PATTERN, '\\$1');
+}
+
+function markdownCodeText(text: string): string {
+  // Backticks terminate an inline code span and line breaks make task ids
+  // spill into the surrounding document. Task ids are opaque identifiers, so
+  // removing those delimiters and flattening line breaks is the safest output.
+  return text.replace(/`/g, '').replace(/[\r\n]+/g, ' ');
+}
+
 export function formatAgentHistoryExport(opts: {
   items: AgentHistoryExportItem[];
   totalCount?: number;
@@ -44,7 +62,7 @@ export function formatAgentHistoryExport(opts: {
 
   const filterNote = (opts.filterNote || '').trim();
   if (filterNote) {
-    lines.push(`_Filtered view: ${filterNote}_`);
+    lines.push(`_Filtered view: ${escapeMarkdown(filterNote)}_`);
     lines.push('');
   }
 
@@ -53,11 +71,11 @@ export function formatAgentHistoryExport(opts: {
   } else {
     items.forEach((item, i) => {
       const title = displayTitle(item);
-      lines.push(`## ${i + 1}. ${title}`);
+      lines.push(`## ${i + 1}. ${escapeMarkdown(title)}`);
       lines.push('');
       const q = (item.question || '').trim();
       if (q && q !== title) {
-        lines.push(`**Question:** ${q}`);
+        lines.push(`**Question:** ${escapeMarkdown(q)}`);
         lines.push('');
       }
       const meta: string[] = [];
@@ -78,11 +96,11 @@ export function formatAgentHistoryExport(opts: {
       }
       const topics = (item.topics || []).map((t) => (t || '').trim()).filter(Boolean);
       if (topics.length > 0) {
-        lines.push(`- **Topics:** ${topics.join(', ')}`);
+        lines.push(`- **Topics:** ${escapeMarkdown(topics.join(', '))}`);
       }
       const taskId = (item.taskId || '').trim();
       if (taskId) {
-        lines.push(`- _Task \`${taskId}\`_`);
+        lines.push(`- _Task \`${markdownCodeText(taskId)}\`_`);
       }
       lines.push('');
     });
@@ -103,13 +121,13 @@ export function formatAgentHistoryItemCopy(item: AgentHistoryExportItem): string
   const title = displayTitle(item);
   if (!question && !(item.title || '').trim()) return '';
 
-  const lines: string[] = [`# ${title}`, ''];
+  const lines: string[] = [`# ${escapeMarkdown(title)}`, ''];
 
   if (question && question !== title) {
-    lines.push(`**Question:** ${question}`);
+    lines.push(`**Question:** ${escapeMarkdown(question)}`);
     lines.push('');
   } else if (question) {
-    lines.push(question);
+    lines.push(escapeMarkdown(question));
     lines.push('');
   }
 
@@ -131,11 +149,11 @@ export function formatAgentHistoryItemCopy(item: AgentHistoryExportItem): string
   }
   const topics = (item.topics || []).map((t) => (t || '').trim()).filter(Boolean);
   if (topics.length > 0) {
-    lines.push(`- **Topics:** ${topics.join(', ')}`);
+    lines.push(`- **Topics:** ${escapeMarkdown(topics.join(', '))}`);
   }
   const taskId = (item.taskId || '').trim();
   if (taskId) {
-    lines.push(`- _Task \`${taskId}\`_`);
+    lines.push(`- _Task \`${markdownCodeText(taskId)}\`_`);
   }
 
   lines.push('');

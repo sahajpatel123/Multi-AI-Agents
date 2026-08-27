@@ -48,6 +48,32 @@ describe('formatAgentHistoryExport', () => {
     expect(md).toContain('## 1. What is enough?');
     expect(md).toContain('**1** task');
   });
+
+  it('escapes hostile Markdown controls in history fields', () => {
+    const md = formatAgentHistoryExport({
+      totalCount: 1,
+      filterNote: 'search "*star*"\n# hidden heading',
+      items: [
+        {
+          title: '# Launch [plan](https://evil.example)',
+          question: 'Line one\n# Heading\n- item\n= summary\n<script>alert(1)</script>',
+          topics: ['*bold*', 'a|b'],
+          taskId: 'task`\nnext',
+        },
+      ],
+    });
+
+    expect(md).toContain(
+      '## 1. \\# Launch \\[plan\\]\\(https://evil.example\\)',
+    );
+    expect(md).toContain(
+      '**Question:** Line one\n\\# Heading\n\\- item\n\\= summary\n\\<script\\>alert\\(1\\)\\</script\\>',
+    );
+    expect(md).toContain('- **Topics:** \\*bold\\*, a\\|b');
+    expect(md).toContain('_Filtered view: search "\\*star\\*"\n\\# hidden heading_');
+    expect(md).toContain('Task `task next`');
+    expect(md).not.toContain('[plan](https://evil.example)');
+  });
 });
 
 describe('formatAgentHistoryItemCopy', () => {
@@ -74,6 +100,20 @@ describe('formatAgentHistoryItemCopy', () => {
 
   it('returns empty when question and title blank', () => {
     expect(formatAgentHistoryItemCopy({ question: '  ', title: '' })).toBe('');
+  });
+
+  it('keeps copied questions and metadata as literal Markdown text', () => {
+    const md = formatAgentHistoryItemCopy({
+      title: 'A *careful* review',
+      question: 'Check [this](https://evil.example)\n# not a heading',
+      topics: ['<script>', 'a|b'],
+      taskId: 'task`id',
+    });
+
+    expect(md).toContain('# A \\*careful\\* review');
+    expect(md).toContain('**Question:** Check \\[this\\]\\(https://evil.example\\)\n\\# not a heading');
+    expect(md).toContain('- **Topics:** \\<script\\>, a\\|b');
+    expect(md).toContain('Task `taskid`');
   });
 });
 
