@@ -282,6 +282,43 @@ describe('formatAgentHistoryJson', () => {
     });
     expect(parsed.items[0].question).toBe('');
   });
+
+  it('keeps malformed runtime fields exportable with the stable schema', () => {
+    const json = formatAgentHistoryJson({
+      items: [
+        {
+          taskId: 42 as unknown as string,
+          title: { unexpected: true } as unknown as string,
+          question: ' first line\nsecond line ',
+          createdAt: 2026 as unknown as string,
+          userFeedback: { label: 'positive' } as unknown as string,
+          topics: [
+            ' macro ',
+            null as unknown as string,
+            42 as unknown as string,
+          ] as unknown as string[],
+          orchestrationId: ' orch_1 ',
+          watchlistItemId: 0 as unknown as string,
+        },
+      ],
+      exportedAt: '2026-07-01T12:00:00.000Z',
+    });
+
+    const parsed = JSON.parse(json) as { items: Array<Record<string, unknown>> };
+    expect(parsed.items[0]).toEqual({
+      task_id: '',
+      title: '',
+      question: 'first line\nsecond line',
+      score: null,
+      confidence: null,
+      user_feedback: null,
+      created_at: '',
+      is_live: false,
+      topics: ['macro'],
+      orchestration_id: 'orch_1',
+      watchlist_item_id: null,
+    });
+  });
 });
 
 describe('formatAgentHistoryJsonl', () => {
