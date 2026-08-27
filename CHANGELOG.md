@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Agent research history now remembers its sort and filter view across visits,
+  while validating browser-local preferences field by field so stale or
+  corrupted values fall back safely without persisting free-text searches
 - Agent history can now filter the retained research list to browser-local
   pinned tasks, with the filter reflected in counts, empty states, and exports
 - Agent history rows now show a source badge for standalone, watchlist, and

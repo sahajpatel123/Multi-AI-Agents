@@ -210,6 +210,10 @@ import {
   type AgentHistorySourceFilter,
 } from '../lib/agentHistorySourceFilter';
 import {
+  loadAgentHistoryViewPreferences,
+  persistAgentHistoryViewPreferences,
+} from '../lib/agentHistoryViewPreferences';
+import {
   AGENT_ROOMS_ACTIVITY_OPTIONS,
   agentRoomsActivityLabel,
   filterAgentRoomsByActivity,
@@ -859,23 +863,26 @@ export function AgentPage() {
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
   const [pinnedTaskIds, setPinnedTaskIds] = useState<string[]>(() => loadAgentHistoryPins());
   const [historySearchQuery, setHistorySearchQuery] = useState('');
-  const [historySort, setHistorySort] = useState<AgentHistorySort>('newest');
+  const [initialHistoryViewPreferences] = useState(() => loadAgentHistoryViewPreferences());
+  const [historySort, setHistorySort] = useState<AgentHistorySort>(
+    initialHistoryViewPreferences.sort,
+  );
   const [historyStatusFilter, setHistoryStatusFilter] =
-    useState<AgentHistoryStatusFilter>('all');
+    useState<AgentHistoryStatusFilter>(initialHistoryViewPreferences.status);
   const [historyScoreFilter, setHistoryScoreFilter] =
-    useState<AgentHistoryScoreFilter>('all');
+    useState<AgentHistoryScoreFilter>(initialHistoryViewPreferences.score);
   const [historyConfidenceFilter, setHistoryConfidenceFilter] =
-    useState<AgentHistoryConfidenceFilter>('all');
+    useState<AgentHistoryConfidenceFilter>(initialHistoryViewPreferences.confidence);
   const [historyRecencyFilter, setHistoryRecencyFilter] =
-    useState<AgentHistoryRecencyFilter>('all');
+    useState<AgentHistoryRecencyFilter>(initialHistoryViewPreferences.recency);
   const [historyFeedbackFilter, setHistoryFeedbackFilter] =
-    useState<AgentHistoryFeedbackFilter>('all');
+    useState<AgentHistoryFeedbackFilter>(initialHistoryViewPreferences.feedback);
   const [historyTopicFilter, setHistoryTopicFilter] =
-    useState<AgentHistoryTopicFilter>(AGENT_HISTORY_TOPIC_ALL);
+    useState<AgentHistoryTopicFilter>(initialHistoryViewPreferences.topic);
   const [historySourceFilter, setHistorySourceFilter] =
-    useState<AgentHistorySourceFilter>(AGENT_HISTORY_SOURCE_ALL);
+    useState<AgentHistorySourceFilter>(initialHistoryViewPreferences.source);
   const [historyPinFilter, setHistoryPinFilter] =
-    useState<AgentHistoryPinFilter>(AGENT_HISTORY_PIN_FILTER_ALL);
+    useState<AgentHistoryPinFilter>(initialHistoryViewPreferences.pin);
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [historyCsvDownloadStatus, setHistoryCsvDownloadStatus] =
@@ -2913,21 +2920,48 @@ export function AgentPage() {
   // Keep the pinned-only view current when another tab changes browser-local pins.
   useEffect(() => subscribeToAgentHistoryPins(setPinnedTaskIds), []);
 
+  // Keep the user's history view stable across visits; free-text search stays transient.
+  useEffect(() => {
+    persistAgentHistoryViewPreferences({
+      sort: historySort,
+      status: historyStatusFilter,
+      score: historyScoreFilter,
+      confidence: historyConfidenceFilter,
+      recency: historyRecencyFilter,
+      feedback: historyFeedbackFilter,
+      topic: historyTopicFilter,
+      source: historySourceFilter,
+      pin: historyPinFilter,
+    });
+  }, [
+    historySort,
+    historyStatusFilter,
+    historyScoreFilter,
+    historyConfidenceFilter,
+    historyRecencyFilter,
+    historyFeedbackFilter,
+    historyTopicFilter,
+    historySourceFilter,
+    historyPinFilter,
+  ]);
+
   // Drop topic filter when that topic no longer appears in history.
   useEffect(() => {
+    if (historyLoading || historyLoadFailed || taskHistory.length === 0) return;
     if (historyTopicFilter === AGENT_HISTORY_TOPIC_ALL) return;
     if (!historyTopicOptions.some((o) => o.value === historyTopicFilter)) {
       setHistoryTopicFilter(AGENT_HISTORY_TOPIC_ALL);
     }
-  }, [historyTopicFilter, historyTopicOptions]);
+  }, [historyLoadFailed, historyLoading, historyTopicFilter, historyTopicOptions, taskHistory.length]);
 
   // Drop a source filter when the last matching source disappears.
   useEffect(() => {
+    if (historyLoading || historyLoadFailed || taskHistory.length === 0) return;
     if (historySourceFilter === AGENT_HISTORY_SOURCE_ALL) return;
     if (!historySourceOptions.some((option) => option.value === historySourceFilter)) {
       setHistorySourceFilter(AGENT_HISTORY_SOURCE_ALL);
     }
-  }, [historySourceFilter, historySourceOptions]);
+  }, [historyLoadFailed, historyLoading, historySourceFilter, historySourceOptions, taskHistory.length]);
 
   // Avoid leaving an invisible active filter after the last retained pin is removed.
   useEffect(() => {
