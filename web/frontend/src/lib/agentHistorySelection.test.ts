@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { selectAgentHistoryItems } from './agentHistorySelection';
+import { formatSelectedAgentHistoryCsv } from './agentHistorySelectionExport';
 
 describe('selectAgentHistoryItems', () => {
   const history = [
@@ -19,5 +20,40 @@ describe('selectAgentHistoryItems', () => {
 
     expect(selectAgentHistoryItems(history, [])).toEqual([]);
     expect(history).toEqual(snapshot);
+  });
+});
+
+describe('formatSelectedAgentHistoryCsv', () => {
+  it('exports only selected retained rows in history order', () => {
+    const csv = formatSelectedAgentHistoryCsv(
+      [
+        { task_id: 'newest', title: 'Newest' },
+        { task_id: 'middle', title: 'Middle' },
+        { task_id: 'oldest', title: 'Oldest' },
+      ],
+      ['oldest', 'missing', 'newest', 'oldest'],
+      (item) => ({ taskId: item.task_id, title: item.title }),
+    );
+
+    expect(csv).not.toBeNull();
+    const rows = csv!
+      .replace(/^\uFEFF/, '')
+      .trim()
+      .split(/\r?\n/)
+      .slice(1);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain('newest,Newest');
+    expect(rows[1]).toContain('oldest,Oldest');
+    expect(rows.join('\n')).not.toContain('Middle');
+  });
+
+  it('returns null when no retained task is selected', () => {
+    expect(
+      formatSelectedAgentHistoryCsv(
+        [{ task_id: 'task_1', title: 'One' }],
+        ['missing'],
+        (item) => ({ taskId: item.task_id, title: item.title }),
+      ),
+    ).toBeNull();
   });
 });

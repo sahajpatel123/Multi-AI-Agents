@@ -160,6 +160,7 @@ import { copyAgentHistoryCsv } from '../lib/agentHistoryCsvClipboard';
 import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
 import { copyAgentHistoryJsonl } from '../lib/agentHistoryJsonlClipboard';
 import { selectAgentHistoryItems } from '../lib/agentHistorySelection';
+import { formatSelectedAgentHistoryCsv } from '../lib/agentHistorySelectionExport';
 import {
   AGENT_HISTORY_SORT_OPTIONS,
   agentHistorySortLabel,
@@ -931,6 +932,9 @@ export function AgentPage() {
   const [historySelectedJsonlDownloadStatus, setHistorySelectedJsonlDownloadStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed'
   >('idle');
+  const [historySelectedCsvDownloadStatus, setHistorySelectedCsvDownloadStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed'
+  >('idle');
   const [historyJsonlCopyStatus, setHistoryJsonlCopyStatus] = useState<
     'idle' | 'copying' | 'copied' | 'failed'
   >('idle');
@@ -949,8 +953,10 @@ export function AgentPage() {
   const historyJsonlDownloadTimerRef = useRef<number | null>(null);
   const historyFilteredJsonlDownloadTimerRef = useRef<number | null>(null);
   const historySelectedJsonlDownloadTimerRef = useRef<number | null>(null);
+  const historySelectedCsvDownloadTimerRef = useRef<number | null>(null);
   /** Prevent rapid or re-entrant activations from creating duplicate files. */
   const historySelectedJsonlDownloadBusyRef = useRef(false);
+  const historySelectedCsvDownloadBusyRef = useRef(false);
   const historyJsonlDownloadBusyRef = useRef(false);
   const historyJsonlCopyTimerRef = useRef<number | null>(null);
   const historyJsonlCopyInFlightRef = useRef(false);
@@ -2372,6 +2378,12 @@ export function AgentPage() {
     }
     historySelectedJsonlDownloadBusyRef.current = false;
     setHistorySelectedJsonlDownloadStatus('idle');
+    if (historySelectedCsvDownloadTimerRef.current != null) {
+      window.clearTimeout(historySelectedCsvDownloadTimerRef.current);
+      historySelectedCsvDownloadTimerRef.current = null;
+    }
+    historySelectedCsvDownloadBusyRef.current = false;
+    setHistorySelectedCsvDownloadStatus('idle');
     setUserRating(null);
     setRatingResult(null);
     setRatingSubmitBusy(false);
@@ -3174,7 +3186,11 @@ export function AgentPage() {
       if (historySelectedJsonlDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedJsonlDownloadTimerRef.current);
       }
+      if (historySelectedCsvDownloadTimerRef.current != null) {
+        window.clearTimeout(historySelectedCsvDownloadTimerRef.current);
+      }
       historySelectedJsonlDownloadBusyRef.current = false;
+      historySelectedCsvDownloadBusyRef.current = false;
       historyJsonlDownloadBusyRef.current = false;
       historyJsonlCopyRunIdRef.current += 1;
       historyJsonlCopyInFlightRef.current = false;
@@ -3646,6 +3662,47 @@ export function AgentPage() {
       historySelectedJsonlDownloadBusyRef.current = false;
       setHistorySelectedJsonlDownloadStatus('idle');
       historySelectedJsonlDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadSelectedHistoryCsv = () => {
+    // The disabled prop follows React's render cycle; the ref closes the
+    // smaller window where two activations can arrive before that render.
+    if (historySelectedCsvDownloadBusyRef.current) return;
+    const csv = formatSelectedAgentHistoryCsv(
+      taskHistory,
+      selectedHistoryTaskIdList,
+      toHistoryExportItem,
+    );
+    if (!csv) {
+      setToastMessage('No selected history tasks to export.');
+      return;
+    }
+    historySelectedCsvDownloadBusyRef.current = true;
+    if (historySelectedCsvDownloadTimerRef.current != null) {
+      window.clearTimeout(historySelectedCsvDownloadTimerRef.current);
+      historySelectedCsvDownloadTimerRef.current = null;
+    }
+    setHistorySelectedCsvDownloadStatus('busy');
+    let ok = false;
+    try {
+      ok = downloadTextFile(csv, {
+        filename: `${withDownloadDate('agent-research-selected')}.csv`,
+        mimeType: 'text/csv;charset=utf-8',
+      });
+    } catch {
+      // Keep one malformed runtime row from leaving the control locked.
+      ok = false;
+    }
+    setHistorySelectedCsvDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download selected history CSV — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historySelectedCsvDownloadTimerRef.current = window.setTimeout(() => {
+      historySelectedCsvDownloadBusyRef.current = false;
+      setHistorySelectedCsvDownloadStatus('idle');
+      historySelectedCsvDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -5720,6 +5777,62 @@ export function AgentPage() {
                           : historySelectedJsonlDownloadStatus === 'failed'
                             ? 'Failed'
                             : 'Selected JSONL'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={downloadSelectedHistoryCsv}
+                        disabled={
+                          historySelectionLocked ||
+                          historySelectedCsvDownloadStatus === 'busy'
+                        }
+                        title="Download the selected history tasks as CSV"
+                        aria-label={
+                          historySelectedCsvDownloadStatus === 'busy'
+                            ? 'Exporting selected history as CSV'
+                            : historySelectedCsvDownloadStatus === 'done'
+                              ? 'Selected history CSV downloaded'
+                              : historySelectedCsvDownloadStatus === 'failed'
+                                ? 'Selected history CSV download failed'
+                                : `Download ${selectedHistoryTaskIdList.length} selected history tasks as CSV`
+                        }
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color:
+                            historySelectedCsvDownloadStatus === 'busy'
+                              ? '#B07840'
+                              : historySelectedCsvDownloadStatus === 'failed'
+                                ? '#D85A30'
+                                : historySelectedCsvDownloadStatus === 'done'
+                                  ? '#5A8C6A'
+                                  : '#A0A39A',
+                          cursor:
+                            historySelectionLocked ||
+                            historySelectedCsvDownloadStatus === 'busy'
+                              ? 'not-allowed'
+                              : 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                          opacity:
+                            historySelectionLocked ||
+                            historySelectedCsvDownloadStatus === 'busy'
+                              ? 0.5
+                              : 1,
+                        }}
+                        aria-busy={historySelectedCsvDownloadStatus === 'busy'}
+                      >
+                        {historySelectedCsvDownloadStatus === 'busy'
+                          ? 'Exporting…'
+                          : historySelectedCsvDownloadStatus === 'done'
+                            ? 'Downloaded'
+                            : historySelectedCsvDownloadStatus === 'failed'
+                              ? 'Failed'
+                              : 'Selected CSV'}
                       </button>
                       {historyBulkDeleteConfirm ? (
                         <>
