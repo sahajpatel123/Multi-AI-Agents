@@ -263,6 +263,47 @@ export function formatAgentHistoryJson(opts: {
   return JSON.stringify(payload, null, 2) + '\n';
 }
 
+function jsonlString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function jsonlNullableString(value: unknown): string | null {
+  const normalized = jsonlString(value);
+  return normalized || null;
+}
+
+function jsonlTopics(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((topic): topic is string => typeof topic === 'string')
+    .map((topic) => topic.trim())
+    .filter(Boolean);
+}
+
+function formatAgentHistoryJsonlRecord(item: AgentHistoryExportItem | null | undefined) {
+  // History data comes from an API boundary. Keep a malformed row exportable
+  // and preserve the JSONL schema instead of allowing one bad field to abort
+  // the whole filtered download.
+  const source = item && typeof item === 'object' ? item : {};
+  return {
+    task_id: jsonlString(source.taskId),
+    title: jsonlString(source.title),
+    question: jsonlString(source.question),
+    score:
+      typeof source.score === 'number' && Number.isFinite(source.score) ? source.score : null,
+    confidence:
+      typeof source.confidence === 'number' && Number.isFinite(source.confidence)
+        ? source.confidence
+        : null,
+    user_feedback: jsonlNullableString(source.userFeedback),
+    created_at: jsonlString(source.createdAt),
+    is_live: source.isLive === true,
+    topics: jsonlTopics(source.topics),
+    orchestration_id: jsonlNullableString(source.orchestrationId),
+    watchlist_item_id: jsonlNullableString(source.watchlistItemId),
+  };
+}
+
 /**
  * JSONL export for the current Agent research history view.
  *
@@ -273,30 +314,8 @@ export function formatAgentHistoryJson(opts: {
 export function formatAgentHistoryJsonl(opts: {
   items: AgentHistoryExportItem[];
 }): string {
-  const lines = (opts.items || []).map((item) =>
-    JSON.stringify({
-      task_id: (item.taskId || '').trim(),
-      title: (item.title || '').trim(),
-      question: (item.question || '').trim(),
-      score:
-        typeof item.score === 'number' && Number.isFinite(item.score) ? item.score : null,
-      confidence:
-        typeof item.confidence === 'number' && Number.isFinite(item.confidence)
-          ? item.confidence
-          : null,
-      user_feedback: item.userFeedback || null,
-      created_at: item.createdAt || '',
-      is_live: item.isLive === true,
-      topics: Array.isArray(item.topics)
-        ? item.topics
-            .filter((topic): topic is string => typeof topic === 'string')
-            .map((topic) => topic.trim())
-            .filter(Boolean)
-        : [],
-      orchestration_id: item.orchestrationId || null,
-      watchlist_item_id: item.watchlistItemId || null,
-    }),
-  );
+  const items = Array.isArray(opts?.items) ? opts.items : [];
+  const lines = items.map((item) => JSON.stringify(formatAgentHistoryJsonlRecord(item)));
 
   return lines.length ? `${lines.join('\n')}\n` : '';
 }

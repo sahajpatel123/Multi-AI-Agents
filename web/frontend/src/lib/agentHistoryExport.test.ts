@@ -302,4 +302,36 @@ describe('formatAgentHistoryJsonl', () => {
     expect(parsed.topics).toEqual(['macro']);
     expect(formatAgentHistoryJsonl({ items: [] })).toBe('');
   });
+
+  it('keeps malformed scalar fields from breaking the stream or its stable schema', () => {
+    const jsonl = formatAgentHistoryJsonl({
+      items: [
+        {
+          taskId: 42 as unknown as string,
+          title: { unexpected: true } as unknown as string,
+          question: ' first line\nsecond line ',
+          createdAt: 2026 as unknown as string,
+          userFeedback: { label: 'positive' } as unknown as string,
+          orchestrationId: ' orch_1 ',
+          watchlistItemId: 0 as unknown as string,
+        },
+      ],
+    });
+
+    const lines = jsonl.trimEnd().split('\n');
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0])).toEqual({
+      task_id: '',
+      title: '',
+      question: 'first line\nsecond line',
+      score: null,
+      confidence: null,
+      user_feedback: null,
+      created_at: '',
+      is_live: false,
+      topics: [],
+      orchestration_id: 'orch_1',
+      watchlist_item_id: null,
+    });
+  });
 });
