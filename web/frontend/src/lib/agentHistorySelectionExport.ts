@@ -1,4 +1,8 @@
-import { formatAgentHistoryCsv, type AgentHistoryExportItem } from './agentHistoryExport';
+import {
+  formatAgentHistoryCsv,
+  formatAgentHistoryExport,
+  type AgentHistoryExportItem,
+} from './agentHistoryExport';
 import {
   selectAgentHistoryItems,
   type SelectableAgentHistoryItem,
@@ -19,4 +23,23 @@ export function formatSelectedAgentHistoryCsv<T extends SelectableAgentHistoryIt
   const selected = selectAgentHistoryItems(items, selectedTaskIds);
   if (selected.length === 0) return null;
   return formatAgentHistoryCsv({ items: selected.map(toExportItem) });
+}
+
+/**
+ * Format only retained history rows selected by the user as Markdown.
+ *
+ * The explicit selection is resolved against retained rows before formatting,
+ * so rows hidden by the current filters still export while stale ids do not.
+ */
+export function formatSelectedAgentHistoryMarkdown<T extends SelectableAgentHistoryItem>(
+  items: readonly T[],
+  selectedTaskIds: readonly string[],
+  toExportItem: (item: T) => AgentHistoryExportItem,
+): string | null {
+  const selected = selectAgentHistoryItems(items, selectedTaskIds);
+  if (selected.length === 0) return null;
+  return formatAgentHistoryExport({
+    items: selected.map(toExportItem),
+    totalCount: selected.length,
+  });
 }

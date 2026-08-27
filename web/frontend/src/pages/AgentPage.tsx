@@ -160,7 +160,10 @@ import { copyAgentHistoryCsv } from '../lib/agentHistoryCsvClipboard';
 import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
 import { copyAgentHistoryJsonl } from '../lib/agentHistoryJsonlClipboard';
 import { selectAgentHistoryItems } from '../lib/agentHistorySelection';
-import { formatSelectedAgentHistoryCsv } from '../lib/agentHistorySelectionExport';
+import {
+  formatSelectedAgentHistoryCsv,
+  formatSelectedAgentHistoryMarkdown,
+} from '../lib/agentHistorySelectionExport';
 import {
   AGENT_HISTORY_SORT_OPTIONS,
   agentHistorySortLabel,
@@ -935,6 +938,8 @@ export function AgentPage() {
   const [historySelectedCsvDownloadStatus, setHistorySelectedCsvDownloadStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed'
   >('idle');
+  const [historySelectedMarkdownDownloadStatus, setHistorySelectedMarkdownDownloadStatus] =
+    useState<'idle' | 'busy' | 'done' | 'failed'>('idle');
   const [historyJsonlCopyStatus, setHistoryJsonlCopyStatus] = useState<
     'idle' | 'copying' | 'copied' | 'failed'
   >('idle');
@@ -954,9 +959,11 @@ export function AgentPage() {
   const historyFilteredJsonlDownloadTimerRef = useRef<number | null>(null);
   const historySelectedJsonlDownloadTimerRef = useRef<number | null>(null);
   const historySelectedCsvDownloadTimerRef = useRef<number | null>(null);
+  const historySelectedMarkdownDownloadTimerRef = useRef<number | null>(null);
   /** Prevent rapid or re-entrant activations from creating duplicate files. */
   const historySelectedJsonlDownloadBusyRef = useRef(false);
   const historySelectedCsvDownloadBusyRef = useRef(false);
+  const historySelectedMarkdownDownloadBusyRef = useRef(false);
   const historyJsonlDownloadBusyRef = useRef(false);
   const historyJsonlCopyTimerRef = useRef<number | null>(null);
   const historyJsonlCopyInFlightRef = useRef(false);
@@ -2384,6 +2391,12 @@ export function AgentPage() {
     }
     historySelectedCsvDownloadBusyRef.current = false;
     setHistorySelectedCsvDownloadStatus('idle');
+    if (historySelectedMarkdownDownloadTimerRef.current != null) {
+      window.clearTimeout(historySelectedMarkdownDownloadTimerRef.current);
+      historySelectedMarkdownDownloadTimerRef.current = null;
+    }
+    historySelectedMarkdownDownloadBusyRef.current = false;
+    setHistorySelectedMarkdownDownloadStatus('idle');
     setUserRating(null);
     setRatingResult(null);
     setRatingSubmitBusy(false);
@@ -3189,8 +3202,12 @@ export function AgentPage() {
       if (historySelectedCsvDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedCsvDownloadTimerRef.current);
       }
+      if (historySelectedMarkdownDownloadTimerRef.current != null) {
+        window.clearTimeout(historySelectedMarkdownDownloadTimerRef.current);
+      }
       historySelectedJsonlDownloadBusyRef.current = false;
       historySelectedCsvDownloadBusyRef.current = false;
+      historySelectedMarkdownDownloadBusyRef.current = false;
       historyJsonlDownloadBusyRef.current = false;
       historyJsonlCopyRunIdRef.current += 1;
       historyJsonlCopyInFlightRef.current = false;
@@ -3713,6 +3730,52 @@ export function AgentPage() {
       historySelectedCsvDownloadBusyRef.current = false;
       setHistorySelectedCsvDownloadStatus('idle');
       historySelectedCsvDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadSelectedHistoryMarkdown = () => {
+    // The disabled prop follows React's render cycle; the ref closes the
+    // smaller window where two activations can arrive before that render.
+    if (historySelectedMarkdownDownloadBusyRef.current) return;
+    historySelectedMarkdownDownloadBusyRef.current = true;
+    if (historySelectedMarkdownDownloadTimerRef.current != null) {
+      window.clearTimeout(historySelectedMarkdownDownloadTimerRef.current);
+      historySelectedMarkdownDownloadTimerRef.current = null;
+    }
+    setHistorySelectedMarkdownDownloadStatus('busy');
+    let ok = false;
+    let emptySelection = false;
+    try {
+      // Keep formatting inside the guarded section too: malformed runtime
+      // rows must not leave the export action locked.
+      const markdown = formatSelectedAgentHistoryMarkdown(
+        taskHistory,
+        selectedHistoryTaskIdList,
+        toHistoryExportItem,
+      );
+      if (!markdown) {
+        emptySelection = true;
+      } else {
+        ok = downloadMarkdownFile(markdown, 'agent-research-selected');
+      }
+    } catch {
+      ok = false;
+    }
+    if (emptySelection) {
+      historySelectedMarkdownDownloadBusyRef.current = false;
+      setHistorySelectedMarkdownDownloadStatus('idle');
+      setToastMessage('No selected history tasks to export.');
+      return;
+    }
+    setHistorySelectedMarkdownDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download selected history Markdown — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historySelectedMarkdownDownloadTimerRef.current = window.setTimeout(() => {
+      historySelectedMarkdownDownloadBusyRef.current = false;
+      setHistorySelectedMarkdownDownloadStatus('idle');
+      historySelectedMarkdownDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -5843,6 +5906,62 @@ export function AgentPage() {
                             : historySelectedCsvDownloadStatus === 'failed'
                               ? 'Failed'
                               : 'Selected CSV'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={downloadSelectedHistoryMarkdown}
+                        disabled={
+                          historySelectionLocked ||
+                          historySelectedMarkdownDownloadStatus === 'busy'
+                        }
+                        title="Download the selected history tasks as Markdown"
+                        aria-label={
+                          historySelectedMarkdownDownloadStatus === 'busy'
+                            ? 'Exporting selected history as Markdown'
+                            : historySelectedMarkdownDownloadStatus === 'done'
+                              ? 'Selected history Markdown downloaded'
+                              : historySelectedMarkdownDownloadStatus === 'failed'
+                                ? 'Selected history Markdown download failed'
+                                : `Download ${selectedHistoryTaskIdList.length} selected history tasks as Markdown`
+                        }
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color:
+                            historySelectedMarkdownDownloadStatus === 'busy'
+                              ? '#B07840'
+                              : historySelectedMarkdownDownloadStatus === 'failed'
+                                ? '#D85A30'
+                                : historySelectedMarkdownDownloadStatus === 'done'
+                                  ? '#5A8C6A'
+                                  : '#A0A39A',
+                          cursor:
+                            historySelectionLocked ||
+                            historySelectedMarkdownDownloadStatus === 'busy'
+                              ? 'not-allowed'
+                              : 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                          opacity:
+                            historySelectionLocked ||
+                            historySelectedMarkdownDownloadStatus === 'busy'
+                              ? 0.5
+                              : 1,
+                        }}
+                        aria-busy={historySelectedMarkdownDownloadStatus === 'busy'}
+                      >
+                        {historySelectedMarkdownDownloadStatus === 'busy'
+                          ? 'Exporting…'
+                          : historySelectedMarkdownDownloadStatus === 'done'
+                            ? 'Downloaded'
+                            : historySelectedMarkdownDownloadStatus === 'failed'
+                              ? 'Failed'
+                              : 'Selected MD'}
                       </button>
                       {historyBulkDeleteConfirm ? (
                         <>

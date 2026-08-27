@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { selectAgentHistoryItems } from './agentHistorySelection';
-import { formatSelectedAgentHistoryCsv } from './agentHistorySelectionExport';
+import {
+  formatSelectedAgentHistoryCsv,
+  formatSelectedAgentHistoryMarkdown,
+} from './agentHistorySelectionExport';
 
 describe('selectAgentHistoryItems', () => {
   const history = [
@@ -50,6 +53,41 @@ describe('formatSelectedAgentHistoryCsv', () => {
   it('returns null when no retained task is selected', () => {
     expect(
       formatSelectedAgentHistoryCsv(
+        [{ task_id: 'task_1', title: 'One' }],
+        ['missing'],
+        (item) => ({ taskId: item.task_id, title: item.title }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('formatSelectedAgentHistoryMarkdown', () => {
+  it('exports only selected retained rows in history order', () => {
+    const markdown = formatSelectedAgentHistoryMarkdown(
+      [
+        { task_id: 'newest', title: 'Newest', task_text: 'First question' },
+        { task_id: 'middle', title: 'Middle', task_text: 'Second question' },
+        { task_id: 'oldest', title: 'Oldest', task_text: 'Third question' },
+      ],
+      ['oldest', 'missing', 'newest', 'oldest'],
+      (item) => ({
+        taskId: item.task_id,
+        title: item.title,
+        question: item.task_text,
+      }),
+    );
+
+    expect(markdown).not.toBeNull();
+    expect(markdown).toContain('**2** tasks');
+    expect(markdown).toContain('## 1. Newest');
+    expect(markdown).toContain('## 2. Oldest');
+    expect(markdown).not.toContain('Middle');
+    expect(markdown).not.toContain('Second question');
+  });
+
+  it('returns null when no retained task is selected', () => {
+    expect(
+      formatSelectedAgentHistoryMarkdown(
         [{ task_id: 'task_1', title: 'One' }],
         ['missing'],
         (item) => ({ taskId: item.task_id, title: item.title }),

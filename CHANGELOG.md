@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Agent research history can now export exactly the selected tasks as a
+  readable Markdown file, including selected rows hidden by filters
+- Agent research history can now export exactly the selected tasks as a
   spreadsheet-safe CSV file, including selected rows hidden by filters
 - Agent research history can now export exactly the selected tasks as a dated
   JSONL file, including selected rows that are temporarily hidden by filters
