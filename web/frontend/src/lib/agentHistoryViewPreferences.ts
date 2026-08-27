@@ -59,6 +59,12 @@ export type AgentHistoryViewPreferences = {
   pin: AgentHistoryPinFilter;
 };
 
+export type AgentHistoryViewLoadState = {
+  hasLoaded: boolean;
+  loading: boolean;
+  loadFailed: boolean;
+};
+
 export const DEFAULT_AGENT_HISTORY_VIEW_PREFERENCES: AgentHistoryViewPreferences = {
   sort: 'newest',
   status: 'all',
@@ -70,6 +76,17 @@ export const DEFAULT_AGENT_HISTORY_VIEW_PREFERENCES: AgentHistoryViewPreferences
   source: AGENT_HISTORY_SOURCE_ALL,
   pin: 'all',
 };
+
+/**
+ * Dynamic filters must wait for a successful history response before they
+ * are reconciled. An initial empty array means "not loaded yet", not "empty
+ * history", and a failed refresh should preserve the user's current view.
+ */
+export function shouldReconcileAgentHistoryDynamicFilters(
+  state: AgentHistoryViewLoadState,
+): boolean {
+  return state.hasLoaded && !state.loading && !state.loadFailed;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

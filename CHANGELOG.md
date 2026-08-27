@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Restored Agent history topic, source, and pinned-only views now wait for a
+  successful history load before being reconciled, so a slow first visit or
+  an empty history response cannot erase or retain the wrong filter
 - Agent history pins and the pinned-only filter now stay synchronized across
   open browser tabs, and storage clears or malformed updates safely reset the
   view instead of leaving stale pinned rows visible

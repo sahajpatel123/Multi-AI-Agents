@@ -212,6 +212,7 @@ import {
 import {
   loadAgentHistoryViewPreferences,
   persistAgentHistoryViewPreferences,
+  shouldReconcileAgentHistoryDynamicFilters,
 } from '../lib/agentHistoryViewPreferences';
 import {
   AGENT_ROOMS_ACTIVITY_OPTIONS,
@@ -931,6 +932,7 @@ export function AgentPage() {
   );
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoadFailed, setHistoryLoadFailed] = useState(false);
+  const [historyHasLoaded, setHistoryHasLoaded] = useState(false);
   /** Ticks every 60s so history / live-update relative clocks stay honest. */
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
@@ -1123,6 +1125,7 @@ export function AgentPage() {
       setHistoryLoadFailed(true);
     } finally {
       setHistoryLoading(false);
+      setHistoryHasLoaded(true);
     }
   }, [authLoading, hasAgentAccess]);
 
@@ -2920,6 +2923,12 @@ export function AgentPage() {
   // Keep the pinned-only view current when another tab changes browser-local pins.
   useEffect(() => subscribeToAgentHistoryPins(setPinnedTaskIds), []);
 
+  const historyViewReady = shouldReconcileAgentHistoryDynamicFilters({
+    hasLoaded: historyHasLoaded,
+    loading: historyLoading,
+    loadFailed: historyLoadFailed,
+  });
+
   // Keep the user's history view stable across visits; free-text search stays transient.
   useEffect(() => {
     persistAgentHistoryViewPreferences({
@@ -2947,27 +2956,28 @@ export function AgentPage() {
 
   // Drop topic filter when that topic no longer appears in history.
   useEffect(() => {
-    if (historyLoading || historyLoadFailed || taskHistory.length === 0) return;
+    if (!historyViewReady) return;
     if (historyTopicFilter === AGENT_HISTORY_TOPIC_ALL) return;
     if (!historyTopicOptions.some((o) => o.value === historyTopicFilter)) {
       setHistoryTopicFilter(AGENT_HISTORY_TOPIC_ALL);
     }
-  }, [historyLoadFailed, historyLoading, historyTopicFilter, historyTopicOptions, taskHistory.length]);
+  }, [historyTopicFilter, historyTopicOptions, historyViewReady]);
 
   // Drop a source filter when the last matching source disappears.
   useEffect(() => {
-    if (historyLoading || historyLoadFailed || taskHistory.length === 0) return;
+    if (!historyViewReady) return;
     if (historySourceFilter === AGENT_HISTORY_SOURCE_ALL) return;
     if (!historySourceOptions.some((option) => option.value === historySourceFilter)) {
       setHistorySourceFilter(AGENT_HISTORY_SOURCE_ALL);
     }
-  }, [historyLoadFailed, historyLoading, historySourceFilter, historySourceOptions, taskHistory.length]);
+  }, [historySourceFilter, historySourceOptions, historyViewReady]);
 
   // Avoid leaving an invisible active filter after the last retained pin is removed.
   useEffect(() => {
+    if (!historyViewReady) return;
     if (historyPinFilter === AGENT_HISTORY_PIN_FILTER_ALL || historyPinFilterUseful) return;
     setHistoryPinFilter(AGENT_HISTORY_PIN_FILTER_ALL);
-  }, [historyPinFilter, historyPinFilterUseful]);
+  }, [historyPinFilter, historyPinFilterUseful, historyViewReady]);
 
   const roomsBodyMode = roomsListBodyMode({
     loading: myRoomsLoading,

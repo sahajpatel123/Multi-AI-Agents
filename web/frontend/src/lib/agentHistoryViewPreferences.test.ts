@@ -5,6 +5,7 @@ import {
   loadAgentHistoryViewPreferences,
   normalizeAgentHistoryViewPreferences,
   persistAgentHistoryViewPreferences,
+  shouldReconcileAgentHistoryDynamicFilters,
 } from './agentHistoryViewPreferences';
 
 describe('agent history view preferences', () => {
@@ -71,5 +72,36 @@ describe('agent history view preferences', () => {
   it('rejects empty and excessively long topic values', () => {
     expect(normalizeAgentHistoryViewPreferences({ topic: '   ' }).topic).toBe('all');
     expect(normalizeAgentHistoryViewPreferences({ topic: 'x'.repeat(81) }).topic).toBe('all');
+  });
+
+  it('waits for a successful history load before reconciling dynamic filters', () => {
+    expect(
+      shouldReconcileAgentHistoryDynamicFilters({
+        hasLoaded: false,
+        loading: false,
+        loadFailed: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldReconcileAgentHistoryDynamicFilters({
+        hasLoaded: true,
+        loading: true,
+        loadFailed: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldReconcileAgentHistoryDynamicFilters({
+        hasLoaded: true,
+        loading: false,
+        loadFailed: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldReconcileAgentHistoryDynamicFilters({
+        hasLoaded: true,
+        loading: false,
+        loadFailed: false,
+      }),
+    ).toBe(true);
   });
 });
