@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Selected Agent history JSONL export now ignores rapid repeat activation and
+  reports its in-progress state, preventing duplicate downloads and locked
+  controls after malformed runtime data
 - Restored Agent history topic, source, and pinned-only views now wait for a
   successful history load before being reconciled, so a slow first visit or
   an empty history response cannot erase or retain the wrong filter

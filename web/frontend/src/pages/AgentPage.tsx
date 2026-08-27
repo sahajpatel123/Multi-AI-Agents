@@ -929,7 +929,7 @@ export function AgentPage() {
     'idle' | 'done' | 'failed'
   >('idle');
   const [historySelectedJsonlDownloadStatus, setHistorySelectedJsonlDownloadStatus] = useState<
-    'idle' | 'done' | 'failed'
+    'idle' | 'busy' | 'done' | 'failed'
   >('idle');
   const [historyJsonlCopyStatus, setHistoryJsonlCopyStatus] = useState<
     'idle' | 'copying' | 'copied' | 'failed'
@@ -949,6 +949,8 @@ export function AgentPage() {
   const historyJsonlDownloadTimerRef = useRef<number | null>(null);
   const historyFilteredJsonlDownloadTimerRef = useRef<number | null>(null);
   const historySelectedJsonlDownloadTimerRef = useRef<number | null>(null);
+  /** Prevent rapid or re-entrant activations from creating duplicate files. */
+  const historySelectedJsonlDownloadBusyRef = useRef(false);
   const historyJsonlDownloadBusyRef = useRef(false);
   const historyJsonlCopyTimerRef = useRef<number | null>(null);
   const historyJsonlCopyInFlightRef = useRef(false);
@@ -2368,6 +2370,7 @@ export function AgentPage() {
       window.clearTimeout(historySelectedJsonlDownloadTimerRef.current);
       historySelectedJsonlDownloadTimerRef.current = null;
     }
+    historySelectedJsonlDownloadBusyRef.current = false;
     setHistorySelectedJsonlDownloadStatus('idle');
     setUserRating(null);
     setRatingResult(null);
@@ -3171,6 +3174,7 @@ export function AgentPage() {
       if (historySelectedJsonlDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedJsonlDownloadTimerRef.current);
       }
+      historySelectedJsonlDownloadBusyRef.current = false;
       historyJsonlDownloadBusyRef.current = false;
       historyJsonlCopyRunIdRef.current += 1;
       historyJsonlCopyInFlightRef.current = false;
@@ -3606,20 +3610,32 @@ export function AgentPage() {
   };
 
   const downloadSelectedHistoryJsonl = () => {
+    // The disabled prop follows React's render cycle; the ref closes the
+    // smaller window where two activations can arrive before that render.
+    if (historySelectedJsonlDownloadBusyRef.current) return;
     const selectedItems = selectAgentHistoryItems(taskHistory, selectedHistoryTaskIdList);
     if (selectedItems.length === 0) {
       setToastMessage('No selected history tasks to export.');
       return;
     }
-    const jsonl = formatAgentHistoryJsonl({
-      items: selectedItems.map(toHistoryExportItem),
-    });
-    const ok = downloadTextFile(jsonl, {
-      filename: `${withDownloadDate('agent-research-selected')}.jsonl`,
-      mimeType: 'application/x-ndjson;charset=utf-8',
-    });
+    historySelectedJsonlDownloadBusyRef.current = true;
     if (historySelectedJsonlDownloadTimerRef.current != null) {
       window.clearTimeout(historySelectedJsonlDownloadTimerRef.current);
+      historySelectedJsonlDownloadTimerRef.current = null;
+    }
+    setHistorySelectedJsonlDownloadStatus('busy');
+    let ok = false;
+    try {
+      const jsonl = formatAgentHistoryJsonl({
+        items: selectedItems.map(toHistoryExportItem),
+      });
+      ok = downloadTextFile(jsonl, {
+        filename: `${withDownloadDate('agent-research-selected')}.jsonl`,
+        mimeType: 'application/x-ndjson;charset=utf-8',
+      });
+    } catch {
+      // Keep one malformed runtime row from leaving the control locked.
+      ok = false;
     }
     setHistorySelectedJsonlDownloadStatus(ok ? 'done' : 'failed');
     if (!ok) {
@@ -3627,6 +3643,7 @@ export function AgentPage() {
     }
     const hold = motionDuration(ok ? 2000 : 2800);
     historySelectedJsonlDownloadTimerRef.current = window.setTimeout(() => {
+      historySelectedJsonlDownloadBusyRef.current = false;
       setHistorySelectedJsonlDownloadStatus('idle');
       historySelectedJsonlDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
@@ -5651,10 +5668,15 @@ export function AgentPage() {
                       <button
                         type="button"
                         onClick={downloadSelectedHistoryJsonl}
-                        disabled={historySelectionLocked}
+                        disabled={
+                          historySelectionLocked ||
+                          historySelectedJsonlDownloadStatus === 'busy'
+                        }
                         title="Download the selected history tasks as JSONL"
                         aria-label={
-                          historySelectedJsonlDownloadStatus === 'done'
+                          historySelectedJsonlDownloadStatus === 'busy'
+                            ? 'Exporting selected history as JSONL'
+                            : historySelectedJsonlDownloadStatus === 'done'
                             ? 'Selected history JSONL downloaded'
                             : historySelectedJsonlDownloadStatus === 'failed'
                               ? 'Selected history JSONL download failed'
@@ -5669,18 +5691,31 @@ export function AgentPage() {
                           letterSpacing: '0.04em',
                           textTransform: 'uppercase',
                           color:
-                            historySelectedJsonlDownloadStatus === 'failed'
+                            historySelectedJsonlDownloadStatus === 'busy'
+                              ? '#B07840'
+                              : historySelectedJsonlDownloadStatus === 'failed'
                               ? '#D85A30'
                               : historySelectedJsonlDownloadStatus === 'done'
                                 ? '#5A8C6A'
                                 : '#A0A39A',
-                          cursor: historySelectionLocked ? 'not-allowed' : 'pointer',
+                          cursor:
+                            historySelectionLocked ||
+                            historySelectedJsonlDownloadStatus === 'busy'
+                              ? 'not-allowed'
+                              : 'pointer',
                           fontFamily: 'var(--vp-font-sans)',
                           lineHeight: 1.4,
-                          opacity: historySelectionLocked ? 0.5 : 1,
+                          opacity:
+                            historySelectionLocked ||
+                            historySelectedJsonlDownloadStatus === 'busy'
+                              ? 0.5
+                              : 1,
                         }}
+                        aria-busy={historySelectedJsonlDownloadStatus === 'busy'}
                       >
-                        {historySelectedJsonlDownloadStatus === 'done'
+                        {historySelectedJsonlDownloadStatus === 'busy'
+                          ? 'Exporting…'
+                          : historySelectedJsonlDownloadStatus === 'done'
                           ? 'Downloaded'
                           : historySelectedJsonlDownloadStatus === 'failed'
                             ? 'Failed'
