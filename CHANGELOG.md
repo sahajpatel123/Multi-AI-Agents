@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Agent history source filtering now fails open to the complete history when
+  stale or unknown runtime filter state is encountered, instead of presenting
+  an unexplained empty view
 - Filtered Agent history JSONL copy now avoids empty clipboard writes and
   reliably falls back to plain text when rich NDJSON clipboard support is
   unavailable or rejected

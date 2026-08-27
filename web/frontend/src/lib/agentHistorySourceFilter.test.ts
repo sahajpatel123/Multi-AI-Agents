@@ -56,4 +56,10 @@ describe('agentHistorySourceFilter', () => {
     expect(agentHistorySourceLabel('unknown' as never, options)).toBe('All sources');
     expect(agentHistorySourceFilterUseful(items)).toBe(true);
   });
+
+  it('fails open to all rows for malformed runtime filter values', () => {
+    expect(filterAgentHistoryBySource(items, 'future-source' as never)).toEqual(items);
+    expect(filterAgentHistoryBySource(items, undefined)).toEqual(items);
+    expect(filterAgentHistoryBySource(items, null)).toEqual(items);
+  });
 });

@@ -26,6 +26,13 @@ const SOURCE_OPTIONS: readonly AgentHistorySourceOption[] = [
   { value: 'orchestration', label: 'Orchestration' },
 ];
 
+function isKnownSourceFilter(value: unknown): value is AgentHistorySourceFilter {
+  return (
+    value === AGENT_HISTORY_SOURCE_ALL ||
+    SOURCE_OPTIONS.some((option) => option.value === value)
+  );
+}
+
 function hasId(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -69,11 +76,15 @@ export function agentHistorySourceLabel(
 /** Filter history by origin without mutating the input array. */
 export function filterAgentHistoryBySource<T extends AgentHistorySourceItem>(
   items: T[],
-  filter: AgentHistorySourceFilter,
+  filter: AgentHistorySourceFilter | null | undefined,
 ): T[] {
   const list = items || [];
-  if (!filter || filter === AGENT_HISTORY_SOURCE_ALL) return [...list];
-  return list.filter((item) => sourceFor(item) === filter);
+  // Keep malformed runtime state fail-open, matching the label helper's
+  // fallback and avoiding a confusing empty history view after a stale
+  // persisted value or a future filter option is removed.
+  const safeFilter = isKnownSourceFilter(filter) ? filter : AGENT_HISTORY_SOURCE_ALL;
+  if (safeFilter === AGENT_HISTORY_SOURCE_ALL) return [...list];
+  return list.filter((item) => sourceFor(item) === safeFilter);
 }
 
 /** True when at least one non-standalone source is available to filter. */
