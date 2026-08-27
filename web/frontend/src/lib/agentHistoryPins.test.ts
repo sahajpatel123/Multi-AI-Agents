@@ -1,13 +1,57 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  AGENT_HISTORY_PIN_FILTER_ALL,
+  AGENT_HISTORY_PIN_FILTER_OPTIONS,
   AGENT_HISTORY_PINS_MAX,
   AGENT_HISTORY_PINS_STORAGE_KEY,
+  agentHistoryPinFilterLabel,
+  agentHistoryPinFilterUseful,
+  filterAgentHistoryByPin,
   loadAgentHistoryPins,
   normalizeAgentHistoryPins,
   persistAgentHistoryPins,
   removeAgentHistoryPins,
   toggleAgentHistoryPin,
 } from './agentHistoryPins';
+
+describe('agent history pin filter', () => {
+  const tasks = [
+    { task_id: 'task-a', title: 'Alpha' },
+    { taskId: 'task-b', title: 'Beta' },
+    { id: 'task-c', title: 'Gamma' },
+  ];
+
+  it('exposes clear filter labels', () => {
+    expect(AGENT_HISTORY_PIN_FILTER_OPTIONS).toEqual([
+      { value: 'all', label: 'All tasks' },
+      { value: 'pinned', label: 'Pinned only' },
+    ]);
+    expect(agentHistoryPinFilterLabel('pinned')).toBe('Pinned only');
+    expect(agentHistoryPinFilterLabel(AGENT_HISTORY_PIN_FILTER_ALL)).toBe('All tasks');
+  });
+
+  it('returns only pinned rows across supported id shapes', () => {
+    expect(filterAgentHistoryByPin(tasks, 'pinned', [' task-a ', 'task-c'])).toEqual([
+      tasks[0],
+      tasks[2],
+    ]);
+  });
+
+  it('returns a fresh unmodified list for all or malformed filters', () => {
+    const all = filterAgentHistoryByPin(tasks, 'all', ['task-a']);
+    const malformed = filterAgentHistoryByPin(tasks, 'future' as never, ['task-a']);
+    expect(all).toEqual(tasks);
+    expect(all).not.toBe(tasks);
+    expect(malformed).toEqual(tasks);
+    expect(tasks.map((task) => task.title)).toEqual(['Alpha', 'Beta', 'Gamma']);
+  });
+
+  it('only reports the filter useful for pins present in retained history', () => {
+    expect(agentHistoryPinFilterUseful(tasks, ['task-b', 'missing'])).toBe(true);
+    expect(agentHistoryPinFilterUseful(tasks, ['missing'])).toBe(false);
+    expect(agentHistoryPinFilterUseful(tasks, [])).toBe(false);
+  });
+});
 
 describe('normalizeAgentHistoryPins', () => {
   it('returns an empty list for non-array or missing input', () => {

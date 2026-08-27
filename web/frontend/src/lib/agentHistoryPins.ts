@@ -4,6 +4,61 @@ import { safeLocalStorage } from './safeStorage';
 
 export const AGENT_HISTORY_PINS_STORAGE_KEY = 'arena_agent_history_pins_v1';
 export const AGENT_HISTORY_PINS_MAX = 50;
+export const AGENT_HISTORY_PIN_FILTER_ALL = 'all' as const;
+
+export type AgentHistoryPinFilter = typeof AGENT_HISTORY_PIN_FILTER_ALL | 'pinned';
+
+export const AGENT_HISTORY_PIN_FILTER_OPTIONS: readonly {
+  value: AgentHistoryPinFilter;
+  label: string;
+}[] = [
+  { value: AGENT_HISTORY_PIN_FILTER_ALL, label: 'All tasks' },
+  { value: 'pinned', label: 'Pinned only' },
+];
+
+export type AgentHistoryPinItem = {
+  id?: string | null;
+  taskId?: string | null;
+  task_id?: string | null;
+};
+
+function itemTaskId(item: AgentHistoryPinItem): string {
+  const candidate = item.taskId ?? item.task_id ?? item.id;
+  return typeof candidate === 'string' ? candidate.trim() : '';
+}
+
+function isKnownPinFilter(value: unknown): value is AgentHistoryPinFilter {
+  return AGENT_HISTORY_PIN_FILTER_OPTIONS.some((option) => option.value === value);
+}
+
+export function agentHistoryPinFilterLabel(filter: AgentHistoryPinFilter): string {
+  return (
+    AGENT_HISTORY_PIN_FILTER_OPTIONS.find((option) => option.value === filter)?.label ||
+    'All tasks'
+  );
+}
+
+/** Filter history to browser-local pins without mutating the input list. */
+export function filterAgentHistoryByPin<T extends AgentHistoryPinItem>(
+  items: T[],
+  filter: AgentHistoryPinFilter | null | undefined,
+  pinnedTaskIds: readonly string[],
+): T[] {
+  const list = items || [];
+  // Fail open if stale runtime state contains a removed future filter value.
+  if (!isKnownPinFilter(filter) || filter === AGENT_HISTORY_PIN_FILTER_ALL) return [...list];
+  const pins = new Set(normalizeAgentHistoryPins(pinnedTaskIds));
+  return list.filter((item) => pins.has(itemTaskId(item)));
+}
+
+/** True when at least one task in the current retained history is pinned. */
+export function agentHistoryPinFilterUseful(
+  items: AgentHistoryPinItem[],
+  pinnedTaskIds: readonly string[],
+): boolean {
+  const pins = new Set(normalizeAgentHistoryPins(pinnedTaskIds));
+  return (items || []).some((item) => pins.has(itemTaskId(item)));
+}
 
 /**
  * Normalize untrusted storage into a bounded list of unique task ids.
