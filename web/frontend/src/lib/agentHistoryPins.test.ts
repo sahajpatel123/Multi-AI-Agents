@@ -9,10 +9,12 @@ import {
   filterAgentHistoryByPin,
   loadAgentHistoryPins,
   normalizeAgentHistoryPins,
+  pinAgentHistoryTasks,
   persistAgentHistoryPins,
   removeAgentHistoryPins,
   subscribeToAgentHistoryPins,
   toggleAgentHistoryPin,
+  unpinAgentHistoryTasks,
 } from './agentHistoryPins';
 
 describe('agent history pin filter', () => {
@@ -95,6 +97,34 @@ describe('agent history pin storage', () => {
     const second = toggleAgentHistoryPin('task-a');
     expect(second).toEqual([]);
     expect(loadAgentHistoryPins()).toEqual([]);
+  });
+
+  it('pins a selection together and gives selected tasks priority at the cap', () => {
+    persistAgentHistoryPins(['oldest', 'keep', 'selected-a']);
+
+    expect(pinAgentHistoryTasks([' selected-a ', 'selected-b'])).toEqual([
+      'oldest',
+      'keep',
+      'selected-a',
+      'selected-b',
+    ]);
+
+    const full = Array.from({ length: AGENT_HISTORY_PINS_MAX }, (_, i) => `old-${i}`);
+    persistAgentHistoryPins(full);
+    const next = pinAgentHistoryTasks(['chosen-a', 'chosen-b']);
+    expect(next).toHaveLength(AGENT_HISTORY_PINS_MAX);
+    expect(next.slice(-2)).toEqual(['chosen-a', 'chosen-b']);
+    expect(next).not.toContain('old-0');
+    expect(next).not.toContain('old-1');
+  });
+
+  it('unpins a selection and ignores blank or unknown ids', () => {
+    persistAgentHistoryPins(['task-a', 'task-b', 'task-c']);
+    expect(unpinAgentHistoryTasks([' task-b ', 'missing', ''])).toEqual([
+      'task-a',
+      'task-c',
+    ]);
+    expect(unpinAgentHistoryTasks(['   '])).toEqual(['task-a', 'task-c']);
   });
 
   it('normalizes whitespace around a pinned task id', () => {

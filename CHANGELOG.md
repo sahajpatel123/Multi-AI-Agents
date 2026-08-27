@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Agent research history now supports selecting visible tasks and pinning or
+  unpinning the selection together, with a browser-local 50-pin cap and safe
+  cleanup when retained history changes
 - Agent research history now remembers its sort and filter view across visits,
   while validating browser-local preferences field by field so stale or
   corrupted values fall back safely without persisting free-text searches

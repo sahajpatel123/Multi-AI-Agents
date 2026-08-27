@@ -118,13 +118,16 @@ import {
 import {
   AGENT_HISTORY_PIN_FILTER_ALL,
   AGENT_HISTORY_PIN_FILTER_OPTIONS,
+  AGENT_HISTORY_PINS_MAX,
   agentHistoryPinFilterLabel,
   agentHistoryPinFilterUseful,
   filterAgentHistoryByPin,
   loadAgentHistoryPins,
   removeAgentHistoryPins,
+  pinAgentHistoryTasks,
   subscribeToAgentHistoryPins,
   toggleAgentHistoryPin,
+  unpinAgentHistoryTasks,
   type AgentHistoryPinFilter,
 } from '../lib/agentHistoryPins';
 import {
@@ -867,6 +870,9 @@ export function AgentPage() {
   const [showAllSourcePills, setShowAllSourcePills] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
   const [pinnedTaskIds, setPinnedTaskIds] = useState<string[]>(() => loadAgentHistoryPins());
+  const [selectedHistoryTaskIds, setSelectedHistoryTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [initialHistoryState] = useState(() => {
     const saved = loadAgentHistoryViewPreferences();
     const shared = readAgentHistoryViewFromSearchParams(searchParams, saved);
@@ -961,6 +967,7 @@ export function AgentPage() {
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const historySearchRef = useRef<HTMLInputElement | null>(null);
+  const historySelectVisibleRef = useRef<HTMLInputElement | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [confActive, setConfActive] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -2235,6 +2242,7 @@ export function AgentPage() {
     setConfirmDeleteTaskId(null);
     setEditingTaskId(null);
     setEditingValue('');
+    setSelectedHistoryTaskIds(new Set());
     setSearchParams({});
     setBridgeMeta(null);
     setResult(null);
@@ -2890,6 +2898,43 @@ export function AgentPage() {
     historySourceFilter,
     historyPinFilter,
   ]);
+
+  const visibleHistoryTaskIds = useMemo(
+    () => filteredTaskHistory.map((item) => item.task_id),
+    [filteredTaskHistory],
+  );
+  const allVisibleHistorySelected =
+    visibleHistoryTaskIds.length > 0 &&
+    visibleHistoryTaskIds.every((taskId) => selectedHistoryTaskIds.has(taskId));
+  const someVisibleHistorySelected = visibleHistoryTaskIds.some((taskId) =>
+    selectedHistoryTaskIds.has(taskId),
+  );
+  const selectedHistoryTaskIdList = useMemo(() => {
+    const available = new Set(taskHistory.map((item) => item.task_id));
+    return [...selectedHistoryTaskIds].filter((taskId) => available.has(taskId));
+  }, [selectedHistoryTaskIds, taskHistory]);
+  const selectedHistoryPinnedCount = useMemo(
+    () => selectedHistoryTaskIdList.filter((taskId) => pinnedTaskIds.includes(taskId)).length,
+    [pinnedTaskIds, selectedHistoryTaskIdList],
+  );
+
+  // A refresh can remove tasks that were selected in an older view. Keep the
+  // selection bounded to retained history so bulk actions never target stale
+  // ids, while still preserving selected rows hidden by a temporary filter.
+  useEffect(() => {
+    const available = new Set(taskHistory.map((item) => item.task_id));
+    setSelectedHistoryTaskIds((previous) => {
+      const next = new Set([...previous].filter((taskId) => available.has(taskId)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [taskHistory]);
+
+  useEffect(() => {
+    if (historySelectVisibleRef.current) {
+      historySelectVisibleRef.current.indeterminate =
+        someVisibleHistorySelected && !allVisibleHistorySelected;
+    }
+  }, [allVisibleHistorySelected, someVisibleHistorySelected]);
 
   const historyScoreFilterUseful = useMemo(
     () => agentHistoryScoreFilterUseful(taskHistory),
@@ -3758,6 +3803,61 @@ export function AgentPage() {
     setPinnedTaskIds(toggleAgentHistoryPin(taskId));
   };
 
+  const toggleHistorySelection = (taskId: string) => {
+    setSelectedHistoryTaskIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+    setOpenMenuTaskId(null);
+    setConfirmDeleteTaskId(null);
+  };
+
+  const toggleVisibleHistorySelection = () => {
+    if (visibleHistoryTaskIds.length === 0) return;
+    setSelectedHistoryTaskIds((previous) => {
+      const next = new Set(previous);
+      if (allVisibleHistorySelected) {
+        visibleHistoryTaskIds.forEach((taskId) => next.delete(taskId));
+      } else {
+        visibleHistoryTaskIds.forEach((taskId) => next.add(taskId));
+      }
+      return next;
+    });
+  };
+
+  const applyHistoryPinSelection = (action: 'pin' | 'unpin') => {
+    const selected = selectedHistoryTaskIdList;
+    if (selected.length === 0) {
+      setSelectedHistoryTaskIds(new Set());
+      return;
+    }
+
+    const nextPins = action === 'pin'
+      ? pinAgentHistoryTasks(selected)
+      : unpinAgentHistoryTasks(selected);
+    const nextPinSet = new Set(nextPins);
+    const changedCount = selected.filter((taskId) =>
+      action === 'pin' ? nextPinSet.has(taskId) : !nextPinSet.has(taskId),
+    ).length;
+    setPinnedTaskIds(nextPins);
+    setSelectedHistoryTaskIds(new Set());
+
+    if (action === 'pin' && changedCount < selected.length) {
+      setToastMessage(
+        `${changedCount} of ${selected.length} selected tasks pinned; your browser keeps up to ${AGENT_HISTORY_PINS_MAX} pins.`,
+      );
+    } else {
+      setToastMessage(
+        `${changedCount} task${changedCount === 1 ? '' : 's'} ${action === 'pin' ? 'pinned' : 'unpinned'}.`,
+      );
+    }
+  };
+
   const deleteHistoryItem = (taskId: string) => {
     const removed = taskHistory.find((t) => t.task_id === taskId) ?? null;
     const wasPinned = pinnedTaskIds.includes(taskId);
@@ -4010,6 +4110,29 @@ export function AgentPage() {
         }}
       >
         <div className="flex items-start justify-between gap-2">
+          <label
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'flex-start',
+              paddingTop: 3,
+              paddingRight: 2,
+              flexShrink: 0,
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={selectedHistoryTaskIds.has(item.task_id)}
+              onChange={() => toggleHistorySelection(item.task_id)}
+              aria-label={
+                selectedHistoryTaskIds.has(item.task_id)
+                  ? `Deselect ${displayTitle} from history selection`
+                  : `Select ${displayTitle} for history actions`
+              }
+              style={{ accentColor: '#B07840', cursor: 'pointer' }}
+            />
+          </label>
           <div className="min-w-0 flex-1">
             {isEditing ? (
               <div onClick={(e) => e.stopPropagation()}>
@@ -5258,6 +5381,112 @@ export function AgentPage() {
               </div>
               {taskHistory.length > 0 ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {filteredTaskHistory.length > 0 ? (
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        fontSize: 10,
+                        color: '#8C7355',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={
+                        allVisibleHistorySelected
+                          ? 'Clear selection for the visible history tasks'
+                          : 'Select all history tasks currently visible'
+                      }
+                    >
+                      <input
+                        ref={historySelectVisibleRef}
+                        type="checkbox"
+                        checked={allVisibleHistorySelected}
+                        onChange={toggleVisibleHistorySelection}
+                        aria-label={
+                          allVisibleHistorySelected
+                            ? `Deselect all ${visibleHistoryTaskIds.length} visible history tasks`
+                            : `Select all ${visibleHistoryTaskIds.length} visible history tasks`
+                        }
+                        style={{ accentColor: '#B07840', cursor: 'pointer' }}
+                      />
+                      <span>{allVisibleHistorySelected ? 'Clear visible' : 'Select visible'}</span>
+                    </label>
+                  ) : null}
+                  {selectedHistoryTaskIdList.length > 0 ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => applyHistoryPinSelection('pin')}
+                        disabled={selectedHistoryPinnedCount === selectedHistoryTaskIdList.length}
+                        title="Pin every selected history task"
+                        aria-label={`Pin ${selectedHistoryTaskIdList.length} selected history tasks`}
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color: '#B07840',
+                          cursor:
+                            selectedHistoryPinnedCount === selectedHistoryTaskIdList.length
+                              ? 'not-allowed'
+                              : 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                          opacity:
+                            selectedHistoryPinnedCount === selectedHistoryTaskIdList.length
+                              ? 0.5
+                              : 1,
+                        }}
+                      >
+                        Pin ({selectedHistoryTaskIdList.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyHistoryPinSelection('unpin')}
+                        disabled={selectedHistoryPinnedCount === 0}
+                        title="Unpin every selected history task"
+                        aria-label={`Unpin ${selectedHistoryTaskIdList.length} selected history tasks`}
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color: '#8C7355',
+                          cursor: selectedHistoryPinnedCount === 0 ? 'not-allowed' : 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                          opacity: selectedHistoryPinnedCount === 0 ? 0.5 : 1,
+                        }}
+                      >
+                        Unpin ({selectedHistoryTaskIdList.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedHistoryTaskIds(new Set())}
+                        title="Clear selected history tasks"
+                        aria-label={`Clear ${selectedHistoryTaskIdList.length} selected history tasks`}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: '2px 0',
+                          fontSize: 10,
+                          color: '#A0A39A',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </>
+                  ) : null}
                   <span style={{ fontSize: 10, color: '#A0A39A' }}>
                     {filteredTaskHistory.length}
                     {historySearchQuery.trim() ||

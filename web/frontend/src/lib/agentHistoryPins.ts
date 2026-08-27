@@ -159,6 +159,34 @@ export function toggleAgentHistoryPin(taskId: string): string[] {
   return persistAgentHistoryPins(next);
 }
 
+/**
+ * Pin several tasks in one browser-local write.
+ *
+ * Requested tasks take priority over older pins, so a bulk action never
+ * silently drops one of the selected rows until the 50-pin cap is reached.
+ * The returned list is the same normalized value written to storage.
+ */
+export function pinAgentHistoryTasks(taskIds: readonly string[]): string[] {
+  const requested = normalizeAgentHistoryPins(taskIds);
+  const current = loadAgentHistoryPins();
+  if (requested.length === 0) return current;
+
+  const requestedSet = new Set(requested);
+  const existing = current.filter((id) => !requestedSet.has(id));
+  const roomForExisting = Math.max(0, AGENT_HISTORY_PINS_MAX - requested.length);
+  return persistAgentHistoryPins([
+    ...existing.slice(Math.max(0, existing.length - roomForExisting)),
+    ...requested,
+  ]);
+}
+
+/** Unpin several tasks in one browser-local write. */
+export function unpinAgentHistoryTasks(taskIds: readonly string[]): string[] {
+  const removing = new Set(normalizeAgentHistoryPins(taskIds));
+  if (removing.size === 0) return loadAgentHistoryPins();
+  return persistAgentHistoryPins(loadAgentHistoryPins().filter((id) => !removing.has(id)));
+}
+
 /** Remove pins for tasks being deleted; other pins survive. */
 export function removeAgentHistoryPins(taskIds: readonly string[]): string[] {
   const removing = new Set(taskIds.filter((id) => typeof id === 'string' && id.length > 0));
