@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Pa
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -508,6 +508,20 @@ class AgentTaskRenameRequest(BaseModel):
     @classmethod
     def validate_title(cls, v: str) -> str:
         return sanitize_model_text(v, max_length=100, field_name="title")
+
+
+class AgentTaskBulkDeleteBody(BaseModel):
+    """Bounded task ids for an explicit bulk history deletion."""
+
+    ids: list[str] = Field(..., min_length=1, max_length=50)
+
+    @field_validator("ids")
+    @classmethod
+    def validate_task_delete_ids(cls, values: list[str]) -> list[str]:
+        cleaned = [value.strip() for value in values if value and value.strip()]
+        if not cleaned:
+            raise ValueError("ids must contain at least one non-empty id")
+        return list(dict.fromkeys(cleaned))
 
 
 class LiveToggleBody(BaseModel):
@@ -4973,6 +4987,69 @@ async def rename_agent_task(
     )
 
 
+@router.delete("/tasks/bulk")
+async def delete_agent_tasks_bulk(
+    http_request: Request,
+    body: AgentTaskBulkDeleteBody,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Delete selected Agent history rows in one ownership-scoped action.
+
+    Missing or foreign ids are skipped rather than treated as a request
+    failure. That makes a stale browser selection safe and lets the client
+    report exactly what the server removed. The endpoint is deliberately
+    bounded more tightly than the single-delete route because one request can
+    remove up to 50 rows.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_bulk_delete",
+        limit=15,
+        window_seconds=3600,
+        message="Too many bulk task deletions. Limit is 15 per hour.",
+    )
+
+    unique_ids = list(dict.fromkeys(body.ids))
+    owned = (
+        db.query(AgentTaskRow)
+        .filter(
+            AgentTaskRow.task_id.in_(unique_ids),
+            AgentTaskRow.user_id == user.id,
+        )
+        .all()
+    )
+    deleted_ids = [row.task_id for row in owned]
+
+    if deleted_ids:
+        # Contradictions intentionally do not use a foreign key: either side
+        # can reference a task that is later removed. Clean those references
+        # with the task so the user's memory never points at deleted research.
+        db.query(AgentContradiction).filter(
+            AgentContradiction.user_id == user.id,
+            or_(
+                AgentContradiction.new_task_id.in_(deleted_ids),
+                AgentContradiction.old_task_id.in_(deleted_ids),
+            ),
+        ).delete(synchronize_session=False)
+        for row in owned:
+            db.delete(row)
+        db.commit()
+
+    skipped_ids = [task_id for task_id in unique_ids if task_id not in set(deleted_ids)]
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            "success": True,
+            "requested": len(unique_ids),
+            "deleted": len(deleted_ids),
+            "deleted_ids": deleted_ids,
+            "skipped_ids": skipped_ids,
+        }
+    )
+
+
 @router.delete("/tasks/{task_id}")
 async def delete_agent_task(
     http_request: Request,
@@ -4999,6 +5076,13 @@ async def delete_agent_task(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
         )
+    db.query(AgentContradiction).filter(
+        AgentContradiction.user_id == user.id,
+        or_(
+            AgentContradiction.new_task_id == row.task_id,
+            AgentContradiction.old_task_id == row.task_id,
+        ),
+    ).delete(synchronize_session=False)
     db.delete(row)
     db.commit()
     return JSONResponse(content={"request_id": correlation_request_id(http_request), "success": True})

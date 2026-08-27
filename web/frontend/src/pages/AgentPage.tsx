@@ -23,6 +23,7 @@ import {
   createAgentTaskShare,
   crossPollinateAgentAnswer,
   deleteAgentTask,
+  deleteAgentTasks,
   exportAgentTasksJsonl,
   exportAgentTaskCsv,
   exportAgentTaskPdf,
@@ -303,6 +304,8 @@ const AR = {
   TEXT_MUTED: '#A0A39A',
   TEXT_FAINT: '#74776F',
 } as const;
+
+const AGENT_HISTORY_BULK_DELETE_MAX = 50;
 
 /** localStorage keys for Agent compose drafts (parity with Arena prompt drafts). */
 const AGENT_TASK_DRAFT_KEY = 'agent_task_draft:v1';
@@ -960,6 +963,8 @@ export function AgentPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
   const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
+  const [historyBulkDeleteConfirm, setHistoryBulkDeleteConfirm] = useState(false);
+  const [historyBulkDeleteBusy, setHistoryBulkDeleteBusy] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -1484,6 +1489,17 @@ export function AgentPage() {
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [openMenuTaskId, confirmDeleteTaskId]);
+
+  useEffect(() => {
+    if (!historyBulkDeleteConfirm || historyBulkDeleteBusy) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setHistoryBulkDeleteConfirm(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [historyBulkDeleteBusy, historyBulkDeleteConfirm]);
 
   useEffect(() => {
     if (!editingTaskId) return;
@@ -2241,6 +2257,7 @@ export function AgentPage() {
     setCrossPollinateBusy(false);
     setOpenMenuTaskId(null);
     setConfirmDeleteTaskId(null);
+    setHistoryBulkDeleteConfirm(false);
     setEditingTaskId(null);
     setEditingValue('');
     setSelectedHistoryTaskIds(new Set());
@@ -2918,6 +2935,7 @@ export function AgentPage() {
     () => selectedHistoryTaskIdList.filter((taskId) => pinnedTaskIds.includes(taskId)).length,
     [pinnedTaskIds, selectedHistoryTaskIdList],
   );
+  const historySelectionLocked = historyBulkDeleteBusy || historyBulkDeleteConfirm;
 
   // A refresh can remove tasks that were selected in an older view. Keep the
   // selection bounded to retained history so bulk actions never target stale
@@ -3801,10 +3819,12 @@ export function AgentPage() {
   };
 
   const toggleHistoryPin = (taskId: string) => {
+    if (historySelectionLocked) return;
     setPinnedTaskIds(toggleAgentHistoryPin(taskId));
   };
 
   const toggleHistorySelection = (taskId: string) => {
+    if (historySelectionLocked) return;
     setSelectedHistoryTaskIds((previous) => {
       const next = new Set(previous);
       if (next.has(taskId)) {
@@ -3819,7 +3839,7 @@ export function AgentPage() {
   };
 
   const toggleVisibleHistorySelection = () => {
-    if (visibleHistoryTaskIds.length === 0) return;
+    if (historySelectionLocked || visibleHistoryTaskIds.length === 0) return;
     setSelectedHistoryTaskIds((previous) => {
       const next = new Set(previous);
       if (allVisibleHistorySelected) {
@@ -3832,6 +3852,7 @@ export function AgentPage() {
   };
 
   const applyHistoryPinSelection = (action: 'pin' | 'unpin') => {
+    if (historySelectionLocked) return;
     const selected = selectedHistoryTaskIdList;
     if (selected.length === 0) {
       setSelectedHistoryTaskIds(new Set());
@@ -3864,7 +3885,71 @@ export function AgentPage() {
     }
   };
 
+  const requestHistoryBulkDelete = () => {
+    if (historySelectionLocked || selectedHistoryTaskIdList.length === 0) return;
+    if (selectedHistoryTaskIdList.length > AGENT_HISTORY_BULK_DELETE_MAX) {
+      setToastMessage(
+        `Select at most ${AGENT_HISTORY_BULK_DELETE_MAX} tasks to delete at once.`,
+      );
+      return;
+    }
+    setOpenMenuTaskId(null);
+    setConfirmDeleteTaskId(null);
+    setHistoryBulkDeleteConfirm(true);
+  };
+
+  const deleteSelectedHistoryTasks = useCallback(async () => {
+    if (historyBulkDeleteBusy) return;
+    const selected = selectedHistoryTaskIdList;
+    if (selected.length === 0) {
+      setHistoryBulkDeleteConfirm(false);
+      return;
+    }
+
+    const selectedSet = new Set(selected);
+    setHistoryBulkDeleteBusy(true);
+    setOpenMenuTaskId(null);
+    setConfirmDeleteTaskId(null);
+    try {
+      const response = await deleteAgentTasks(selected);
+      const deletedIds = response.deleted_ids.filter((taskId) => selectedSet.has(taskId));
+      const deletedSet = new Set(deletedIds);
+      setTaskHistory((previous) => previous.filter((item) => !deletedSet.has(item.task_id)));
+      setPinnedTaskIds(removeAgentHistoryPins(deletedIds));
+      setSelectedHistoryTaskIds(new Set());
+
+      if (result?.task_id && deletedSet.has(result.task_id)) {
+        resetRun();
+      }
+
+      if (deletedIds.length === selected.length) {
+        setToastMessage(
+          `${deletedIds.length} task${deletedIds.length === 1 ? '' : 's'} deleted.`,
+        );
+      } else if (deletedIds.length > 0) {
+        setToastMessage(
+          `${deletedIds.length} of ${selected.length} selected tasks deleted; the rest were already gone.`,
+        );
+      } else {
+        setToastMessage('No selected tasks were deleted; they may already be gone.');
+      }
+    } catch (error) {
+      setToastMessage(
+        error instanceof Error ? error.message : 'Could not delete selected tasks.',
+      );
+    } finally {
+      setHistoryBulkDeleteConfirm(false);
+      setHistoryBulkDeleteBusy(false);
+    }
+  }, [
+    historyBulkDeleteBusy,
+    resetRun,
+    result?.task_id,
+    selectedHistoryTaskIdList,
+  ]);
+
   const deleteHistoryItem = (taskId: string) => {
+    if (historySelectionLocked) return;
     const removed = taskHistory.find((t) => t.task_id === taskId) ?? null;
     const wasPinned = pinnedTaskIds.includes(taskId);
     const wasActive = result?.task_id === taskId;
@@ -4130,13 +4215,17 @@ export function AgentPage() {
             <input
               type="checkbox"
               checked={selectedHistoryTaskIds.has(item.task_id)}
+              disabled={historySelectionLocked}
               onChange={() => toggleHistorySelection(item.task_id)}
               aria-label={
                 selectedHistoryTaskIds.has(item.task_id)
                   ? `Deselect ${displayTitle} from history selection`
                   : `Select ${displayTitle} for history actions`
               }
-              style={{ accentColor: '#B07840', cursor: 'pointer' }}
+              style={{
+                accentColor: '#B07840',
+                cursor: historySelectionLocked ? 'not-allowed' : 'pointer',
+              }}
             />
           </label>
           <div className="min-w-0 flex-1">
@@ -4325,6 +4414,7 @@ export function AgentPage() {
               <button
                 type="button"
                 aria-label="History item actions"
+                disabled={historySelectionLocked}
                 onClick={(e) => {
                   e.stopPropagation();
                   setEditingTaskId(null);
@@ -4340,6 +4430,8 @@ export function AgentPage() {
                   background: isMenuOpen ? '#F0EBE3' : 'transparent',
                   color: '#A0A39A',
                   transition: 'all 150ms ease',
+                  opacity: historySelectionLocked ? 0.5 : 1,
+                  cursor: historySelectionLocked ? 'not-allowed' : 'pointer',
                 }}
               >
                 <Ellipsis className="w-4 h-4" />
@@ -5408,13 +5500,17 @@ export function AgentPage() {
                         ref={historySelectVisibleRef}
                         type="checkbox"
                         checked={allVisibleHistorySelected}
+                        disabled={historySelectionLocked}
                         onChange={toggleVisibleHistorySelection}
                         aria-label={
                           allVisibleHistorySelected
                             ? `Deselect all ${visibleHistoryTaskIds.length} visible history tasks`
                             : `Select all ${visibleHistoryTaskIds.length} visible history tasks`
                         }
-                        style={{ accentColor: '#B07840', cursor: 'pointer' }}
+                        style={{
+                          accentColor: '#B07840',
+                          cursor: historySelectionLocked ? 'not-allowed' : 'pointer',
+                        }}
                       />
                       <span>{allVisibleHistorySelected ? 'Clear visible' : 'Select visible'}</span>
                     </label>
@@ -5424,7 +5520,10 @@ export function AgentPage() {
                       <button
                         type="button"
                         onClick={() => applyHistoryPinSelection('pin')}
-                        disabled={selectedHistoryPinnedCount === selectedHistoryTaskIdList.length}
+                        disabled={
+                          historySelectionLocked ||
+                          selectedHistoryPinnedCount === selectedHistoryTaskIdList.length
+                        }
                         title="Pin every selected history task"
                         aria-label={`Pin ${selectedHistoryTaskIdList.length} selected history tasks`}
                         style={{
@@ -5437,12 +5536,14 @@ export function AgentPage() {
                           textTransform: 'uppercase',
                           color: '#B07840',
                           cursor:
+                            historySelectionLocked ||
                             selectedHistoryPinnedCount === selectedHistoryTaskIdList.length
                               ? 'not-allowed'
                               : 'pointer',
                           fontFamily: 'var(--vp-font-sans)',
                           lineHeight: 1.4,
                           opacity:
+                            historySelectionLocked ||
                             selectedHistoryPinnedCount === selectedHistoryTaskIdList.length
                               ? 0.5
                               : 1,
@@ -5453,7 +5554,7 @@ export function AgentPage() {
                       <button
                         type="button"
                         onClick={() => applyHistoryPinSelection('unpin')}
-                        disabled={selectedHistoryPinnedCount === 0}
+                        disabled={historySelectionLocked || selectedHistoryPinnedCount === 0}
                         title="Unpin every selected history task"
                         aria-label={`Unpin ${selectedHistoryTaskIdList.length} selected history tasks`}
                         style={{
@@ -5465,17 +5566,24 @@ export function AgentPage() {
                           letterSpacing: '0.04em',
                           textTransform: 'uppercase',
                           color: '#8C7355',
-                          cursor: selectedHistoryPinnedCount === 0 ? 'not-allowed' : 'pointer',
+                          cursor:
+                            historySelectionLocked || selectedHistoryPinnedCount === 0
+                              ? 'not-allowed'
+                              : 'pointer',
                           fontFamily: 'var(--vp-font-sans)',
                           lineHeight: 1.4,
-                          opacity: selectedHistoryPinnedCount === 0 ? 0.5 : 1,
+                          opacity:
+                            historySelectionLocked || selectedHistoryPinnedCount === 0 ? 0.5 : 1,
                         }}
                       >
                         Unpin ({selectedHistoryTaskIdList.length})
                       </button>
                       <button
                         type="button"
-                        onClick={() => setSelectedHistoryTaskIds(new Set())}
+                        onClick={() => {
+                          if (!historySelectionLocked) setSelectedHistoryTaskIds(new Set());
+                        }}
+                        disabled={historySelectionLocked}
                         title="Clear selected history tasks"
                         aria-label={`Clear ${selectedHistoryTaskIdList.length} selected history tasks`}
                         style={{
@@ -5484,13 +5592,91 @@ export function AgentPage() {
                           padding: '2px 0',
                           fontSize: 10,
                           color: '#A0A39A',
-                          cursor: 'pointer',
+                          cursor: historySelectionLocked ? 'not-allowed' : 'pointer',
                           fontFamily: 'var(--vp-font-sans)',
                           lineHeight: 1.4,
+                          opacity: historySelectionLocked ? 0.5 : 1,
                         }}
                       >
                         Clear
                       </button>
+                      {historyBulkDeleteConfirm ? (
+                        <>
+                          <span
+                            role="status"
+                            aria-live="polite"
+                            style={{ fontSize: 10, color: '#C0392B', whiteSpace: 'nowrap' }}
+                          >
+                            Delete {selectedHistoryTaskIdList.length} selected?
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setHistoryBulkDeleteConfirm(false)}
+                            disabled={historyBulkDeleteBusy}
+                            aria-label="Cancel deleting selected history tasks"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: '2px 0',
+                              fontSize: 10,
+                              color: '#A0A39A',
+                              cursor: historyBulkDeleteBusy ? 'not-allowed' : 'pointer',
+                              fontFamily: 'var(--vp-font-sans)',
+                              lineHeight: 1.4,
+                              opacity: historyBulkDeleteBusy ? 0.5 : 1,
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void deleteSelectedHistoryTasks()}
+                            disabled={historyBulkDeleteBusy}
+                            aria-busy={historyBulkDeleteBusy}
+                            aria-label={`Confirm deleting ${selectedHistoryTaskIdList.length} selected history tasks`}
+                            style={{
+                              background: 'none',
+                              border: '0.5px solid #D85A30',
+                              borderRadius: 6,
+                              padding: '2px 7px',
+                              fontSize: 10,
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              color: '#C0392B',
+                              cursor: historyBulkDeleteBusy ? 'wait' : 'pointer',
+                              fontFamily: 'var(--vp-font-sans)',
+                              lineHeight: 1.4,
+                              opacity: historyBulkDeleteBusy ? 0.65 : 1,
+                            }}
+                          >
+                            {historyBulkDeleteBusy ? 'Deleting…' : 'Delete'}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={requestHistoryBulkDelete}
+                          disabled={historySelectionLocked}
+                          title={`Delete selected history tasks (up to ${AGENT_HISTORY_BULK_DELETE_MAX} at a time)`}
+                          aria-label={`Delete ${selectedHistoryTaskIdList.length} selected history tasks`}
+                          style={{
+                            background: 'none',
+                            border: '0.5px solid #E0D5C5',
+                            borderRadius: 6,
+                            padding: '2px 7px',
+                            fontSize: 10,
+                            letterSpacing: '0.04em',
+                            textTransform: 'uppercase',
+                            color: '#C0392B',
+                            cursor: historySelectionLocked ? 'not-allowed' : 'pointer',
+                            fontFamily: 'var(--vp-font-sans)',
+                            lineHeight: 1.4,
+                            opacity: historySelectionLocked ? 0.5 : 1,
+                          }}
+                        >
+                          Delete ({selectedHistoryTaskIdList.length})
+                        </button>
+                      )}
                     </>
                   ) : null}
                   <span style={{ fontSize: 10, color: '#A0A39A' }}>

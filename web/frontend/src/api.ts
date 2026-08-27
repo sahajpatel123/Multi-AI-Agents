@@ -3978,6 +3978,51 @@ export async function deleteAgentTask(taskId: string): Promise<{ success: boolea
   return { success: true };
 }
 
+export type AgentTaskBulkDeleteResult = {
+  success: boolean;
+  requested: number;
+  deleted: number;
+  deleted_ids: string[];
+  skipped_ids: string[];
+};
+
+export async function deleteAgentTasks(
+  taskIds: string[],
+): Promise<AgentTaskBulkDeleteResult> {
+  const response = await apiFetch('/api/agent/tasks/bulk', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: taskIds }),
+  });
+  const data = await parseJsonSafely<
+    Partial<AgentTaskBulkDeleteResult> & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Bulk delete failed'), response),
+      response.status,
+      data,
+    );
+  }
+  if (
+    !data ||
+    data.success !== true ||
+    typeof data.requested !== 'number' ||
+    typeof data.deleted !== 'number' ||
+    !Array.isArray(data.deleted_ids) ||
+    !Array.isArray(data.skipped_ids)
+  ) {
+    throw new Error(withRequestId('Invalid bulk delete response', response));
+  }
+  return {
+    success: true,
+    requested: data.requested,
+    deleted: data.deleted,
+    deleted_ids: data.deleted_ids.filter((id): id is string => typeof id === 'string'),
+    skipped_ids: data.skipped_ids.filter((id): id is string => typeof id === 'string'),
+  };
+}
+
 export type CancelAgentTaskResponse = {
   task_id: string;
   status: 'cancelling' | 'cancelled' | 'complete' | 'failed';

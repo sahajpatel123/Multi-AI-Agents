@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Agent research history now supports deleting selected tasks together, with
+  an explicit inline confirmation, bounded server-side deletion, safe
+  ownership scoping, and honest partial-success feedback
 - Agent research history now supports selecting visible tasks and pinning or
   unpinning the selection together, with a browser-local 50-pin cap and safe
   cleanup when retained history changes
