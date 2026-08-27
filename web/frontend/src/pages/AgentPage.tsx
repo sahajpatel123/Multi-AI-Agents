@@ -3669,15 +3669,6 @@ export function AgentPage() {
     // The disabled prop follows React's render cycle; the ref closes the
     // smaller window where two activations can arrive before that render.
     if (historySelectedCsvDownloadBusyRef.current) return;
-    const csv = formatSelectedAgentHistoryCsv(
-      taskHistory,
-      selectedHistoryTaskIdList,
-      toHistoryExportItem,
-    );
-    if (!csv) {
-      setToastMessage('No selected history tasks to export.');
-      return;
-    }
     historySelectedCsvDownloadBusyRef.current = true;
     if (historySelectedCsvDownloadTimerRef.current != null) {
       window.clearTimeout(historySelectedCsvDownloadTimerRef.current);
@@ -3685,14 +3676,33 @@ export function AgentPage() {
     }
     setHistorySelectedCsvDownloadStatus('busy');
     let ok = false;
+    let emptySelection = false;
     try {
-      ok = downloadTextFile(csv, {
-        filename: `${withDownloadDate('agent-research-selected')}.csv`,
-        mimeType: 'text/csv;charset=utf-8',
-      });
+      // Keep formatting inside the guarded section too: it traverses
+      // API-shaped rows and must not escape before the busy ref can be
+      // released if a malformed runtime row reaches the page.
+      const csv = formatSelectedAgentHistoryCsv(
+        taskHistory,
+        selectedHistoryTaskIdList,
+        toHistoryExportItem,
+      );
+      if (!csv) {
+        emptySelection = true;
+      } else {
+        ok = downloadTextFile(csv, {
+          filename: `${withDownloadDate('agent-research-selected')}.csv`,
+          mimeType: 'text/csv;charset=utf-8',
+        });
+      }
     } catch {
       // Keep one malformed runtime row from leaving the control locked.
       ok = false;
+    }
+    if (emptySelection) {
+      historySelectedCsvDownloadBusyRef.current = false;
+      setHistorySelectedCsvDownloadStatus('idle');
+      setToastMessage('No selected history tasks to export.');
+      return;
     }
     setHistorySelectedCsvDownloadStatus(ok ? 'done' : 'failed');
     if (!ok) {

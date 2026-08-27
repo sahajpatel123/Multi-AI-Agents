@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Selected Agent history CSV downloads now guard serialization as well as the
+  browser trigger, so malformed runtime rows report a failure without leaving
+  the export action locked
 - Selected Agent history JSONL export now ignores rapid repeat activation and
   reports its in-progress state, preventing duplicate downloads and locked
   controls after malformed runtime data
