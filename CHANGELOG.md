@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Agent history can now filter by source — standalone research, watchlist
+  runs, or orchestration tasks — and carries that choice into the filtered
+  count, empty state, and all history exports
 - Agent history can now copy the current filtered view as JSONL, placing one
   stable task object per line on the clipboard for quick handoff to terminals,
   notebooks, and import tools
