@@ -15,6 +15,8 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[IMPROVED] Agent history: pins and the pinned-only filter now stay synchronized across open browser tabs, including safe resets after storage clears',
+      '[NEW] Agent history: filter the retained research list to pinned tasks, with matching counts, empty states, and exports',
       '[NEW] Agent history: copy the current filtered view as structured JSON directly to the clipboard, with the same filter note and stable fields as the JSON download',
       '[NEW] Agent history: copy the current filtered view as spreadsheet-ready CSV directly to the clipboard, with a plain-text fallback and formula-safe escaping',
       '[NEW] Arena leaderboard: search session prompts by question, winning mind, or answer text; Copy session and Download .md honor the combined view',

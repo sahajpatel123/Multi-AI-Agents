@@ -6,6 +6,25 @@ export const AGENT_HISTORY_PINS_STORAGE_KEY = 'arena_agent_history_pins_v1';
 export const AGENT_HISTORY_PINS_MAX = 50;
 export const AGENT_HISTORY_PIN_FILTER_ALL = 'all' as const;
 
+/**
+ * Notify subscribers in this tab after a pin write. Browsers only emit their
+ * native `storage` event in other documents, so the synthetic event keeps any
+ * other mounted history consumers in this document consistent too.
+ */
+function notifyAgentHistoryPinsChanged(newValue: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: AGENT_HISTORY_PINS_STORAGE_KEY,
+        newValue,
+      }),
+    );
+  } catch {
+    /* locked-down iframe / older browser — best effort */
+  }
+}
+
 export type AgentHistoryPinFilter = typeof AGENT_HISTORY_PIN_FILTER_ALL | 'pinned';
 
 export const AGENT_HISTORY_PIN_FILTER_OPTIONS: readonly {
@@ -79,9 +98,7 @@ export function normalizeAgentHistoryPins(raw: unknown): string[] {
   return out;
 }
 
-/** Load pinned task ids, falling back to an empty list on any failure. */
-export function loadAgentHistoryPins(): string[] {
-  const raw = safeLocalStorage.getItem(AGENT_HISTORY_PINS_STORAGE_KEY);
+function parseAgentHistoryPins(raw: string | null): string[] {
   if (!raw) return [];
   try {
     return normalizeAgentHistoryPins(JSON.parse(raw) as unknown);
@@ -90,15 +107,39 @@ export function loadAgentHistoryPins(): string[] {
   }
 }
 
+/** Load pinned task ids, falling back to an empty list on any failure. */
+export function loadAgentHistoryPins(): string[] {
+  return parseAgentHistoryPins(safeLocalStorage.getItem(AGENT_HISTORY_PINS_STORAGE_KEY));
+}
+
 /** Persist a bounded pin list. Swallows storage failures silently. */
 export function persistAgentHistoryPins(ids: string[]): string[] {
   const next = normalizeAgentHistoryPins(ids);
+  const serialized = JSON.stringify(next);
   try {
-    safeLocalStorage.setItem(AGENT_HISTORY_PINS_STORAGE_KEY, JSON.stringify(next));
+    safeLocalStorage.setItem(AGENT_HISTORY_PINS_STORAGE_KEY, serialized);
   } catch {
     /* private mode / quota — best effort */
   }
+  notifyAgentHistoryPinsChanged(serialized);
   return next;
+}
+
+/**
+ * Subscribe to pin changes from this document and other browser tabs.
+ * Returns an unsubscribe callback and treats storage clears/corruption as an
+ * empty pin list, matching `loadAgentHistoryPins`.
+ */
+export function subscribeToAgentHistoryPins(
+  onChange: (ids: string[]) => void,
+): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== null && event.key !== AGENT_HISTORY_PINS_STORAGE_KEY) return;
+    onChange(parseAgentHistoryPins(event.newValue));
+  };
+  window.addEventListener('storage', onStorage);
+  return () => window.removeEventListener('storage', onStorage);
 }
 
 /** Toggle a task's pin state and persist the result. */

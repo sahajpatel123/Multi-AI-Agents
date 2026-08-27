@@ -123,6 +123,7 @@ import {
   filterAgentHistoryByPin,
   loadAgentHistoryPins,
   removeAgentHistoryPins,
+  subscribeToAgentHistoryPins,
   toggleAgentHistoryPin,
   type AgentHistoryPinFilter,
 } from '../lib/agentHistoryPins';
@@ -2908,6 +2909,9 @@ export function AgentPage() {
     () => agentHistoryPinFilterUseful(taskHistory, pinnedTaskIds),
     [taskHistory, pinnedTaskIds],
   );
+
+  // Keep the pinned-only view current when another tab changes browser-local pins.
+  useEffect(() => subscribeToAgentHistoryPins(setPinnedTaskIds), []);
 
   // Drop topic filter when that topic no longer appears in history.
   useEffect(() => {

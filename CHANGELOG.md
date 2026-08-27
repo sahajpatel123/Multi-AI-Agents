@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Agent history can now filter the retained research list to browser-local
+  pinned tasks, with the filter reflected in counts, empty states, and exports
 - Agent history rows now show a source badge for standalone, watchlist, and
   orchestration research, so task provenance is visible without applying a
   filter or opening the task
@@ -24,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Agent history pins and the pinned-only filter now stay synchronized across
+  open browser tabs, and storage clears or malformed updates safely reset the
+  view instead of leaving stale pinned rows visible
 - Agent history source filtering now fails open to the complete history when
   stale or unknown runtime filter state is encountered, instead of presenting
   an unexplained empty view

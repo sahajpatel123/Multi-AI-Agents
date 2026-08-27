@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AGENT_HISTORY_PIN_FILTER_ALL,
   AGENT_HISTORY_PIN_FILTER_OPTIONS,
@@ -11,6 +11,7 @@ import {
   normalizeAgentHistoryPins,
   persistAgentHistoryPins,
   removeAgentHistoryPins,
+  subscribeToAgentHistoryPins,
   toggleAgentHistoryPin,
 } from './agentHistoryPins';
 
@@ -127,5 +128,61 @@ describe('agent history pin storage', () => {
     const next = removeAgentHistoryPins(['task-b', 'missing']);
     expect(next).toEqual(['task-a', 'task-c']);
     expect(loadAgentHistoryPins()).toEqual(['task-a', 'task-c']);
+  });
+
+  it('notifies subscribers with normalized pins after a same-tab write', () => {
+    const onChange = vi.fn();
+    const unsubscribe = subscribeToAgentHistoryPins(onChange);
+    try {
+      persistAgentHistoryPins([' task-a ', 'task-a', 'task-b']);
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenCalledWith(['task-a', 'task-b']);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('observes matching cross-tab updates and storage clears only', () => {
+    const onChange = vi.fn();
+    const unsubscribe = subscribeToAgentHistoryPins(onChange);
+    try {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'unrelated-key',
+          newValue: JSON.stringify(['ignored']),
+        }),
+      );
+      expect(onChange).not.toHaveBeenCalled();
+
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: AGENT_HISTORY_PINS_STORAGE_KEY,
+          newValue: JSON.stringify([' task-a ', '', 'task-b']),
+        }),
+      );
+      expect(onChange).toHaveBeenLastCalledWith(['task-a', 'task-b']);
+
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: AGENT_HISTORY_PINS_STORAGE_KEY,
+          newValue: '{not json',
+        }),
+      );
+      expect(onChange).toHaveBeenLastCalledWith([]);
+
+      window.dispatchEvent(new StorageEvent('storage', { key: null, newValue: null }));
+      expect(onChange).toHaveBeenLastCalledWith([]);
+      expect(onChange).toHaveBeenCalledTimes(3);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('stops observing pin updates after unsubscribe', () => {
+    const onChange = vi.fn();
+    const unsubscribe = subscribeToAgentHistoryPins(onChange);
+    unsubscribe();
+    persistAgentHistoryPins(['task-a']);
+    expect(onChange).not.toHaveBeenCalled();
   });
 });
