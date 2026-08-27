@@ -162,6 +162,7 @@ import { copyAgentHistoryJsonl } from '../lib/agentHistoryJsonlClipboard';
 import { selectAgentHistoryItems } from '../lib/agentHistorySelection';
 import {
   formatSelectedAgentHistoryCsv,
+  formatSelectedAgentHistoryJson,
   formatSelectedAgentHistoryMarkdown,
 } from '../lib/agentHistorySelectionExport';
 import {
@@ -938,6 +939,9 @@ export function AgentPage() {
   const [historySelectedCsvDownloadStatus, setHistorySelectedCsvDownloadStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed'
   >('idle');
+  const [historySelectedJsonDownloadStatus, setHistorySelectedJsonDownloadStatus] = useState<
+    'idle' | 'busy' | 'done' | 'failed'
+  >('idle');
   const [historySelectedMarkdownDownloadStatus, setHistorySelectedMarkdownDownloadStatus] =
     useState<'idle' | 'busy' | 'done' | 'failed'>('idle');
   const [historyJsonlCopyStatus, setHistoryJsonlCopyStatus] = useState<
@@ -959,10 +963,12 @@ export function AgentPage() {
   const historyFilteredJsonlDownloadTimerRef = useRef<number | null>(null);
   const historySelectedJsonlDownloadTimerRef = useRef<number | null>(null);
   const historySelectedCsvDownloadTimerRef = useRef<number | null>(null);
+  const historySelectedJsonDownloadTimerRef = useRef<number | null>(null);
   const historySelectedMarkdownDownloadTimerRef = useRef<number | null>(null);
   /** Prevent rapid or re-entrant activations from creating duplicate files. */
   const historySelectedJsonlDownloadBusyRef = useRef(false);
   const historySelectedCsvDownloadBusyRef = useRef(false);
+  const historySelectedJsonDownloadBusyRef = useRef(false);
   const historySelectedMarkdownDownloadBusyRef = useRef(false);
   const historyJsonlDownloadBusyRef = useRef(false);
   const historyJsonlCopyTimerRef = useRef<number | null>(null);
@@ -2391,6 +2397,12 @@ export function AgentPage() {
     }
     historySelectedCsvDownloadBusyRef.current = false;
     setHistorySelectedCsvDownloadStatus('idle');
+    if (historySelectedJsonDownloadTimerRef.current != null) {
+      window.clearTimeout(historySelectedJsonDownloadTimerRef.current);
+      historySelectedJsonDownloadTimerRef.current = null;
+    }
+    historySelectedJsonDownloadBusyRef.current = false;
+    setHistorySelectedJsonDownloadStatus('idle');
     if (historySelectedMarkdownDownloadTimerRef.current != null) {
       window.clearTimeout(historySelectedMarkdownDownloadTimerRef.current);
       historySelectedMarkdownDownloadTimerRef.current = null;
@@ -3202,11 +3214,15 @@ export function AgentPage() {
       if (historySelectedCsvDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedCsvDownloadTimerRef.current);
       }
+      if (historySelectedJsonDownloadTimerRef.current != null) {
+        window.clearTimeout(historySelectedJsonDownloadTimerRef.current);
+      }
       if (historySelectedMarkdownDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedMarkdownDownloadTimerRef.current);
       }
       historySelectedJsonlDownloadBusyRef.current = false;
       historySelectedCsvDownloadBusyRef.current = false;
+      historySelectedJsonDownloadBusyRef.current = false;
       historySelectedMarkdownDownloadBusyRef.current = false;
       historyJsonlDownloadBusyRef.current = false;
       historyJsonlCopyRunIdRef.current += 1;
@@ -3776,6 +3792,55 @@ export function AgentPage() {
       historySelectedMarkdownDownloadBusyRef.current = false;
       setHistorySelectedMarkdownDownloadStatus('idle');
       historySelectedMarkdownDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadSelectedHistoryJson = () => {
+    // The disabled prop follows React's render cycle; the ref closes the
+    // smaller window where two activations can arrive before that render.
+    if (historySelectedJsonDownloadBusyRef.current) return;
+    historySelectedJsonDownloadBusyRef.current = true;
+    if (historySelectedJsonDownloadTimerRef.current != null) {
+      window.clearTimeout(historySelectedJsonDownloadTimerRef.current);
+      historySelectedJsonDownloadTimerRef.current = null;
+    }
+    setHistorySelectedJsonDownloadStatus('busy');
+    let ok = false;
+    let emptySelection = false;
+    try {
+      // Keep formatting inside the guarded section too: malformed runtime
+      // rows must not leave the export action locked.
+      const json = formatSelectedAgentHistoryJson(
+        taskHistory,
+        selectedHistoryTaskIdList,
+        toHistoryExportItem,
+      );
+      if (!json) {
+        emptySelection = true;
+      } else {
+        ok = downloadTextFile(json, {
+          filename: `${withDownloadDate('agent-research-selected')}.json`,
+          mimeType: 'application/json;charset=utf-8',
+        });
+      }
+    } catch {
+      ok = false;
+    }
+    if (emptySelection) {
+      historySelectedJsonDownloadBusyRef.current = false;
+      setHistorySelectedJsonDownloadStatus('idle');
+      setToastMessage('No selected history tasks to export.');
+      return;
+    }
+    setHistorySelectedJsonDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download selected history JSON — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historySelectedJsonDownloadTimerRef.current = window.setTimeout(() => {
+      historySelectedJsonDownloadBusyRef.current = false;
+      setHistorySelectedJsonDownloadStatus('idle');
+      historySelectedJsonDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -5906,6 +5971,62 @@ export function AgentPage() {
                             : historySelectedCsvDownloadStatus === 'failed'
                               ? 'Failed'
                               : 'Selected CSV'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={downloadSelectedHistoryJson}
+                        disabled={
+                          historySelectionLocked ||
+                          historySelectedJsonDownloadStatus === 'busy'
+                        }
+                        title="Download the selected history tasks as JSON"
+                        aria-label={
+                          historySelectedJsonDownloadStatus === 'busy'
+                            ? 'Exporting selected history as JSON'
+                            : historySelectedJsonDownloadStatus === 'done'
+                              ? 'Selected history JSON downloaded'
+                              : historySelectedJsonDownloadStatus === 'failed'
+                                ? 'Selected history JSON download failed'
+                                : `Download ${selectedHistoryTaskIdList.length} selected history tasks as JSON`
+                        }
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color:
+                            historySelectedJsonDownloadStatus === 'busy'
+                              ? '#B07840'
+                              : historySelectedJsonDownloadStatus === 'failed'
+                                ? '#D85A30'
+                                : historySelectedJsonDownloadStatus === 'done'
+                                  ? '#5A8C6A'
+                                  : '#A0A39A',
+                          cursor:
+                            historySelectionLocked ||
+                            historySelectedJsonDownloadStatus === 'busy'
+                              ? 'not-allowed'
+                              : 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                          opacity:
+                            historySelectionLocked ||
+                            historySelectedJsonDownloadStatus === 'busy'
+                              ? 0.5
+                              : 1,
+                        }}
+                        aria-busy={historySelectedJsonDownloadStatus === 'busy'}
+                      >
+                        {historySelectedJsonDownloadStatus === 'busy'
+                          ? 'Exporting…'
+                          : historySelectedJsonDownloadStatus === 'done'
+                            ? 'Downloaded'
+                            : historySelectedJsonDownloadStatus === 'failed'
+                              ? 'Failed'
+                              : 'Selected JSON'}
                       </button>
                       <button
                         type="button"

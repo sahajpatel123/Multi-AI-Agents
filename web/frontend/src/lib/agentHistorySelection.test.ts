@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { selectAgentHistoryItems } from './agentHistorySelection';
 import {
   formatSelectedAgentHistoryCsv,
+  formatSelectedAgentHistoryJson,
   formatSelectedAgentHistoryMarkdown,
 } from './agentHistorySelectionExport';
 
@@ -88,6 +89,45 @@ describe('formatSelectedAgentHistoryMarkdown', () => {
   it('returns null when no retained task is selected', () => {
     expect(
       formatSelectedAgentHistoryMarkdown(
+        [{ task_id: 'task_1', title: 'One' }],
+        ['missing'],
+        (item) => ({ taskId: item.task_id, title: item.title }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('formatSelectedAgentHistoryJson', () => {
+  it('exports only selected retained rows in history order with a count envelope', () => {
+    const json = formatSelectedAgentHistoryJson(
+      [
+        { task_id: 'newest', title: 'Newest', task_text: 'First question' },
+        { task_id: 'middle', title: 'Middle', task_text: 'Second question' },
+        { task_id: 'oldest', title: 'Oldest', task_text: 'Third question' },
+      ],
+      ['oldest', 'missing', 'newest', 'oldest'],
+      (item) => ({
+        taskId: item.task_id,
+        title: item.title,
+        question: item.task_text,
+      }),
+    );
+
+    expect(json).not.toBeNull();
+    const payload = JSON.parse(json!);
+    expect(payload.total).toBe(2);
+    expect(payload.items).toEqual([
+      expect.objectContaining({ task_id: 'newest', title: 'Newest' }),
+      expect.objectContaining({ task_id: 'oldest', title: 'Oldest' }),
+    ]);
+    expect(payload.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ task_id: 'middle' })]),
+    );
+  });
+
+  it('returns null when no retained task is selected', () => {
+    expect(
+      formatSelectedAgentHistoryJson(
         [{ task_id: 'task_1', title: 'One' }],
         ['missing'],
         (item) => ({ taskId: item.task_id, title: item.title }),

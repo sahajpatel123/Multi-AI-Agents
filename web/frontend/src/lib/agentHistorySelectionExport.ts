@@ -1,6 +1,7 @@
 import {
   formatAgentHistoryCsv,
   formatAgentHistoryExport,
+  formatAgentHistoryJson,
   type AgentHistoryExportItem,
 } from './agentHistoryExport';
 import {
@@ -39,6 +40,25 @@ export function formatSelectedAgentHistoryMarkdown<T extends SelectableAgentHist
   const selected = selectAgentHistoryItems(items, selectedTaskIds);
   if (selected.length === 0) return null;
   return formatAgentHistoryExport({
+    items: selected.map(toExportItem),
+    totalCount: selected.length,
+  });
+}
+
+/**
+ * Format only retained history rows selected by the user as JSON.
+ *
+ * The envelope keeps the selected count explicit while reusing the stable
+ * history export field names used by the unfiltered JSON action.
+ */
+export function formatSelectedAgentHistoryJson<T extends SelectableAgentHistoryItem>(
+  items: readonly T[],
+  selectedTaskIds: readonly string[],
+  toExportItem: (item: T) => AgentHistoryExportItem,
+): string | null {
+  const selected = selectAgentHistoryItems(items, selectedTaskIds);
+  if (selected.length === 0) return null;
+  return formatAgentHistoryJson({
     items: selected.map(toExportItem),
     totalCount: selected.length,
   });
