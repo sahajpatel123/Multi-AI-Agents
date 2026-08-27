@@ -25,20 +25,28 @@ const SOURCE_META = {
 } as const;
 
 /** Visible provenance for a task in Agent research history. */
-export function AgentHistorySourceBadge({ item }: { item: AgentHistorySourceItem }) {
+export function AgentHistorySourceBadge({
+  item,
+}: {
+  item?: AgentHistorySourceItem | null;
+}) {
   const source = agentHistorySourceFor(item);
   const meta = SOURCE_META[source];
 
   return (
     <span
+      role="img"
       data-source={source}
       title={meta.title}
       aria-label={`Source: ${meta.label}. ${meta.title}`}
       style={{
+        display: 'inline-flex',
+        alignItems: 'center',
         fontSize: 10,
         letterSpacing: '0.04em',
         borderRadius: 999,
         padding: '1px 7px',
+        lineHeight: 1.35,
         background: meta.background,
         color: meta.color,
         whiteSpace: 'nowrap',

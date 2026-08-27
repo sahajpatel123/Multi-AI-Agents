@@ -14,7 +14,7 @@ describe('AgentHistorySourceBadge', () => {
   ])('shows provenance for %s tasks', (item, source, label) => {
     render(<AgentHistorySourceBadge item={item} />);
 
-    const badge = screen.getByText(label);
+    const badge = screen.getByRole('img', { name: new RegExp(`^Source: ${label}\\.`) });
     expect(badge).toHaveAttribute('data-source', source);
     expect(badge).toHaveAccessibleName(expect.stringContaining(`Source: ${label}`));
     expect(badge).toHaveAttribute('title', expect.stringContaining('Started'));
@@ -27,7 +27,19 @@ describe('AgentHistorySourceBadge', () => {
       />,
     );
 
-    expect(screen.getByText('Watchlist')).toHaveAttribute('data-source', 'watchlist');
-    expect(screen.queryByText('Orchestration')).not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /^Source: Watchlist\./ })).toHaveAttribute(
+      'data-source',
+      'watchlist',
+    );
+    expect(screen.queryByRole('img', { name: /^Source: Orchestration\./ })).not.toBeInTheDocument();
+  });
+
+  it('fails open to standalone when a history row has no payload', () => {
+    render(<AgentHistorySourceBadge item={null} />);
+
+    expect(screen.getByRole('img', { name: /^Source: Standalone\./ })).toHaveAttribute(
+      'data-source',
+      'standalone',
+    );
   });
 });
