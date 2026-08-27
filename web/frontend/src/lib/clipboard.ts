@@ -136,6 +136,35 @@ export async function copyJsonToClipboard(text: string): Promise<boolean> {
 }
 
 /**
+ * Copy newline-delimited JSON with a structured NDJSON representation and a
+ * plain-text fallback. JSONL is useful in terminals, notebooks, and import
+ * tools, so keep its MIME type distinct from a single JSON document.
+ */
+export async function copyJsonlToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+
+  try {
+    if (
+      typeof ClipboardItem !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      navigator.clipboard?.write
+    ) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'application/x-ndjson': new Blob([text], { type: 'application/x-ndjson' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        }),
+      ]);
+      return true;
+    }
+  } catch {
+    /* fall through to the generic text copy path */
+  }
+
+  return copyToClipboard(text);
+}
+
+/**
  * Copy an HTML report with both rich and plain-text representations. Rich
  * editors can preserve the formatted share, while ordinary fields receive a
  * readable fallback instead of the full document markup.

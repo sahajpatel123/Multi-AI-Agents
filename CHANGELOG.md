@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Agent history can now copy the current filtered view as JSONL, placing one
+  stable task object per line on the clipboard for quick handoff to terminals,
+  notebooks, and import tools
 - Agent history can now download the current filtered view as JSONL, with one
   stable task object per line for streaming into command-line tools
 - Agent history now has a Copy CSV action for the current filtered view,

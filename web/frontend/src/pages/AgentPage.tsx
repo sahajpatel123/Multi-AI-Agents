@@ -144,6 +144,7 @@ import {
 } from '../lib/agentHistoryExport';
 import { copyAgentHistoryCsv } from '../lib/agentHistoryCsvClipboard';
 import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
+import { copyAgentHistoryJsonl } from '../lib/agentHistoryJsonlClipboard';
 import {
   AGENT_HISTORY_SORT_OPTIONS,
   agentHistorySortLabel,
@@ -871,6 +872,9 @@ export function AgentPage() {
   const [historyFilteredJsonlDownloadStatus, setHistoryFilteredJsonlDownloadStatus] = useState<
     'idle' | 'done' | 'failed'
   >('idle');
+  const [historyJsonlCopyStatus, setHistoryJsonlCopyStatus] = useState<
+    'idle' | 'copying' | 'copied' | 'failed'
+  >('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
   const historyCsvDownloadTimerRef = useRef<number | null>(null);
@@ -886,6 +890,9 @@ export function AgentPage() {
   const historyJsonlDownloadTimerRef = useRef<number | null>(null);
   const historyFilteredJsonlDownloadTimerRef = useRef<number | null>(null);
   const historyJsonlDownloadBusyRef = useRef(false);
+  const historyJsonlCopyTimerRef = useRef<number | null>(null);
+  const historyJsonlCopyInFlightRef = useRef(false);
+  const historyJsonlCopyRunIdRef = useRef(0);
   const [roomsCopyStatus, setRoomsCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [roomsDownloadStatus, setRoomsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [roomLinkCopyStatus, setRoomLinkCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -2272,6 +2279,13 @@ export function AgentPage() {
       historyJsonCopyTimerRef.current = null;
     }
     setHistoryJsonCopyStatus('idle');
+    historyJsonlCopyRunIdRef.current += 1;
+    historyJsonlCopyInFlightRef.current = false;
+    if (historyJsonlCopyTimerRef.current != null) {
+      window.clearTimeout(historyJsonlCopyTimerRef.current);
+      historyJsonlCopyTimerRef.current = null;
+    }
+    setHistoryJsonlCopyStatus('idle');
     setUserRating(null);
     setRatingResult(null);
     setRatingSubmitBusy(false);
@@ -2949,10 +2963,16 @@ export function AgentPage() {
       if (historyJsonlDownloadTimerRef.current != null) {
         window.clearTimeout(historyJsonlDownloadTimerRef.current);
       }
+      if (historyJsonlCopyTimerRef.current != null) {
+        window.clearTimeout(historyJsonlCopyTimerRef.current);
+        historyJsonlCopyTimerRef.current = null;
+      }
       if (historyFilteredJsonlDownloadTimerRef.current != null) {
         window.clearTimeout(historyFilteredJsonlDownloadTimerRef.current);
       }
       historyJsonlDownloadBusyRef.current = false;
+      historyJsonlCopyRunIdRef.current += 1;
+      historyJsonlCopyInFlightRef.current = false;
       historyJsonCopyRunIdRef.current += 1;
       historyJsonCopyInFlightRef.current = false;
       if (roomsCopyTimerRef.current != null) {
@@ -3350,6 +3370,52 @@ export function AgentPage() {
       setHistoryFilteredJsonlDownloadStatus('idle');
       historyFilteredJsonlDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
+  };
+
+  const copyFilteredHistoryJsonl = async () => {
+    if (filteredTaskHistory.length === 0) {
+      setToastMessage('No tasks in the current history view to copy.');
+      return;
+    }
+    // Guard synchronously because a second keyboard or pointer activation can
+    // arrive before React commits the first "copying" state update.
+    if (historyJsonlCopyInFlightRef.current) return;
+    const runId = ++historyJsonlCopyRunIdRef.current;
+    historyJsonlCopyInFlightRef.current = true;
+    if (historyJsonlCopyTimerRef.current != null) {
+      window.clearTimeout(historyJsonlCopyTimerRef.current);
+      historyJsonlCopyTimerRef.current = null;
+    }
+    setHistoryJsonlCopyStatus('copying');
+
+    try {
+      let ok = false;
+      try {
+        ok = await copyAgentHistoryJsonl({
+          items: filteredTaskHistory.map(toHistoryExportItem),
+        });
+      } catch {
+        // Keep the page safe if a future clipboard adapter regresses its
+        // boolean refusal contract.
+        ok = false;
+      }
+      if (historyJsonlCopyRunIdRef.current !== runId) return;
+
+      setHistoryJsonlCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setToastMessage('Could not copy filtered history JSONL — try again.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      historyJsonlCopyTimerRef.current = window.setTimeout(() => {
+        if (historyJsonlCopyRunIdRef.current !== runId) return;
+        setHistoryJsonlCopyStatus('idle');
+        historyJsonlCopyTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (historyJsonlCopyRunIdRef.current === runId) {
+        historyJsonlCopyInFlightRef.current = false;
+      }
+    }
   };
 
   const sortedAssumptionItems = useMemo(() => {
@@ -5339,6 +5405,61 @@ export function AgentPage() {
                       : historyFilteredJsonlDownloadStatus === 'failed'
                         ? 'Failed'
                         : 'Filtered JSONL'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyFilteredHistoryJsonl()}
+                    disabled={filteredTaskHistory.length === 0 || historyJsonlCopyStatus === 'copying'}
+                    title={
+                      filteredTaskHistory.length === 0
+                        ? 'No tasks in the current history view'
+                        : 'Copy the current history view as newline-delimited JSON'
+                    }
+                    aria-busy={historyJsonlCopyStatus === 'copying'}
+                    aria-label={
+                      filteredTaskHistory.length === 0
+                        ? 'No history tasks in current view'
+                        : historyJsonlCopyStatus === 'copying'
+                          ? 'Copying filtered history as JSONL'
+                          : historyJsonlCopyStatus === 'copied'
+                            ? 'Filtered history JSONL copied'
+                            : historyJsonlCopyStatus === 'failed'
+                              ? 'Filtered history JSONL copy failed'
+                              : 'Copy filtered history as JSONL'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyJsonlCopyStatus === 'failed'
+                          ? '#D85A30'
+                          : historyJsonlCopyStatus === 'copied'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor:
+                        filteredTaskHistory.length === 0 || historyJsonlCopyStatus === 'copying'
+                          ? 'not-allowed'
+                          : 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                      opacity:
+                        filteredTaskHistory.length === 0 || historyJsonlCopyStatus === 'copying'
+                          ? 0.5
+                          : 1,
+                    }}
+                  >
+                    {historyJsonlCopyStatus === 'copying'
+                      ? 'Copying…'
+                      : historyJsonlCopyStatus === 'copied'
+                        ? 'Copied'
+                        : historyJsonlCopyStatus === 'failed'
+                          ? 'Failed'
+                          : 'Copy JSONL'}
                   </button>
                   <button
                     type="button"
