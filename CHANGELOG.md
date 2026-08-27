@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current tab immediately, keeping stale rows and local pins from lingering
 
 ### Added
+- Agent research history can now export exactly the selected tasks as a dated
+  JSONL file, including selected rows that are temporarily hidden by filters
 - Agent research history now supports deleting selected tasks together, with
   an explicit inline confirmation, bounded server-side deletion, safe
   ownership scoping, and honest partial-success feedback

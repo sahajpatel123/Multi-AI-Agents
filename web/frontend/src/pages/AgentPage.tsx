@@ -159,6 +159,7 @@ import {
 import { copyAgentHistoryCsv } from '../lib/agentHistoryCsvClipboard';
 import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
 import { copyAgentHistoryJsonl } from '../lib/agentHistoryJsonlClipboard';
+import { selectAgentHistoryItems } from '../lib/agentHistorySelection';
 import {
   AGENT_HISTORY_SORT_OPTIONS,
   agentHistorySortLabel,
@@ -927,6 +928,9 @@ export function AgentPage() {
   const [historyFilteredJsonlDownloadStatus, setHistoryFilteredJsonlDownloadStatus] = useState<
     'idle' | 'done' | 'failed'
   >('idle');
+  const [historySelectedJsonlDownloadStatus, setHistorySelectedJsonlDownloadStatus] = useState<
+    'idle' | 'done' | 'failed'
+  >('idle');
   const [historyJsonlCopyStatus, setHistoryJsonlCopyStatus] = useState<
     'idle' | 'copying' | 'copied' | 'failed'
   >('idle');
@@ -944,6 +948,7 @@ export function AgentPage() {
   const historyJsonCopyRunIdRef = useRef(0);
   const historyJsonlDownloadTimerRef = useRef<number | null>(null);
   const historyFilteredJsonlDownloadTimerRef = useRef<number | null>(null);
+  const historySelectedJsonlDownloadTimerRef = useRef<number | null>(null);
   const historyJsonlDownloadBusyRef = useRef(false);
   const historyJsonlCopyTimerRef = useRef<number | null>(null);
   const historyJsonlCopyInFlightRef = useRef(false);
@@ -2359,6 +2364,11 @@ export function AgentPage() {
       historyJsonlCopyTimerRef.current = null;
     }
     setHistoryJsonlCopyStatus('idle');
+    if (historySelectedJsonlDownloadTimerRef.current != null) {
+      window.clearTimeout(historySelectedJsonlDownloadTimerRef.current);
+      historySelectedJsonlDownloadTimerRef.current = null;
+    }
+    setHistorySelectedJsonlDownloadStatus('idle');
     setUserRating(null);
     setRatingResult(null);
     setRatingSubmitBusy(false);
@@ -3158,6 +3168,9 @@ export function AgentPage() {
       if (historyFilteredJsonlDownloadTimerRef.current != null) {
         window.clearTimeout(historyFilteredJsonlDownloadTimerRef.current);
       }
+      if (historySelectedJsonlDownloadTimerRef.current != null) {
+        window.clearTimeout(historySelectedJsonlDownloadTimerRef.current);
+      }
       historyJsonlDownloadBusyRef.current = false;
       historyJsonlCopyRunIdRef.current += 1;
       historyJsonlCopyInFlightRef.current = false;
@@ -3589,6 +3602,33 @@ export function AgentPage() {
     historyFilteredJsonlDownloadTimerRef.current = window.setTimeout(() => {
       setHistoryFilteredJsonlDownloadStatus('idle');
       historyFilteredJsonlDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadSelectedHistoryJsonl = () => {
+    const selectedItems = selectAgentHistoryItems(taskHistory, selectedHistoryTaskIdList);
+    if (selectedItems.length === 0) {
+      setToastMessage('No selected history tasks to export.');
+      return;
+    }
+    const jsonl = formatAgentHistoryJsonl({
+      items: selectedItems.map(toHistoryExportItem),
+    });
+    const ok = downloadTextFile(jsonl, {
+      filename: `${withDownloadDate('agent-research-selected')}.jsonl`,
+      mimeType: 'application/x-ndjson;charset=utf-8',
+    });
+    if (historySelectedJsonlDownloadTimerRef.current != null) {
+      window.clearTimeout(historySelectedJsonlDownloadTimerRef.current);
+    }
+    setHistorySelectedJsonlDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download selected history JSONL — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historySelectedJsonlDownloadTimerRef.current = window.setTimeout(() => {
+      setHistorySelectedJsonlDownloadStatus('idle');
+      historySelectedJsonlDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -5607,6 +5647,44 @@ export function AgentPage() {
                         }}
                       >
                         Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={downloadSelectedHistoryJsonl}
+                        disabled={historySelectionLocked}
+                        title="Download the selected history tasks as JSONL"
+                        aria-label={
+                          historySelectedJsonlDownloadStatus === 'done'
+                            ? 'Selected history JSONL downloaded'
+                            : historySelectedJsonlDownloadStatus === 'failed'
+                              ? 'Selected history JSONL download failed'
+                              : `Download ${selectedHistoryTaskIdList.length} selected history tasks as JSONL`
+                        }
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color:
+                            historySelectedJsonlDownloadStatus === 'failed'
+                              ? '#D85A30'
+                              : historySelectedJsonlDownloadStatus === 'done'
+                                ? '#5A8C6A'
+                                : '#A0A39A',
+                          cursor: historySelectionLocked ? 'not-allowed' : 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                          opacity: historySelectionLocked ? 0.5 : 1,
+                        }}
+                      >
+                        {historySelectedJsonlDownloadStatus === 'done'
+                          ? 'Downloaded'
+                          : historySelectedJsonlDownloadStatus === 'failed'
+                            ? 'Failed'
+                            : 'Selected JSONL'}
                       </button>
                       {historyBulkDeleteConfirm ? (
                         <>
