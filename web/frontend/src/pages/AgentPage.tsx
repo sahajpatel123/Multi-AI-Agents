@@ -867,14 +867,17 @@ export function AgentPage() {
   const [showAllSourcePills, setShowAllSourcePills] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
   const [pinnedTaskIds, setPinnedTaskIds] = useState<string[]>(() => loadAgentHistoryPins());
-  const [initialHistoryViewPreferences] = useState(() => {
+  const [initialHistoryState] = useState(() => {
     const saved = loadAgentHistoryViewPreferences();
-    return readAgentHistoryViewFromSearchParams(searchParams, saved)?.preferences ?? saved;
+    const shared = readAgentHistoryViewFromSearchParams(searchParams, saved);
+    return {
+      preferences: shared?.preferences ?? saved,
+      searchQuery: shared?.searchQuery ?? '',
+      fromSharedUrl: shared !== null,
+    };
   });
-  const [initialHistorySearchQuery] = useState(() => {
-    const saved = loadAgentHistoryViewPreferences();
-    return readAgentHistoryViewFromSearchParams(searchParams, saved)?.searchQuery ?? '';
-  });
+  const initialHistoryViewPreferences = initialHistoryState.preferences;
+  const initialHistorySearchQuery = initialHistoryState.searchQuery;
   const [historySearchQuery, setHistorySearchQuery] = useState(initialHistorySearchQuery);
   const [historySort, setHistorySort] = useState<AgentHistorySort>(
     initialHistoryViewPreferences.sort,
@@ -895,6 +898,8 @@ export function AgentPage() {
     useState<AgentHistorySourceFilter>(initialHistoryViewPreferences.source);
   const [historyPinFilter, setHistoryPinFilter] =
     useState<AgentHistoryPinFilter>(initialHistoryViewPreferences.pin);
+  /** A shared view is a one-time presentation override, not a new local default. */
+  const historyViewEditedRef = useRef(!initialHistoryState.fromSharedUrl);
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [historyCsvDownloadStatus, setHistoryCsvDownloadStatus] =
@@ -2940,8 +2945,15 @@ export function AgentPage() {
     loadFailed: historyLoadFailed,
   });
 
+  const markHistoryViewEdited = useCallback(() => {
+    historyViewEditedRef.current = true;
+  }, []);
+
   // Keep the user's history view stable across visits; free-text search stays transient.
+  // A shared URL is a presentation override and must not overwrite the
+  // recipient's saved defaults until they explicitly change a filter.
   useEffect(() => {
+    if (!historyViewEditedRef.current) return;
     persistAgentHistoryViewPreferences({
       sort: historySort,
       status: historyStatusFilter,
@@ -5678,7 +5690,10 @@ export function AgentPage() {
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setHistoryStatusFilter(opt.value)}
+                        onClick={() => {
+                          markHistoryViewEdited();
+                          setHistoryStatusFilter(opt.value);
+                        }}
                         aria-pressed={selected}
                         style={{
                           padding: '3px 10px',
@@ -5714,7 +5729,10 @@ export function AgentPage() {
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => setHistoryPinFilter(opt.value)}
+                          onClick={() => {
+                            markHistoryViewEdited();
+                            setHistoryPinFilter(opt.value);
+                          }}
                           aria-pressed={selected}
                           style={{
                             padding: '3px 10px',
@@ -5751,7 +5769,10 @@ export function AgentPage() {
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => setHistorySourceFilter(opt.value)}
+                          onClick={() => {
+                            markHistoryViewEdited();
+                            setHistorySourceFilter(opt.value);
+                          }}
                           aria-pressed={selected}
                           style={{
                             padding: '3px 10px',
@@ -5788,7 +5809,10 @@ export function AgentPage() {
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => setHistoryScoreFilter(opt.value)}
+                          onClick={() => {
+                            markHistoryViewEdited();
+                            setHistoryScoreFilter(opt.value);
+                          }}
                           aria-pressed={selected}
                           style={{
                             padding: '3px 10px',
@@ -5825,7 +5849,10 @@ export function AgentPage() {
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => setHistoryConfidenceFilter(opt.value)}
+                          onClick={() => {
+                            markHistoryViewEdited();
+                            setHistoryConfidenceFilter(opt.value);
+                          }}
                           aria-pressed={selected}
                           style={{
                             padding: '3px 10px',
@@ -5862,7 +5889,10 @@ export function AgentPage() {
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => setHistoryRecencyFilter(opt.value)}
+                          onClick={() => {
+                            markHistoryViewEdited();
+                            setHistoryRecencyFilter(opt.value);
+                          }}
                           aria-pressed={selected}
                           style={{
                             padding: '3px 10px',
@@ -5899,7 +5929,10 @@ export function AgentPage() {
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => setHistoryFeedbackFilter(opt.value)}
+                          onClick={() => {
+                            markHistoryViewEdited();
+                            setHistoryFeedbackFilter(opt.value);
+                          }}
                           aria-pressed={selected}
                           style={{
                             padding: '3px 10px',
@@ -5936,7 +5969,10 @@ export function AgentPage() {
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => setHistoryTopicFilter(opt.value)}
+                          onClick={() => {
+                            markHistoryViewEdited();
+                            setHistoryTopicFilter(opt.value);
+                          }}
                           aria-pressed={selected}
                           style={{
                             padding: '3px 10px',
@@ -5958,7 +5994,10 @@ export function AgentPage() {
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                   <select
                     value={historySort}
-                    onChange={(e) => setHistorySort(e.target.value as AgentHistorySort)}
+                    onChange={(e) => {
+                      markHistoryViewEdited();
+                      setHistorySort(e.target.value as AgentHistorySort);
+                    }}
                     aria-label="Sort research history"
                     title="Sort research history"
                     style={{
@@ -6156,6 +6195,7 @@ export function AgentPage() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm"
                     onClick={() => {
+                      markHistoryViewEdited();
                       setHistorySearchQuery('');
                       setHistoryStatusFilter('all');
                       setHistoryScoreFilter('all');

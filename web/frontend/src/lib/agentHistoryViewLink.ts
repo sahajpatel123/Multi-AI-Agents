@@ -17,6 +17,9 @@ export const AGENT_HISTORY_VIEW_QUERY_KEYS = {
   feedback: 'history_feedback',
   topic: 'history_topic',
   source: 'history_source',
+  // Kept here so builders can explicitly strip a legacy/local-only pin
+  // parameter. Pins are device-local and must never travel in a shared link.
+  pin: 'history_pin',
 } as const;
 
 export const AGENT_HISTORY_VIEW_QUERY_MARKER = '1';
@@ -52,7 +55,12 @@ export type AgentHistoryViewFromUrl = {
 };
 
 function boundedSearchQuery(value: string | null | undefined): string {
-  return (value ?? '').trim().slice(0, AGENT_HISTORY_SHARED_SEARCH_MAX_LENGTH);
+  // NULs are not useful search input and can create surprising behavior when
+  // this value is copied between URL and storage boundaries. Count Unicode
+  // code points so a cap never leaves a dangling UTF-16 surrogate behind.
+  // eslint-disable-next-line no-control-regex
+  const clean = (value ?? '').replace(/\u0000/g, '').trim();
+  return Array.from(clean).slice(0, AGENT_HISTORY_SHARED_SEARCH_MAX_LENGTH).join('');
 }
 
 /**
@@ -110,6 +118,7 @@ export function buildAgentHistoryViewUrl(
   url.searchParams.delete('createRoom');
   url.searchParams.delete(AGENT_HISTORY_VIEW_QUERY_KEYS.marker);
   url.searchParams.delete(AGENT_HISTORY_VIEW_QUERY_KEYS.search);
+  url.searchParams.delete(AGENT_HISTORY_VIEW_QUERY_KEYS.pin);
   for (const preference of SHAREABLE_PREFERENCE_KEYS) {
     url.searchParams.delete(QUERY_KEY_BY_PREFERENCE[preference]);
   }

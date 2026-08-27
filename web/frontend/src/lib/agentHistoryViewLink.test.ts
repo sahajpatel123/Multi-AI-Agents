@@ -21,7 +21,7 @@ const preferences = {
 describe('Agent history view links', () => {
   it('serializes the complete shareable view and removes task deep-link state', () => {
     const shared = buildAgentHistoryViewUrl(
-      'https://arena.test/agent?task_id=task-7&q=private%20prompt&createRoom=1&tab=history',
+      'https://arena.test/agent?task_id=task-7&q=private%20prompt&createRoom=1&tab=history&history_pin=pinned',
       preferences,
       '  IPO outlook  ',
     );
@@ -39,6 +39,16 @@ describe('Agent history view links', () => {
     expect(url.searchParams.get(AGENT_HISTORY_VIEW_QUERY_KEYS.search)).toBe('IPO outlook');
     // Pins are browser-local and are intentionally never put in a shared URL.
     expect(url.searchParams.has('history_pin')).toBe(false);
+  });
+
+  it('strips NULs and caps shared search by Unicode code point', () => {
+    const search = `\u0000${'🙂'.repeat(AGENT_HISTORY_SHARED_SEARCH_MAX_LENGTH + 20)}`;
+    const shared = buildAgentHistoryViewUrl('https://arena.test/agent', preferences, search);
+    const url = new URL(shared);
+
+    expect(url.searchParams.get(AGENT_HISTORY_VIEW_QUERY_KEYS.search)).toBe(
+      '🙂'.repeat(AGENT_HISTORY_SHARED_SEARCH_MAX_LENGTH),
+    );
   });
 
   it('reads and normalizes a shared view while resetting local pins', () => {
