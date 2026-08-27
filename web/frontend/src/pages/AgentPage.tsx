@@ -215,6 +215,10 @@ import {
   shouldReconcileAgentHistoryDynamicFilters,
 } from '../lib/agentHistoryViewPreferences';
 import {
+  buildAgentHistoryViewUrl,
+  readAgentHistoryViewFromSearchParams,
+} from '../lib/agentHistoryViewLink';
+import {
   AGENT_ROOMS_ACTIVITY_OPTIONS,
   agentRoomsActivityLabel,
   filterAgentRoomsByActivity,
@@ -863,8 +867,15 @@ export function AgentPage() {
   const [showAllSourcePills, setShowAllSourcePills] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
   const [pinnedTaskIds, setPinnedTaskIds] = useState<string[]>(() => loadAgentHistoryPins());
-  const [historySearchQuery, setHistorySearchQuery] = useState('');
-  const [initialHistoryViewPreferences] = useState(() => loadAgentHistoryViewPreferences());
+  const [initialHistoryViewPreferences] = useState(() => {
+    const saved = loadAgentHistoryViewPreferences();
+    return readAgentHistoryViewFromSearchParams(searchParams, saved)?.preferences ?? saved;
+  });
+  const [initialHistorySearchQuery] = useState(() => {
+    const saved = loadAgentHistoryViewPreferences();
+    return readAgentHistoryViewFromSearchParams(searchParams, saved)?.searchQuery ?? '';
+  });
+  const [historySearchQuery, setHistorySearchQuery] = useState(initialHistorySearchQuery);
   const [historySort, setHistorySort] = useState<AgentHistorySort>(
     initialHistoryViewPreferences.sort,
   );
@@ -3260,6 +3271,30 @@ export function AgentPage() {
     });
   };
 
+  const copyHistoryViewLink = async () => {
+    const link = buildAgentHistoryViewUrl(
+      window.location.href,
+      {
+        sort: historySort,
+        status: historyStatusFilter,
+        score: historyScoreFilter,
+        confidence: historyConfidenceFilter,
+        recency: historyRecencyFilter,
+        feedback: historyFeedbackFilter,
+        topic: historyTopicFilter,
+        source: historySourceFilter,
+        pin: historyPinFilter,
+      },
+      historySearchQuery,
+    );
+    const ok = await copyToClipboard(link);
+    setToastMessage(
+      ok
+        ? 'History view link copied. Pins stay on this device.'
+        : 'Could not copy history view link — try again.',
+    );
+  };
+
   const copyFilteredHistory = async () => {
     const markdown = buildFilteredHistoryMarkdown();
     const ok = await copyToClipboard(markdown);
@@ -5225,6 +5260,31 @@ export function AgentPage() {
                       ? ` / ${taskHistory.length}`
                       : ''}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => void copyHistoryViewLink()}
+                    title="Copy a link to these history filters; pins stay on this device"
+                    aria-label="Copy link to current history view"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color: '#A0A39A',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <Link2 size={11} aria-hidden />
+                    Link
+                  </button>
                   <button
                     type="button"
                     onClick={() => void copyFilteredHistory()}
