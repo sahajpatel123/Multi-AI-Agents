@@ -214,6 +214,38 @@ describe('copyToClipboard', () => {
     expect(writeText).toHaveBeenCalledWith('{"task_id":"task_1"}\n');
   });
 
+  it('falls back to plain text when a structured JSONL write is rejected', async () => {
+    const write = vi.fn().mockRejectedValue(new Error('NDJSON MIME type denied'));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { write, writeText } });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        constructor(public data: Record<string, Blob>) {}
+      },
+    );
+
+    const jsonl = '{"task_id":"task_1"}\n';
+    expect(await copyJsonlToClipboard(jsonl)).toBe(true);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith(jsonl);
+  });
+
+  it('treats a non-callable structured write as unavailable', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { write: {}, writeText } });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        constructor(public data: Record<string, Blob>) {}
+      },
+    );
+
+    const jsonl = '{"task_id":"task_1"}\n';
+    expect(await copyJsonlToClipboard(jsonl)).toBe(true);
+    expect(writeText).toHaveBeenCalledWith(jsonl);
+  });
+
   it('writes rich HTML and a plain-text fallback through ClipboardItem', async () => {
     const write = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { write } });

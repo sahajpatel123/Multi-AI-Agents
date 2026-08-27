@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Filtered Agent history JSONL copy now avoids empty clipboard writes and
+  reliably falls back to plain text when rich NDJSON clipboard support is
+  unavailable or rejected
 - Agent history CSV exports now trim topic labels and ignore malformed runtime
   topic values, while structured CSV clipboard writes retain a plain-text
   fallback when the browser rejects the richer MIME payload

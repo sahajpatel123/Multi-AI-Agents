@@ -10,7 +10,9 @@ export async function copyAgentHistoryJsonl(
   opts: Parameters<typeof formatAgentHistoryJsonl>[0],
 ): Promise<boolean> {
   try {
-    return await copyJsonlToClipboard(formatAgentHistoryJsonl(opts));
+    const jsonl = formatAgentHistoryJsonl(opts);
+    if (!jsonl) return false;
+    return await copyJsonlToClipboard(jsonl);
   } catch {
     return false;
   }

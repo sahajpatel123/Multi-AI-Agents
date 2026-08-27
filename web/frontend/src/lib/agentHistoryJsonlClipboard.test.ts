@@ -38,10 +38,15 @@ describe('copyAgentHistoryJsonl', () => {
     });
   });
 
+  it('does not touch the clipboard for an empty history view', async () => {
+    await expect(copyAgentHistoryJsonl({ items: [] })).resolves.toBe(false);
+    expect(copyJsonlToClipboard).not.toHaveBeenCalled();
+  });
+
   it('returns a clipboard refusal so the page can show failure feedback', async () => {
     vi.mocked(copyJsonlToClipboard).mockResolvedValueOnce(false);
 
-    await expect(copyAgentHistoryJsonl({ items: [] })).resolves.toBe(false);
+    await expect(copyAgentHistoryJsonl({ items: [{ taskId: 'task_123' }] })).resolves.toBe(false);
   });
 
   it('converts an unexpected clipboard exception into a refusal', async () => {
