@@ -159,6 +159,7 @@ import {
 import { copyAgentHistoryCsv } from '../lib/agentHistoryCsvClipboard';
 import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
 import { copyAgentHistoryJsonl } from '../lib/agentHistoryJsonlClipboard';
+import { copySelectedAgentHistoryJson } from '../lib/agentHistorySelectionClipboard';
 import { selectAgentHistoryItems } from '../lib/agentHistorySelection';
 import {
   formatSelectedAgentHistoryCsv,
@@ -942,6 +943,9 @@ export function AgentPage() {
   const [historySelectedJsonDownloadStatus, setHistorySelectedJsonDownloadStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed'
   >('idle');
+  const [historySelectedJsonCopyStatus, setHistorySelectedJsonCopyStatus] = useState<
+    'idle' | 'copying' | 'copied' | 'failed'
+  >('idle');
   const [historySelectedMarkdownDownloadStatus, setHistorySelectedMarkdownDownloadStatus] =
     useState<'idle' | 'busy' | 'done' | 'failed'>('idle');
   const [historyJsonlCopyStatus, setHistoryJsonlCopyStatus] = useState<
@@ -964,11 +968,14 @@ export function AgentPage() {
   const historySelectedJsonlDownloadTimerRef = useRef<number | null>(null);
   const historySelectedCsvDownloadTimerRef = useRef<number | null>(null);
   const historySelectedJsonDownloadTimerRef = useRef<number | null>(null);
+  const historySelectedJsonCopyTimerRef = useRef<number | null>(null);
   const historySelectedMarkdownDownloadTimerRef = useRef<number | null>(null);
   /** Prevent rapid or re-entrant activations from creating duplicate files. */
   const historySelectedJsonlDownloadBusyRef = useRef(false);
   const historySelectedCsvDownloadBusyRef = useRef(false);
   const historySelectedJsonDownloadBusyRef = useRef(false);
+  const historySelectedJsonCopyInFlightRef = useRef(false);
+  const historySelectedJsonCopyRunIdRef = useRef(0);
   const historySelectedMarkdownDownloadBusyRef = useRef(false);
   const historyJsonlDownloadBusyRef = useRef(false);
   const historyJsonlCopyTimerRef = useRef<number | null>(null);
@@ -2403,6 +2410,13 @@ export function AgentPage() {
     }
     historySelectedJsonDownloadBusyRef.current = false;
     setHistorySelectedJsonDownloadStatus('idle');
+    historySelectedJsonCopyRunIdRef.current += 1;
+    historySelectedJsonCopyInFlightRef.current = false;
+    if (historySelectedJsonCopyTimerRef.current != null) {
+      window.clearTimeout(historySelectedJsonCopyTimerRef.current);
+      historySelectedJsonCopyTimerRef.current = null;
+    }
+    setHistorySelectedJsonCopyStatus('idle');
     if (historySelectedMarkdownDownloadTimerRef.current != null) {
       window.clearTimeout(historySelectedMarkdownDownloadTimerRef.current);
       historySelectedMarkdownDownloadTimerRef.current = null;
@@ -3217,12 +3231,17 @@ export function AgentPage() {
       if (historySelectedJsonDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedJsonDownloadTimerRef.current);
       }
+      if (historySelectedJsonCopyTimerRef.current != null) {
+        window.clearTimeout(historySelectedJsonCopyTimerRef.current);
+      }
       if (historySelectedMarkdownDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedMarkdownDownloadTimerRef.current);
       }
       historySelectedJsonlDownloadBusyRef.current = false;
       historySelectedCsvDownloadBusyRef.current = false;
       historySelectedJsonDownloadBusyRef.current = false;
+      historySelectedJsonCopyRunIdRef.current += 1;
+      historySelectedJsonCopyInFlightRef.current = false;
       historySelectedMarkdownDownloadBusyRef.current = false;
       historyJsonlDownloadBusyRef.current = false;
       historyJsonlCopyRunIdRef.current += 1;
@@ -3842,6 +3861,50 @@ export function AgentPage() {
       setHistorySelectedJsonDownloadStatus('idle');
       historySelectedJsonDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
+  };
+
+  const copySelectedHistoryJson = async () => {
+    if (historySelectionLocked || historySelectedJsonCopyInFlightRef.current) return;
+    const selected = selectedHistoryTaskIdList;
+    if (selected.length === 0) {
+      setToastMessage('No selected history tasks to copy.');
+      return;
+    }
+
+    const runId = ++historySelectedJsonCopyRunIdRef.current;
+    historySelectedJsonCopyInFlightRef.current = true;
+    if (historySelectedJsonCopyTimerRef.current != null) {
+      window.clearTimeout(historySelectedJsonCopyTimerRef.current);
+      historySelectedJsonCopyTimerRef.current = null;
+    }
+    setHistorySelectedJsonCopyStatus('copying');
+
+    try {
+      let ok = false;
+      try {
+        ok = await copySelectedAgentHistoryJson(taskHistory, selected, toHistoryExportItem);
+      } catch {
+        // Keep the page safe if a future clipboard adapter regresses its
+        // boolean refusal contract.
+        ok = false;
+      }
+      if (historySelectedJsonCopyRunIdRef.current !== runId) return;
+
+      setHistorySelectedJsonCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setToastMessage('Could not copy selected history JSON — try again.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      historySelectedJsonCopyTimerRef.current = window.setTimeout(() => {
+        if (historySelectedJsonCopyRunIdRef.current !== runId) return;
+        setHistorySelectedJsonCopyStatus('idle');
+        historySelectedJsonCopyTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (historySelectedJsonCopyRunIdRef.current === runId) {
+        historySelectedJsonCopyInFlightRef.current = false;
+      }
+    }
   };
 
   const copyFilteredHistoryJsonl = async () => {
@@ -6027,6 +6090,62 @@ export function AgentPage() {
                             : historySelectedJsonDownloadStatus === 'failed'
                               ? 'Failed'
                               : 'Selected JSON'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void copySelectedHistoryJson()}
+                        disabled={
+                          historySelectionLocked ||
+                          historySelectedJsonCopyStatus === 'copying'
+                        }
+                        title="Copy the selected history tasks as JSON"
+                        aria-label={
+                          historySelectedJsonCopyStatus === 'copying'
+                            ? 'Copying selected history as JSON'
+                            : historySelectedJsonCopyStatus === 'copied'
+                              ? 'Selected history JSON copied'
+                              : historySelectedJsonCopyStatus === 'failed'
+                                ? 'Selected history JSON copy failed'
+                                : `Copy ${selectedHistoryTaskIdList.length} selected history tasks as JSON`
+                        }
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color:
+                            historySelectedJsonCopyStatus === 'copying'
+                              ? '#B07840'
+                              : historySelectedJsonCopyStatus === 'failed'
+                                ? '#D85A30'
+                                : historySelectedJsonCopyStatus === 'copied'
+                                  ? '#5A8C6A'
+                                  : '#A0A39A',
+                          cursor:
+                            historySelectionLocked ||
+                            historySelectedJsonCopyStatus === 'copying'
+                              ? 'not-allowed'
+                              : 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                          opacity:
+                            historySelectionLocked ||
+                            historySelectedJsonCopyStatus === 'copying'
+                              ? 0.5
+                              : 1,
+                        }}
+                        aria-busy={historySelectedJsonCopyStatus === 'copying'}
+                      >
+                        {historySelectedJsonCopyStatus === 'copying'
+                          ? 'Copying…'
+                          : historySelectedJsonCopyStatus === 'copied'
+                            ? 'Copied'
+                            : historySelectedJsonCopyStatus === 'failed'
+                              ? 'Failed'
+                              : 'Copy selected JSON'}
                       </button>
                       <button
                         type="button"
