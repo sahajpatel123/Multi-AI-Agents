@@ -109,6 +109,20 @@ describe('formatAgentHistoryCsv', () => {
     expect(csv).toContain(',true,macro; fed,orch_1,watch_1');
   });
 
+  it('trims topic labels and ignores malformed runtime topic values', () => {
+    const csv = formatAgentHistoryCsv({
+      items: [
+        {
+          taskId: 'task_topics',
+          question: 'How should topics be normalized?',
+          topics: [' macro ', ' ', '\tfed', null as unknown as string, 42 as unknown as string],
+        },
+      ],
+    });
+    const row = csv.replace(/^\uFEFF/, '').trim().split(/\r?\n/)[1];
+    expect(row.split(',')[8]).toBe('macro; fed');
+  });
+
   it('starts with a UTF-8 BOM and uses CRLF record separators', () => {
     const csv = formatAgentHistoryCsv({
       items: [{ question: 'How is the Indian IPO market evolving?' }],

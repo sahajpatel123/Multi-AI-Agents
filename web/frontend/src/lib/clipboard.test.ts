@@ -106,6 +106,23 @@ describe('copyToClipboard', () => {
     expect(writeText).toHaveBeenCalledWith('a,b\r\n1,2\r\n');
   });
 
+  it('falls back to plain text when a structured CSV write is rejected', async () => {
+    const write = vi.fn().mockRejectedValue(new Error('CSV MIME type denied'));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { write, writeText } });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        constructor(public data: Record<string, Blob>) {}
+      },
+    );
+
+    const csv = 'a,b\r\n1,2\r\n';
+    expect(await copyCsvToClipboard(csv)).toBe(true);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith(csv);
+  });
+
   it('writes Markdown clipboard data through ClipboardItem when available', async () => {
     const write = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { write } });

@@ -16,6 +16,7 @@ const CHANGELOG_ENTRIES = [
     },
     items: [
       '[NEW] Agent history: copy the current filtered view as structured JSON directly to the clipboard, with the same filter note and stable fields as the JSON download',
+      '[NEW] Agent history: copy the current filtered view as spreadsheet-ready CSV directly to the clipboard, with a plain-text fallback and formula-safe escaping',
       '[NEW] Arena leaderboard: search session prompts by question, winning mind, or answer text; Copy session and Download .md honor the combined view',
       '[NEW] Public shared rounds: copy spreadsheet-ready CSV directly into table-aware apps, with a plain-text fallback',
       '[NEW] Public shared rounds: download every shared take as a spreadsheet-ready CSV with scores and winner flags',

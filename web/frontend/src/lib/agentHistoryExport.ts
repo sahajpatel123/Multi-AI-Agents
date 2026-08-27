@@ -156,6 +156,16 @@ export function formatAgentHistoryItemCopy(item: AgentHistoryExportItem): string
 export function formatAgentHistoryCsv(opts: { items: AgentHistoryExportItem[] }): string {
   const CSV_FORMULA_PREFIXES: readonly string[] = ['=', '+', '-', '@', '\t', '\r'];
 
+  const csvTopics = (topics: AgentHistoryExportItem['topics']): string => {
+    // Treat runtime data defensively: the API contract is string[], but a
+    // malformed topic must not make a valid history row uncopyable.
+    if (!Array.isArray(topics)) return '';
+    return topics
+      .map((topic) => (typeof topic === 'string' ? topic.trim() : ''))
+      .filter(Boolean)
+      .join('; ');
+  };
+
   const csvSafe = (value: unknown): string => {
     const s = value === null || value === undefined ? '' : String(value);
     // Spreadsheets commonly ignore leading whitespace before deciding whether
@@ -197,7 +207,7 @@ export function formatAgentHistoryCsv(opts: { items: AgentHistoryExportItem[] })
     item.userFeedback,
     item.createdAt,
     item.isLive === true ? 'true' : 'false',
-    (item.topics || []).filter((t) => (t || '').trim()).join('; '),
+    csvTopics(item.topics),
     item.orchestrationId,
     item.watchlistItemId,
   ]);
