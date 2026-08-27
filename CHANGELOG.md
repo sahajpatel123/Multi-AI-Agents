@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Bulk Agent history deletion now reconciles already-missing selections in the
+  current tab immediately, keeping stale rows and local pins from lingering
+
 ### Added
 - Agent research history now supports deleting selected tasks together, with
   an explicit inline confirmation, bounded server-side deletion, safe

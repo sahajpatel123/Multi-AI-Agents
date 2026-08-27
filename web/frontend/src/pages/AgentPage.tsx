@@ -132,6 +132,7 @@ import {
   unpinAgentHistoryTasks,
   type AgentHistoryPinFilter,
 } from '../lib/agentHistoryPins';
+import { reconcileAgentHistoryBulkDeleteIds } from '../lib/agentHistoryBulkDelete';
 import {
   AGENT_REFINE_MAX_CHARS,
   AGENT_TASK_MAX_CHARS,
@@ -3913,12 +3914,19 @@ export function AgentPage() {
     try {
       const response = await deleteAgentTasks(selected);
       const deletedIds = response.deleted_ids.filter((taskId) => selectedSet.has(taskId));
-      const deletedSet = new Set(deletedIds);
-      setTaskHistory((previous) => previous.filter((item) => !deletedSet.has(item.task_id)));
-      setPinnedTaskIds(removeAgentHistoryPins(deletedIds));
+      const reconciledIds = reconcileAgentHistoryBulkDeleteIds(
+        selected,
+        response.deleted_ids,
+        response.skipped_ids,
+      );
+      const reconciledSet = new Set(reconciledIds);
+      setTaskHistory((previous) =>
+        previous.filter((item) => !reconciledSet.has(item.task_id)),
+      );
+      setPinnedTaskIds(removeAgentHistoryPins(reconciledIds));
       setSelectedHistoryTaskIds(new Set());
 
-      if (result?.task_id && deletedSet.has(result.task_id)) {
+      if (result?.task_id && reconciledSet.has(result.task_id)) {
         resetRun();
       }
 
