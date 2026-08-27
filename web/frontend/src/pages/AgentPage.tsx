@@ -141,6 +141,7 @@ import {
   formatAgentHistoryItemCopy,
   formatAgentHistoryJson,
 } from '../lib/agentHistoryExport';
+import { copyAgentHistoryCsv } from '../lib/agentHistoryCsvClipboard';
 import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
 import {
   AGENT_HISTORY_SORT_OPTIONS,
@@ -857,6 +858,8 @@ export function AgentPage() {
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [historyCsvDownloadStatus, setHistoryCsvDownloadStatus] =
     useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyCsvCopyStatus, setHistoryCsvCopyStatus] =
+    useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
   const [historyJsonDownloadStatus, setHistoryJsonDownloadStatus] =
     useState<'idle' | 'done' | 'failed'>('idle');
   const [historyJsonCopyStatus, setHistoryJsonCopyStatus] =
@@ -867,6 +870,10 @@ export function AgentPage() {
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
   const historyCsvDownloadTimerRef = useRef<number | null>(null);
+  const historyCsvCopyTimerRef = useRef<number | null>(null);
+  /** Prevent duplicate CSV clipboard writes and stale feedback after reset. */
+  const historyCsvCopyInFlightRef = useRef(false);
+  const historyCsvCopyRunIdRef = useRef(0);
   const historyJsonDownloadTimerRef = useRef<number | null>(null);
   const historyJsonCopyTimerRef = useRef<number | null>(null);
   /** Prevent duplicate JSON clipboard writes and stale feedback after reset. */
@@ -2246,6 +2253,13 @@ export function AgentPage() {
     }
     setCopyingReportCsv(false);
     setCopyReportCsvFeedback('idle');
+    historyCsvCopyRunIdRef.current += 1;
+    historyCsvCopyInFlightRef.current = false;
+    if (historyCsvCopyTimerRef.current != null) {
+      window.clearTimeout(historyCsvCopyTimerRef.current);
+      historyCsvCopyTimerRef.current = null;
+    }
+    setHistoryCsvCopyStatus('idle');
     historyJsonCopyRunIdRef.current += 1;
     historyJsonCopyInFlightRef.current = false;
     if (historyJsonCopyTimerRef.current != null) {
@@ -2914,6 +2928,12 @@ export function AgentPage() {
       if (historyCsvDownloadTimerRef.current != null) {
         window.clearTimeout(historyCsvDownloadTimerRef.current);
       }
+      if (historyCsvCopyTimerRef.current != null) {
+        window.clearTimeout(historyCsvCopyTimerRef.current);
+        historyCsvCopyTimerRef.current = null;
+      }
+      historyCsvCopyRunIdRef.current += 1;
+      historyCsvCopyInFlightRef.current = false;
       if (historyJsonDownloadTimerRef.current != null) {
         window.clearTimeout(historyJsonDownloadTimerRef.current);
       }
@@ -3158,6 +3178,42 @@ export function AgentPage() {
       setHistoryCsvDownloadStatus('idle');
       historyCsvDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
+  };
+
+  const copyFilteredHistoryCsv = async () => {
+    // Keep a synchronous ref guard as well as the visual busy state: two
+    // keyboard or pointer activations can arrive before React commits the
+    // first update.
+    if (historyCsvCopyInFlightRef.current) return;
+    const runId = ++historyCsvCopyRunIdRef.current;
+    historyCsvCopyInFlightRef.current = true;
+    if (historyCsvCopyTimerRef.current != null) {
+      window.clearTimeout(historyCsvCopyTimerRef.current);
+      historyCsvCopyTimerRef.current = null;
+    }
+    setHistoryCsvCopyStatus('copying');
+
+    try {
+      const ok = await copyAgentHistoryCsv({
+        items: filteredTaskHistory.map(toHistoryExportItem),
+      });
+      if (historyCsvCopyRunIdRef.current !== runId) return;
+
+      setHistoryCsvCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setToastMessage('Could not copy history CSV — try again.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      historyCsvCopyTimerRef.current = window.setTimeout(() => {
+        if (historyCsvCopyRunIdRef.current !== runId) return;
+        setHistoryCsvCopyStatus('idle');
+        historyCsvCopyTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (historyCsvCopyRunIdRef.current === runId) {
+        historyCsvCopyInFlightRef.current = false;
+      }
+    }
   };
 
   const downloadFilteredHistoryJson = () => {
@@ -5083,6 +5139,49 @@ export function AgentPage() {
                       : historyCsvDownloadStatus === 'failed'
                         ? 'Failed'
                         : 'CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyFilteredHistoryCsv()}
+                    title="Copy the current history view as CSV"
+                    disabled={historyCsvCopyStatus === 'copying'}
+                    aria-busy={historyCsvCopyStatus === 'copying'}
+                    aria-label={
+                      historyCsvCopyStatus === 'copying'
+                        ? 'Copying research history as CSV'
+                        : historyCsvCopyStatus === 'copied'
+                          ? 'History CSV copied'
+                          : historyCsvCopyStatus === 'failed'
+                            ? 'History CSV copy failed'
+                            : 'Copy research history as CSV'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyCsvCopyStatus === 'failed'
+                          ? '#D85A30'
+                          : historyCsvCopyStatus === 'copied'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor: historyCsvCopyStatus === 'copying' ? 'wait' : 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                      opacity: historyCsvCopyStatus === 'copying' ? 0.65 : 1,
+                    }}
+                  >
+                    {historyCsvCopyStatus === 'copying'
+                      ? 'Copying…'
+                      : historyCsvCopyStatus === 'copied'
+                        ? 'Copied'
+                        : historyCsvCopyStatus === 'failed'
+                          ? 'Failed'
+                          : 'Copy CSV'}
                   </button>
                   <button
                     type="button"

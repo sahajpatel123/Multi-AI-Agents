@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Agent history now has a Copy CSV action for the current filtered view,
+  preserving spreadsheet-safe escaping and the UTF-8 marker used by CSV
+  downloads while also exposing a plain-text clipboard fallback
+
 ### Improved
 - Agent history JSON clipboard copying now locks repeat activation, reports an
   in-flight state, and ignores late clipboard completions after reset or unmount
