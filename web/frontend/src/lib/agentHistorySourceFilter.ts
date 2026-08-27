@@ -8,6 +8,8 @@ export type AgentHistorySourceFilter =
   | 'watchlist'
   | 'orchestration';
 
+export type AgentHistorySource = Exclude<AgentHistorySourceFilter, 'all'>;
+
 export type AgentHistorySourceOption = {
   value: AgentHistorySourceFilter;
   label: string;
@@ -38,9 +40,9 @@ function hasId(value: unknown): boolean {
 }
 
 /** Resolve the most specific source available on a history row. */
-function sourceFor(
+export function agentHistorySourceFor(
   item: AgentHistorySourceItem | null | undefined,
-): Exclude<AgentHistorySourceFilter, 'all'> {
+): AgentHistorySource {
   const source = item || {};
   // A watchlist task is still an orchestration in some older payloads, but
   // the watchlist origin is the actionable distinction for history users.
@@ -54,7 +56,7 @@ export function collectHistorySourceOptions(
   items: AgentHistorySourceItem[],
 ): AgentHistorySourceOption[] {
   const present = new Set<AgentHistorySourceFilter>(
-    (items || []).map((item) => sourceFor(item)),
+    (items || []).map((item) => agentHistorySourceFor(item)),
   );
   return [
     { value: AGENT_HISTORY_SOURCE_ALL, label: 'All sources' },
@@ -84,7 +86,7 @@ export function filterAgentHistoryBySource<T extends AgentHistorySourceItem>(
   // persisted value or a future filter option is removed.
   const safeFilter = isKnownSourceFilter(filter) ? filter : AGENT_HISTORY_SOURCE_ALL;
   if (safeFilter === AGENT_HISTORY_SOURCE_ALL) return [...list];
-  return list.filter((item) => sourceFor(item) === safeFilter);
+  return list.filter((item) => agentHistorySourceFor(item) === safeFilter);
 }
 
 /** True when at least one non-standalone source is available to filter. */

@@ -3,6 +3,7 @@ import {
   AGENT_HISTORY_SOURCE_ALL,
   agentHistorySourceFilterUseful,
   agentHistorySourceLabel,
+  agentHistorySourceFor,
   collectHistorySourceOptions,
   filterAgentHistoryBySource,
 } from './agentHistorySourceFilter';
@@ -34,6 +35,14 @@ describe('agentHistorySourceFilter', () => {
       'watch-priority',
     ]);
     expect(filterAgentHistoryBySource(items, 'orchestration').map((i) => i.id)).toEqual(['orch']);
+  });
+
+  it('resolves a stable source for row provenance badges', () => {
+    expect(agentHistorySourceFor(items[0])).toBe('standalone');
+    expect(agentHistorySourceFor(items[1])).toBe('watchlist');
+    expect(agentHistorySourceFor(items[2])).toBe('orchestration');
+    expect(agentHistorySourceFor(items[3])).toBe('watchlist');
+    expect(agentHistorySourceFor(undefined)).toBe('standalone');
   });
 
   it('treats blank and malformed identifiers as standalone', () => {

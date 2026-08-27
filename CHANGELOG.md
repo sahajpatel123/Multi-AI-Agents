@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Agent history rows now show a source badge for standalone, watchlist, and
+  orchestration research, so task provenance is visible without applying a
+  filter or opening the task
 - Agent history can now filter by source — standalone research, watchlist
   runs, or orchestration tasks — and carries that choice into the filtered
   count, empty state, and all history exports
