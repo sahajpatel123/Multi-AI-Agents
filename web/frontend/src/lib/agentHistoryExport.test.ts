@@ -4,6 +4,7 @@ import {
   formatAgentHistoryExport,
   formatAgentHistoryItemCopy,
   formatAgentHistoryJson,
+  formatAgentHistoryJsonl,
 } from './agentHistoryExport';
 
 describe('formatAgentHistoryExport', () => {
@@ -240,5 +241,65 @@ describe('formatAgentHistoryJson', () => {
       watchlist_item_id: null,
     });
     expect(parsed.items[0].question).toBe('');
+  });
+});
+
+describe('formatAgentHistoryJsonl', () => {
+  it('writes one stable JSON object per filtered task', () => {
+    const jsonl = formatAgentHistoryJsonl({
+      items: [
+        {
+          title: 'Rate path scan',
+          question: 'Will rates cut this quarter?',
+          score: 84,
+          confidence: 0.72,
+          createdAt: '2026-07-01T12:00:00.000Z',
+          topics: [' macro ', 'fed'],
+          taskId: 'task_abc',
+          isLive: true,
+          userFeedback: 'positive',
+          orchestrationId: 'orch_1',
+          watchlistItemId: 'watch_1',
+        },
+        { taskId: 'task_empty', question: 'A second task' },
+      ],
+    });
+
+    const lines = jsonl.trimEnd().split('\n').map((line) => JSON.parse(line));
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({
+      task_id: 'task_abc',
+      title: 'Rate path scan',
+      question: 'Will rates cut this quarter?',
+      score: 84,
+      confidence: 0.72,
+      user_feedback: 'positive',
+      is_live: true,
+      topics: ['macro', 'fed'],
+      orchestration_id: 'orch_1',
+      watchlist_item_id: 'watch_1',
+    });
+    expect(lines[1]).toMatchObject({
+      task_id: 'task_empty',
+      score: null,
+      confidence: null,
+      topics: [],
+      is_live: false,
+    });
+    expect(jsonl.endsWith('\n')).toBe(true);
+  });
+
+  it('returns an empty stream for an empty view and ignores malformed topics', () => {
+    const jsonl = formatAgentHistoryJsonl({
+      items: [
+        {
+          taskId: 'task_topics',
+          topics: [' macro ', null as unknown as string, 42 as unknown as string],
+        },
+      ],
+    });
+    const parsed = JSON.parse(jsonl.trim()) as { topics: string[] };
+    expect(parsed.topics).toEqual(['macro']);
+    expect(formatAgentHistoryJsonl({ items: [] })).toBe('');
   });
 });

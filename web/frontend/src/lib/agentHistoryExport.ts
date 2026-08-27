@@ -262,3 +262,41 @@ export function formatAgentHistoryJson(opts: {
 
   return JSON.stringify(payload, null, 2) + '\n';
 }
+
+/**
+ * JSONL export for the current Agent research history view.
+ *
+ * Each retained task is a complete JSON object on its own line, so filtered
+ * history can be streamed into command-line tools without unwrapping a JSON
+ * document first. An empty view intentionally produces an empty file.
+ */
+export function formatAgentHistoryJsonl(opts: {
+  items: AgentHistoryExportItem[];
+}): string {
+  const lines = (opts.items || []).map((item) =>
+    JSON.stringify({
+      task_id: (item.taskId || '').trim(),
+      title: (item.title || '').trim(),
+      question: (item.question || '').trim(),
+      score:
+        typeof item.score === 'number' && Number.isFinite(item.score) ? item.score : null,
+      confidence:
+        typeof item.confidence === 'number' && Number.isFinite(item.confidence)
+          ? item.confidence
+          : null,
+      user_feedback: item.userFeedback || null,
+      created_at: item.createdAt || '',
+      is_live: item.isLive === true,
+      topics: Array.isArray(item.topics)
+        ? item.topics
+            .filter((topic): topic is string => typeof topic === 'string')
+            .map((topic) => topic.trim())
+            .filter(Boolean)
+        : [],
+      orchestration_id: item.orchestrationId || null,
+      watchlist_item_id: item.watchlistItemId || null,
+    }),
+  );
+
+  return lines.length ? `${lines.join('\n')}\n` : '';
+}

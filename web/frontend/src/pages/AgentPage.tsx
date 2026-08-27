@@ -140,6 +140,7 @@ import {
   formatAgentHistoryExport,
   formatAgentHistoryItemCopy,
   formatAgentHistoryJson,
+  formatAgentHistoryJsonl,
 } from '../lib/agentHistoryExport';
 import { copyAgentHistoryCsv } from '../lib/agentHistoryCsvClipboard';
 import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
@@ -867,6 +868,9 @@ export function AgentPage() {
   const [historyJsonlDownloadStatus, setHistoryJsonlDownloadStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed'
   >('idle');
+  const [historyFilteredJsonlDownloadStatus, setHistoryFilteredJsonlDownloadStatus] = useState<
+    'idle' | 'done' | 'failed'
+  >('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
   const historyCsvDownloadTimerRef = useRef<number | null>(null);
@@ -880,6 +884,7 @@ export function AgentPage() {
   const historyJsonCopyInFlightRef = useRef(false);
   const historyJsonCopyRunIdRef = useRef(0);
   const historyJsonlDownloadTimerRef = useRef<number | null>(null);
+  const historyFilteredJsonlDownloadTimerRef = useRef<number | null>(null);
   const historyJsonlDownloadBusyRef = useRef(false);
   const [roomsCopyStatus, setRoomsCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [roomsDownloadStatus, setRoomsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -2944,6 +2949,9 @@ export function AgentPage() {
       if (historyJsonlDownloadTimerRef.current != null) {
         window.clearTimeout(historyJsonlDownloadTimerRef.current);
       }
+      if (historyFilteredJsonlDownloadTimerRef.current != null) {
+        window.clearTimeout(historyFilteredJsonlDownloadTimerRef.current);
+      }
       historyJsonlDownloadBusyRef.current = false;
       historyJsonCopyRunIdRef.current += 1;
       historyJsonCopyInFlightRef.current = false;
@@ -3315,6 +3323,32 @@ export function AgentPage() {
     historyJsonlDownloadTimerRef.current = window.setTimeout(() => {
       setHistoryJsonlDownloadStatus('idle');
       historyJsonlDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadFilteredHistoryJsonl = () => {
+    if (filteredTaskHistory.length === 0) {
+      setToastMessage('No tasks in the current history view to export.');
+      return;
+    }
+    const jsonl = formatAgentHistoryJsonl({
+      items: filteredTaskHistory.map(toHistoryExportItem),
+    });
+    const ok = downloadTextFile(jsonl, {
+      filename: `${withDownloadDate('agent-research-history-filtered')}.jsonl`,
+      mimeType: 'application/x-ndjson;charset=utf-8',
+    });
+    if (historyFilteredJsonlDownloadTimerRef.current != null) {
+      window.clearTimeout(historyFilteredJsonlDownloadTimerRef.current);
+    }
+    setHistoryFilteredJsonlDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download filtered history JSONL — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historyFilteredJsonlDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryFilteredJsonlDownloadStatus('idle');
+      historyFilteredJsonlDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -5264,6 +5298,50 @@ export function AgentPage() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => downloadFilteredHistoryJsonl()}
+                    disabled={filteredTaskHistory.length === 0}
+                    title={
+                      filteredTaskHistory.length === 0
+                        ? 'No tasks in the current history view'
+                        : 'Download the current history view as newline-delimited JSON'
+                    }
+                    aria-label={
+                      filteredTaskHistory.length === 0
+                        ? 'No history tasks in current view'
+                        : historyFilteredJsonlDownloadStatus === 'done'
+                          ? 'Filtered history JSONL downloaded'
+                          : historyFilteredJsonlDownloadStatus === 'failed'
+                            ? 'Filtered history JSONL download failed'
+                            : 'Download filtered history as JSONL'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyFilteredJsonlDownloadStatus === 'failed'
+                          ? '#D85A30'
+                          : historyFilteredJsonlDownloadStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor: filteredTaskHistory.length === 0 ? 'not-allowed' : 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                      opacity: filteredTaskHistory.length === 0 ? 0.5 : 1,
+                    }}
+                  >
+                    {historyFilteredJsonlDownloadStatus === 'done'
+                      ? 'Downloaded'
+                      : historyFilteredJsonlDownloadStatus === 'failed'
+                        ? 'Failed'
+                        : 'Filtered JSONL'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void downloadFullHistoryJsonl()}
                     disabled={historyJsonlDownloadStatus === 'busy'}
                     title="Download all retained Agent tasks as newline-delimited JSON"
@@ -5302,7 +5380,7 @@ export function AgentPage() {
                         ? 'Downloaded'
                         : historyJsonlDownloadStatus === 'failed'
                           ? 'Failed'
-                          : 'JSONL'}
+                          : 'All JSONL'}
                   </button>
                 </div>
               ) : null}

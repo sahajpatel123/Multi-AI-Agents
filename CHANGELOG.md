@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Agent history can now download the current filtered view as JSONL, with one
+  stable task object per line for streaming into command-line tools
 - Agent history now has a Copy CSV action for the current filtered view,
   preserving spreadsheet-safe escaping and the UTF-8 marker used by CSV
   downloads while also exposing a plain-text clipboard fallback
