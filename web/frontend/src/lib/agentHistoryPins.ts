@@ -187,6 +187,23 @@ export function unpinAgentHistoryTasks(taskIds: readonly string[]): string[] {
   return persistAgentHistoryPins(loadAgentHistoryPins().filter((id) => !removing.has(id)));
 }
 
+/** Count selected tasks whose pin state actually changed during a bulk action. */
+export function countChangedAgentHistoryPins(
+  taskIds: readonly string[],
+  previousPins: readonly string[],
+  nextPins: readonly string[],
+  action: 'pin' | 'unpin',
+): number {
+  const selected = new Set(taskIds.map((taskId) => taskId.trim()).filter(Boolean));
+  const previous = new Set(normalizeAgentHistoryPins(previousPins));
+  const next = new Set(normalizeAgentHistoryPins(nextPins));
+  return [...selected].filter((taskId) =>
+    action === 'pin'
+      ? !previous.has(taskId) && next.has(taskId)
+      : previous.has(taskId) && !next.has(taskId),
+  ).length;
+}
+
 /** Remove pins for tasks being deleted; other pins survive. */
 export function removeAgentHistoryPins(taskIds: readonly string[]): string[] {
   const removing = new Set(taskIds.filter((id) => typeof id === 'string' && id.length > 0));

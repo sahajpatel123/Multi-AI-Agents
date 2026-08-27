@@ -121,6 +121,7 @@ import {
   AGENT_HISTORY_PINS_MAX,
   agentHistoryPinFilterLabel,
   agentHistoryPinFilterUseful,
+  countChangedAgentHistoryPins,
   filterAgentHistoryByPin,
   loadAgentHistoryPins,
   removeAgentHistoryPins,
@@ -3837,19 +3838,24 @@ export function AgentPage() {
       return;
     }
 
+    const previousPins = pinnedTaskIds;
     const nextPins = action === 'pin'
       ? pinAgentHistoryTasks(selected)
       : unpinAgentHistoryTasks(selected);
-    const nextPinSet = new Set(nextPins);
-    const changedCount = selected.filter((taskId) =>
-      action === 'pin' ? nextPinSet.has(taskId) : !nextPinSet.has(taskId),
-    ).length;
+    const changedCount = countChangedAgentHistoryPins(
+      selected,
+      previousPins,
+      nextPins,
+      action,
+    );
     setPinnedTaskIds(nextPins);
     setSelectedHistoryTaskIds(new Set());
 
-    if (action === 'pin' && changedCount < selected.length) {
+    if (changedCount < selected.length) {
       setToastMessage(
-        `${changedCount} of ${selected.length} selected tasks pinned; your browser keeps up to ${AGENT_HISTORY_PINS_MAX} pins.`,
+        action === 'pin'
+          ? `${changedCount} of ${selected.length} selected tasks pinned; your browser keeps up to ${AGENT_HISTORY_PINS_MAX} pins.`
+          : `${changedCount} of ${selected.length} selected tasks unpinned.`,
       );
     } else {
       setToastMessage(

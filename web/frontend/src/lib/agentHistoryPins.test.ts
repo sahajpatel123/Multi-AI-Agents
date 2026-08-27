@@ -6,6 +6,7 @@ import {
   AGENT_HISTORY_PINS_STORAGE_KEY,
   agentHistoryPinFilterLabel,
   agentHistoryPinFilterUseful,
+  countChangedAgentHistoryPins,
   filterAgentHistoryByPin,
   loadAgentHistoryPins,
   normalizeAgentHistoryPins,
@@ -125,6 +126,20 @@ describe('agent history pin storage', () => {
       'task-c',
     ]);
     expect(unpinAgentHistoryTasks(['   '])).toEqual(['task-a', 'task-c']);
+  });
+
+  it('counts only actual state changes for mixed bulk selections', () => {
+    expect(
+      countChangedAgentHistoryPins(
+        [' task-a ', 'task-b', 'task-b'],
+        ['task-a', 'task-c'],
+        ['task-c', 'task-b'],
+        'pin',
+      ),
+    ).toBe(1);
+    expect(
+      countChangedAgentHistoryPins(['task-a', 'task-b'], ['task-a'], [], 'unpin'),
+    ).toBe(1);
   });
 
   it('normalizes whitespace around a pinned task id', () => {
