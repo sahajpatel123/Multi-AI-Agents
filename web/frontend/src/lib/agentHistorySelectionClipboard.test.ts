@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { copyAgentHistoryCsv } from './agentHistoryCsvClipboard';
 import { copyAgentHistoryJson } from './agentHistoryJsonClipboard';
 import { copyAgentHistoryMarkdown } from './agentHistoryMarkdownClipboard';
 import {
+  copySelectedAgentHistoryCsv,
   copySelectedAgentHistoryJson,
   copySelectedAgentHistoryMarkdown,
 } from './agentHistorySelectionClipboard';
+
+vi.mock('./agentHistoryCsvClipboard', () => ({
+  copyAgentHistoryCsv: vi.fn(),
+}));
 
 vi.mock('./agentHistoryJsonClipboard', () => ({
   copyAgentHistoryJson: vi.fn(),
@@ -13,6 +19,59 @@ vi.mock('./agentHistoryJsonClipboard', () => ({
 vi.mock('./agentHistoryMarkdownClipboard', () => ({
   copyAgentHistoryMarkdown: vi.fn(),
 }));
+
+describe('copySelectedAgentHistoryCsv', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('copies only selected retained rows in source order', async () => {
+    vi.mocked(copyAgentHistoryCsv).mockResolvedValueOnce(true);
+
+    await expect(
+      copySelectedAgentHistoryCsv(
+        [
+          { task_id: 'newest', title: 'Newest' },
+          { task_id: 'middle', title: 'Middle' },
+          { task_id: 'oldest', title: 'Oldest' },
+        ],
+        ['oldest', 'missing', 'newest', 'oldest'],
+        (item) => ({ taskId: item.task_id, title: item.title }),
+      ),
+    ).resolves.toBe(true);
+
+    expect(copyAgentHistoryCsv).toHaveBeenCalledWith({
+      items: [
+        { taskId: 'newest', title: 'Newest' },
+        { taskId: 'oldest', title: 'Oldest' },
+      ],
+    });
+  });
+
+  it('does not write an empty or stale selection', async () => {
+    await expect(
+      copySelectedAgentHistoryCsv(
+        [{ task_id: 'task-1', title: 'One' }],
+        ['missing'],
+        (item) => ({ taskId: item.task_id, title: item.title }),
+      ),
+    ).resolves.toBe(false);
+
+    expect(copyAgentHistoryCsv).not.toHaveBeenCalled();
+  });
+
+  it('converts unexpected clipboard exceptions into a refusal', async () => {
+    vi.mocked(copyAgentHistoryCsv).mockRejectedValueOnce(new Error('clipboard unavailable'));
+
+    await expect(
+      copySelectedAgentHistoryCsv(
+        [{ task_id: 'task-1', title: 'One' }],
+        ['task-1'],
+        (item) => ({ taskId: item.task_id, title: item.title }),
+      ),
+    ).resolves.toBe(false);
+  });
+});
 
 describe('copySelectedAgentHistoryJson', () => {
   beforeEach(() => {

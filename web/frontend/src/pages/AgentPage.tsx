@@ -160,6 +160,7 @@ import { copyAgentHistoryCsv } from '../lib/agentHistoryCsvClipboard';
 import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
 import { copyAgentHistoryJsonl } from '../lib/agentHistoryJsonlClipboard';
 import {
+  copySelectedAgentHistoryCsv,
   copySelectedAgentHistoryJson,
   copySelectedAgentHistoryMarkdown,
 } from '../lib/agentHistorySelectionClipboard';
@@ -943,6 +944,9 @@ export function AgentPage() {
   const [historySelectedCsvDownloadStatus, setHistorySelectedCsvDownloadStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed'
   >('idle');
+  const [historySelectedCsvCopyStatus, setHistorySelectedCsvCopyStatus] = useState<
+    'idle' | 'copying' | 'copied' | 'failed'
+  >('idle');
   const [historySelectedJsonDownloadStatus, setHistorySelectedJsonDownloadStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed'
   >('idle');
@@ -973,12 +977,16 @@ export function AgentPage() {
   const historyFilteredJsonlDownloadTimerRef = useRef<number | null>(null);
   const historySelectedJsonlDownloadTimerRef = useRef<number | null>(null);
   const historySelectedCsvDownloadTimerRef = useRef<number | null>(null);
+  const historySelectedCsvCopyTimerRef = useRef<number | null>(null);
   const historySelectedJsonDownloadTimerRef = useRef<number | null>(null);
   const historySelectedJsonCopyTimerRef = useRef<number | null>(null);
   const historySelectedMarkdownDownloadTimerRef = useRef<number | null>(null);
   /** Prevent rapid or re-entrant activations from creating duplicate files. */
   const historySelectedJsonlDownloadBusyRef = useRef(false);
   const historySelectedCsvDownloadBusyRef = useRef(false);
+  /** Prevent duplicate selected CSV clipboard writes and stale feedback. */
+  const historySelectedCsvCopyInFlightRef = useRef(false);
+  const historySelectedCsvCopyRunIdRef = useRef(0);
   const historySelectedJsonDownloadBusyRef = useRef(false);
   const historySelectedJsonCopyInFlightRef = useRef(false);
   const historySelectedJsonCopyRunIdRef = useRef(0);
@@ -2414,6 +2422,13 @@ export function AgentPage() {
     }
     historySelectedCsvDownloadBusyRef.current = false;
     setHistorySelectedCsvDownloadStatus('idle');
+    historySelectedCsvCopyRunIdRef.current += 1;
+    historySelectedCsvCopyInFlightRef.current = false;
+    if (historySelectedCsvCopyTimerRef.current != null) {
+      window.clearTimeout(historySelectedCsvCopyTimerRef.current);
+      historySelectedCsvCopyTimerRef.current = null;
+    }
+    setHistorySelectedCsvCopyStatus('idle');
     if (historySelectedJsonDownloadTimerRef.current != null) {
       window.clearTimeout(historySelectedJsonDownloadTimerRef.current);
       historySelectedJsonDownloadTimerRef.current = null;
@@ -3245,6 +3260,10 @@ export function AgentPage() {
       if (historySelectedCsvDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedCsvDownloadTimerRef.current);
       }
+      if (historySelectedCsvCopyTimerRef.current != null) {
+        window.clearTimeout(historySelectedCsvCopyTimerRef.current);
+        historySelectedCsvCopyTimerRef.current = null;
+      }
       if (historySelectedJsonDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedJsonDownloadTimerRef.current);
       }
@@ -3259,6 +3278,8 @@ export function AgentPage() {
       }
       historySelectedJsonlDownloadBusyRef.current = false;
       historySelectedCsvDownloadBusyRef.current = false;
+      historySelectedCsvCopyRunIdRef.current += 1;
+      historySelectedCsvCopyInFlightRef.current = false;
       historySelectedJsonDownloadBusyRef.current = false;
       historySelectedJsonCopyRunIdRef.current += 1;
       historySelectedJsonCopyInFlightRef.current = false;
@@ -3788,6 +3809,50 @@ export function AgentPage() {
       setHistorySelectedCsvDownloadStatus('idle');
       historySelectedCsvDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
+  };
+
+  const copySelectedHistoryCsv = async () => {
+    if (historySelectionLocked || historySelectedCsvCopyInFlightRef.current) return;
+    const selected = selectedHistoryTaskIdList;
+    if (selected.length === 0) {
+      setToastMessage('No selected history tasks to copy.');
+      return;
+    }
+
+    const runId = ++historySelectedCsvCopyRunIdRef.current;
+    historySelectedCsvCopyInFlightRef.current = true;
+    if (historySelectedCsvCopyTimerRef.current != null) {
+      window.clearTimeout(historySelectedCsvCopyTimerRef.current);
+      historySelectedCsvCopyTimerRef.current = null;
+    }
+    setHistorySelectedCsvCopyStatus('copying');
+
+    try {
+      let ok = false;
+      try {
+        ok = await copySelectedAgentHistoryCsv(taskHistory, selected, toHistoryExportItem);
+      } catch {
+        // Keep the page safe if a future clipboard adapter regresses its
+        // boolean refusal contract.
+        ok = false;
+      }
+      if (historySelectedCsvCopyRunIdRef.current !== runId) return;
+
+      setHistorySelectedCsvCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setToastMessage('Could not copy selected history CSV — try again.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      historySelectedCsvCopyTimerRef.current = window.setTimeout(() => {
+        if (historySelectedCsvCopyRunIdRef.current !== runId) return;
+        setHistorySelectedCsvCopyStatus('idle');
+        historySelectedCsvCopyTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (historySelectedCsvCopyRunIdRef.current === runId) {
+        historySelectedCsvCopyInFlightRef.current = false;
+      }
+    }
   };
 
   const downloadSelectedHistoryMarkdown = () => {
@@ -6100,6 +6165,62 @@ export function AgentPage() {
                             : historySelectedCsvDownloadStatus === 'failed'
                               ? 'Failed'
                               : 'Selected CSV'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void copySelectedHistoryCsv()}
+                        disabled={
+                          historySelectionLocked ||
+                          historySelectedCsvCopyStatus === 'copying'
+                        }
+                        title="Copy the selected history tasks as CSV"
+                        aria-label={
+                          historySelectedCsvCopyStatus === 'copying'
+                            ? 'Copying selected history as CSV'
+                            : historySelectedCsvCopyStatus === 'copied'
+                              ? 'Selected history CSV copied'
+                              : historySelectedCsvCopyStatus === 'failed'
+                                ? 'Selected history CSV copy failed'
+                                : `Copy ${selectedHistoryTaskIdList.length} selected history tasks as CSV`
+                        }
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color:
+                            historySelectedCsvCopyStatus === 'copying'
+                              ? '#B07840'
+                              : historySelectedCsvCopyStatus === 'failed'
+                                ? '#D85A30'
+                                : historySelectedCsvCopyStatus === 'copied'
+                                  ? '#5A8C6A'
+                                  : '#A0A39A',
+                          cursor:
+                            historySelectionLocked ||
+                            historySelectedCsvCopyStatus === 'copying'
+                              ? 'not-allowed'
+                              : 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                          opacity:
+                            historySelectionLocked ||
+                            historySelectedCsvCopyStatus === 'copying'
+                              ? 0.5
+                              : 1,
+                        }}
+                        aria-busy={historySelectedCsvCopyStatus === 'copying'}
+                      >
+                        {historySelectedCsvCopyStatus === 'copying'
+                          ? 'Copying…'
+                          : historySelectedCsvCopyStatus === 'copied'
+                            ? 'Copied'
+                            : historySelectedCsvCopyStatus === 'failed'
+                              ? 'Failed'
+                              : 'Copy selected CSV'}
                       </button>
                       <button
                         type="button"

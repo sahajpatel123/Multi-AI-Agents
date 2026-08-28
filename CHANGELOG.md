@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Agent research history can now copy exactly the selected tasks as
+  spreadsheet-safe CSV, including selections temporarily hidden by filters
+- Agent research history can now copy exactly the selected tasks as
   structured JSON, including selections temporarily hidden by filters
 - Agent research history can now export exactly the selected tasks as a
   structured JSON file, including selected rows hidden by filters
