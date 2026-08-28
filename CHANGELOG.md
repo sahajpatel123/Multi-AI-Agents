@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Agent history rich-HTML copy now treats malformed browser clipboard
+  capability shims as unavailable and reliably reaches its readable fallback
 - Filtered Agent history rich-HTML copy now keeps its Markdown fallback
   usable when a refreshed API row contains malformed scalar data
 - Selected Agent history HTML exports now skip malformed retained rows and

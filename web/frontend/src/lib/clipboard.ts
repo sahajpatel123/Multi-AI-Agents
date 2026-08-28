@@ -172,13 +172,12 @@ export async function copyHtmlToClipboard(html: string, plainText = html): Promi
   const fallbackText = plainText || html;
 
   try {
-    if (
-      typeof ClipboardItem !== 'undefined' &&
-      typeof navigator !== 'undefined' &&
-      navigator.clipboard?.write
-    ) {
-      await navigator.clipboard.write([
-        new ClipboardItem({
+    const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
+    const ClipboardItemConstructor =
+      typeof ClipboardItem === 'function' ? ClipboardItem : undefined;
+    if (ClipboardItemConstructor && typeof clipboard?.write === 'function') {
+      await clipboard.write([
+        new ClipboardItemConstructor({
           'text/html': new Blob([html], { type: 'text/html;charset=utf-8' }),
           'text/plain': new Blob([fallbackText], { type: 'text/plain' }),
         }),

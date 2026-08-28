@@ -306,4 +306,34 @@ describe('copyToClipboard', () => {
     expect(await copyHtmlToClipboard('<strong>Arena</strong>', 'Arena')).toBe(true);
     expect(writeText).toHaveBeenCalledWith('Arena');
   });
+
+  it('falls back to the readable text when a structured HTML write is rejected', async () => {
+    const write = vi.fn().mockRejectedValue(new Error('HTML MIME type denied'));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { write, writeText } });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        constructor(public data: Record<string, Blob>) {}
+      },
+    );
+
+    expect(await copyHtmlToClipboard('<strong>Arena</strong>', 'Arena')).toBe(true);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('Arena');
+  });
+
+  it('treats a non-callable structured HTML writer as unavailable', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { write: {}, writeText } });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        constructor(public data: Record<string, Blob>) {}
+      },
+    );
+
+    expect(await copyHtmlToClipboard('<strong>Arena</strong>', 'Arena')).toBe(true);
+    expect(writeText).toHaveBeenCalledWith('Arena');
+  });
 });
