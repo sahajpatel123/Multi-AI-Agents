@@ -442,3 +442,34 @@ async def test_export_orchestrations_markdown_empty_is_valid_document(
     assert res.status_code == 200
     assert "# Arena orchestration history" in res.text
     assert "_No orchestrations found._" in res.text
+
+
+@pytest.mark.asyncio
+async def test_export_orchestrations_markdown_escapes_html_in_synthesis(
+    app_client, make_user, db_session
+):
+    """LLM synthesis keeps useful Markdown without emitting active HTML."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    orch = _seed_orchestration(db_session, user.id, "orch-md-hostile")
+    orch.synthesis = (
+        "#### Preserved detail\n\n"
+        "- Safe **Markdown** remains useful.\n\n"
+        "<script>alert('unsafe')</script>\n"
+        '<img src=x onerror="alert(1)">'
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrations/export.md",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert "#### Preserved detail" in res.text
+    assert "- Safe **Markdown** remains useful." in res.text
+    assert "<script>" not in res.text
+    assert "<img" not in res.text
+    assert "&lt;script&gt;alert('unsafe')&lt;/script&gt;" in res.text
+    assert "&lt;img src=x onerror=\"alert(1)\"&gt;" in res.text

@@ -521,6 +521,18 @@ def _md_inline(value: Any) -> str:
     )
 
 
+def _md_block(value: Any) -> str:
+    """Escape raw HTML in a Markdown block while preserving Markdown syntax.
+
+    Synthesis text is LLM-produced and may legitimately contain headings,
+    lists, code fences, or links, so flattening it through ``_md_inline``
+    would make the report much less useful. Escaping only HTML
+    metacharacters keeps that Markdown structure intact while ensuring raw
+    tags and event handlers render as text in previewers that allow HTML.
+    """
+    return html.escape(str(value), quote=False)
+
+
 def _score_text(value: Any) -> str:
     """Render a numeric score without float noise; missing values become '—'."""
     if value is None or isinstance(value, bool):
@@ -1063,7 +1075,7 @@ def generate_orchestration_history_markdown(
 
         lines.append("### Synthesis")
         lines.append("")
-        synthesis = str(item.get("synthesis") or "").strip()
+        synthesis = _md_block(item.get("synthesis") or "").strip()
         lines.append(synthesis or "_No synthesis recorded._")
         lines.append("")
 
