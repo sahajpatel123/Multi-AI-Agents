@@ -60,6 +60,39 @@ function stablePublicUrl(raw: string | null | undefined): string | null {
   }
 }
 
+const SOURCE_LABEL_KEYS = ['title', 'name', 'label', 'url', 'source'] as const;
+
+function sourceLabel(raw: unknown): string {
+  if (typeof raw === 'string') return raw.trim();
+  if (!raw || typeof raw !== 'object') return '';
+
+  const source = raw as Record<string, unknown>;
+  for (const key of SOURCE_LABEL_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+/** Normalize the several source shapes returned by current and older APIs. */
+export function normalizeAgentReportSources(rawSources: unknown): string[] {
+  if (!Array.isArray(rawSources)) return [];
+  return rawSources.map(sourceLabel).filter(Boolean);
+}
+
+/** Prefer persisted canonical sources, then compatibility fallbacks. */
+export function selectAgentReportSources(opts: {
+  sources?: unknown;
+  sourceIntegritySources?: unknown;
+  answerSources?: unknown;
+}): string[] {
+  for (const candidate of [opts.sources, opts.sourceIntegritySources, opts.answerSources]) {
+    const sources = normalizeAgentReportSources(candidate);
+    if (sources.length > 0) return sources;
+  }
+  return [];
+}
+
 function inlineMarkdown(raw: string): string {
   const protectedFragments: string[] = [];
   const protect = (fragment: string): string => {

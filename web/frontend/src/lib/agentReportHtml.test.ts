@@ -1,5 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { formatAgentReportHtml } from './agentReportHtml';
+import { formatAgentReportHtml, selectAgentReportSources } from './agentReportHtml';
+
+describe('selectAgentReportSources', () => {
+  it('prefers the canonical persisted list over derived fallbacks', () => {
+    expect(
+      selectAgentReportSources({
+        sources: [' https://example.com/canonical '],
+        sourceIntegritySources: [{ title: 'Integrity source' }],
+        answerSources: ['Answer source'],
+      }),
+    ).toEqual(['https://example.com/canonical']);
+  });
+
+  it('normalizes legacy source objects and skips malformed entries', () => {
+    expect(
+      selectAgentReportSources({
+        sources: [null, 42, { title: '  ' }],
+        sourceIntegritySources: [
+          { name: 'Named source' },
+          { url: 'https://example.com/source' },
+          { unsupported: true },
+        ],
+      }),
+    ).toEqual(['Named source', 'https://example.com/source']);
+  });
+});
 
 describe('formatAgentReportHtml', () => {
   it('renders a portable report with metadata, Markdown blocks, and sources', () => {

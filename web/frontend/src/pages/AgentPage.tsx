@@ -151,7 +151,7 @@ import {
   withDownloadDate,
 } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
-import { formatAgentReportHtml } from '../lib/agentReportHtml';
+import { formatAgentReportHtml, selectAgentReportSources } from '../lib/agentReportHtml';
 import {
   formatAgentHistoryCsv,
   formatAgentHistoryExport,
@@ -416,6 +416,7 @@ type AgentResult = {
   final_answer?: string;
   final_confidence?: number;
   final_score?: number;
+  sources?: unknown[];
   flags?: string[];
   caveats?: StructuredCaveat[];
   error?: string;
@@ -547,27 +548,6 @@ function parseSynthesisFromFinalAnswer(finalAnswer: string | undefined): ParsedS
   } catch {
     return null;
   }
-}
-
-/** Source labels used by the offline HTML report without exposing raw payloads. */
-function sourceTitlesForReport(result: AgentResult | null): string[] {
-  const rawSources = result?.source_integrity?.sources;
-  if (Array.isArray(rawSources) && rawSources.length > 0) {
-    return rawSources.map((item, index) => {
-      const source = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
-      const title =
-        (typeof source.title === 'string' && source.title) ||
-        (typeof source.name === 'string' && source.name) ||
-        (typeof source.url === 'string' && source.url) ||
-        `Source ${index + 1}`;
-      return title.trim() || `Source ${index + 1}`;
-    });
-  }
-
-  return (parseSynthesisFromFinalAnswer(result?.final_answer)?.sources_referenced || [])
-    .filter((source): source is string => typeof source === 'string')
-    .map((source) => source.trim())
-    .filter(Boolean);
 }
 
 const CALIBRATION_LEVEL_TITLES: Record<number, string> = {
@@ -2135,7 +2115,11 @@ export function AgentPage() {
         title: question,
         question,
         answer: plainTextFromFinalAnswer(result.final_answer, parsed),
-        sources: sourceTitlesForReport(result),
+        sources: selectAgentReportSources({
+          sources: result.sources,
+          sourceIntegritySources: result.source_integrity?.sources,
+          answerSources: parsed?.sources_referenced,
+        }),
         finalScore: result.final_score,
         finalConfidence: result.final_confidence,
       });

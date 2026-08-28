@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Agent HTML report exports now preserve the canonical persisted source list,
+  instead of silently falling back to incomplete derived references
 - Agent history Markdown exports now escape user/API-controlled formatting
   characters so copied or downloaded snapshots remain structurally safe
 - Bulk Agent history deletion now reconciles already-missing selections in the
