@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current tab immediately, keeping stale rows and local pins from lingering
 
 ### Added
+- Agent research history can now copy exactly the selected tasks as JSONL,
+  including selections hidden by filters, for direct handoff to terminals,
+  notebooks, and import tools
 - Agent research history can now copy exactly the selected tasks as
   spreadsheet-safe CSV, including selections temporarily hidden by filters
 - Agent research history can now copy exactly the selected tasks as

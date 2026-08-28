@@ -1,5 +1,6 @@
 import { copyAgentHistoryCsv } from './agentHistoryCsvClipboard';
 import { copyAgentHistoryJson } from './agentHistoryJsonClipboard';
+import { copyAgentHistoryJsonl } from './agentHistoryJsonlClipboard';
 import { copyAgentHistoryMarkdown } from './agentHistoryMarkdownClipboard';
 import {
   selectAgentHistoryItems,
@@ -24,6 +25,30 @@ export async function copySelectedAgentHistoryCsv<
     if (selected.length === 0) return false;
 
     return await copyAgentHistoryCsv({
+      items: selected.map(toExportItem),
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Copy exactly the retained Agent history rows selected by the user as JSONL.
+ * Resolve ids before formatting so stale selections cannot copy a filtered
+ * view or produce duplicate records.
+ */
+export async function copySelectedAgentHistoryJsonl<
+  T extends SelectableAgentHistoryItem,
+>(
+  items: readonly T[],
+  selectedTaskIds: readonly string[],
+  toExportItem: (item: T) => AgentHistoryExportItem,
+): Promise<boolean> {
+  try {
+    const selected = selectAgentHistoryItems(items, selectedTaskIds);
+    if (selected.length === 0) return false;
+
+    return await copyAgentHistoryJsonl({
       items: selected.map(toExportItem),
     });
   } catch {
