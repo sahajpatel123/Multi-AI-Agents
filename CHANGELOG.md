@@ -68,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Selected Agent history HTML exports now skip malformed retained rows and
+  stale selection ids, so one bad refresh record cannot discard an otherwise
+  valid offline archive
 - Selected Agent history JSONL copy now clears stale completion feedback when
   the checkbox selection changes while the clipboard request is pending
 - Selected Agent history exports now keep one row per task when a malformed

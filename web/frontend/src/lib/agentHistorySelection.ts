@@ -15,11 +15,21 @@ export function selectAgentHistoryItems<T extends SelectableAgentHistoryItem>(
   items: readonly T[],
   selectedTaskIds: readonly string[],
 ): T[] {
-  const selected = new Set(selectedTaskIds);
+  // History and selection state originate at runtime boundaries. Keep a bad
+  // payload from aborting an otherwise valid bulk export or clipboard action.
+  if (!Array.isArray(items) || !Array.isArray(selectedTaskIds)) return [];
+
+  const selected = new Set(
+    selectedTaskIds.filter((taskId): taskId is string => typeof taskId === 'string'),
+  );
   const seen = new Set<string>();
   return items.filter((item) => {
-    if (!selected.has(item.task_id) || seen.has(item.task_id)) return false;
-    seen.add(item.task_id);
+    if (!item || typeof item !== 'object') return false;
+    const taskId = (item as SelectableAgentHistoryItem).task_id;
+    if (typeof taskId !== 'string' || !taskId || !selected.has(taskId) || seen.has(taskId)) {
+      return false;
+    }
+    seen.add(taskId);
     return true;
   });
 }

@@ -40,6 +40,25 @@ describe('selectAgentHistoryItems', () => {
     expect(selectAgentHistoryItems(history, [])).toEqual([]);
     expect(history).toEqual(snapshot);
   });
+
+  it('skips malformed rows and selection ids without aborting valid matches', () => {
+    const valid = { task_id: 'kept', task_text: 'Keep this row' };
+    const malformed = [
+      null,
+      'not a row',
+      { task_id: 42 },
+      { title: 'Missing an id' },
+      { task_id: '' },
+      valid,
+    ] as unknown as typeof history;
+
+    expect(
+      selectAgentHistoryItems(
+        malformed,
+        [null, 42, '', 'kept'] as unknown as string[],
+      ),
+    ).toEqual([valid]);
+  });
 });
 
 describe('formatSelectedAgentHistoryCsv', () => {
