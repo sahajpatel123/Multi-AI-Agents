@@ -3188,6 +3188,32 @@ export async function exportAgentTasksJsonl(): Promise<Blob> {
   return response.blob();
 }
 
+export type AgentOrchestrationStatus = 'running' | 'complete' | 'failed' | 'cancelled';
+
+/** Download the caller's orchestration history as a spreadsheet-safe CSV. */
+export async function exportAgentOrchestrationsCsv(
+  status?: AgentOrchestrationStatus,
+): Promise<Blob> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  const response = await apiFetch(`/api/agent/orchestrations/export.csv${query}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export orchestration history'), response),
+      response.status,
+      err,
+    );
+  }
+
+  // Validate through a clone so a successful HTTP response with no body never
+  // becomes an apparently valid but unusable download.
+  const text = await response.clone().text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty orchestration history export returned by the server', response));
+  }
+  return response.blob();
+}
+
 export type AgentWatchlistItem = {
   id: string;
   question: string;

@@ -25,6 +25,7 @@ import {
   deleteAgentTask,
   deleteAgentTasks,
   exportAgentTasksJsonl,
+  exportAgentOrchestrationsCsv,
   exportAgentTaskCsv,
   exportAgentTaskPdf,
   exportAgentTaskMarkdown,
@@ -1107,6 +1108,7 @@ export function AgentPage() {
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingJson, setExportingJson] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
+  const [exportingOrchestrationHistory, setExportingOrchestrationHistory] = useState(false);
   /** Guards Shift+L / toolbar clicks so a report download can never double-fire. */
   const exportMdInFlightRef = useRef(false);
   const exportReportRunIdRef = useRef(0);
@@ -2292,6 +2294,27 @@ export function AgentPage() {
       setExportingPdf(false);
     }
   };
+
+  const handleExportOrchestrationHistoryCsv = useCallback(async () => {
+    if (exportingOrchestrationHistory) return;
+    setExportingOrchestrationHistory(true);
+    try {
+      const blob = await exportAgentOrchestrationsCsv();
+      const ok = downloadBlobFile(
+        blob,
+        `${withDownloadDate('arena-orchestrations')}.csv`,
+      );
+      if (!ok) setError('Could not download orchestration history — try again.');
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not download orchestration history — try again.',
+      );
+    } finally {
+      setExportingOrchestrationHistory(false);
+    }
+  }, [exportingOrchestrationHistory]);
 
   const handleConfirmWatchlist = async () => {
     const q = (result?.original_task || result?.task || '').trim();
@@ -10433,6 +10456,32 @@ export function AgentPage() {
                         </svg>
                       ) : null}
                       {exportingPdf ? 'Exporting…' : 'Export all as PDF'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={exportingOrchestrationHistory}
+                      onClick={() => void handleExportOrchestrationHistoryCsv()}
+                      aria-busy={exportingOrchestrationHistory}
+                      aria-label={
+                        exportingOrchestrationHistory
+                          ? 'Exporting orchestration history as CSV'
+                          : 'Download orchestration history as CSV'
+                      }
+                      style={{
+                        padding: '9px 18px',
+                        border: '0.5px solid #35382F',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: exportingOrchestrationHistory ? 'default' : 'pointer',
+                        opacity: exportingOrchestrationHistory ? 0.7 : 1,
+                      }}
+                    >
+                      {exportingOrchestrationHistory
+                        ? 'Exporting…'
+                        : 'Export history as CSV'}
                     </button>
                     <button
                       type="button"
