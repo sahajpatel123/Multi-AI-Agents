@@ -21,6 +21,7 @@ import {
   isArenaShareRoundKey,
   isArenaVerifyWinnerKey,
   isAgentCopyAnswerKey,
+  isAgentCopyReportHtmlKey,
   isAgentCopyReportCsvKey,
   isAgentCopyReportKey,
   isAgentCopyReportJsonKey,
@@ -553,6 +554,13 @@ describe('keyboardShortcuts', () => {
     expect(isAgentDownloadAnswerKey({ key: 'D', shiftKey: true, ctrlKey: true })).toBe(false);
     expect(isAgentDownloadAnswerKey({ key: 'J', shiftKey: true })).toBe(false);
 
+    expect(isAgentCopyReportHtmlKey({ key: 'E', shiftKey: true })).toBe(true);
+    expect(isAgentCopyReportHtmlKey({ key: 'e', shiftKey: true })).toBe(true);
+    expect(isAgentCopyReportHtmlKey({ key: 'E' })).toBe(false);
+    expect(isAgentCopyReportHtmlKey({ key: 'E', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isAgentCopyReportHtmlKey({ key: 'E', shiftKey: true, repeat: true })).toBe(false);
+    expect(isAgentCopyReportHtmlKey({ key: 'H', shiftKey: true })).toBe(false);
+
     expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true })).toBe(true);
     expect(isAgentDownloadJsonKey({ key: 'j', shiftKey: true })).toBe(true);
     expect(isAgentDownloadJsonKey({ key: 'J' })).toBe(false);
@@ -610,6 +618,7 @@ describe('keyboardShortcuts', () => {
 
     expect(isAgentCopyAnswerKey({ key: 'C', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadAnswerKey({ key: 'D', shiftKey: true, repeat: true })).toBe(false);
+    expect(isAgentCopyReportHtmlKey({ key: 'E', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadJsonKey({ key: 'J', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadReportMarkdownKey({ key: 'L', shiftKey: true, repeat: true })).toBe(false);
     expect(isAgentDownloadReportCsvKey({ key: 'K', shiftKey: true, repeat: true })).toBe(false);

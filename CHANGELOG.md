@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current tab immediately, keeping stale rows and local pins from lingering
 
 ### Added
+- Completed Agent research reports can now be copied as rich HTML, with a
+  Markdown fallback for text-only destinations and the same source list as
+  the standalone report (Shift+E)
 - Completed Agent research reports can now be downloaded as standalone HTML,
   preserving the question, answer, score, confidence, and source list for
   offline reading and printing

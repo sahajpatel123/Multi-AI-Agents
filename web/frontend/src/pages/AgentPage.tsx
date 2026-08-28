@@ -94,6 +94,7 @@ import {
 } from '../lib/agentHistoryRow';
 import {
   isAgentCopyAnswerKey,
+  isAgentCopyReportHtmlKey,
   isAgentCopyReportCsvKey,
   isAgentCopyReportKey,
   isAgentCopyReportJsonKey,
@@ -142,7 +143,7 @@ import {
   charBudgetTone,
   clampToMax,
 } from '../lib/charBudget';
-import { copyCsvToClipboard, copyToClipboard } from '../lib/clipboard';
+import { copyCsvToClipboard, copyHtmlToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
   downloadBlobFile,
   downloadHtmlFile,
@@ -151,6 +152,7 @@ import {
   withDownloadDate,
 } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
+import { formatAgentReportClipboard } from '../lib/agentReportClipboard';
 import { formatAgentReportHtml, selectAgentReportSources } from '../lib/agentReportHtml';
 import {
   formatAgentHistoryCsv,
@@ -1153,6 +1155,11 @@ export function AgentPage() {
   const copyReportCsvInFlightRef = useRef(false);
   const copyReportCsvRunIdRef = useRef(0);
   const copyReportCsvFeedbackTimerRef = useRef<number | null>(null);
+  const [copyingReportHtml, setCopyingReportHtml] = useState(false);
+  const [copyReportHtmlFeedback, setCopyReportHtmlFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copyReportHtmlInFlightRef = useRef(false);
+  const copyReportHtmlRunIdRef = useRef(0);
+  const copyReportHtmlFeedbackTimerRef = useRef<number | null>(null);
   const [sharingTask, setSharingTask] = useState(false);
   const [revokingTaskShare, setRevokingTaskShare] = useState(false);
   const [taskShareFeedback, setTaskShareFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -2436,6 +2443,14 @@ export function AgentPage() {
     }
     setCopyingReportCsv(false);
     setCopyReportCsvFeedback('idle');
+    copyReportHtmlRunIdRef.current += 1;
+    copyReportHtmlInFlightRef.current = false;
+    if (copyReportHtmlFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportHtmlFeedbackTimerRef.current);
+      copyReportHtmlFeedbackTimerRef.current = null;
+    }
+    setCopyingReportHtml(false);
+    setCopyReportHtmlFeedback('idle');
     historyCsvCopyRunIdRef.current += 1;
     historyCsvCopyInFlightRef.current = false;
     if (historyCsvCopyTimerRef.current != null) {
@@ -2819,6 +2834,61 @@ export function AgentPage() {
     }
   }, [result?.status, result?.task_id]);
 
+  const handleCopyTaskHtml = useCallback(async () => {
+    if (!result?.task_id || result.status !== 'complete' || copyReportHtmlInFlightRef.current) return;
+    const taskId = result.task_id;
+    const runId = ++copyReportHtmlRunIdRef.current;
+    copyReportHtmlInFlightRef.current = true;
+    setCopyingReportHtml(true);
+    setCopyReportHtmlFeedback('idle');
+    if (copyReportHtmlFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyReportHtmlFeedbackTimerRef.current);
+      copyReportHtmlFeedbackTimerRef.current = null;
+    }
+
+    try {
+      const question = result.original_task || result.task || task || '';
+      const parsed = parsedAnswer;
+      const payload = formatAgentReportClipboard({
+        question,
+        answer: plainAnswerText || result.final_answer || '',
+        taskId,
+        sources: result.sources,
+        sourceIntegritySources: result.source_integrity?.sources,
+        answerSources: parsed?.sources_referenced,
+        finalScore: result.final_score,
+        finalConfidence: result.final_confidence,
+      });
+      const ok = await copyHtmlToClipboard(payload.html, payload.plainText);
+      if (copyReportHtmlRunIdRef.current !== runId) return;
+      setCopyReportHtmlFeedback(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy the rich report. Try the Report .html download instead.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyReportHtmlFeedbackTimerRef.current = window.setTimeout(() => {
+        if (copyReportHtmlRunIdRef.current !== runId) return;
+        setCopyReportHtmlFeedback('idle');
+        copyReportHtmlFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      if (copyReportHtmlRunIdRef.current !== runId) return;
+      setCopyReportHtmlFeedback('failed');
+      setError(e instanceof Error ? e.message : 'Could not copy the rich report.');
+      const hold = motionDuration(2800);
+      copyReportHtmlFeedbackTimerRef.current = window.setTimeout(() => {
+        if (copyReportHtmlRunIdRef.current !== runId) return;
+        setCopyReportHtmlFeedback('idle');
+        copyReportHtmlFeedbackTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (copyReportHtmlRunIdRef.current === runId) {
+        copyReportHtmlInFlightRef.current = false;
+        setCopyingReportHtml(false);
+      }
+    }
+  }, [parsedAnswer, plainAnswerText, result, task]);
+
   /**
    * Publish a completed report as a public link and copy it to the
    * clipboard. The backend is idempotent, so repeat clicks return the same
@@ -2885,8 +2955,8 @@ export function AgentPage() {
   }, [result?.task_id, result?.share_url]);
 
   // Keyboard-first exports for a completed Agent result: Shift+C / Shift+D /
-  // Shift+I / Shift+J / Shift+K / Shift+L / Shift+O / Shift+P mirror the result
-  // toolbar buttons.
+  // Shift+E / Shift+I / Shift+J / Shift+K / Shift+L / Shift+O / Shift+P mirror
+  // the result toolbar buttons.
   // Form controls are skipped so normal Shift+letter typing is never swallowed.
   useEffect(() => {
     if (result?.status !== 'complete' || !result?.task_id || isRunning) return;
@@ -2913,6 +2983,9 @@ export function AgentPage() {
       } else if (isAgentDownloadReportCsvKey(e)) {
         e.preventDefault();
         void handleExportTaskCsv();
+      } else if (isAgentCopyReportHtmlKey(e)) {
+        e.preventDefault();
+        void handleCopyTaskHtml();
       } else if (isAgentCopyReportKey(e)) {
         e.preventDefault();
         void handleCopyTaskMarkdown();
@@ -2932,6 +3005,7 @@ export function AgentPage() {
     handleCopyTaskMarkdown,
     handleCopyTaskJson,
     handleCopyTaskCsv,
+    handleCopyTaskHtml,
     handleExportTaskJson,
     handleExportTaskMarkdown,
     handleExportTaskHtml,
@@ -3387,6 +3461,11 @@ export function AgentPage() {
       copyReportCsvInFlightRef.current = false;
       if (copyReportCsvFeedbackTimerRef.current != null) {
         window.clearTimeout(copyReportCsvFeedbackTimerRef.current);
+      }
+      copyReportHtmlRunIdRef.current += 1;
+      copyReportHtmlInFlightRef.current = false;
+      if (copyReportHtmlFeedbackTimerRef.current != null) {
+        window.clearTimeout(copyReportHtmlFeedbackTimerRef.current);
       }
       taskShareInFlightRef.current = false;
       if (taskShareFeedbackTimerRef.current != null) {
@@ -11790,6 +11869,27 @@ export function AgentPage() {
                         onClick={handleExportTaskHtml}
                       >
                         {exportingHtml ? 'Exporting…' : 'Report .html'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={copyingReportHtml ? undefined : Icons.copy(14)}
+                        loading={copyingReportHtml}
+                        disabled={copyingReportHtml || result.status !== 'complete'}
+                        title="Copy the full research report as rich HTML (Shift+E)"
+                        aria-keyshortcuts="Shift+E"
+                        onClick={() => void handleCopyTaskHtml()}
+                      >
+                        {copyingReportHtml
+                          ? 'Copying…'
+                          : copyReportHtmlFeedback === 'copied'
+                            ? 'HTML copied'
+                            : copyReportHtmlFeedback === 'failed'
+                              ? 'Copy failed'
+                              : 'Copy .html'}
                       </Button>
                     ) : null}
                     {result.task_id ? (
