@@ -166,6 +166,7 @@ import {
   formatAgentHistoryJsonl,
 } from '../lib/agentHistoryExport';
 import { copyAgentHistoryCsv } from '../lib/agentHistoryCsvClipboard';
+import { copyAgentHistoryHtml } from '../lib/agentHistoryHtmlClipboard';
 import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
 import { copyAgentHistoryJsonl } from '../lib/agentHistoryJsonlClipboard';
 import {
@@ -947,6 +948,9 @@ export function AgentPage() {
     useState<'idle' | 'done' | 'failed'>('idle');
   const [historyJsonCopyStatus, setHistoryJsonCopyStatus] =
     useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
+  const [historyHtmlCopyStatus, setHistoryHtmlCopyStatus] = useState<
+    'idle' | 'copying' | 'copied' | 'failed'
+  >('idle');
   const [historyJsonlDownloadStatus, setHistoryJsonlDownloadStatus] = useState<
     'idle' | 'busy' | 'done' | 'failed'
   >('idle');
@@ -991,9 +995,13 @@ export function AgentPage() {
   const historyCsvCopyRunIdRef = useRef(0);
   const historyJsonDownloadTimerRef = useRef<number | null>(null);
   const historyJsonCopyTimerRef = useRef<number | null>(null);
+  const historyHtmlCopyTimerRef = useRef<number | null>(null);
   /** Prevent duplicate JSON clipboard writes and stale feedback after reset. */
   const historyJsonCopyInFlightRef = useRef(false);
   const historyJsonCopyRunIdRef = useRef(0);
+  /** Prevent duplicate rich-HTML clipboard writes and stale feedback. */
+  const historyHtmlCopyInFlightRef = useRef(false);
+  const historyHtmlCopyRunIdRef = useRef(0);
   const historyJsonlDownloadTimerRef = useRef<number | null>(null);
   const historyFilteredJsonlDownloadTimerRef = useRef<number | null>(null);
   const historySelectedJsonlDownloadTimerRef = useRef<number | null>(null);
@@ -2480,6 +2488,13 @@ export function AgentPage() {
       historyJsonCopyTimerRef.current = null;
     }
     setHistoryJsonCopyStatus('idle');
+    historyHtmlCopyRunIdRef.current += 1;
+    historyHtmlCopyInFlightRef.current = false;
+    if (historyHtmlCopyTimerRef.current != null) {
+      window.clearTimeout(historyHtmlCopyTimerRef.current);
+      historyHtmlCopyTimerRef.current = null;
+    }
+    setHistoryHtmlCopyStatus('idle');
     historyJsonlCopyRunIdRef.current += 1;
     historyJsonlCopyInFlightRef.current = false;
     if (historyJsonlCopyTimerRef.current != null) {
@@ -3413,6 +3428,10 @@ export function AgentPage() {
         window.clearTimeout(historyJsonCopyTimerRef.current);
         historyJsonCopyTimerRef.current = null;
       }
+      if (historyHtmlCopyTimerRef.current != null) {
+        window.clearTimeout(historyHtmlCopyTimerRef.current);
+        historyHtmlCopyTimerRef.current = null;
+      }
       if (historyJsonlDownloadTimerRef.current != null) {
         window.clearTimeout(historyJsonlDownloadTimerRef.current);
       }
@@ -3469,6 +3488,8 @@ export function AgentPage() {
       historyJsonlCopyInFlightRef.current = false;
       historyJsonCopyRunIdRef.current += 1;
       historyJsonCopyInFlightRef.current = false;
+      historyHtmlCopyRunIdRef.current += 1;
+      historyHtmlCopyInFlightRef.current = false;
       if (roomsCopyTimerRef.current != null) {
         window.clearTimeout(roomsCopyTimerRef.current);
       }
@@ -3739,6 +3760,51 @@ export function AgentPage() {
       setHistoryHtmlDownloadStatus('idle');
       historyHtmlDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
+  };
+
+  const copyFilteredHistoryHtml = async () => {
+    // Keep a synchronous ref guard as well as the visual busy state: two
+    // pointer or keyboard activations can arrive before React commits the
+    // first update.
+    if (historyHtmlCopyInFlightRef.current) return;
+    const runId = ++historyHtmlCopyRunIdRef.current;
+    historyHtmlCopyInFlightRef.current = true;
+    if (historyHtmlCopyTimerRef.current != null) {
+      window.clearTimeout(historyHtmlCopyTimerRef.current);
+      historyHtmlCopyTimerRef.current = null;
+    }
+    setHistoryHtmlCopyStatus('copying');
+
+    try {
+      let ok = false;
+      try {
+        ok = await copyAgentHistoryHtml({
+          items: filteredTaskHistory.map(toHistoryExportItem),
+          totalCount: taskHistory.length,
+          filterNote: buildHistoryFilterNote(),
+        });
+      } catch {
+        // Keep the page safe if a future clipboard adapter regresses its
+        // boolean refusal contract.
+        ok = false;
+      }
+      if (historyHtmlCopyRunIdRef.current !== runId) return;
+
+      setHistoryHtmlCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setToastMessage('Could not copy history HTML — try again.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      historyHtmlCopyTimerRef.current = window.setTimeout(() => {
+        if (historyHtmlCopyRunIdRef.current !== runId) return;
+        setHistoryHtmlCopyStatus('idle');
+        historyHtmlCopyTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (historyHtmlCopyRunIdRef.current === runId) {
+        historyHtmlCopyInFlightRef.current = false;
+      }
+    }
   };
 
   const downloadFilteredHistoryCsv = () => {
@@ -7108,6 +7174,49 @@ export function AgentPage() {
                       : historyHtmlDownloadStatus === 'failed'
                         ? 'Failed'
                         : 'HTML'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyFilteredHistoryHtml()}
+                    title="Copy the current history view as rich HTML"
+                    disabled={historyHtmlCopyStatus === 'copying'}
+                    aria-busy={historyHtmlCopyStatus === 'copying'}
+                    aria-label={
+                      historyHtmlCopyStatus === 'copying'
+                        ? 'Copying research history as HTML'
+                        : historyHtmlCopyStatus === 'copied'
+                          ? 'History HTML copied'
+                          : historyHtmlCopyStatus === 'failed'
+                            ? 'History HTML copy failed'
+                            : 'Copy research history as HTML'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyHtmlCopyStatus === 'failed'
+                          ? '#D85A30'
+                          : historyHtmlCopyStatus === 'copied'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor: historyHtmlCopyStatus === 'copying' ? 'wait' : 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                      opacity: historyHtmlCopyStatus === 'copying' ? 0.65 : 1,
+                    }}
+                  >
+                    {historyHtmlCopyStatus === 'copying'
+                      ? 'Copying…'
+                      : historyHtmlCopyStatus === 'copied'
+                        ? 'Copied'
+                        : historyHtmlCopyStatus === 'failed'
+                          ? 'Failed'
+                          : 'Copy HTML'}
                   </button>
                   <button
                     type="button"

@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current tab immediately, keeping stale rows and local pins from lingering
 
 ### Added
+- Agent research history can now copy the current filtered view as rich HTML,
+  with a Markdown fallback for text-only destinations such as Docs and Notion
 - Agent research history can now download the current filtered view as a
   standalone HTML archive for offline reading and printing
 - Completed Agent research reports can now be copied as rich HTML, with a
