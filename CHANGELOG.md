@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Filtered Agent history rich-HTML copy now keeps its Markdown fallback
+  usable when a refreshed API row contains malformed scalar data
 - Selected Agent history HTML exports now skip malformed retained rows and
   stale selection ids, so one bad refresh record cannot discard an otherwise
   valid offline archive

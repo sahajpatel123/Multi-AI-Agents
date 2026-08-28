@@ -29,6 +29,44 @@ function displayTitle(item: AgentHistoryExportItem): string {
   return 'Untitled research';
 }
 
+function historyTopics(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((topic): topic is string => typeof topic === 'string')
+    .map((topic) => topic.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Normalize remote history rows before rendering or copying them.
+ *
+ * History is remote data at runtime even though the TypeScript contract is
+ * narrower. Keeping this boundary tolerant means one null row or malformed
+ * scalar cannot make the rich HTML copy's Markdown fallback refuse the whole
+ * view.
+ */
+function normalizeAgentHistoryItem(value: unknown): AgentHistoryExportItem {
+  if (!value || typeof value !== 'object') return {};
+  const source = value as Record<string, unknown>;
+  return {
+    title: historyText(source.title),
+    question: historyText(source.question),
+    score:
+      typeof source.score === 'number' && Number.isFinite(source.score) ? source.score : null,
+    confidence:
+      typeof source.confidence === 'number' && Number.isFinite(source.confidence)
+        ? source.confidence
+        : null,
+    createdAt: historyText(source.createdAt),
+    topics: historyTopics(source.topics),
+    isLive: source.isLive === true,
+    taskId: historyText(source.taskId),
+    userFeedback: historyText(source.userFeedback),
+    orchestrationId: historyText(source.orchestrationId),
+    watchlistItemId: historyText(source.watchlistItemId),
+  };
+}
+
 const MARKDOWN_ESCAPE_PATTERN = /([\\`*_{}[\]()#+!>|~<\-=])/g;
 
 /**
@@ -54,8 +92,9 @@ export function formatAgentHistoryExport(opts: {
 }): string {
   const lines: string[] = ['# Agent research history', ''];
 
-  const total = opts.totalCount;
-  const items = opts.items || [];
+  const total = opts?.totalCount;
+  const rawItems: unknown[] = Array.isArray(opts?.items) ? opts.items : [];
+  const items = rawItems.map(normalizeAgentHistoryItem);
   if (typeof total === 'number' && Number.isFinite(total) && total > 0) {
     lines.push(
       items.length === total
@@ -65,7 +104,7 @@ export function formatAgentHistoryExport(opts: {
     lines.push('');
   }
 
-  const filterNote = (opts.filterNote || '').trim();
+  const filterNote = historyText(opts?.filterNote);
   if (filterNote) {
     lines.push(`_Filtered view: ${escapeMarkdown(filterNote)}_`);
     lines.push('');
@@ -78,7 +117,7 @@ export function formatAgentHistoryExport(opts: {
       const title = displayTitle(item);
       lines.push(`## ${i + 1}. ${escapeMarkdown(title)}`);
       lines.push('');
-      const q = (item.question || '').trim();
+      const q = historyText(item.question);
       if (q && q !== title) {
         lines.push(`**Question:** ${escapeMarkdown(q)}`);
         lines.push('');
@@ -99,11 +138,11 @@ export function formatAgentHistoryExport(opts: {
       if (meta.length > 0) {
         lines.push(`- ${meta.join(' · ')}`);
       }
-      const topics = (item.topics || []).map((t) => (t || '').trim()).filter(Boolean);
+      const topics = historyTopics(item.topics);
       if (topics.length > 0) {
         lines.push(`- **Topics:** ${escapeMarkdown(topics.join(', '))}`);
       }
-      const taskId = (item.taskId || '').trim();
+      const taskId = historyText(item.taskId);
       if (taskId) {
         lines.push(`- _Task \`${markdownCodeText(taskId)}\`_`);
       }
@@ -339,43 +378,6 @@ function htmlConfidence(value: number): string {
   return `${Math.round(Math.min(100, Math.max(0, normalized)))}%`;
 }
 
-function historyHtmlTopics(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((topic): topic is string => typeof topic === 'string')
-    .map((topic) => topic.trim())
-    .filter(Boolean);
-}
-
-/**
- * Normalize remote history rows before rendering them into HTML.
- *
- * The API normally returns objects matching AgentHistoryExportItem, but this
- * formatter is also used at a browser trust boundary. A null row or a scalar
- * field should produce a readable placeholder, not abort the whole download.
- */
-function normalizeAgentHistoryHtmlItem(value: unknown): AgentHistoryExportItem {
-  if (!value || typeof value !== 'object') return {};
-  const source = value as Record<string, unknown>;
-  return {
-    title: historyText(source.title),
-    question: historyText(source.question),
-    score:
-      typeof source.score === 'number' && Number.isFinite(source.score) ? source.score : null,
-    confidence:
-      typeof source.confidence === 'number' && Number.isFinite(source.confidence)
-        ? source.confidence
-        : null,
-    createdAt: historyText(source.createdAt),
-    topics: historyHtmlTopics(source.topics),
-    isLive: source.isLive === true,
-    taskId: historyText(source.taskId),
-    userFeedback: historyText(source.userFeedback),
-    orchestrationId: historyText(source.orchestrationId),
-    watchlistItemId: historyText(source.watchlistItemId),
-  };
-}
-
 function historyHtmlMeta(item: AgentHistoryExportItem): string[] {
   const meta: string[] = [];
   if (typeof item.score === 'number' && Number.isFinite(item.score)) {
@@ -402,7 +404,7 @@ export function formatAgentHistoryHtml(opts: {
   exportedAt?: string;
 }): string {
   const rawItems: unknown[] = Array.isArray(opts?.items) ? opts.items : [];
-  const items = rawItems.map(normalizeAgentHistoryHtmlItem);
+  const items = rawItems.map(normalizeAgentHistoryItem);
   const requestedTotal =
     typeof opts?.totalCount === 'number' && Number.isFinite(opts.totalCount)
       ? Math.max(0, Math.round(opts.totalCount))
@@ -421,7 +423,7 @@ export function formatAgentHistoryHtml(opts: {
     .map((item, index) => {
       const title = displayTitle(item);
       const question = historyText(item.question);
-      const topics = historyHtmlTopics(item.topics);
+      const topics = historyTopics(item.topics);
       const meta = historyHtmlMeta(item);
       const taskId = historyText(item.taskId);
       const questionBlock =

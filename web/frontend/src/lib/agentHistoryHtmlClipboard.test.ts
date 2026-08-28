@@ -49,6 +49,30 @@ describe('copyAgentHistoryHtml', () => {
     expect(plainText).toContain('_No research tasks in this view._');
   });
 
+  it('keeps the plain-text fallback usable when a history row is malformed', async () => {
+    vi.mocked(copyHtmlToClipboard).mockResolvedValueOnce(true);
+
+    await expect(
+      copyAgentHistoryHtml({
+        items: [
+          null as unknown as { taskId: string },
+          {
+            title: { unexpected: true } as unknown as string,
+            question: 'A readable fallback row',
+            topics: 'not-an-array' as unknown as string[],
+            taskId: 42 as unknown as string,
+          },
+        ],
+      }),
+    ).resolves.toBe(true);
+
+    const [html, plainText] = vi.mocked(copyHtmlToClipboard).mock.calls[0];
+    expect(html).toContain('A readable fallback row');
+    expect(html).toContain('Untitled research');
+    expect(plainText).toContain('A readable fallback row');
+    expect(plainText).toContain('Untitled research');
+  });
+
   it('converts an unexpected clipboard exception into a refusal', async () => {
     vi.mocked(copyHtmlToClipboard).mockRejectedValueOnce(new Error('clipboard unavailable'));
 
