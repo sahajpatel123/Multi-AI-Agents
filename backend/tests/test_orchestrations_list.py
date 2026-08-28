@@ -169,7 +169,7 @@ async def test_export_single_orchestration_markdown(
         db_session,
         user.id,
         "orch-single-md",
-        status="running",
+        status="complete",
         task_ids=["task-a", "task-b"],
     )
     orch.synthesis = "Safe **Markdown**\n\n<script>alert('unsafe')</script>"
@@ -190,13 +190,41 @@ async def test_export_single_orchestration_markdown(
     assert 'filename="arena-orchestration-orch-sin.md"' in res.headers["content-disposition"]
     assert "# Arena orchestration report" in res.text
     assert "## Orchestration orch-single-md" in res.text
-    assert "**Status:** running" in res.text
+    assert "**Status:** complete" in res.text
     assert "Safe **Markdown**" in res.text
     assert "### Supporting points" in res.text
     assert "### Conflicts" in res.text
     assert "Different assumptions" in res.text
     assert "<script>" not in res.text
     assert "&lt;script&gt;alert('unsafe')&lt;/script&gt;" in res.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["running", "failed", "cancelled"])
+async def test_export_single_orchestration_markdown_rejects_incomplete_run(
+    app_client, make_user, db_session, status
+):
+    user = _make_pro(make_user)
+    orchestration_id = f"orch-{status}-md"
+    _seed_orchestration(
+        db_session,
+        user.id,
+        orchestration_id,
+        status=status,
+        task_ids=["task-a"],
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/orchestrate/{orchestration_id}/export.md",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == {
+        "error": "feature_not_allowed",
+        "message": "Orchestration is not complete yet",
+    }
 
 
 @pytest.mark.asyncio

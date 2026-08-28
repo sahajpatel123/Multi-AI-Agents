@@ -2292,6 +2292,14 @@ async def export_orchestration_markdown(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Orchestration not found"},
         )
+    if orch.status != "complete":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": ErrorCodes.FEATURE_NOT_ALLOWED,
+                "message": "Orchestration is not complete yet",
+            },
+        )
 
     bullets = _json_column_value(orch.synthesis_bullets)
     conflicts = _json_column_value(orch.conflicts)
