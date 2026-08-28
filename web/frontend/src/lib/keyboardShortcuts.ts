@@ -51,6 +51,7 @@ const AGENT: ShortcutHint[] = [
   { keys: 'Shift + D', action: 'Download the answer as a markdown file' },
   { keys: 'Shift + J', action: 'Download the full report as JSON' },
   { keys: 'Shift + L', action: 'Download the full research report as markdown' },
+  { keys: 'Shift + H', action: 'Download the full research report as standalone HTML' },
   { keys: 'Shift + K', action: 'Download the full research report as CSV' },
   { keys: 'Shift + I', action: 'Copy the full research report as CSV' },
   { keys: 'Shift + O', action: 'Copy the full research report as JSON' },
@@ -228,6 +229,7 @@ function isBareShiftLetterKey(
     | 'w'
     | 'g'
     | 'l'
+    | 'h'
     | 'f',
 ): boolean {
   if (event.repeat) return false;
@@ -400,6 +402,11 @@ export function isAgentDownloadJsonKey(event: ShortcutKeyEvent): boolean {
 /** Shift+L — download the full Agent research report as a markdown file. */
 export function isAgentDownloadReportMarkdownKey(event: ShortcutKeyEvent): boolean {
   return isBareShiftLetterKey(event, 'l');
+}
+
+/** Shift+H — download the full Agent research report as a standalone HTML file. */
+export function isAgentDownloadReportHtmlKey(event: ShortcutKeyEvent): boolean {
+  return isBareShiftLetterKey(event, 'h');
 }
 
 /** Shift+K — download the full Agent research report as a CSV file. */

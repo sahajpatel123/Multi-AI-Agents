@@ -27,6 +27,7 @@ import {
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
   isAgentDownloadReportCsvKey,
+  isAgentDownloadReportHtmlKey,
   isAgentDownloadReportMarkdownKey,
   isAgentNewTaskKey,
   isBareQuestionHelpKey,
@@ -224,6 +225,11 @@ describe('keyboardShortcuts', () => {
     expect(
       shortcutsForSurface('agent').some(
         (s) => s.keys === 'Shift + L' && s.action.toLowerCase().includes('markdown'),
+      ),
+    ).toBe(true);
+    expect(
+      shortcutsForSurface('agent').some(
+        (s) => s.keys === 'Shift + H' && s.action.toLowerCase().includes('html'),
       ),
     ).toBe(true);
     expect(
@@ -558,6 +564,13 @@ describe('keyboardShortcuts', () => {
     expect(isAgentDownloadReportMarkdownKey({ key: 'L' })).toBe(false);
     expect(isAgentDownloadReportMarkdownKey({ key: 'L', shiftKey: true, ctrlKey: true })).toBe(false);
     expect(isAgentDownloadReportMarkdownKey({ key: 'J', shiftKey: true })).toBe(false);
+
+    expect(isAgentDownloadReportHtmlKey({ key: 'H', shiftKey: true })).toBe(true);
+    expect(isAgentDownloadReportHtmlKey({ key: 'h', shiftKey: true })).toBe(true);
+    expect(isAgentDownloadReportHtmlKey({ key: 'H' })).toBe(false);
+    expect(isAgentDownloadReportHtmlKey({ key: 'H', shiftKey: true, metaKey: true })).toBe(false);
+    expect(isAgentDownloadReportHtmlKey({ key: 'H', shiftKey: true, repeat: true })).toBe(false);
+    expect(isAgentDownloadReportHtmlKey({ key: 'L', shiftKey: true })).toBe(false);
 
     expect(isAgentDownloadReportCsvKey({ key: 'K', shiftKey: true })).toBe(true);
     expect(isAgentDownloadReportCsvKey({ key: 'k', shiftKey: true })).toBe(true);

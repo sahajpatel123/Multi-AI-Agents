@@ -100,6 +100,7 @@ import {
   isAgentDownloadAnswerKey,
   isAgentDownloadJsonKey,
   isAgentDownloadReportCsvKey,
+  isAgentDownloadReportHtmlKey,
   isAgentDownloadReportMarkdownKey,
   isAgentNewTaskKey,
 } from '../lib/keyboardShortcuts';
@@ -144,11 +145,13 @@ import {
 import { copyCsvToClipboard, copyToClipboard } from '../lib/clipboard';
 import {
   downloadBlobFile,
+  downloadHtmlFile,
   downloadMarkdownFile,
   downloadTextFile,
   withDownloadDate,
 } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
+import { formatAgentReportHtml } from '../lib/agentReportHtml';
 import {
   formatAgentHistoryCsv,
   formatAgentHistoryExport,
@@ -544,6 +547,27 @@ function parseSynthesisFromFinalAnswer(finalAnswer: string | undefined): ParsedS
   } catch {
     return null;
   }
+}
+
+/** Source labels used by the offline HTML report without exposing raw payloads. */
+function sourceTitlesForReport(result: AgentResult | null): string[] {
+  const rawSources = result?.source_integrity?.sources;
+  if (Array.isArray(rawSources) && rawSources.length > 0) {
+    return rawSources.map((item, index) => {
+      const source = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+      const title =
+        (typeof source.title === 'string' && source.title) ||
+        (typeof source.name === 'string' && source.name) ||
+        (typeof source.url === 'string' && source.url) ||
+        `Source ${index + 1}`;
+      return title.trim() || `Source ${index + 1}`;
+    });
+  }
+
+  return (parseSynthesisFromFinalAnswer(result?.final_answer)?.sources_referenced || [])
+    .filter((source): source is string => typeof source === 'string')
+    .map((source) => source.trim())
+    .filter(Boolean);
 }
 
 const CALIBRATION_LEVEL_TITLES: Record<number, string> = {
@@ -1071,12 +1095,15 @@ export function AgentPage() {
   const [exportingMd, setExportingMd] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingJson, setExportingJson] = useState(false);
+  const [exportingHtml, setExportingHtml] = useState(false);
   /** Guards Shift+L / toolbar clicks so a report download can never double-fire. */
   const exportMdInFlightRef = useRef(false);
   const exportReportRunIdRef = useRef(0);
   /** Guards Shift+K / toolbar clicks so a report CSV download can never double-fire. */
   const exportCsvInFlightRef = useRef(false);
   const exportCsvRunIdRef = useRef(0);
+  /** Guards the synchronous HTML download against rapid repeat activation. */
+  const exportHtmlInFlightRef = useRef(false);
   const [multiMode, setMultiMode] = useState(false);
   const [multiTasks, setMultiTasks] = useState(['', '', '', '']);
   const [activeTaskCount, setActiveTaskCount] = useState(2);
@@ -2096,6 +2123,32 @@ export function AgentPage() {
     }
   };
 
+  const handleExportTaskHtml = useCallback(() => {
+    if (!result?.task_id || result.status !== 'complete' || exportHtmlInFlightRef.current) return;
+    const taskId = result.task_id;
+    exportHtmlInFlightRef.current = true;
+    setExportingHtml(true);
+    try {
+      const question = result.original_task || result.task || task || '';
+      const parsed = parseSynthesisFromFinalAnswer(result.final_answer);
+      const html = formatAgentReportHtml({
+        title: question,
+        question,
+        answer: plainTextFromFinalAnswer(result.final_answer, parsed),
+        sources: sourceTitlesForReport(result),
+        finalScore: result.final_score,
+        finalConfidence: result.final_confidence,
+      });
+      const ok = downloadHtmlFile(html, `arena-report-${taskId.slice(0, 8)}`);
+      if (!ok) setError('Could not download the HTML report — try Report .md instead.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not download the HTML report.');
+    } finally {
+      exportHtmlInFlightRef.current = false;
+      setExportingHtml(false);
+    }
+  }, [result, task]);
+
   const handleCrossPollinate = async () => {
     if (!result?.task_id || isRunning || isRefining || crossPollinateBusy) return;
     const taskId = result.task_id;
@@ -2367,10 +2420,12 @@ export function AgentPage() {
     setExportingMd(false);
     setExportingJson(false);
     setExportingCsv(false);
+    setExportingHtml(false);
     exportReportRunIdRef.current += 1;
     exportMdInFlightRef.current = false;
     exportCsvRunIdRef.current += 1;
     exportCsvInFlightRef.current = false;
+    exportHtmlInFlightRef.current = false;
     setCopyAnswerFeedback('idle');
     setDownloadAnswerFeedback('idle');
     copyReportRunIdRef.current += 1;
@@ -2868,6 +2923,9 @@ export function AgentPage() {
       } else if (isAgentDownloadReportMarkdownKey(e)) {
         e.preventDefault();
         void handleExportTaskMarkdown();
+      } else if (isAgentDownloadReportHtmlKey(e)) {
+        e.preventDefault();
+        handleExportTaskHtml();
       } else if (isAgentDownloadReportCsvKey(e)) {
         e.preventDefault();
         void handleExportTaskCsv();
@@ -2892,6 +2950,7 @@ export function AgentPage() {
     handleCopyTaskCsv,
     handleExportTaskJson,
     handleExportTaskMarkdown,
+    handleExportTaskHtml,
     handleExportTaskCsv,
     isRunning,
     result?.status,
@@ -11732,6 +11791,21 @@ export function AgentPage() {
                         onClick={() => void handleExportTaskPdf()}
                       >
                         {exportingPdf ? 'Exporting…' : 'Export PDF'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={exportingHtml ? undefined : Icons.download(14)}
+                        loading={exportingHtml}
+                        disabled={exportingHtml || result.status !== 'complete'}
+                        title="Download the full research report as standalone HTML (Shift+H)"
+                        aria-keyshortcuts="Shift+H"
+                        onClick={handleExportTaskHtml}
+                      >
+                        {exportingHtml ? 'Exporting…' : 'Report .html'}
                       </Button>
                     ) : null}
                     {result.task_id ? (

@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current tab immediately, keeping stale rows and local pins from lingering
 
 ### Added
+- Completed Agent research reports can now be downloaded as standalone HTML,
+  preserving the question, answer, score, confidence, and source list for
+  offline reading and printing
 - Agent research history can now copy exactly the selected tasks as JSONL,
   including selections hidden by filters, for direct handoff to terminals,
   notebooks, and import tools
