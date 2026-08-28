@@ -1,4 +1,5 @@
 import { copyAgentHistoryJson } from './agentHistoryJsonClipboard';
+import { copyAgentHistoryMarkdown } from './agentHistoryMarkdownClipboard';
 import {
   selectAgentHistoryItems,
   type SelectableAgentHistoryItem,
@@ -33,6 +34,35 @@ export async function copySelectedAgentHistoryJson<
   } catch {
     // Keep this boundary total if a future clipboard adapter changes its
     // refusal contract or throws before returning a boolean.
+    return false;
+  }
+}
+
+/**
+ * Copy exactly the retained Agent history rows selected by the user as
+ * Markdown. Resolve ids before formatting so stale selections cannot copy a
+ * filtered view or produce duplicate records.
+ */
+export async function copySelectedAgentHistoryMarkdown<
+  T extends SelectableAgentHistoryItem,
+>(
+  items: readonly T[],
+  selectedTaskIds: readonly string[],
+  toExportItem: (item: T) => AgentHistoryExportItem,
+): Promise<boolean> {
+  try {
+    // Keep selection resolution inside the same total boundary as
+    // serialization. API-shaped rows can be malformed at runtime, and a
+    // clipboard action should refuse safely rather than escape its click
+    // handler.
+    const selected = selectAgentHistoryItems(items, selectedTaskIds);
+    if (selected.length === 0) return false;
+
+    return await copyAgentHistoryMarkdown({
+      items: selected.map(toExportItem),
+      totalCount: selected.length,
+    });
+  } catch {
     return false;
   }
 }
