@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current tab immediately, keeping stale rows and local pins from lingering
 
 ### Added
+- Orchestration history can now be downloaded as a readable Markdown report,
+  preserving syntheses, supporting points, conflicts, and status filters
 - Orchestration history can now be downloaded as structured JSON, preserving
   full syntheses, bullets, conflicts, and validated status filters
 - Completed orchestration runs can now be downloaded together as a dated,

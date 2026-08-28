@@ -73,6 +73,7 @@ from arena.core.agent_metrics import (
 )
 from arena.core.report_generator import (
     generate_orchestration_report_html,
+    generate_orchestration_history_markdown,
     generate_report_csv,
     generate_report_html,
     generate_report_markdown,
@@ -2462,6 +2463,70 @@ async def export_orchestrations_json(
     return Response(
         content=json.dumps(items, indent=2, ensure_ascii=False, default=str) + "\n",
         media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get("/orchestrations/export.md")
+async def export_orchestrations_markdown(
+    status: OrchestrationStatus | None = Query(
+        None,
+        description="Filter by status: 'running', 'complete', 'failed', or 'cancelled'",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Markdown export of orchestration history for sharing and review.
+
+    The export mirrors the JSON payload's complete synthesis details while
+    presenting them as a compact, readable document for notes, Docs, and
+    Markdown-aware tools. It remains scoped to the caller and supports the
+    same validated status filter as the list and other export endpoints.
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_md",
+        limit=30,
+        window_seconds=60,
+        message="Too many Markdown exports. Please wait.",
+    )
+
+    query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
+    if status:
+        query = query.filter(Orchestration.status == status)
+
+    orchestrations = query.order_by(Orchestration.created_at.desc()).all()
+    items = []
+    for orch in orchestrations:
+        task_ids = list(orch.task_ids or [])
+        bullets = _json_column_value(orch.synthesis_bullets)
+        conflicts = _json_column_value(orch.conflicts)
+        items.append(
+            {
+                "id": orch.id,
+                "status": orch.status,
+                "created_at": orch.created_at.isoformat() if orch.created_at else None,
+                "task_ids": task_ids,
+                "synthesis": orch.synthesis or "",
+                "synthesis_bullets": bullets if isinstance(bullets, list) else [],
+                "conflicts": conflicts if isinstance(conflicts, list) else [],
+            }
+        )
+
+    body = generate_orchestration_history_markdown(
+        items, generated_at=utcnow_naive().isoformat()
+    )
+    filename = f"arena-orchestrations-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.md"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=body,
+        media_type="text/markdown; charset=utf-8",
         headers=headers,
     )
 

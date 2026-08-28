@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { exportAgentOrchestrationsCsv, exportAgentOrchestrationsJson } from './api';
+import {
+  exportAgentOrchestrationsCsv,
+  exportAgentOrchestrationsJson,
+  exportAgentOrchestrationsMarkdown,
+} from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -136,6 +140,70 @@ describe('Agent orchestration history JSON export frontend API helper', () => {
     await expect(exportAgentOrchestrationsJson()).rejects.toMatchObject({
       status: 429,
       message: 'Too many JSON exports (Request ID: req-orchestration-json)',
+    });
+  });
+});
+
+describe('Agent orchestration history Markdown export frontend API helper', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('fetches readable orchestration history and returns a non-empty blob', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('# Arena orchestration history\n', {
+        status: 200,
+        headers: { 'content-type': 'text/markdown; charset=utf-8' },
+      }),
+    );
+
+    const blob = await exportAgentOrchestrationsMarkdown();
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/orchestrations/export.md',
+      {},
+    );
+    expect(blob.size).toBeGreaterThan(0);
+    expect(blob.type).toBe('text/markdown;charset=utf-8');
+  });
+
+  it('encodes an optional orchestration status filter', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('# Arena orchestration history\n', { status: 200 }),
+    );
+
+    await exportAgentOrchestrationsMarkdown('failed');
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/orchestrations/export.md?status=failed',
+      {},
+    );
+  });
+
+  it('rejects an empty successful response', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('', { status: 200 }),
+    );
+
+    await expect(exportAgentOrchestrationsMarkdown()).rejects.toThrow(
+      'Empty orchestration history Markdown returned by the server',
+    );
+  });
+
+  it('surfaces request IDs when the Markdown export is rate limited', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ detail: { message: 'Too many Markdown exports' } }),
+        {
+          status: 429,
+          headers: { 'x-request-id': 'req-orchestration-md' },
+        },
+      ),
+    );
+
+    await expect(exportAgentOrchestrationsMarkdown()).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many Markdown exports (Request ID: req-orchestration-md)',
     });
   });
 });

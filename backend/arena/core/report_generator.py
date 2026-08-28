@@ -1019,6 +1019,80 @@ def generate_report_markdown(
     return "\n".join(lines)
 
 
+def generate_orchestration_history_markdown(
+    items: list[dict[str, Any]], generated_at: str = ""
+) -> str:
+    """Render a portable Markdown export of orchestration history.
+
+    The history export intentionally stays at orchestration level rather than
+    expanding every child task. This keeps the download compact while
+    retaining the unified synthesis, its supporting bullets, and recorded
+    conflicts that are otherwise only available in the JSON export.
+    """
+    lines = [
+        "# Arena orchestration history",
+        "",
+        "> Multi-task research runs exported from Arena.",
+        "",
+    ]
+    if generated_at:
+        lines.extend([f"_Exported {_md_inline(generated_at)} UTC_", ""])
+
+    if not items:
+        lines.extend(["_No orchestrations found._", ""])
+        return "\n".join(lines)
+
+    lines.extend([f"{len(items)} orchestration(s)", ""])
+    for index, item in enumerate(items, 1):
+        orchestration_id = str(item.get("id") or "Unknown orchestration")
+        status = str(item.get("status") or "unknown")
+        created_at = str(item.get("created_at") or "")
+        task_ids = item.get("task_ids")
+        task_ids = task_ids if isinstance(task_ids, list) else []
+
+        lines.append(f"## {index}. {_md_inline(orchestration_id)}")
+        lines.append("")
+        lines.append(f"- **Status:** {_md_inline(status)}")
+        if created_at:
+            lines.append(f"- **Created:** {_md_inline(created_at)}")
+        lines.append(f"- **Tasks:** {len(task_ids)}")
+        if task_ids:
+            for task_id in task_ids:
+                lines.append(f"  - {_md_inline(task_id)}")
+        lines.append("")
+
+        lines.append("### Synthesis")
+        lines.append("")
+        synthesis = str(item.get("synthesis") or "").strip()
+        lines.append(synthesis or "_No synthesis recorded._")
+        lines.append("")
+
+        bullets = item.get("synthesis_bullets")
+        bullets = bullets if isinstance(bullets, list) else []
+        clean_bullets = [str(b).strip() for b in bullets if str(b).strip()]
+        if clean_bullets:
+            lines.extend(["### Supporting points", ""])
+            lines.extend(f"- {_md_inline(bullet)}" for bullet in clean_bullets)
+            lines.append("")
+
+        conflicts = item.get("conflicts")
+        conflicts = conflicts if isinstance(conflicts, list) else []
+        clean_conflicts = [conflict for conflict in conflicts if isinstance(conflict, dict)]
+        if clean_conflicts:
+            lines.extend(["### Conflicts", ""])
+            for conflict in clean_conflicts:
+                task_a = _md_inline(conflict.get("task_a") or "?")
+                task_b = _md_inline(conflict.get("task_b") or "?")
+                text = _md_inline(conflict.get("conflict") or "")
+                lines.append(f"- **Task {task_a} vs Task {task_b}:** {text}")
+            lines.append("")
+
+        if index < len(items):
+            lines.extend(["---", ""])
+
+    return "\n".join(lines)
+
+
 def generate_synthesis_section_html(
     synthesis: str,
     bullets: list[str],

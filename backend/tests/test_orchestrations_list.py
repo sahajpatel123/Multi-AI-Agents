@@ -365,3 +365,80 @@ async def test_export_orchestrations_json_empty_is_valid_array(
     assert res.status_code == 200
     assert res.json() == []
     assert res.text.endswith("\n")
+
+
+@pytest.mark.asyncio
+async def test_export_orchestrations_markdown_includes_synthesis_details(
+    app_client, make_user, db_session
+):
+    """Markdown export is readable while retaining structured run details."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_orchestration(
+        db_session,
+        user.id,
+        "orch-md-1",
+        status="complete",
+        task_ids=["task-a", "task-b"],
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrations/export.md",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/markdown")
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert res.headers["cache-control"] == "no-store, no-cache, must-revalidate, private"
+    assert "arena-orchestrations-" in res.headers["content-disposition"]
+    body = res.text
+    assert "# Arena orchestration history" in body
+    assert "orch-md-1" in body
+    assert "**Status:** complete" in body
+    assert "**Tasks:** 2" in body
+    assert "task-a" in body
+    assert "### Synthesis" in body
+    assert "This is a test synthesis" in body
+    assert "### Supporting points" in body
+    assert "Point 1" in body
+
+
+@pytest.mark.asyncio
+async def test_export_orchestrations_markdown_applies_status_filter(
+    app_client, make_user, db_session
+):
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_orchestration(db_session, user.id, "orch-md-complete", status="complete")
+    _seed_orchestration(db_session, user.id, "orch-md-running", status="running")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrations/export.md?status=complete",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert "orch-md-complete" in res.text
+    assert "orch-md-running" not in res.text
+
+
+@pytest.mark.asyncio
+async def test_export_orchestrations_markdown_empty_is_valid_document(
+    app_client, make_user, db_session
+):
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrations/export.md",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert "# Arena orchestration history" in res.text
+    assert "_No orchestrations found._" in res.text

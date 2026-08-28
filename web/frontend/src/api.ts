@@ -3250,6 +3250,33 @@ export async function exportAgentOrchestrationsJson(
   return response.blob();
 }
 
+/** Download the caller's orchestration history as a readable Markdown report. */
+export async function exportAgentOrchestrationsMarkdown(
+  status?: AgentOrchestrationStatus,
+): Promise<Blob> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  const response = await apiFetch(`/api/agent/orchestrations/export.md${query}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(
+        getErrorMessage(err, 'Failed to export orchestration history as Markdown'),
+        response,
+      ),
+      response.status,
+      err,
+    );
+  }
+
+  const text = await response.clone().text();
+  if (!text.trim()) {
+    throw new Error(
+      withRequestId('Empty orchestration history Markdown returned by the server', response),
+    );
+  }
+  return response.blob();
+}
+
 export type AgentWatchlistItem = {
   id: string;
   question: string;
