@@ -53,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Selected Agent history exports now keep one row per task when a malformed
+  refresh payload repeats a task id, preventing duplicate clipboard/download
+  records while preserving history order
 - Selected Agent history CSV downloads now guard serialization as well as the
   browser trigger, so malformed runtime rows report a failure without leaving
   the export action locked

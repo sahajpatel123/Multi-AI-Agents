@@ -19,6 +19,19 @@ describe('selectAgentHistoryItems', () => {
     ).toEqual([history[0], history[2]]);
   });
 
+  it('keeps only the first retained row when an API payload repeats an id', () => {
+    const repeated = [
+      { task_id: 'newest', task_text: 'First copy' },
+      { task_id: 'newest', task_text: 'Duplicate copy' },
+      { task_id: 'oldest', task_text: 'Last' },
+    ];
+
+    expect(selectAgentHistoryItems(repeated, ['newest', 'oldest'])).toEqual([
+      repeated[0],
+      repeated[2],
+    ]);
+  });
+
   it('returns an empty list without mutating the source rows', () => {
     const snapshot = [...history];
 
