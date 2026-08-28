@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Rich HTML report copy feedback now invalidates when switching tasks, so a
+  late clipboard result cannot be shown on the newly selected report
 - Agent HTML report exports now preserve the canonical persisted source list,
   instead of silently falling back to incomplete derived references
 - Agent history Markdown exports now escape user/API-controlled formatting

@@ -1,5 +1,40 @@
-import { describe, expect, it } from 'vitest';
-import { formatAgentReportClipboard } from './agentReportClipboard';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  formatAgentReportClipboard,
+  invalidateAgentReportCopy,
+} from './agentReportClipboard';
+
+describe('invalidateAgentReportCopy', () => {
+  it('invalidates late completions and clears the pending feedback timer', () => {
+    const lifecycle = {
+      runId: { current: 4 },
+      inFlight: { current: true },
+      feedbackTimer: { current: 17 as number | null },
+    };
+    const clearTimer = vi.fn();
+
+    invalidateAgentReportCopy(lifecycle, clearTimer);
+
+    expect(lifecycle.runId.current).toBe(5);
+    expect(lifecycle.inFlight.current).toBe(false);
+    expect(lifecycle.feedbackTimer.current).toBeNull();
+    expect(clearTimer).toHaveBeenCalledWith(17);
+  });
+
+  it('does not ask the browser to clear an absent timer', () => {
+    const lifecycle = {
+      runId: { current: 0 },
+      inFlight: { current: false },
+      feedbackTimer: { current: null },
+    };
+    const clearTimer = vi.fn();
+
+    invalidateAgentReportCopy(lifecycle, clearTimer);
+
+    expect(clearTimer).not.toHaveBeenCalled();
+    expect(lifecycle.runId.current).toBe(1);
+  });
+});
 
 describe('formatAgentReportClipboard', () => {
   it('keeps rich and plain representations aligned', () => {

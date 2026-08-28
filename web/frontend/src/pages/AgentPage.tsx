@@ -152,7 +152,10 @@ import {
   withDownloadDate,
 } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
-import { formatAgentReportClipboard } from '../lib/agentReportClipboard';
+import {
+  formatAgentReportClipboard,
+  invalidateAgentReportCopy,
+} from '../lib/agentReportClipboard';
 import { formatAgentReportHtml, selectAgentReportSources } from '../lib/agentReportHtml';
 import {
   formatAgentHistoryCsv,
@@ -2443,12 +2446,14 @@ export function AgentPage() {
     }
     setCopyingReportCsv(false);
     setCopyReportCsvFeedback('idle');
-    copyReportHtmlRunIdRef.current += 1;
-    copyReportHtmlInFlightRef.current = false;
-    if (copyReportHtmlFeedbackTimerRef.current != null) {
-      window.clearTimeout(copyReportHtmlFeedbackTimerRef.current);
-      copyReportHtmlFeedbackTimerRef.current = null;
-    }
+    invalidateAgentReportCopy(
+      {
+        runId: copyReportHtmlRunIdRef,
+        inFlight: copyReportHtmlInFlightRef,
+        feedbackTimer: copyReportHtmlFeedbackTimerRef,
+      },
+      window.clearTimeout,
+    );
     setCopyingReportHtml(false);
     setCopyReportHtmlFeedback('idle');
     historyCsvCopyRunIdRef.current += 1;
@@ -3462,11 +3467,14 @@ export function AgentPage() {
       if (copyReportCsvFeedbackTimerRef.current != null) {
         window.clearTimeout(copyReportCsvFeedbackTimerRef.current);
       }
-      copyReportHtmlRunIdRef.current += 1;
-      copyReportHtmlInFlightRef.current = false;
-      if (copyReportHtmlFeedbackTimerRef.current != null) {
-        window.clearTimeout(copyReportHtmlFeedbackTimerRef.current);
-      }
+      invalidateAgentReportCopy(
+        {
+          runId: copyReportHtmlRunIdRef,
+          inFlight: copyReportHtmlInFlightRef,
+          feedbackTimer: copyReportHtmlFeedbackTimerRef,
+        },
+        window.clearTimeout,
+      );
       taskShareInFlightRef.current = false;
       if (taskShareFeedbackTimerRef.current != null) {
         window.clearTimeout(taskShareFeedbackTimerRef.current);
@@ -4349,6 +4357,22 @@ export function AgentPage() {
   useEffect(() => {
     setConfActive(false);
   }, [result?.task_id]);
+
+  // Clipboard writes can outlive a history selection. Invalidate the old
+  // request when the displayed report changes so late feedback cannot be
+  // presented as confirmation for the newly selected task.
+  useEffect(() => {
+    invalidateAgentReportCopy(
+      {
+        runId: copyReportHtmlRunIdRef,
+        inFlight: copyReportHtmlInFlightRef,
+        feedbackTimer: copyReportHtmlFeedbackTimerRef,
+      },
+      window.clearTimeout,
+    );
+    setCopyingReportHtml(false);
+    setCopyReportHtmlFeedback('idle');
+  }, [result?.task_id, result?.refinement_count]);
 
   useEffect(() => {
     if (!result?.task_id || result.status !== 'complete' || isRunning) return;
