@@ -171,6 +171,7 @@ import { copyAgentHistoryJson } from '../lib/agentHistoryJsonClipboard';
 import { copyAgentHistoryJsonl } from '../lib/agentHistoryJsonlClipboard';
 import {
   copySelectedAgentHistoryCsv,
+  copySelectedAgentHistoryHtml,
   copySelectedAgentHistoryJson,
   copySelectedAgentHistoryJsonl,
   copySelectedAgentHistoryMarkdown,
@@ -982,6 +983,9 @@ export function AgentPage() {
     useState<'idle' | 'busy' | 'done' | 'failed'>('idle');
   const [historySelectedHtmlDownloadStatus, setHistorySelectedHtmlDownloadStatus] =
     useState<'idle' | 'busy' | 'done' | 'failed'>('idle');
+  const [historySelectedHtmlCopyStatus, setHistorySelectedHtmlCopyStatus] = useState<
+    'idle' | 'copying' | 'copied' | 'failed'
+  >('idle');
   const [historyJsonlCopyStatus, setHistoryJsonlCopyStatus] = useState<
     'idle' | 'copying' | 'copied' | 'failed'
   >('idle');
@@ -1012,6 +1016,7 @@ export function AgentPage() {
   const historySelectedJsonCopyTimerRef = useRef<number | null>(null);
   const historySelectedMarkdownDownloadTimerRef = useRef<number | null>(null);
   const historySelectedHtmlDownloadTimerRef = useRef<number | null>(null);
+  const historySelectedHtmlCopyTimerRef = useRef<number | null>(null);
   /** Prevent rapid or re-entrant activations from creating duplicate files. */
   const historySelectedJsonlDownloadBusyRef = useRef(false);
   /** Prevent duplicate selected JSONL clipboard writes and stale feedback. */
@@ -1030,6 +1035,9 @@ export function AgentPage() {
   const historySelectedMarkdownCopyRunIdRef = useRef(0);
   const historySelectedMarkdownDownloadBusyRef = useRef(false);
   const historySelectedHtmlDownloadBusyRef = useRef(false);
+  /** Prevent duplicate selected HTML clipboard writes and stale feedback. */
+  const historySelectedHtmlCopyInFlightRef = useRef(false);
+  const historySelectedHtmlCopyRunIdRef = useRef(0);
   const historyJsonlDownloadBusyRef = useRef(false);
   const historyJsonlCopyTimerRef = useRef<number | null>(null);
   const historyJsonlCopyInFlightRef = useRef(false);
@@ -2560,6 +2568,13 @@ export function AgentPage() {
     }
     historySelectedHtmlDownloadBusyRef.current = false;
     setHistorySelectedHtmlDownloadStatus('idle');
+    historySelectedHtmlCopyRunIdRef.current += 1;
+    historySelectedHtmlCopyInFlightRef.current = false;
+    if (historySelectedHtmlCopyTimerRef.current != null) {
+      window.clearTimeout(historySelectedHtmlCopyTimerRef.current);
+      historySelectedHtmlCopyTimerRef.current = null;
+    }
+    setHistorySelectedHtmlCopyStatus('idle');
     setUserRating(null);
     setRatingResult(null);
     setRatingSubmitBusy(false);
@@ -3224,6 +3239,13 @@ export function AgentPage() {
       historySelectedJsonlCopyTimerRef.current = null;
     }
     setHistorySelectedJsonlCopyStatus('idle');
+    historySelectedHtmlCopyRunIdRef.current += 1;
+    historySelectedHtmlCopyInFlightRef.current = false;
+    if (historySelectedHtmlCopyTimerRef.current != null) {
+      window.clearTimeout(historySelectedHtmlCopyTimerRef.current);
+      historySelectedHtmlCopyTimerRef.current = null;
+    }
+    setHistorySelectedHtmlCopyStatus('idle');
   }, [selectedHistoryTaskIdList]);
 
   useEffect(() => {
@@ -3470,6 +3492,9 @@ export function AgentPage() {
       if (historySelectedHtmlDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedHtmlDownloadTimerRef.current);
       }
+      if (historySelectedHtmlCopyTimerRef.current != null) {
+        window.clearTimeout(historySelectedHtmlCopyTimerRef.current);
+      }
       historySelectedJsonlDownloadBusyRef.current = false;
       historySelectedJsonlCopyRunIdRef.current += 1;
       historySelectedJsonlCopyInFlightRef.current = false;
@@ -3483,6 +3508,8 @@ export function AgentPage() {
       historySelectedMarkdownCopyInFlightRef.current = false;
       historySelectedMarkdownDownloadBusyRef.current = false;
       historySelectedHtmlDownloadBusyRef.current = false;
+      historySelectedHtmlCopyRunIdRef.current += 1;
+      historySelectedHtmlCopyInFlightRef.current = false;
       historyJsonlDownloadBusyRef.current = false;
       historyJsonlCopyRunIdRef.current += 1;
       historyJsonlCopyInFlightRef.current = false;
@@ -4274,6 +4301,50 @@ export function AgentPage() {
       setHistorySelectedHtmlDownloadStatus('idle');
       historySelectedHtmlDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
+  };
+
+  const copySelectedHistoryHtml = async () => {
+    if (historySelectionLocked || historySelectedHtmlCopyInFlightRef.current) return;
+    const selected = selectedHistoryTaskIdList;
+    if (selected.length === 0) {
+      setToastMessage('No selected history tasks to copy.');
+      return;
+    }
+
+    const runId = ++historySelectedHtmlCopyRunIdRef.current;
+    historySelectedHtmlCopyInFlightRef.current = true;
+    if (historySelectedHtmlCopyTimerRef.current != null) {
+      window.clearTimeout(historySelectedHtmlCopyTimerRef.current);
+      historySelectedHtmlCopyTimerRef.current = null;
+    }
+    setHistorySelectedHtmlCopyStatus('copying');
+
+    try {
+      let ok = false;
+      try {
+        ok = await copySelectedAgentHistoryHtml(taskHistory, selected, toHistoryExportItem);
+      } catch {
+        // Keep the page safe if a future clipboard adapter regresses its
+        // boolean refusal contract.
+        ok = false;
+      }
+      if (historySelectedHtmlCopyRunIdRef.current !== runId) return;
+
+      setHistorySelectedHtmlCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setToastMessage('Could not copy selected history HTML — try again.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      historySelectedHtmlCopyTimerRef.current = window.setTimeout(() => {
+        if (historySelectedHtmlCopyRunIdRef.current !== runId) return;
+        setHistorySelectedHtmlCopyStatus('idle');
+        historySelectedHtmlCopyTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (historySelectedHtmlCopyRunIdRef.current === runId) {
+        historySelectedHtmlCopyInFlightRef.current = false;
+      }
+    }
   };
 
   const downloadSelectedHistoryJson = () => {
@@ -6948,6 +7019,62 @@ export function AgentPage() {
                             : historySelectedHtmlDownloadStatus === 'failed'
                               ? 'Failed'
                               : 'Selected HTML'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void copySelectedHistoryHtml()}
+                        disabled={
+                          historySelectionLocked ||
+                          historySelectedHtmlCopyStatus === 'copying'
+                        }
+                        title="Copy the selected history tasks as rich HTML"
+                        aria-label={
+                          historySelectedHtmlCopyStatus === 'copying'
+                            ? 'Copying selected history as HTML'
+                            : historySelectedHtmlCopyStatus === 'copied'
+                              ? 'Selected history HTML copied'
+                              : historySelectedHtmlCopyStatus === 'failed'
+                                ? 'Selected history HTML copy failed'
+                                : `Copy ${selectedHistoryTaskIdList.length} selected history tasks as HTML`
+                        }
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color:
+                            historySelectedHtmlCopyStatus === 'copying'
+                              ? '#B07840'
+                              : historySelectedHtmlCopyStatus === 'failed'
+                                ? '#D85A30'
+                                : historySelectedHtmlCopyStatus === 'copied'
+                                  ? '#5A8C6A'
+                                  : '#A0A39A',
+                          cursor:
+                            historySelectionLocked ||
+                            historySelectedHtmlCopyStatus === 'copying'
+                              ? 'not-allowed'
+                              : 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                          opacity:
+                            historySelectionLocked ||
+                            historySelectedHtmlCopyStatus === 'copying'
+                              ? 0.5
+                              : 1,
+                        }}
+                        aria-busy={historySelectedHtmlCopyStatus === 'copying'}
+                      >
+                        {historySelectedHtmlCopyStatus === 'copying'
+                          ? 'Copying…'
+                          : historySelectedHtmlCopyStatus === 'copied'
+                            ? 'Copied'
+                            : historySelectedHtmlCopyStatus === 'failed'
+                              ? 'Failed'
+                              : 'Copy selected HTML'}
                       </button>
                       {historyBulkDeleteConfirm ? (
                         <>

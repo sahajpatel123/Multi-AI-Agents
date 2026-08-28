@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { copyAgentHistoryCsv } from './agentHistoryCsvClipboard';
+import { copyAgentHistoryHtml } from './agentHistoryHtmlClipboard';
 import { copyAgentHistoryJson } from './agentHistoryJsonClipboard';
 import { copyAgentHistoryJsonl } from './agentHistoryJsonlClipboard';
 import { copyAgentHistoryMarkdown } from './agentHistoryMarkdownClipboard';
 import {
   copySelectedAgentHistoryCsv,
+  copySelectedAgentHistoryHtml,
   copySelectedAgentHistoryJson,
   copySelectedAgentHistoryJsonl,
   copySelectedAgentHistoryMarkdown,
@@ -12,6 +14,10 @@ import {
 
 vi.mock('./agentHistoryCsvClipboard', () => ({
   copyAgentHistoryCsv: vi.fn(),
+}));
+
+vi.mock('./agentHistoryHtmlClipboard', () => ({
+  copyAgentHistoryHtml: vi.fn(),
 }));
 
 vi.mock('./agentHistoryJsonClipboard', () => ({
@@ -71,6 +77,62 @@ describe('copySelectedAgentHistoryCsv', () => {
 
     await expect(
       copySelectedAgentHistoryCsv(
+        [{ task_id: 'task-1', title: 'One' }],
+        ['task-1'],
+        (item) => ({ taskId: item.task_id, title: item.title }),
+      ),
+    ).resolves.toBe(false);
+  });
+});
+
+describe('copySelectedAgentHistoryHtml', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('copies only selected retained rows in source order with an explicit count', async () => {
+    vi.mocked(copyAgentHistoryHtml).mockResolvedValueOnce(true);
+
+    await expect(
+      copySelectedAgentHistoryHtml(
+        [
+          { task_id: 'newest', title: 'Newest' },
+          { task_id: 'middle', title: 'Middle' },
+          { task_id: 'oldest', title: 'Oldest' },
+        ],
+        ['oldest', 'missing', 'newest', 'oldest'],
+        (item) => ({ taskId: item.task_id, title: item.title }),
+      ),
+    ).resolves.toBe(true);
+
+    expect(copyAgentHistoryHtml).toHaveBeenCalledWith({
+      items: [
+        { taskId: 'newest', title: 'Newest' },
+        { taskId: 'oldest', title: 'Oldest' },
+      ],
+      totalCount: 2,
+    });
+  });
+
+  it('does not write an empty or stale selection', async () => {
+    await expect(
+      copySelectedAgentHistoryHtml(
+        [{ task_id: 'task-1', title: 'One' }],
+        ['missing'],
+        (item) => ({ taskId: item.task_id, title: item.title }),
+      ),
+    ).resolves.toBe(false);
+
+    expect(copyAgentHistoryHtml).not.toHaveBeenCalled();
+  });
+
+  it('converts unexpected clipboard exceptions into a refusal', async () => {
+    vi.mocked(copyAgentHistoryHtml).mockRejectedValueOnce(
+      new Error('clipboard unavailable'),
+    );
+
+    await expect(
+      copySelectedAgentHistoryHtml(
         [{ task_id: 'task-1', title: 'One' }],
         ['task-1'],
         (item) => ({ taskId: item.task_id, title: item.title }),

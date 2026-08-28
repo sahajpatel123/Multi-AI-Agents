@@ -1,4 +1,5 @@
 import { copyAgentHistoryCsv } from './agentHistoryCsvClipboard';
+import { copyAgentHistoryHtml } from './agentHistoryHtmlClipboard';
 import { copyAgentHistoryJson } from './agentHistoryJsonClipboard';
 import { copyAgentHistoryJsonl } from './agentHistoryJsonlClipboard';
 import { copyAgentHistoryMarkdown } from './agentHistoryMarkdownClipboard';
@@ -7,6 +8,30 @@ import {
   type SelectableAgentHistoryItem,
 } from './agentHistorySelection';
 import type { AgentHistoryExportItem } from './agentHistoryExport';
+
+/**
+ * Copy exactly the retained Agent history rows selected by the user as rich
+ * HTML, with the adapter's Markdown fallback for text-only destinations.
+ * Resolve ids before formatting so hidden rows remain included while stale
+ * selections and duplicate runtime rows are ignored.
+ */
+export async function copySelectedAgentHistoryHtml<T extends SelectableAgentHistoryItem>(
+  items: readonly T[],
+  selectedTaskIds: readonly string[],
+  toExportItem: (item: T) => AgentHistoryExportItem,
+): Promise<boolean> {
+  try {
+    const selected = selectAgentHistoryItems(items, selectedTaskIds);
+    if (selected.length === 0) return false;
+
+    return await copyAgentHistoryHtml({
+      items: selected.map(toExportItem),
+      totalCount: selected.length,
+    });
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Copy exactly the retained Agent history rows selected by the user as CSV.
