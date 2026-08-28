@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Orchestration history Markdown copy now advertises a structured Markdown
+  clipboard payload, with the existing plain-text fallback for restricted browsers
 - Orchestration CSV status filters now reject unknown values instead of
   returning a misleading empty export
 - Rich HTML report copy feedback now invalidates when switching tasks, so a

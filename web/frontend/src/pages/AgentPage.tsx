@@ -148,6 +148,7 @@ import {
   clampToMax,
 } from '../lib/charBudget';
 import { copyCsvToClipboard, copyHtmlToClipboard, copyToClipboard } from '../lib/clipboard';
+import { copyAgentOrchestrationMarkdown } from '../lib/agentOrchestrationMarkdownClipboard';
 import {
   downloadBlobFile,
   downloadHtmlFile,
@@ -2381,7 +2382,7 @@ export function AgentPage() {
     try {
       const markdown = await fetchAgentOrchestrationsMarkdownText();
       if (copyOrchestrationHistoryRunIdRef.current !== runId) return;
-      const ok = await copyToClipboard(markdown);
+      const ok = await copyAgentOrchestrationMarkdown(markdown);
       if (copyOrchestrationHistoryRunIdRef.current !== runId) return;
       setCopyOrchestrationHistoryStatus(ok ? 'copied' : 'failed');
       if (!ok) {
