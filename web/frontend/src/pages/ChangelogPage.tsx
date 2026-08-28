@@ -194,6 +194,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Search research tasks on Room boards and in the add-task picker',
       '[NEW] Copy Room group synthesis as markdown (contradictions, patterns, tasks)',
       '[NEW] Copy Agent Watchlist as markdown (respects search and status filters)',
+      '[NEW] Agent history: copy explicitly selected retained research tasks as Markdown, with a plain-text clipboard fallback',
       '[IMPROVED] Browser tabs show Room names and shared-take mind names',
       '[NEW] Press / and ? for Room board search focus and keyboard shortcuts help',
       '[NEW] Press / and ? on Agent Watchlist for search focus and shortcuts help',

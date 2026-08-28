@@ -86,13 +86,12 @@ export async function copyMarkdownToClipboard(text: string): Promise<boolean> {
   if (!text) return false;
 
   try {
-    if (
-      typeof ClipboardItem !== 'undefined' &&
-      typeof navigator !== 'undefined' &&
-      navigator.clipboard?.write
-    ) {
-      await navigator.clipboard.write([
-        new ClipboardItem({
+    const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
+    const ClipboardItemConstructor =
+      typeof ClipboardItem === 'function' ? ClipboardItem : undefined;
+    if (ClipboardItemConstructor && typeof clipboard?.write === 'function') {
+      await clipboard.write([
+        new ClipboardItemConstructor({
           'text/markdown': new Blob([text], { type: 'text/markdown;charset=utf-8' }),
           'text/plain': new Blob([text], { type: 'text/plain' }),
         }),

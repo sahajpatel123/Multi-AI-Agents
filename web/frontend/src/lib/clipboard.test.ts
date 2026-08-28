@@ -154,6 +154,37 @@ describe('copyToClipboard', () => {
     expect(writeText).toHaveBeenCalledWith('# Arena usage\n');
   });
 
+  it('falls back to plain text when a structured Markdown write is rejected', async () => {
+    const write = vi.fn().mockRejectedValue(new Error('Markdown MIME type denied'));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { write, writeText } });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        constructor(public data: Record<string, Blob>) {}
+      },
+    );
+
+    const markdown = '# Arena usage\n';
+    expect(await copyMarkdownToClipboard(markdown)).toBe(true);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith(markdown);
+  });
+
+  it('treats a non-callable structured Markdown writer as unavailable', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { write: {}, writeText } });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        constructor(public data: Record<string, Blob>) {}
+      },
+    );
+
+    expect(await copyMarkdownToClipboard('# Arena usage\n')).toBe(true);
+    expect(writeText).toHaveBeenCalledWith('# Arena usage\n');
+  });
+
   it('writes JSON clipboard data through ClipboardItem when available', async () => {
     const write = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { write } });
