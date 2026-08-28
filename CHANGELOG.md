@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current tab immediately, keeping stale rows and local pins from lingering
 
 ### Added
+- Orchestration history can now be copied directly as Markdown from the
+  unified synthesis view, with guarded clipboard feedback and download fallback
 - Orchestration history can now be downloaded as a readable Markdown report,
   preserving syntheses, supporting points, conflicts, and status filters
 - Orchestration history can now be downloaded as structured JSON, preserving

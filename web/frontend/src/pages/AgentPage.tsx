@@ -28,6 +28,7 @@ import {
   exportAgentOrchestrationsCsv,
   exportAgentOrchestrationsJson,
   exportAgentOrchestrationsMarkdown,
+  fetchAgentOrchestrationsMarkdownText,
   exportAgentTaskCsv,
   exportAgentTaskPdf,
   exportAgentTaskMarkdown,
@@ -1111,6 +1112,14 @@ export function AgentPage() {
   const [exportingJson, setExportingJson] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
   const [exportingOrchestrationHistory, setExportingOrchestrationHistory] = useState(false);
+  const [copyOrchestrationHistoryStatus, setCopyOrchestrationHistoryStatus] = useState<
+    'idle' | 'copying' | 'copied' | 'failed'
+  >('idle');
+  const copyOrchestrationHistoryTimerRef = useRef<number | null>(null);
+  const copyOrchestrationHistoryInFlightRef = useRef(false);
+  const copyOrchestrationHistoryRunIdRef = useRef(0);
+  const orchestrationHistoryBusy =
+    exportingOrchestrationHistory || copyOrchestrationHistoryStatus === 'copying';
   /** Guards Shift+L / toolbar clicks so a report download can never double-fire. */
   const exportMdInFlightRef = useRef(false);
   const exportReportRunIdRef = useRef(0);
@@ -2298,7 +2307,7 @@ export function AgentPage() {
   };
 
   const handleExportOrchestrationHistoryCsv = useCallback(async () => {
-    if (exportingOrchestrationHistory) return;
+    if (orchestrationHistoryBusy) return;
     setExportingOrchestrationHistory(true);
     try {
       const blob = await exportAgentOrchestrationsCsv();
@@ -2316,10 +2325,10 @@ export function AgentPage() {
     } finally {
       setExportingOrchestrationHistory(false);
     }
-  }, [exportingOrchestrationHistory]);
+  }, [orchestrationHistoryBusy]);
 
   const handleExportOrchestrationHistoryJson = useCallback(async () => {
-    if (exportingOrchestrationHistory) return;
+    if (orchestrationHistoryBusy) return;
     setExportingOrchestrationHistory(true);
     try {
       const blob = await exportAgentOrchestrationsJson();
@@ -2337,10 +2346,10 @@ export function AgentPage() {
     } finally {
       setExportingOrchestrationHistory(false);
     }
-  }, [exportingOrchestrationHistory]);
+  }, [orchestrationHistoryBusy]);
 
   const handleExportOrchestrationHistoryMarkdown = useCallback(async () => {
-    if (exportingOrchestrationHistory) return;
+    if (orchestrationHistoryBusy) return;
     setExportingOrchestrationHistory(true);
     try {
       const blob = await exportAgentOrchestrationsMarkdown();
@@ -2358,7 +2367,52 @@ export function AgentPage() {
     } finally {
       setExportingOrchestrationHistory(false);
     }
-  }, [exportingOrchestrationHistory]);
+  }, [orchestrationHistoryBusy]);
+
+  const handleCopyOrchestrationHistoryMarkdown = useCallback(async () => {
+    if (orchestrationHistoryBusy || copyOrchestrationHistoryInFlightRef.current) return;
+    const runId = ++copyOrchestrationHistoryRunIdRef.current;
+    copyOrchestrationHistoryInFlightRef.current = true;
+    if (copyOrchestrationHistoryTimerRef.current != null) {
+      window.clearTimeout(copyOrchestrationHistoryTimerRef.current);
+      copyOrchestrationHistoryTimerRef.current = null;
+    }
+    setCopyOrchestrationHistoryStatus('copying');
+    try {
+      const markdown = await fetchAgentOrchestrationsMarkdownText();
+      if (copyOrchestrationHistoryRunIdRef.current !== runId) return;
+      const ok = await copyToClipboard(markdown);
+      if (copyOrchestrationHistoryRunIdRef.current !== runId) return;
+      setCopyOrchestrationHistoryStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy orchestration history — try the Markdown download instead.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyOrchestrationHistoryTimerRef.current = window.setTimeout(() => {
+        if (copyOrchestrationHistoryRunIdRef.current !== runId) return;
+        setCopyOrchestrationHistoryStatus('idle');
+        copyOrchestrationHistoryTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      if (copyOrchestrationHistoryRunIdRef.current !== runId) return;
+      setCopyOrchestrationHistoryStatus('failed');
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not copy orchestration history — try the Markdown download instead.',
+      );
+      const hold = motionDuration(2800);
+      copyOrchestrationHistoryTimerRef.current = window.setTimeout(() => {
+        if (copyOrchestrationHistoryRunIdRef.current !== runId) return;
+        setCopyOrchestrationHistoryStatus('idle');
+        copyOrchestrationHistoryTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (copyOrchestrationHistoryRunIdRef.current === runId) {
+        copyOrchestrationHistoryInFlightRef.current = false;
+      }
+    }
+  }, [orchestrationHistoryBusy]);
 
   const handleConfirmWatchlist = async () => {
     const q = (result?.original_task || result?.task || '').trim();
@@ -3621,6 +3675,12 @@ export function AgentPage() {
       exportMdInFlightRef.current = false;
       exportCsvRunIdRef.current += 1;
       exportCsvInFlightRef.current = false;
+      copyOrchestrationHistoryRunIdRef.current += 1;
+      copyOrchestrationHistoryInFlightRef.current = false;
+      if (copyOrchestrationHistoryTimerRef.current != null) {
+        window.clearTimeout(copyOrchestrationHistoryTimerRef.current);
+        copyOrchestrationHistoryTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -10503,7 +10563,7 @@ export function AgentPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={exportingOrchestrationHistory}
+                      disabled={orchestrationHistoryBusy}
                       onClick={() => void handleExportOrchestrationHistoryCsv()}
                       aria-busy={exportingOrchestrationHistory}
                       aria-label={
@@ -10519,8 +10579,8 @@ export function AgentPage() {
                         color: '#6B5040',
                         fontSize: 13,
                         fontFamily: 'var(--vp-font-sans)',
-                        cursor: exportingOrchestrationHistory ? 'default' : 'pointer',
-                        opacity: exportingOrchestrationHistory ? 0.7 : 1,
+                        cursor: orchestrationHistoryBusy ? 'default' : 'pointer',
+                        opacity: orchestrationHistoryBusy ? 0.7 : 1,
                       }}
                     >
                       {exportingOrchestrationHistory
@@ -10529,7 +10589,7 @@ export function AgentPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={exportingOrchestrationHistory}
+                      disabled={orchestrationHistoryBusy}
                       onClick={() => void handleExportOrchestrationHistoryJson()}
                       aria-busy={exportingOrchestrationHistory}
                       aria-label={
@@ -10545,8 +10605,8 @@ export function AgentPage() {
                         color: '#6B5040',
                         fontSize: 13,
                         fontFamily: 'var(--vp-font-sans)',
-                        cursor: exportingOrchestrationHistory ? 'default' : 'pointer',
-                        opacity: exportingOrchestrationHistory ? 0.7 : 1,
+                        cursor: orchestrationHistoryBusy ? 'default' : 'pointer',
+                        opacity: orchestrationHistoryBusy ? 0.7 : 1,
                       }}
                     >
                       {exportingOrchestrationHistory
@@ -10555,7 +10615,7 @@ export function AgentPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={exportingOrchestrationHistory}
+                      disabled={orchestrationHistoryBusy}
                       onClick={() => void handleExportOrchestrationHistoryMarkdown()}
                       aria-busy={exportingOrchestrationHistory}
                       aria-label={
@@ -10571,13 +10631,52 @@ export function AgentPage() {
                         color: '#6B5040',
                         fontSize: 13,
                         fontFamily: 'var(--vp-font-sans)',
-                        cursor: exportingOrchestrationHistory ? 'default' : 'pointer',
-                        opacity: exportingOrchestrationHistory ? 0.7 : 1,
+                        cursor: orchestrationHistoryBusy ? 'default' : 'pointer',
+                        opacity: orchestrationHistoryBusy ? 0.7 : 1,
                       }}
                     >
                       {exportingOrchestrationHistory
                         ? 'Exporting…'
                         : 'Export history as Markdown'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={orchestrationHistoryBusy}
+                      onClick={() => void handleCopyOrchestrationHistoryMarkdown()}
+                      aria-busy={copyOrchestrationHistoryStatus === 'copying'}
+                      aria-label={
+                        copyOrchestrationHistoryStatus === 'copying'
+                          ? 'Copying orchestration history as Markdown'
+                          : copyOrchestrationHistoryStatus === 'copied'
+                            ? 'Orchestration history Markdown copied'
+                            : copyOrchestrationHistoryStatus === 'failed'
+                              ? 'Orchestration history Markdown copy failed'
+                              : 'Copy orchestration history as Markdown'
+                      }
+                      title="Copy orchestration history as Markdown"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 7,
+                        padding: '9px 18px',
+                        border: '0.5px solid #35382F',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: orchestrationHistoryBusy ? 'default' : 'pointer',
+                        opacity: orchestrationHistoryBusy ? 0.7 : 1,
+                      }}
+                    >
+                      <Copy size={14} aria-hidden="true" />
+                      {copyOrchestrationHistoryStatus === 'copying'
+                        ? 'Copying…'
+                        : copyOrchestrationHistoryStatus === 'copied'
+                          ? 'Copied Markdown'
+                          : copyOrchestrationHistoryStatus === 'failed'
+                            ? 'Copy failed'
+                            : 'Copy history as Markdown'}
                     </button>
                     <button
                       type="button"

@@ -3,6 +3,7 @@ import {
   exportAgentOrchestrationsCsv,
   exportAgentOrchestrationsJson,
   exportAgentOrchestrationsMarkdown,
+  fetchAgentOrchestrationsMarkdownText,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -180,12 +181,36 @@ describe('Agent orchestration history Markdown export frontend API helper', () =
     );
   });
 
+  it('returns Markdown text for direct clipboard sharing', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('# Arena orchestration history\n\n## Complete\n', { status: 200 }),
+    );
+
+    await expect(fetchAgentOrchestrationsMarkdownText('complete')).resolves.toBe(
+      '# Arena orchestration history\n\n## Complete\n',
+    );
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/orchestrations/export.md?status=complete',
+      {},
+    );
+  });
+
   it('rejects an empty successful response', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response('', { status: 200 }),
     );
 
     await expect(exportAgentOrchestrationsMarkdown()).rejects.toThrow(
+      'Empty orchestration history Markdown returned by the server',
+    );
+  });
+
+  it('rejects empty clipboard text through the shared validation path', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('   \n', { status: 200 }),
+    );
+
+    await expect(fetchAgentOrchestrationsMarkdownText()).rejects.toThrow(
       'Empty orchestration history Markdown returned by the server',
     );
   });

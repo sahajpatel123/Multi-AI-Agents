@@ -3250,10 +3250,9 @@ export async function exportAgentOrchestrationsJson(
   return response.blob();
 }
 
-/** Download the caller's orchestration history as a readable Markdown report. */
-export async function exportAgentOrchestrationsMarkdown(
+async function requestAgentOrchestrationsMarkdown(
   status?: AgentOrchestrationStatus,
-): Promise<Blob> {
+): Promise<Response> {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
   const response = await apiFetch(`/api/agent/orchestrations/export.md${query}`);
   if (!response.ok) {
@@ -3274,7 +3273,23 @@ export async function exportAgentOrchestrationsMarkdown(
       withRequestId('Empty orchestration history Markdown returned by the server', response),
     );
   }
+  return response;
+}
+
+/** Download the caller's orchestration history as a readable Markdown report. */
+export async function exportAgentOrchestrationsMarkdown(
+  status?: AgentOrchestrationStatus,
+): Promise<Blob> {
+  const response = await requestAgentOrchestrationsMarkdown(status);
   return response.blob();
+}
+
+/** Fetch orchestration history as Markdown for direct clipboard sharing. */
+export async function fetchAgentOrchestrationsMarkdownText(
+  status?: AgentOrchestrationStatus,
+): Promise<string> {
+  const response = await requestAgentOrchestrationsMarkdown(status);
+  return response.text();
 }
 
 export type AgentWatchlistItem = {
