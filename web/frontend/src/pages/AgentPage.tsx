@@ -165,10 +165,10 @@ import {
   copySelectedAgentHistoryJsonl,
   copySelectedAgentHistoryMarkdown,
 } from '../lib/agentHistorySelectionClipboard';
-import { selectAgentHistoryItems } from '../lib/agentHistorySelection';
 import {
   formatSelectedAgentHistoryCsv,
   formatSelectedAgentHistoryJson,
+  formatSelectedAgentHistoryJsonl,
   formatSelectedAgentHistoryMarkdown,
 } from '../lib/agentHistorySelectionExport';
 import {
@@ -3060,6 +3060,19 @@ export function AgentPage() {
     });
   }, [taskHistory]);
 
+  // Clipboard writes can outlive a checkbox change. Invalidate their
+  // completion feedback when the selected set changes so a late result for
+  // the previous set cannot be presented as confirmation for the new one.
+  useEffect(() => {
+    historySelectedJsonlCopyRunIdRef.current += 1;
+    historySelectedJsonlCopyInFlightRef.current = false;
+    if (historySelectedJsonlCopyTimerRef.current != null) {
+      window.clearTimeout(historySelectedJsonlCopyTimerRef.current);
+      historySelectedJsonlCopyTimerRef.current = null;
+    }
+    setHistorySelectedJsonlCopyStatus('idle');
+  }, [selectedHistoryTaskIdList]);
+
   useEffect(() => {
     if (historySelectVisibleRef.current) {
       historySelectVisibleRef.current.indeterminate =
@@ -3744,8 +3757,7 @@ export function AgentPage() {
     // The disabled prop follows React's render cycle; the ref closes the
     // smaller window where two activations can arrive before that render.
     if (historySelectedJsonlDownloadBusyRef.current) return;
-    const selectedItems = selectAgentHistoryItems(taskHistory, selectedHistoryTaskIdList);
-    if (selectedItems.length === 0) {
+    if (selectedHistoryTaskIdList.length === 0) {
       setToastMessage('No selected history tasks to export.');
       return;
     }
@@ -3756,17 +3768,30 @@ export function AgentPage() {
     }
     setHistorySelectedJsonlDownloadStatus('busy');
     let ok = false;
+    let emptySelection = false;
     try {
-      const jsonl = formatAgentHistoryJsonl({
-        items: selectedItems.map(toHistoryExportItem),
-      });
-      ok = downloadTextFile(jsonl, {
-        filename: `${withDownloadDate('agent-research-selected')}.jsonl`,
-        mimeType: 'application/x-ndjson;charset=utf-8',
-      });
+      const jsonl = formatSelectedAgentHistoryJsonl(
+        taskHistory,
+        selectedHistoryTaskIdList,
+        toHistoryExportItem,
+      );
+      if (!jsonl) {
+        emptySelection = true;
+      } else {
+        ok = downloadTextFile(jsonl, {
+          filename: `${withDownloadDate('agent-research-selected')}.jsonl`,
+          mimeType: 'application/x-ndjson;charset=utf-8',
+        });
+      }
     } catch {
       // Keep one malformed runtime row from leaving the control locked.
       ok = false;
+    }
+    if (emptySelection) {
+      historySelectedJsonlDownloadBusyRef.current = false;
+      setHistorySelectedJsonlDownloadStatus('idle');
+      setToastMessage('No selected history tasks to export.');
+      return;
     }
     setHistorySelectedJsonlDownloadStatus(ok ? 'done' : 'failed');
     if (!ok) {

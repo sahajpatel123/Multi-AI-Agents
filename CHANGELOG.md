@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads while also exposing a plain-text clipboard fallback
 
 ### Improved
+- Selected Agent history JSONL copy now clears stale completion feedback when
+  the checkbox selection changes while the clipboard request is pending
 - Selected Agent history exports now keep one row per task when a malformed
   refresh payload repeats a task id, preventing duplicate clipboard/download
   records while preserving history order

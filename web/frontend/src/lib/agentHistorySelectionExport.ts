@@ -2,6 +2,7 @@ import {
   formatAgentHistoryCsv,
   formatAgentHistoryExport,
   formatAgentHistoryJson,
+  formatAgentHistoryJsonl,
   type AgentHistoryExportItem,
 } from './agentHistoryExport';
 import {
@@ -62,4 +63,20 @@ export function formatSelectedAgentHistoryJson<T extends SelectableAgentHistoryI
     items: selected.map(toExportItem),
     totalCount: selected.length,
   });
+}
+
+/**
+ * Format only retained history rows selected by the user as JSONL.
+ *
+ * Keep selection resolution beside the other selected export formats so the
+ * download and clipboard actions cannot drift on stale ids or duplicate rows.
+ */
+export function formatSelectedAgentHistoryJsonl<T extends SelectableAgentHistoryItem>(
+  items: readonly T[],
+  selectedTaskIds: readonly string[],
+  toExportItem: (item: T) => AgentHistoryExportItem,
+): string | null {
+  const selected = selectAgentHistoryItems(items, selectedTaskIds);
+  if (selected.length === 0) return null;
+  return formatAgentHistoryJsonl({ items: selected.map(toExportItem) });
 }
