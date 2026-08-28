@@ -143,6 +143,8 @@ AGENT_HISTORY_RETENTION_DAYS: dict[UserTier, int] = {
     UserTier.PRO: 365,
 }
 
+OrchestrationStatus = Literal["running", "complete", "failed", "cancelled"]
+
 
 def _json_column_value(value) -> list | dict | None:
     """Normalize JSON columns (PostgreSQL returns objects; SQLite may return str)."""
@@ -2265,7 +2267,7 @@ async def list_orchestrations(
     http_request: Request,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
-    status: str | None = Query(
+    status: OrchestrationStatus | None = Query(
         None,
         description="Filter by status: 'running', 'complete', 'failed', 'cancelled'",
     ),
@@ -2329,7 +2331,10 @@ async def list_orchestrations(
 
 @router.get("/orchestrations/export.csv")
 async def export_orchestrations_csv(
-    status: str | None = Query(None, description="Filter by status: 'running', 'complete', 'failed'"),
+    status: OrchestrationStatus | None = Query(
+        None,
+        description="Filter by status: 'running', 'complete', 'failed', or 'cancelled'",
+    ),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):

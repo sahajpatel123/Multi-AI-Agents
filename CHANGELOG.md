@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Orchestration CSV status filters now reject unknown values instead of
+  returning a misleading empty export
 - Rich HTML report copy feedback now invalidates when switching tasks, so a
   late clipboard result cannot be shown on the newly selected report
 - Agent HTML report exports now preserve the canonical persisted source list,

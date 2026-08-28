@@ -210,6 +210,21 @@ async def test_export_orchestrations_csv_with_status_filter(app_client, make_use
 
 
 @pytest.mark.asyncio
+async def test_export_orchestrations_csv_rejects_unknown_status(app_client, make_user, db_session):
+    """Reject typos instead of returning a misleading header-only export."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrations/export.csv?status=finished",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 422
+    assert "status" in res.text
+
+
+@pytest.mark.asyncio
 async def test_export_orchestrations_csv_formula_injection_defense(app_client, make_user, db_session):
     """Test CSV export defends against formula injection."""
     user = _make_pro(make_user)
