@@ -1,6 +1,7 @@
 /** Portable markdown for Agent Mode research history (list view). */
 
 import { formatIsoWhen } from './relativeTime';
+import { escapeHtml } from './agentReportHtml';
 
 export type AgentHistoryExportItem = {
   title?: string | null;
@@ -16,10 +17,14 @@ export type AgentHistoryExportItem = {
   watchlistItemId?: string | null;
 };
 
+function historyText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 function displayTitle(item: AgentHistoryExportItem): string {
-  const title = (item.title || '').trim();
+  const title = historyText(item.title);
   if (title) return title;
-  const q = (item.question || '').trim();
+  const q = historyText(item.question);
   if (q) return q.length > 120 ? `${q.slice(0, 119).trimEnd()}…` : q;
   return 'Untitled research';
 }
@@ -327,4 +332,148 @@ export function formatAgentHistoryJsonl(opts: {
   const lines = items.map((item) => JSON.stringify(formatAgentHistoryJsonRecord(item)));
 
   return lines.length ? `${lines.join('\n')}\n` : '';
+}
+
+function htmlConfidence(value: number): string {
+  const normalized = value <= 1 ? value * 100 : value;
+  return `${Math.round(Math.min(100, Math.max(0, normalized)))}%`;
+}
+
+function historyHtmlTopics(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((topic): topic is string => typeof topic === 'string')
+    .map((topic) => topic.trim())
+    .filter(Boolean);
+}
+
+function historyHtmlMeta(item: AgentHistoryExportItem): string[] {
+  const meta: string[] = [];
+  if (typeof item.score === 'number' && Number.isFinite(item.score)) {
+    meta.push(`<span><strong>Score</strong> ${Math.round(Math.min(100, Math.max(0, item.score)))}/100</span>`);
+  }
+  if (typeof item.confidence === 'number' && Number.isFinite(item.confidence)) {
+    meta.push(`<span><strong>Confidence</strong> ${htmlConfidence(item.confidence)}</span>`);
+  }
+  if (item.isLive === true) meta.push('<span class="history-live">Live</span>');
+  if (historyText(item.createdAt)) {
+    meta.push(`<span><strong>Run</strong> ${escapeHtml(formatIsoWhen(item.createdAt, { fallback: '—' }))}</span>`);
+  }
+  if (historyText(item.userFeedback)) {
+    meta.push(`<span><strong>Feedback</strong> ${escapeHtml(historyText(item.userFeedback))}</span>`);
+  }
+  return meta;
+}
+
+/** Format the current Agent history view as a self-contained offline HTML archive. */
+export function formatAgentHistoryHtml(opts: {
+  items: AgentHistoryExportItem[];
+  totalCount?: number;
+  filterNote?: string;
+  exportedAt?: string;
+}): string {
+  const items = Array.isArray(opts?.items) ? opts.items : [];
+  const total =
+    typeof opts?.totalCount === 'number' && Number.isFinite(opts.totalCount)
+      ? Math.max(0, Math.round(opts.totalCount))
+      : null;
+  const countLabel =
+    total != null && items.length !== total
+      ? `${items.length} of ${total} tasks`
+      : `${items.length} task${items.length === 1 ? '' : 's'}`;
+  const filterNote = historyText(opts?.filterNote);
+  const exportedAt = historyText(opts?.exportedAt) || new Date().toISOString();
+
+  const cards = items
+    .map((item, index) => {
+      const title = displayTitle(item);
+      const question = historyText(item.question);
+      const topics = historyHtmlTopics(item.topics);
+      const meta = historyHtmlMeta(item);
+      const taskId = historyText(item.taskId);
+      const questionBlock =
+        question && question !== title
+          ? `<p class="history-question"><strong>Question</strong>${escapeHtml(question)}</p>`
+          : '';
+      const topicsBlock =
+        topics.length > 0
+          ? `<div class="history-topics"><strong>Topics</strong>${topics
+              .map((topic) => `<span>${escapeHtml(topic)}</span>`)
+              .join('')}</div>`
+          : '';
+      const taskBlock = taskId
+        ? `<p class="history-task"><strong>Task</strong><code>${escapeHtml(taskId)}</code></p>`
+        : '';
+
+      return `<article class="history-card">
+  <header class="history-card__heading"><span class="history-card__number">${String(index + 1).padStart(2, '0')}</span><h2>${escapeHtml(title)}</h2></header>
+  ${meta.length > 0 ? `<div class="history-meta">${meta.join('')}</div>` : ''}
+  ${questionBlock}
+  ${topicsBlock}
+  ${taskBlock}
+</article>`;
+    })
+    .join('\n');
+
+  const emptyState =
+    items.length === 0
+      ? '<p class="history-empty">No research tasks in this view.</p>'
+      : '';
+  const filterBlock = filterNote
+    ? `<p class="history-filter"><strong>Filtered view</strong>${escapeHtml(filterNote)}</p>`
+    : '';
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="generator" content="Arena Agent history">
+  <title>Arena Agent research history</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { background: #f7f4ee; color: #2b211b; margin: 0; }
+    main { box-sizing: border-box; max-width: 980px; margin: 0 auto; padding: 48px 24px 64px; }
+    header.page-heading { margin-bottom: 28px; }
+    .eyebrow { color: #79583d; font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { font-size: clamp(1.8rem, 5vw, 3rem); line-height: 1.1; margin: 8px 0 12px; }
+    .summary { color: #79583d; margin: 0; }
+    .history-filter { background: #fff8ef; border-left: 3px solid #b66f43; margin: 22px 0 0; padding: 10px 14px; white-space: pre-wrap; }
+    .history-filter strong, .history-question strong, .history-topics strong, .history-task strong { display: block; font-size: .7rem; letter-spacing: .1em; margin-bottom: 5px; text-transform: uppercase; }
+    .history-list { display: grid; gap: 16px; }
+    .history-card { background: #fffdf9; border: 1px solid #e4d9cc; border-radius: 14px; box-shadow: 0 8px 28px rgba(66, 45, 28, .06); padding: 22px 24px; }
+    .history-card__heading { align-items: baseline; display: flex; gap: 12px; }
+    .history-card__number { color: #b66f43; font-size: .75rem; font-weight: 700; letter-spacing: .08em; }
+    h2 { font-size: 1.15rem; line-height: 1.35; margin: 0; white-space: pre-wrap; }
+    .history-meta { color: #79583d; display: flex; flex-wrap: wrap; font-size: .82rem; gap: 8px 16px; margin: 14px 0 0 28px; }
+    .history-meta strong { color: #4f3a2b; font-weight: 700; }
+    .history-live { color: #477957; font-weight: 700; }
+    .history-question { border-left: 2px solid #d5b79d; line-height: 1.55; margin: 18px 0 0 28px; padding-left: 14px; white-space: pre-wrap; }
+    .history-topics { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0 0 28px; }
+    .history-topics strong { margin: 0 4px 0 0; }
+    .history-topics span { background: #f0e9e0; border-radius: 999px; color: #644b37; font-size: .78rem; padding: 4px 9px; }
+    .history-task { color: #79583d; font-size: .78rem; margin: 16px 0 0 28px; }
+    .history-task code { background: #f0e9e0; border-radius: 4px; display: inline-block; max-width: 100%; overflow-wrap: anywhere; padding: 3px 6px; }
+    .history-empty { background: #fffdf9; border: 1px dashed #d5b79d; border-radius: 14px; color: #79583d; padding: 32px; text-align: center; }
+    footer { border-top: 1px solid #e4d9cc; color: #79583d; font-size: .8rem; margin-top: 30px; padding-top: 14px; }
+    @media print { body { background: #fff; } main { padding: 0; } .history-card { box-shadow: none; break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <main data-format="arena-agent-history" data-version="1">
+    <header class="page-heading">
+      <div class="eyebrow">Arena Agent</div>
+      <h1>Research history</h1>
+      <p class="summary">${escapeHtml(countLabel)}</p>
+      ${filterBlock}
+    </header>
+    <section class="history-list" aria-label="Agent research history">
+      ${emptyState || cards}
+    </section>
+    <footer>Exported ${escapeHtml(exportedAt)} · Shared from Arena Agent history</footer>
+  </main>
+</body>
+</html>
+`;
 }

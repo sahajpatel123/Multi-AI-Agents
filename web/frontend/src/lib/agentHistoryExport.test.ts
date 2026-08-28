@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatAgentHistoryCsv,
   formatAgentHistoryExport,
+  formatAgentHistoryHtml,
   formatAgentHistoryItemCopy,
   formatAgentHistoryJson,
   formatAgentHistoryJsonl,
@@ -410,5 +411,68 @@ describe('formatAgentHistoryJsonl', () => {
       orchestration_id: 'orch_1',
       watchlist_item_id: null,
     });
+  });
+});
+
+describe('formatAgentHistoryHtml', () => {
+  it('builds a self-contained archive with view context and task metadata', () => {
+    const html = formatAgentHistoryHtml({
+      totalCount: 5,
+      filterNote: 'search: “rates”',
+      exportedAt: '2026-07-01T12:00:00.000Z',
+      items: [
+        {
+          title: 'Rate path scan',
+          question: 'Will rates cut this quarter?',
+          score: 84,
+          confidence: 0.72,
+          createdAt: '2026-07-01T12:00:00.000Z',
+          topics: ['macro', 'fed'],
+          taskId: 'task_abc',
+          userFeedback: 'positive',
+          isLive: true,
+        },
+      ],
+    });
+
+    expect(html).toContain('<!doctype html>');
+    expect(html).toContain('data-format="arena-agent-history"');
+    expect(html).toContain('1 of 5 tasks');
+    expect(html).toContain('search: “rates”');
+    expect(html).toContain('Rate path scan');
+    expect(html).toContain('Will rates cut this quarter?');
+    expect(html).toContain('Score</strong> 84/100');
+    expect(html).toContain('Confidence</strong> 72%');
+    expect(html).toContain('macro');
+    expect(html).toContain('task_abc');
+    expect(html).toContain('Exported 2026-07-01T12:00:00.000Z');
+  });
+
+  it('escapes hostile history content and renders empty views honestly', () => {
+    const html = formatAgentHistoryHtml({
+      totalCount: 0,
+      filterNote: '<script>alert(1)</script>\n# hidden',
+      exportedAt: '2026-07-01T12:00:00.000Z',
+      items: [
+        {
+          title: '<img src=x onerror=alert(1)>',
+          question: 'Use </article><script>alert(1)</script>',
+          topics: ['<b>topic</b>'],
+          taskId: 'task" onclick="alert(1)',
+          userFeedback: '<strong>unsafe</strong>',
+        },
+      ],
+    });
+
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).toContain('Use &lt;/article&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).toContain('&lt;b&gt;topic&lt;/b&gt;');
+    expect(html).toContain('task&quot; onclick=&quot;alert(1)');
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('Filtered view</strong>&lt;script&gt;alert(1)&lt;/script&gt;');
+
+    const empty = formatAgentHistoryHtml({ items: [], exportedAt: '2026-07-01' });
+    expect(empty).toContain('No research tasks in this view.');
+    expect(empty).toContain('0 tasks');
   });
 });

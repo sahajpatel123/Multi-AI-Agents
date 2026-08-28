@@ -160,6 +160,7 @@ import { formatAgentReportHtml, selectAgentReportSources } from '../lib/agentRep
 import {
   formatAgentHistoryCsv,
   formatAgentHistoryExport,
+  formatAgentHistoryHtml,
   formatAgentHistoryItemCopy,
   formatAgentHistoryJson,
   formatAgentHistoryJsonl,
@@ -934,6 +935,9 @@ export function AgentPage() {
   const historyViewEditedRef = useRef(!initialHistoryState.fromSharedUrl);
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyHtmlDownloadStatus, setHistoryHtmlDownloadStatus] = useState<
+    'idle' | 'done' | 'failed'
+  >('idle');
   const [historyCsvDownloadStatus, setHistoryCsvDownloadStatus] =
     useState<'idle' | 'done' | 'failed'>('idle');
   const [historyCsvCopyStatus, setHistoryCsvCopyStatus] =
@@ -976,6 +980,7 @@ export function AgentPage() {
   >('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
+  const historyHtmlDownloadTimerRef = useRef<number | null>(null);
   const historyCsvDownloadTimerRef = useRef<number | null>(null);
   const historyCsvCopyTimerRef = useRef<number | null>(null);
   /** Prevent duplicate CSV clipboard writes and stale feedback after reset. */
@@ -3378,6 +3383,9 @@ export function AgentPage() {
       if (historyDownloadTimerRef.current != null) {
         window.clearTimeout(historyDownloadTimerRef.current);
       }
+      if (historyHtmlDownloadTimerRef.current != null) {
+        window.clearTimeout(historyHtmlDownloadTimerRef.current);
+      }
       if (historyCsvDownloadTimerRef.current != null) {
         window.clearTimeout(historyCsvDownloadTimerRef.current);
       }
@@ -3694,6 +3702,27 @@ export function AgentPage() {
     historyDownloadTimerRef.current = window.setTimeout(() => {
       setHistoryDownloadStatus('idle');
       historyDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadFilteredHistoryHtml = () => {
+    const html = formatAgentHistoryHtml({
+      items: filteredTaskHistory.map(toHistoryExportItem),
+      totalCount: taskHistory.length,
+      filterNote: buildHistoryFilterNote(),
+    });
+    const ok = downloadHtmlFile(html, 'agent-research-history');
+    if (historyHtmlDownloadTimerRef.current != null) {
+      window.clearTimeout(historyHtmlDownloadTimerRef.current);
+    }
+    setHistoryHtmlDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download history HTML — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historyHtmlDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryHtmlDownloadStatus('idle');
+      historyHtmlDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -6926,6 +6955,42 @@ export function AgentPage() {
                       : historyDownloadStatus === 'failed'
                         ? 'Failed'
                         : 'Download'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadFilteredHistoryHtml()}
+                    title="Download current history view as a standalone HTML archive"
+                    aria-label={
+                      historyHtmlDownloadStatus === 'done'
+                        ? 'History HTML downloaded'
+                        : historyHtmlDownloadStatus === 'failed'
+                          ? 'History HTML download failed'
+                          : 'Download research history as HTML'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyHtmlDownloadStatus === 'failed'
+                          ? '#D85A30'
+                          : historyHtmlDownloadStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#A0A39A',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--vp-font-sans)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {historyHtmlDownloadStatus === 'done'
+                      ? 'HTML'
+                      : historyHtmlDownloadStatus === 'failed'
+                        ? 'Failed'
+                        : 'HTML'}
                   </button>
                   <button
                     type="button"
