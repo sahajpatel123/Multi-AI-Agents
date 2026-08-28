@@ -174,6 +174,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verbatim and keeps the loaded rows
 
 ### Added
+- Agent research history can now export exactly the selected tasks as a
+  standalone HTML archive for offline reading and printing, including rows
+  temporarily hidden by filters
 - Agent history can now copy the current filtered view as structured JSON
   directly to the clipboard, preserving the same filter note and stable field
   names as its JSON download for quick handoff to scripts and notebooks

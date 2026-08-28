@@ -1,6 +1,7 @@
 import {
   formatAgentHistoryCsv,
   formatAgentHistoryExport,
+  formatAgentHistoryHtml,
   formatAgentHistoryJson,
   formatAgentHistoryJsonl,
   type AgentHistoryExportItem,
@@ -41,6 +42,27 @@ export function formatSelectedAgentHistoryMarkdown<T extends SelectableAgentHist
   const selected = selectAgentHistoryItems(items, selectedTaskIds);
   if (selected.length === 0) return null;
   return formatAgentHistoryExport({
+    items: selected.map(toExportItem),
+    totalCount: selected.length,
+  });
+}
+
+/**
+ * Format only retained history rows selected by the user as a standalone HTML
+ * archive.
+ *
+ * The selected count is used as the archive total because this action is an
+ * explicit curation, not a filtered view whose rows are a subset of a larger
+ * result set.
+ */
+export function formatSelectedAgentHistoryHtml<T extends SelectableAgentHistoryItem>(
+  items: readonly T[],
+  selectedTaskIds: readonly string[],
+  toExportItem: (item: T) => AgentHistoryExportItem,
+): string | null {
+  const selected = selectAgentHistoryItems(items, selectedTaskIds);
+  if (selected.length === 0) return null;
+  return formatAgentHistoryHtml({
     items: selected.map(toExportItem),
     totalCount: selected.length,
   });

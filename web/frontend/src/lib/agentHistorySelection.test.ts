@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { selectAgentHistoryItems } from './agentHistorySelection';
 import {
   formatSelectedAgentHistoryCsv,
+  formatSelectedAgentHistoryHtml,
   formatSelectedAgentHistoryJson,
   formatSelectedAgentHistoryJsonl,
   formatSelectedAgentHistoryMarkdown,
@@ -103,6 +104,42 @@ describe('formatSelectedAgentHistoryMarkdown', () => {
   it('returns null when no retained task is selected', () => {
     expect(
       formatSelectedAgentHistoryMarkdown(
+        [{ task_id: 'task_1', title: 'One' }],
+        ['missing'],
+        (item) => ({ taskId: item.task_id, title: item.title }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('formatSelectedAgentHistoryHtml', () => {
+  it('exports only selected retained rows in history order as an offline archive', () => {
+    const html = formatSelectedAgentHistoryHtml(
+      [
+        { task_id: 'newest', title: 'Newest', task_text: 'First question' },
+        { task_id: 'middle', title: 'Middle', task_text: 'Second question' },
+        { task_id: 'oldest', title: 'Oldest', task_text: 'Third question' },
+      ],
+      ['oldest', 'missing', 'newest', 'oldest'],
+      (item) => ({
+        taskId: item.task_id,
+        title: item.title,
+        question: item.task_text,
+      }),
+    );
+
+    expect(html).not.toBeNull();
+    expect(html).toContain('<meta name="generator" content="Arena Agent history">');
+    expect(html).toContain('<p class="summary">2 tasks</p>');
+    expect(html).toContain('<h2>Newest</h2>');
+    expect(html).toContain('<h2>Oldest</h2>');
+    expect(html).not.toContain('<h2>Middle</h2>');
+    expect(html).not.toContain('Second question');
+  });
+
+  it('returns null when no retained task is selected', () => {
+    expect(
+      formatSelectedAgentHistoryHtml(
         [{ task_id: 'task_1', title: 'One' }],
         ['missing'],
         (item) => ({ taskId: item.task_id, title: item.title }),

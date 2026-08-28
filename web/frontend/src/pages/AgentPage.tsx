@@ -176,6 +176,7 @@ import {
 } from '../lib/agentHistorySelectionClipboard';
 import {
   formatSelectedAgentHistoryCsv,
+  formatSelectedAgentHistoryHtml,
   formatSelectedAgentHistoryJson,
   formatSelectedAgentHistoryJsonl,
   formatSelectedAgentHistoryMarkdown,
@@ -975,6 +976,8 @@ export function AgentPage() {
   >('idle');
   const [historySelectedMarkdownDownloadStatus, setHistorySelectedMarkdownDownloadStatus] =
     useState<'idle' | 'busy' | 'done' | 'failed'>('idle');
+  const [historySelectedHtmlDownloadStatus, setHistorySelectedHtmlDownloadStatus] =
+    useState<'idle' | 'busy' | 'done' | 'failed'>('idle');
   const [historyJsonlCopyStatus, setHistoryJsonlCopyStatus] = useState<
     'idle' | 'copying' | 'copied' | 'failed'
   >('idle');
@@ -1000,6 +1003,7 @@ export function AgentPage() {
   const historySelectedJsonDownloadTimerRef = useRef<number | null>(null);
   const historySelectedJsonCopyTimerRef = useRef<number | null>(null);
   const historySelectedMarkdownDownloadTimerRef = useRef<number | null>(null);
+  const historySelectedHtmlDownloadTimerRef = useRef<number | null>(null);
   /** Prevent rapid or re-entrant activations from creating duplicate files. */
   const historySelectedJsonlDownloadBusyRef = useRef(false);
   /** Prevent duplicate selected JSONL clipboard writes and stale feedback. */
@@ -1017,6 +1021,7 @@ export function AgentPage() {
   const historySelectedMarkdownCopyInFlightRef = useRef(false);
   const historySelectedMarkdownCopyRunIdRef = useRef(0);
   const historySelectedMarkdownDownloadBusyRef = useRef(false);
+  const historySelectedHtmlDownloadBusyRef = useRef(false);
   const historyJsonlDownloadBusyRef = useRef(false);
   const historyJsonlCopyTimerRef = useRef<number | null>(null);
   const historyJsonlCopyInFlightRef = useRef(false);
@@ -2534,6 +2539,12 @@ export function AgentPage() {
     }
     historySelectedMarkdownDownloadBusyRef.current = false;
     setHistorySelectedMarkdownDownloadStatus('idle');
+    if (historySelectedHtmlDownloadTimerRef.current != null) {
+      window.clearTimeout(historySelectedHtmlDownloadTimerRef.current);
+      historySelectedHtmlDownloadTimerRef.current = null;
+    }
+    historySelectedHtmlDownloadBusyRef.current = false;
+    setHistorySelectedHtmlDownloadStatus('idle');
     setUserRating(null);
     setRatingResult(null);
     setRatingSubmitBusy(false);
@@ -3437,6 +3448,9 @@ export function AgentPage() {
       if (historySelectedMarkdownDownloadTimerRef.current != null) {
         window.clearTimeout(historySelectedMarkdownDownloadTimerRef.current);
       }
+      if (historySelectedHtmlDownloadTimerRef.current != null) {
+        window.clearTimeout(historySelectedHtmlDownloadTimerRef.current);
+      }
       historySelectedJsonlDownloadBusyRef.current = false;
       historySelectedJsonlCopyRunIdRef.current += 1;
       historySelectedJsonlCopyInFlightRef.current = false;
@@ -3449,6 +3463,7 @@ export function AgentPage() {
       historySelectedMarkdownCopyRunIdRef.current += 1;
       historySelectedMarkdownCopyInFlightRef.current = false;
       historySelectedMarkdownDownloadBusyRef.current = false;
+      historySelectedHtmlDownloadBusyRef.current = false;
       historyJsonlDownloadBusyRef.current = false;
       historyJsonlCopyRunIdRef.current += 1;
       historyJsonlCopyInFlightRef.current = false;
@@ -4146,6 +4161,52 @@ export function AgentPage() {
       historySelectedMarkdownDownloadBusyRef.current = false;
       setHistorySelectedMarkdownDownloadStatus('idle');
       historySelectedMarkdownDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadSelectedHistoryHtml = () => {
+    // The disabled prop follows React's render cycle; the ref closes the
+    // smaller window where two activations can arrive before that render.
+    if (historySelectedHtmlDownloadBusyRef.current) return;
+    historySelectedHtmlDownloadBusyRef.current = true;
+    if (historySelectedHtmlDownloadTimerRef.current != null) {
+      window.clearTimeout(historySelectedHtmlDownloadTimerRef.current);
+      historySelectedHtmlDownloadTimerRef.current = null;
+    }
+    setHistorySelectedHtmlDownloadStatus('busy');
+    let ok = false;
+    let emptySelection = false;
+    try {
+      // Keep selection resolution and HTML normalization inside the guarded
+      // section so malformed remote rows cannot leave this action locked.
+      const html = formatSelectedAgentHistoryHtml(
+        taskHistory,
+        selectedHistoryTaskIdList,
+        toHistoryExportItem,
+      );
+      if (!html) {
+        emptySelection = true;
+      } else {
+        ok = downloadHtmlFile(html, 'agent-research-selected');
+      }
+    } catch {
+      ok = false;
+    }
+    if (emptySelection) {
+      historySelectedHtmlDownloadBusyRef.current = false;
+      setHistorySelectedHtmlDownloadStatus('idle');
+      setToastMessage('No selected history tasks to export.');
+      return;
+    }
+    setHistorySelectedHtmlDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download selected history HTML — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historySelectedHtmlDownloadTimerRef.current = window.setTimeout(() => {
+      historySelectedHtmlDownloadBusyRef.current = false;
+      setHistorySelectedHtmlDownloadStatus('idle');
+      historySelectedHtmlDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -6765,6 +6826,62 @@ export function AgentPage() {
                             : historySelectedMarkdownDownloadStatus === 'failed'
                               ? 'Failed'
                               : 'Selected MD'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={downloadSelectedHistoryHtml}
+                        disabled={
+                          historySelectionLocked ||
+                          historySelectedHtmlDownloadStatus === 'busy'
+                        }
+                        title="Download the selected history tasks as a standalone HTML archive"
+                        aria-label={
+                          historySelectedHtmlDownloadStatus === 'busy'
+                            ? 'Exporting selected history as HTML'
+                            : historySelectedHtmlDownloadStatus === 'done'
+                              ? 'Selected history HTML downloaded'
+                              : historySelectedHtmlDownloadStatus === 'failed'
+                                ? 'Selected history HTML download failed'
+                                : `Download ${selectedHistoryTaskIdList.length} selected history tasks as HTML`
+                        }
+                        style={{
+                          background: 'none',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color:
+                            historySelectedHtmlDownloadStatus === 'busy'
+                              ? '#B07840'
+                              : historySelectedHtmlDownloadStatus === 'failed'
+                                ? '#D85A30'
+                                : historySelectedHtmlDownloadStatus === 'done'
+                                  ? '#5A8C6A'
+                                  : '#A0A39A',
+                          cursor:
+                            historySelectionLocked ||
+                            historySelectedHtmlDownloadStatus === 'busy'
+                              ? 'not-allowed'
+                              : 'pointer',
+                          fontFamily: 'var(--vp-font-sans)',
+                          lineHeight: 1.4,
+                          opacity:
+                            historySelectionLocked ||
+                            historySelectedHtmlDownloadStatus === 'busy'
+                              ? 0.5
+                              : 1,
+                        }}
+                        aria-busy={historySelectedHtmlDownloadStatus === 'busy'}
+                      >
+                        {historySelectedHtmlDownloadStatus === 'busy'
+                          ? 'Exporting…'
+                          : historySelectedHtmlDownloadStatus === 'done'
+                            ? 'Downloaded'
+                            : historySelectedHtmlDownloadStatus === 'failed'
+                              ? 'Failed'
+                              : 'Selected HTML'}
                       </button>
                       {historyBulkDeleteConfirm ? (
                         <>
