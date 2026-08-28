@@ -58,4 +58,16 @@ describe('copySelectedAgentHistoryJson', () => {
       ),
     ).resolves.toBe(false);
   });
+
+  it('refuses malformed retained rows without escaping the clipboard boundary', async () => {
+    await expect(
+      copySelectedAgentHistoryJson(
+        [null] as unknown as Array<{ task_id: string }>,
+        ['task-1'],
+        (item) => ({ taskId: item.task_id }),
+      ),
+    ).resolves.toBe(false);
+
+    expect(copyAgentHistoryJson).not.toHaveBeenCalled();
+  });
 });

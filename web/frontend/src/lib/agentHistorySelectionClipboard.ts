@@ -19,10 +19,13 @@ export async function copySelectedAgentHistoryJson<
   selectedTaskIds: readonly string[],
   toExportItem: (item: T) => AgentHistoryExportItem,
 ): Promise<boolean> {
-  const selected = selectAgentHistoryItems(items, selectedTaskIds);
-  if (selected.length === 0) return false;
-
   try {
+    // History is API data at runtime, so keep selection resolution inside the
+    // same total boundary as serialization. A malformed collection or row
+    // must refuse the copy instead of escaping through a click handler.
+    const selected = selectAgentHistoryItems(items, selectedTaskIds);
+    if (selected.length === 0) return false;
+
     return await copyAgentHistoryJson({
       items: selected.map(toExportItem),
       totalCount: selected.length,
