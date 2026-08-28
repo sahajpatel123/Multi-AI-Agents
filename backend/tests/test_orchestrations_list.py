@@ -270,3 +270,98 @@ async def test_export_orchestrations_csv_empty(app_client, make_user, db_session
     text = res.text
     assert "id" in text  # Header should be present
     assert "status" in text
+
+
+@pytest.mark.asyncio
+async def test_export_orchestrations_json_preserves_synthesis_details(
+    app_client, make_user, db_session
+):
+    """JSON export keeps the structured synthesis omitted by the CSV view."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_orchestration(
+        db_session,
+        user.id,
+        "orch-json-1",
+        status="complete",
+        task_ids=["task-1", "task-2"],
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrations/export.json",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "application/json; charset=utf-8"
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert res.headers["cache-control"] == "no-store, no-cache, must-revalidate, private"
+    assert "arena-orchestrations-" in res.headers["content-disposition"]
+    payload = res.json()
+    assert payload == [
+        {
+            "id": "orch-json-1",
+            "status": "complete",
+            "created_at": payload[0]["created_at"],
+            "task_count": 2,
+            "task_ids": ["task-1", "task-2"],
+            "synthesis": "This is a test synthesis",
+            "synthesis_bullets": ["Point 1", "Point 2"],
+            "conflicts": [],
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_export_orchestrations_json_applies_status_filter(
+    app_client, make_user, db_session
+):
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_orchestration(db_session, user.id, "orch-json-complete", status="complete")
+    _seed_orchestration(db_session, user.id, "orch-json-running", status="running")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrations/export.json?status=complete",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert [item["id"] for item in res.json()] == ["orch-json-complete"]
+
+
+@pytest.mark.asyncio
+async def test_export_orchestrations_json_rejects_unknown_status(
+    app_client, make_user, db_session
+):
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrations/export.json?status=finished",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 422
+    assert "status" in res.text
+
+
+@pytest.mark.asyncio
+async def test_export_orchestrations_json_empty_is_valid_array(
+    app_client, make_user, db_session
+):
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrations/export.json",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert res.json() == []
+    assert res.text.endswith("\n")

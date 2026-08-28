@@ -2403,6 +2403,69 @@ async def export_orchestrations_csv(
     )
 
 
+@router.get("/orchestrations/export.json")
+async def export_orchestrations_json(
+    status: OrchestrationStatus | None = Query(
+        None,
+        description="Filter by status: 'running', 'complete', 'failed', or 'cancelled'",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """JSON export of orchestration history for programmatic use.
+
+    Unlike the compact CSV export, JSON preserves the complete synthesis,
+    bullets, and conflict objects so a downloaded history can be re-used by
+    notebooks, scripts, or future Arena imports. The payload remains scoped
+    to the caller and supports the same validated status filter as the list
+    and CSV endpoints.
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_json",
+        limit=30,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait.",
+    )
+
+    query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
+    if status:
+        query = query.filter(Orchestration.status == status)
+
+    orchestrations = query.order_by(Orchestration.created_at.desc()).all()
+    items = []
+    for orch in orchestrations:
+        task_ids = list(orch.task_ids or [])
+        bullets = _json_column_value(orch.synthesis_bullets)
+        conflicts = _json_column_value(orch.conflicts)
+        items.append(
+            {
+                "id": orch.id,
+                "status": orch.status,
+                "created_at": orch.created_at.isoformat() if orch.created_at else None,
+                "task_count": len(task_ids),
+                "task_ids": task_ids,
+                "synthesis": orch.synthesis or "",
+                "synthesis_bullets": bullets if isinstance(bullets, list) else [],
+                "conflicts": conflicts if isinstance(conflicts, list) else [],
+            }
+        )
+
+    filename = f"arena-orchestrations-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=json.dumps(items, indent=2, ensure_ascii=False, default=str) + "\n",
+        media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/tasks/{task_id}/export/pdf")
 async def export_task_pdf(
     task_id: str,

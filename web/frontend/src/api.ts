@@ -3214,6 +3214,42 @@ export async function exportAgentOrchestrationsCsv(
   return response.blob();
 }
 
+/** Download the caller's orchestration history with full synthesis details as JSON. */
+export async function exportAgentOrchestrationsJson(
+  status?: AgentOrchestrationStatus,
+): Promise<Blob> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  const response = await apiFetch(`/api/agent/orchestrations/export.json${query}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(
+        getErrorMessage(err, 'Failed to export orchestration history as JSON'),
+        response,
+      ),
+      response.status,
+      err,
+    );
+  }
+
+  const text = await response.clone().text();
+  if (!text.trim()) {
+    throw new Error(
+      withRequestId('Empty orchestration history JSON returned by the server', response),
+    );
+  }
+  try {
+    if (!Array.isArray(JSON.parse(text))) {
+      throw new Error('not an array');
+    }
+  } catch {
+    throw new Error(
+      withRequestId('Invalid orchestration history JSON returned by the server', response),
+    );
+  }
+  return response.blob();
+}
+
 export type AgentWatchlistItem = {
   id: string;
   question: string;

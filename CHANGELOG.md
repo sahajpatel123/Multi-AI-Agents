@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current tab immediately, keeping stale rows and local pins from lingering
 
 ### Added
+- Orchestration history can now be downloaded as structured JSON, preserving
+  full syntheses, bullets, conflicts, and validated status filters
 - Completed orchestration runs can now be downloaded together as a dated,
   spreadsheet-safe CSV history from the unified synthesis view
 - Agent research history can now copy exactly the selected tasks as rich HTML,

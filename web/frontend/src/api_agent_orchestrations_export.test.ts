@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { exportAgentOrchestrationsCsv } from './api';
+import { exportAgentOrchestrationsCsv, exportAgentOrchestrationsJson } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -66,6 +66,76 @@ describe('Agent orchestration history CSV export frontend API helper', () => {
     await expect(exportAgentOrchestrationsCsv()).rejects.toMatchObject({
       status: 429,
       message: 'Too many CSV exports (Request ID: req-orchestration-csv)',
+    });
+  });
+});
+
+describe('Agent orchestration history JSON export frontend API helper', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('fetches structured orchestration history and returns a non-empty blob', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('[{"id":"orch-1","status":"complete"}]', {
+        status: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      }),
+    );
+
+    const blob = await exportAgentOrchestrationsJson();
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/orchestrations/export.json',
+      {},
+    );
+    expect(blob.size).toBeGreaterThan(0);
+    expect(blob.type).toBe('application/json;charset=utf-8');
+  });
+
+  it('encodes an optional orchestration status filter', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('[]', { status: 200 }),
+    );
+
+    await exportAgentOrchestrationsJson('cancelled');
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/orchestrations/export.json?status=cancelled',
+      {},
+    );
+  });
+
+  it('rejects empty or malformed successful responses', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('', { status: 200 }),
+    );
+    await expect(exportAgentOrchestrationsJson()).rejects.toThrow(
+      'Empty orchestration history JSON returned by the server',
+    );
+
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('{"items":[]}', { status: 200 }),
+    );
+    await expect(exportAgentOrchestrationsJson()).rejects.toThrow(
+      'Invalid orchestration history JSON returned by the server',
+    );
+  });
+
+  it('surfaces request IDs when the JSON export is rate limited', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ detail: { message: 'Too many JSON exports' } }),
+        {
+          status: 429,
+          headers: { 'x-request-id': 'req-orchestration-json' },
+        },
+      ),
+    );
+
+    await expect(exportAgentOrchestrationsJson()).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many JSON exports (Request ID: req-orchestration-json)',
     });
   });
 });
