@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type AgentHistoryExportItem,
   formatAgentHistoryCsv,
   formatAgentHistoryExport,
   formatAgentHistoryHtml,
@@ -474,5 +475,27 @@ describe('formatAgentHistoryHtml', () => {
     const empty = formatAgentHistoryHtml({ items: [], exportedAt: '2026-07-01' });
     expect(empty).toContain('No research tasks in this view.');
     expect(empty).toContain('0 tasks');
+  });
+
+  it('keeps malformed rows renderable and prevents impossible totals', () => {
+    const html = formatAgentHistoryHtml({
+      totalCount: 0,
+      items: [
+        null as unknown as AgentHistoryExportItem,
+        {
+          title: { unexpected: true } as unknown as string,
+          question: 'A readable fallback row',
+          topics: [' macro ', null as unknown as string, 42 as unknown as string],
+          score: '84' as unknown as number,
+        },
+      ],
+    });
+
+    expect(html).toContain('2 tasks');
+    expect(html).not.toContain('2 of 0 tasks');
+    expect(html).toContain('Untitled research');
+    expect(html).toContain('A readable fallback row');
+    expect(html).toContain('<span>macro</span>');
+    expect(html).toContain("default-src 'none'; style-src 'unsafe-inline';");
   });
 });

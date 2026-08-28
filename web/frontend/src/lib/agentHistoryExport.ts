@@ -347,6 +347,35 @@ function historyHtmlTopics(value: unknown): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Normalize remote history rows before rendering them into HTML.
+ *
+ * The API normally returns objects matching AgentHistoryExportItem, but this
+ * formatter is also used at a browser trust boundary. A null row or a scalar
+ * field should produce a readable placeholder, not abort the whole download.
+ */
+function normalizeAgentHistoryHtmlItem(value: unknown): AgentHistoryExportItem {
+  if (!value || typeof value !== 'object') return {};
+  const source = value as Record<string, unknown>;
+  return {
+    title: historyText(source.title),
+    question: historyText(source.question),
+    score:
+      typeof source.score === 'number' && Number.isFinite(source.score) ? source.score : null,
+    confidence:
+      typeof source.confidence === 'number' && Number.isFinite(source.confidence)
+        ? source.confidence
+        : null,
+    createdAt: historyText(source.createdAt),
+    topics: historyHtmlTopics(source.topics),
+    isLive: source.isLive === true,
+    taskId: historyText(source.taskId),
+    userFeedback: historyText(source.userFeedback),
+    orchestrationId: historyText(source.orchestrationId),
+    watchlistItemId: historyText(source.watchlistItemId),
+  };
+}
+
 function historyHtmlMeta(item: AgentHistoryExportItem): string[] {
   const meta: string[] = [];
   if (typeof item.score === 'number' && Number.isFinite(item.score)) {
@@ -372,11 +401,15 @@ export function formatAgentHistoryHtml(opts: {
   filterNote?: string;
   exportedAt?: string;
 }): string {
-  const items = Array.isArray(opts?.items) ? opts.items : [];
-  const total =
+  const rawItems: unknown[] = Array.isArray(opts?.items) ? opts.items : [];
+  const items = rawItems.map(normalizeAgentHistoryHtmlItem);
+  const requestedTotal =
     typeof opts?.totalCount === 'number' && Number.isFinite(opts.totalCount)
       ? Math.max(0, Math.round(opts.totalCount))
       : null;
+  // A malformed count must never claim that the archive contains more rows
+  // than it actually can describe.
+  const total = requestedTotal == null ? null : Math.max(items.length, requestedTotal);
   const countLabel =
     total != null && items.length !== total
       ? `${items.length} of ${total} tasks`
@@ -429,6 +462,7 @@ export function formatAgentHistoryHtml(opts: {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
   <meta name="generator" content="Arena Agent history">
   <title>Arena Agent research history</title>
   <style>
