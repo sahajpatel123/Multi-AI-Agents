@@ -3095,6 +3095,26 @@ export async function exportOrchestrationPdf(orchId: string): Promise<Blob> {
   return response.blob();
 }
 
+/** Download one unified orchestration result as a portable Markdown report. */
+export async function exportOrchestrationMarkdown(orchId: string): Promise<Blob> {
+  const response = await apiFetch(
+    `/api/agent/orchestrate/${encodeURIComponent(orchId)}/export.md`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Markdown export failed'), response),
+      response.status,
+      err,
+    );
+  }
+  const text = await response.clone().text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty orchestration Markdown returned by the server', response));
+  }
+  return response.blob();
+}
+
 export type AgentChallengeItem = {
   challenger: string;
   challenge: string;

@@ -72,6 +72,7 @@ from arena.core.agent_metrics import (
     compute_user_feedback_summary,
 )
 from arena.core.report_generator import (
+    generate_orchestration_markdown,
     generate_orchestration_report_html,
     generate_orchestration_history_markdown,
     generate_report_csv,
@@ -2260,6 +2261,61 @@ async def export_orchestration_pdf(
         content=blob,
         media_type=mime,
         headers={"Content-Disposition": content_disposition_attachment(filename)},
+    )
+
+
+@router.get("/orchestrate/{orch_id}/export.md")
+async def export_orchestration_markdown(
+    orch_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download one caller-owned orchestration as a portable Markdown report."""
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_export_md",
+        limit=60,
+        window_seconds=3600,
+        message="Too many orchestration Markdown exports. Limit is 60 per hour.",
+    )
+
+    oid = orch_id.strip()
+    orch = (
+        db.query(Orchestration)
+        .filter(Orchestration.id == oid, Orchestration.user_id == user.id)
+        .first()
+    )
+    if not orch:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Orchestration not found"},
+        )
+
+    bullets = _json_column_value(orch.synthesis_bullets)
+    conflicts = _json_column_value(orch.conflicts)
+    body = generate_orchestration_markdown(
+        {
+            "id": orch.id,
+            "status": orch.status,
+            "created_at": orch.created_at.isoformat() if orch.created_at else None,
+            "task_ids": list(orch.task_ids or []),
+            "synthesis": orch.synthesis or "",
+            "synthesis_bullets": bullets if isinstance(bullets, list) else [],
+            "conflicts": conflicts if isinstance(conflicts, list) else [],
+        },
+        generated_at=utcnow_naive().isoformat(),
+    )
+    filename = f"arena-orchestration-{oid[:8]}.md"
+    return Response(
+        content=body,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
     )
 
 

@@ -161,6 +161,63 @@ async def test_list_orchestrations_pagination(app_client, make_user, db_session)
 
 
 @pytest.mark.asyncio
+async def test_export_single_orchestration_markdown(
+    app_client, make_user, db_session
+):
+    user = _make_pro(make_user)
+    orch = _seed_orchestration(
+        db_session,
+        user.id,
+        "orch-single-md",
+        status="running",
+        task_ids=["task-a", "task-b"],
+    )
+    orch.synthesis = "Safe **Markdown**\n\n<script>alert('unsafe')</script>"
+    orch.conflicts = [
+        {"task_a": "task-a", "task_b": "task-b", "conflict": "Different assumptions"}
+    ]
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrate/orch-single-md/export.md",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/markdown")
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert res.headers["cache-control"] == "no-store, no-cache, must-revalidate, private"
+    assert 'filename="arena-orchestration-orch-sin.md"' in res.headers["content-disposition"]
+    assert "# Arena orchestration report" in res.text
+    assert "## Orchestration orch-single-md" in res.text
+    assert "**Status:** running" in res.text
+    assert "Safe **Markdown**" in res.text
+    assert "### Supporting points" in res.text
+    assert "### Conflicts" in res.text
+    assert "Different assumptions" in res.text
+    assert "<script>" not in res.text
+    assert "&lt;script&gt;alert('unsafe')&lt;/script&gt;" in res.text
+
+
+@pytest.mark.asyncio
+async def test_export_single_orchestration_markdown_is_caller_scoped(
+    app_client, make_user, db_session
+):
+    owner = _make_pro(make_user)
+    outsider = make_user(email="other_pro_orch@example.com", tier=UserTier.PRO)
+    _seed_orchestration(db_session, owner.id, "orch-private-md")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrate/orch-private-md/export.md",
+        headers=_pro_headers(outsider),
+    )
+
+    assert res.status_code == 404
+    assert res.json()["detail"]["error"] == "not_found"
+
+
+@pytest.mark.asyncio
 async def test_export_orchestrations_csv(app_client, make_user, db_session):
     """Test CSV export of orchestrations."""
     user = _make_pro(make_user)

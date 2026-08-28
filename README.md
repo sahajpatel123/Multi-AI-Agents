@@ -121,6 +121,7 @@ GET  /api/agent/status/:id|result/:id|history|templates
 DELETE /api/agent/tasks/bulk   Delete selected retained research tasks (max 50)
 GET  /api/agent/feedback/calibration   Display-only confidence adjustment based on caller's verdict history
 GET  /api/agent/tasks/:id/export.json   Download a single task result as a .json file (pretty-printed)
+GET  /api/agent/orchestrate/:id/export.md   Download one unified orchestration as a Markdown report
 POST /api/agent/watchlist   Recurring research questions
 POST /api/agent/watchlist/:id/duplicate   Paused copy of an existing watch
 POST /api/agent/upload      File attachment (max 10 MB)

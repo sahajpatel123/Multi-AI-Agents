@@ -1031,6 +1031,67 @@ def generate_report_markdown(
     return "\n".join(lines)
 
 
+def _append_orchestration_markdown(
+    lines: list[str], item: dict[str, Any], heading: str
+) -> None:
+    """Append one safely escaped orchestration summary to ``lines``."""
+    status = str(item.get("status") or "unknown")
+    created_at = str(item.get("created_at") or "")
+    task_ids = item.get("task_ids")
+    task_ids = task_ids if isinstance(task_ids, list) else []
+
+    lines.extend([heading, "", f"- **Status:** {_md_inline(status)}"])
+    if created_at:
+        lines.append(f"- **Created:** {_md_inline(created_at)}")
+    lines.append(f"- **Tasks:** {len(task_ids)}")
+    lines.extend(f"  - {_md_inline(task_id)}" for task_id in task_ids)
+    lines.extend(["", "### Synthesis", ""])
+
+    synthesis = _md_block(item.get("synthesis") or "").strip()
+    lines.extend([synthesis or "_No synthesis recorded._", ""])
+
+    bullets = item.get("synthesis_bullets")
+    bullets = bullets if isinstance(bullets, list) else []
+    clean_bullets = [str(b).strip() for b in bullets if str(b).strip()]
+    if clean_bullets:
+        lines.extend(["### Supporting points", ""])
+        lines.extend(f"- {_md_inline(bullet)}" for bullet in clean_bullets)
+        lines.append("")
+
+    conflicts = item.get("conflicts")
+    conflicts = conflicts if isinstance(conflicts, list) else []
+    clean_conflicts = [conflict for conflict in conflicts if isinstance(conflict, dict)]
+    if clean_conflicts:
+        lines.extend(["### Conflicts", ""])
+        for conflict in clean_conflicts:
+            task_a = _md_inline(conflict.get("task_a") or "?")
+            task_b = _md_inline(conflict.get("task_b") or "?")
+            text = _md_inline(conflict.get("conflict") or "")
+            lines.append(f"- **Task {task_a} vs Task {task_b}:** {text}")
+        lines.append("")
+
+
+def generate_orchestration_markdown(
+    item: dict[str, Any], generated_at: str = ""
+) -> str:
+    """Render one orchestration as a portable, safely escaped report."""
+    orchestration_id = str(item.get("id") or "Unknown orchestration")
+    lines = [
+        "# Arena orchestration report",
+        "",
+        "> Unified multi-task research result exported from Arena.",
+        "",
+    ]
+    if generated_at:
+        lines.extend([f"_Exported {_md_inline(generated_at)} UTC_", ""])
+    _append_orchestration_markdown(
+        lines,
+        item,
+        f"## Orchestration {_md_inline(orchestration_id)}",
+    )
+    return "\n".join(lines)
+
+
 def generate_orchestration_history_markdown(
     items: list[dict[str, Any]], generated_at: str = ""
 ) -> str:
@@ -1057,48 +1118,11 @@ def generate_orchestration_history_markdown(
     lines.extend([f"{len(items)} orchestration(s)", ""])
     for index, item in enumerate(items, 1):
         orchestration_id = str(item.get("id") or "Unknown orchestration")
-        status = str(item.get("status") or "unknown")
-        created_at = str(item.get("created_at") or "")
-        task_ids = item.get("task_ids")
-        task_ids = task_ids if isinstance(task_ids, list) else []
-
-        lines.append(f"## {index}. {_md_inline(orchestration_id)}")
-        lines.append("")
-        lines.append(f"- **Status:** {_md_inline(status)}")
-        if created_at:
-            lines.append(f"- **Created:** {_md_inline(created_at)}")
-        lines.append(f"- **Tasks:** {len(task_ids)}")
-        if task_ids:
-            for task_id in task_ids:
-                lines.append(f"  - {_md_inline(task_id)}")
-        lines.append("")
-
-        lines.append("### Synthesis")
-        lines.append("")
-        synthesis = _md_block(item.get("synthesis") or "").strip()
-        lines.append(synthesis or "_No synthesis recorded._")
-        lines.append("")
-
-        bullets = item.get("synthesis_bullets")
-        bullets = bullets if isinstance(bullets, list) else []
-        clean_bullets = [str(b).strip() for b in bullets if str(b).strip()]
-        if clean_bullets:
-            lines.extend(["### Supporting points", ""])
-            lines.extend(f"- {_md_inline(bullet)}" for bullet in clean_bullets)
-            lines.append("")
-
-        conflicts = item.get("conflicts")
-        conflicts = conflicts if isinstance(conflicts, list) else []
-        clean_conflicts = [conflict for conflict in conflicts if isinstance(conflict, dict)]
-        if clean_conflicts:
-            lines.extend(["### Conflicts", ""])
-            for conflict in clean_conflicts:
-                task_a = _md_inline(conflict.get("task_a") or "?")
-                task_b = _md_inline(conflict.get("task_b") or "?")
-                text = _md_inline(conflict.get("conflict") or "")
-                lines.append(f"- **Task {task_a} vs Task {task_b}:** {text}")
-            lines.append("")
-
+        _append_orchestration_markdown(
+            lines,
+            item,
+            f"## {index}. {_md_inline(orchestration_id)}",
+        )
         if index < len(items):
             lines.extend(["---", ""])
 

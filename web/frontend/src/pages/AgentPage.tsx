@@ -33,6 +33,7 @@ import {
   exportAgentTaskPdf,
   exportAgentTaskMarkdown,
   exportAgentTaskJson,
+  exportOrchestrationMarkdown,
   exportOrchestrationPdf,
   fetchAgentTaskCsvText,
   fetchAgentTaskJsonText,
@@ -1112,6 +1113,7 @@ export function AgentPage() {
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingJson, setExportingJson] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
+  const [exportingOrchestrationMarkdown, setExportingOrchestrationMarkdown] = useState(false);
   const [exportingOrchestrationHistory, setExportingOrchestrationHistory] = useState(false);
   const [copyOrchestrationHistoryStatus, setCopyOrchestrationHistoryStatus] = useState<
     'idle' | 'copying' | 'copied' | 'failed'
@@ -2304,6 +2306,21 @@ export function AgentPage() {
       setError(e instanceof Error ? e.message : 'Export failed');
     } finally {
       setExportingPdf(false);
+    }
+  };
+
+  const handleExportOrchestrationMarkdown = async () => {
+    const oid = orchResult?.orchestration?.id as string | undefined;
+    if (!oid || exportingOrchestrationMarkdown) return;
+    setExportingOrchestrationMarkdown(true);
+    try {
+      const blob = await exportOrchestrationMarkdown(oid);
+      const ok = downloadBlobFile(blob, `arena-orchestration-${oid.slice(0, 8)}.md`);
+      if (!ok) setError('Markdown export failed');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Markdown export failed');
+    } finally {
+      setExportingOrchestrationMarkdown(false);
     }
   };
 
@@ -10561,6 +10578,32 @@ export function AgentPage() {
                         </svg>
                       ) : null}
                       {exportingPdf ? 'Exporting…' : 'Export all as PDF'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={exportingOrchestrationMarkdown}
+                      onClick={() => void handleExportOrchestrationMarkdown()}
+                      aria-busy={exportingOrchestrationMarkdown}
+                      aria-label={
+                        exportingOrchestrationMarkdown
+                          ? 'Exporting this orchestration as Markdown'
+                          : 'Download this orchestration as Markdown'
+                      }
+                      style={{
+                        padding: '9px 18px',
+                        border: '0.5px solid #35382F',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: exportingOrchestrationMarkdown ? 'default' : 'pointer',
+                        opacity: exportingOrchestrationMarkdown ? 0.7 : 1,
+                      }}
+                    >
+                      {exportingOrchestrationMarkdown
+                        ? 'Exporting…'
+                        : 'Export this run as Markdown'}
                     </button>
                     <button
                       type="button"

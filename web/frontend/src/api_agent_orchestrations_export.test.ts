@@ -3,6 +3,7 @@ import {
   exportAgentOrchestrationsCsv,
   exportAgentOrchestrationsJson,
   exportAgentOrchestrationsMarkdown,
+  exportOrchestrationMarkdown,
   fetchAgentOrchestrationsMarkdownText,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
@@ -10,6 +11,54 @@ import * as apiFetchModule from './lib/apiFetch';
 vi.mock('./lib/apiFetch', () => ({
   apiFetch: vi.fn(),
 }));
+
+describe('single Agent orchestration Markdown export helper', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('encodes the orchestration ID and returns a non-empty Markdown blob', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('# Arena orchestration report\n', {
+        status: 200,
+        headers: { 'content-type': 'text/markdown; charset=utf-8' },
+      }),
+    );
+
+    const blob = await exportOrchestrationMarkdown('orch/id 1');
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/orchestrate/orch%2Fid%201/export.md',
+      {},
+    );
+    expect(blob.size).toBeGreaterThan(0);
+    expect(blob.type).toBe('text/markdown;charset=utf-8');
+  });
+
+  it('rejects an empty successful response', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('  \n', { status: 200 }),
+    );
+
+    await expect(exportOrchestrationMarkdown('orch-1')).rejects.toThrow(
+      'Empty orchestration Markdown returned by the server',
+    );
+  });
+
+  it('surfaces the request ID on a failed export', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: { message: 'Orchestration not found' } }), {
+        status: 404,
+        headers: { 'x-request-id': 'req-single-orch-md' },
+      }),
+    );
+
+    await expect(exportOrchestrationMarkdown('missing')).rejects.toMatchObject({
+      status: 404,
+      message: 'Orchestration not found (Request ID: req-single-orch-md)',
+    });
+  });
+});
 
 describe('Agent orchestration history CSV export frontend API helper', () => {
   beforeEach(() => {
