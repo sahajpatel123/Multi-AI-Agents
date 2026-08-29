@@ -68,10 +68,21 @@ describe('single Agent orchestration JSON export helper', () => {
 
   it('encodes the orchestration ID and returns a validated JSON blob', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
-      new Response('{"id":"orch/id 1","status":"complete"}\n', {
-        status: 200,
-        headers: { 'content-type': 'application/json; charset=utf-8' },
-      }),
+      new Response(
+        JSON.stringify({
+          id: 'orch/id 1',
+          status: 'complete',
+          task_count: 1,
+          task_ids: ['task-1'],
+          synthesis: 'Combined result',
+          synthesis_bullets: ['Supported point'],
+          conflicts: [],
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json; charset=utf-8' },
+        },
+      ),
     );
 
     const blob = await exportOrchestrationJson('orch/id 1');
@@ -97,6 +108,68 @@ describe('single Agent orchestration JSON export helper', () => {
     );
     await expect(exportOrchestrationJson('orch-1')).rejects.toThrow(
       'Invalid orchestration JSON returned by the server',
+    );
+  });
+
+  it.each([
+    [
+      'a different orchestration',
+      {
+        id: 'orch-2',
+        status: 'complete',
+        task_count: 0,
+        task_ids: [],
+        synthesis: '',
+        synthesis_bullets: [],
+        conflicts: [],
+      },
+    ],
+    [
+      'an incomplete orchestration',
+      {
+        id: 'orch-1',
+        status: 'running',
+        task_count: 0,
+        task_ids: [],
+        synthesis: '',
+        synthesis_bullets: [],
+        conflicts: [],
+      },
+    ],
+    [
+      'an inconsistent task count',
+      {
+        id: 'orch-1',
+        status: 'complete',
+        task_count: 2,
+        task_ids: ['task-1'],
+        synthesis: '',
+        synthesis_bullets: [],
+        conflicts: [],
+      },
+    ],
+    [
+      'malformed synthesis fields',
+      {
+        id: 'orch-1',
+        status: 'complete',
+        task_count: 0,
+        task_ids: [],
+        synthesis: null,
+        synthesis_bullets: {},
+        conflicts: [],
+      },
+    ],
+  ])('rejects %s returned with a successful status', async (_label, payload) => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'x-request-id': 'req-invalid-orch-json' },
+      }),
+    );
+
+    await expect(exportOrchestrationJson('orch-1')).rejects.toThrow(
+      'Invalid orchestration JSON returned by the server (Request ID: req-invalid-orch-json)',
     );
   });
 
