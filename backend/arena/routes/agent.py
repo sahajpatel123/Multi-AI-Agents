@@ -2327,6 +2327,73 @@ async def export_orchestration_markdown(
     )
 
 
+@router.get("/orchestrate/{orch_id}/export.json")
+async def export_orchestration_json(
+    orch_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download one caller-owned orchestration as machine-readable JSON."""
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_export_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many orchestration JSON exports. Limit is 60 per hour.",
+    )
+
+    oid = orch_id.strip()
+    orch = (
+        db.query(Orchestration)
+        .filter(Orchestration.id == oid, Orchestration.user_id == user.id)
+        .first()
+    )
+    if not orch:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Orchestration not found"},
+        )
+    if orch.status != "complete":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": ErrorCodes.FEATURE_NOT_ALLOWED,
+                "message": "Orchestration is not complete yet",
+            },
+        )
+
+    task_ids = list(orch.task_ids or [])
+    bullets = _json_column_value(orch.synthesis_bullets)
+    conflicts = _json_column_value(orch.conflicts)
+    body = json.dumps(
+        {
+            "id": orch.id,
+            "status": orch.status,
+            "created_at": orch.created_at.isoformat() if orch.created_at else None,
+            "task_count": len(task_ids),
+            "task_ids": task_ids,
+            "synthesis": orch.synthesis or "",
+            "synthesis_bullets": bullets if isinstance(bullets, list) else [],
+            "conflicts": conflicts if isinstance(conflicts, list) else [],
+        },
+        indent=2,
+        ensure_ascii=False,
+        default=str,
+    ) + "\n"
+    filename = f"arena-orchestration-{oid[:8]}.json"
+    return Response(
+        content=body,
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
+    )
+
+
 @router.get("/orchestrations")
 async def list_orchestrations(
     http_request: Request,

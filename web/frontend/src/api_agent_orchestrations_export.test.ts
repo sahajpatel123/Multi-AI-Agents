@@ -3,6 +3,7 @@ import {
   exportAgentOrchestrationsCsv,
   exportAgentOrchestrationsJson,
   exportAgentOrchestrationsMarkdown,
+  exportOrchestrationJson,
   exportOrchestrationMarkdown,
   fetchAgentOrchestrationsMarkdownText,
 } from './api';
@@ -56,6 +57,60 @@ describe('single Agent orchestration Markdown export helper', () => {
     await expect(exportOrchestrationMarkdown('missing')).rejects.toMatchObject({
       status: 404,
       message: 'Orchestration not found (Request ID: req-single-orch-md)',
+    });
+  });
+});
+
+describe('single Agent orchestration JSON export helper', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('encodes the orchestration ID and returns a validated JSON blob', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('{"id":"orch/id 1","status":"complete"}\n', {
+        status: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      }),
+    );
+
+    const blob = await exportOrchestrationJson('orch/id 1');
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/orchestrate/orch%2Fid%201/export.json',
+      {},
+    );
+    expect(blob.size).toBeGreaterThan(0);
+    expect(blob.type).toBe('application/json;charset=utf-8');
+  });
+
+  it('rejects empty and malformed successful responses', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('  \n', { status: 200 }),
+    );
+    await expect(exportOrchestrationJson('orch-1')).rejects.toThrow(
+      'Empty orchestration JSON returned by the server',
+    );
+
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('[]', { status: 200 }),
+    );
+    await expect(exportOrchestrationJson('orch-1')).rejects.toThrow(
+      'Invalid orchestration JSON returned by the server',
+    );
+  });
+
+  it('surfaces the request ID on a failed export', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: { message: 'Orchestration not found' } }), {
+        status: 404,
+        headers: { 'x-request-id': 'req-single-orch-json' },
+      }),
+    );
+
+    await expect(exportOrchestrationJson('missing')).rejects.toMatchObject({
+      status: 404,
+      message: 'Orchestration not found (Request ID: req-single-orch-json)',
     });
   });
 });

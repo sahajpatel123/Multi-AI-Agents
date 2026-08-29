@@ -3115,6 +3115,40 @@ export async function exportOrchestrationMarkdown(orchId: string): Promise<Blob>
   return response.blob();
 }
 
+/** Download one unified orchestration result as machine-readable JSON. */
+export async function exportOrchestrationJson(orchId: string): Promise<Blob> {
+  const response = await apiFetch(
+    `/api/agent/orchestrate/${encodeURIComponent(orchId)}/export.json`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'JSON export failed'), response),
+      response.status,
+      err,
+    );
+  }
+
+  const text = await response.clone().text();
+  if (!text.trim()) {
+    throw new Error(withRequestId('Empty orchestration JSON returned by the server', response));
+  }
+  try {
+    const payload: unknown = JSON.parse(text);
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      Array.isArray(payload) ||
+      typeof (payload as { id?: unknown }).id !== 'string'
+    ) {
+      throw new Error('invalid orchestration payload');
+    }
+  } catch {
+    throw new Error(withRequestId('Invalid orchestration JSON returned by the server', response));
+  }
+  return response.blob();
+}
+
 export type AgentChallengeItem = {
   challenger: string;
   challenge: string;

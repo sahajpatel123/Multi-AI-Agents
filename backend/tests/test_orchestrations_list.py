@@ -246,6 +246,102 @@ async def test_export_single_orchestration_markdown_is_caller_scoped(
 
 
 @pytest.mark.asyncio
+async def test_export_single_orchestration_json_preserves_complete_synthesis(
+    app_client, make_user, db_session
+):
+    user = _make_pro(make_user)
+    orch = _seed_orchestration(
+        db_session,
+        user.id,
+        "orch-single-json",
+        status="complete",
+        task_ids=["task-a", "task-b"],
+    )
+    orch.synthesis = "Résumé of the combined research"
+    orch.synthesis_bullets = ["First finding", "Second finding"]
+    orch.conflicts = [
+        {"task_a": "task-a", "task_b": "task-b", "conflict": "Different assumptions"}
+    ]
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrate/orch-single-json/export.json",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("application/json")
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert res.headers["cache-control"] == "no-store, no-cache, must-revalidate, private"
+    assert 'filename="arena-orchestration-orch-sin.json"' in res.headers[
+        "content-disposition"
+    ]
+    assert res.content.endswith(b"\n")
+    assert res.json() == {
+        "id": "orch-single-json",
+        "status": "complete",
+        "created_at": orch.created_at.isoformat(),
+        "task_count": 2,
+        "task_ids": ["task-a", "task-b"],
+        "synthesis": "Résumé of the combined research",
+        "synthesis_bullets": ["First finding", "Second finding"],
+        "conflicts": [
+            {
+                "task_a": "task-a",
+                "task_b": "task-b",
+                "conflict": "Different assumptions",
+            }
+        ],
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["running", "failed", "cancelled"])
+async def test_export_single_orchestration_json_rejects_incomplete_run(
+    app_client, make_user, db_session, status
+):
+    user = _make_pro(make_user)
+    orchestration_id = f"orch-{status}-json"
+    _seed_orchestration(
+        db_session,
+        user.id,
+        orchestration_id,
+        status=status,
+        task_ids=["task-a"],
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/orchestrate/{orchestration_id}/export.json",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == {
+        "error": "feature_not_allowed",
+        "message": "Orchestration is not complete yet",
+    }
+
+
+@pytest.mark.asyncio
+async def test_export_single_orchestration_json_is_caller_scoped(
+    app_client, make_user, db_session
+):
+    owner = _make_pro(make_user)
+    outsider = make_user(email="other_pro_orch_json@example.com", tier=UserTier.PRO)
+    _seed_orchestration(db_session, owner.id, "orch-private-json")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrate/orch-private-json/export.json",
+        headers=_pro_headers(outsider),
+    )
+
+    assert res.status_code == 404
+    assert res.json()["detail"]["error"] == "not_found"
+
+
+@pytest.mark.asyncio
 async def test_export_orchestrations_csv(app_client, make_user, db_session):
     """Test CSV export of orchestrations."""
     user = _make_pro(make_user)

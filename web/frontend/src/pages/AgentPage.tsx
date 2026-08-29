@@ -33,6 +33,7 @@ import {
   exportAgentTaskPdf,
   exportAgentTaskMarkdown,
   exportAgentTaskJson,
+  exportOrchestrationJson,
   exportOrchestrationMarkdown,
   exportOrchestrationPdf,
   fetchAgentTaskCsvText,
@@ -1113,6 +1114,7 @@ export function AgentPage() {
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingJson, setExportingJson] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
+  const [exportingOrchestrationJson, setExportingOrchestrationJson] = useState(false);
   const [exportingOrchestrationMarkdown, setExportingOrchestrationMarkdown] = useState(false);
   const [exportingOrchestrationHistory, setExportingOrchestrationHistory] = useState(false);
   const [copyOrchestrationHistoryStatus, setCopyOrchestrationHistoryStatus] = useState<
@@ -2321,6 +2323,21 @@ export function AgentPage() {
       setError(e instanceof Error ? e.message : 'Markdown export failed');
     } finally {
       setExportingOrchestrationMarkdown(false);
+    }
+  };
+
+  const handleExportOrchestrationJson = async () => {
+    const oid = orchResult?.orchestration?.id as string | undefined;
+    if (!oid || exportingOrchestrationJson) return;
+    setExportingOrchestrationJson(true);
+    try {
+      const blob = await exportOrchestrationJson(oid);
+      const ok = downloadBlobFile(blob, `arena-orchestration-${oid.slice(0, 8)}.json`);
+      if (!ok) setError('JSON export failed');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'JSON export failed');
+    } finally {
+      setExportingOrchestrationJson(false);
     }
   };
 
@@ -10604,6 +10621,30 @@ export function AgentPage() {
                       {exportingOrchestrationMarkdown
                         ? 'Exporting…'
                         : 'Export this run as Markdown'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={exportingOrchestrationJson}
+                      onClick={() => void handleExportOrchestrationJson()}
+                      aria-busy={exportingOrchestrationJson}
+                      aria-label={
+                        exportingOrchestrationJson
+                          ? 'Exporting this orchestration as JSON'
+                          : 'Download this orchestration as JSON'
+                      }
+                      style={{
+                        padding: '9px 18px',
+                        border: '0.5px solid #35382F',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: exportingOrchestrationJson ? 'default' : 'pointer',
+                        opacity: exportingOrchestrationJson ? 0.7 : 1,
+                      }}
+                    >
+                      {exportingOrchestrationJson ? 'Exporting…' : 'Export this run as JSON'}
                     </button>
                     <button
                       type="button"
