@@ -150,6 +150,7 @@ import {
   clampToMax,
 } from '../lib/charBudget';
 import { copyCsvToClipboard, copyHtmlToClipboard, copyToClipboard } from '../lib/clipboard';
+import { copyAgentOrchestrationJson } from '../lib/agentOrchestrationJsonClipboard';
 import { copyAgentOrchestrationMarkdown } from '../lib/agentOrchestrationMarkdownClipboard';
 import {
   downloadBlobFile,
@@ -1115,6 +1116,7 @@ export function AgentPage() {
   const [exportingJson, setExportingJson] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
   const [exportingOrchestrationJson, setExportingOrchestrationJson] = useState(false);
+  const [copyingOrchestrationJson, setCopyingOrchestrationJson] = useState(false);
   const [exportingOrchestrationMarkdown, setExportingOrchestrationMarkdown] = useState(false);
   const [exportingOrchestrationHistory, setExportingOrchestrationHistory] = useState(false);
   const [copyOrchestrationHistoryStatus, setCopyOrchestrationHistoryStatus] = useState<
@@ -2328,7 +2330,7 @@ export function AgentPage() {
 
   const handleExportOrchestrationJson = async () => {
     const oid = orchResult?.orchestration?.id as string | undefined;
-    if (!oid || exportingOrchestrationJson) return;
+    if (!oid || exportingOrchestrationJson || copyingOrchestrationJson) return;
     setExportingOrchestrationJson(true);
     try {
       const blob = await exportOrchestrationJson(oid);
@@ -2338,6 +2340,25 @@ export function AgentPage() {
       setError(e instanceof Error ? e.message : 'JSON export failed');
     } finally {
       setExportingOrchestrationJson(false);
+    }
+  };
+
+  const handleCopyOrchestrationJson = async () => {
+    const oid = orchResult?.orchestration?.id as string | undefined;
+    if (!oid || exportingOrchestrationJson || copyingOrchestrationJson) return;
+    setCopyingOrchestrationJson(true);
+    try {
+      const blob = await exportOrchestrationJson(oid);
+      const ok = await copyAgentOrchestrationJson(blob);
+      if (ok) {
+        setToastMessage('Orchestration JSON copied.');
+      } else {
+        setError('Could not copy orchestration JSON — try the JSON download instead.');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not copy orchestration JSON.');
+    } finally {
+      setCopyingOrchestrationJson(false);
     }
   };
 
@@ -10624,7 +10645,7 @@ export function AgentPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={exportingOrchestrationJson}
+                      disabled={exportingOrchestrationJson || copyingOrchestrationJson}
                       onClick={() => void handleExportOrchestrationJson()}
                       aria-busy={exportingOrchestrationJson}
                       aria-label={
@@ -10641,10 +10662,39 @@ export function AgentPage() {
                         fontSize: 13,
                         fontFamily: 'var(--vp-font-sans)',
                         cursor: exportingOrchestrationJson ? 'default' : 'pointer',
-                        opacity: exportingOrchestrationJson ? 0.7 : 1,
+                        opacity: exportingOrchestrationJson || copyingOrchestrationJson ? 0.7 : 1,
                       }}
                     >
                       {exportingOrchestrationJson ? 'Exporting…' : 'Export this run as JSON'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={exportingOrchestrationJson || copyingOrchestrationJson}
+                      onClick={() => void handleCopyOrchestrationJson()}
+                      aria-busy={copyingOrchestrationJson}
+                      aria-label={
+                        copyingOrchestrationJson
+                          ? 'Copying this orchestration as JSON'
+                          : 'Copy this orchestration as JSON'
+                      }
+                      title="Copy this orchestration as JSON"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 7,
+                        padding: '9px 18px',
+                        border: '0.5px solid #35382F',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: exportingOrchestrationJson || copyingOrchestrationJson ? 'default' : 'pointer',
+                        opacity: exportingOrchestrationJson || copyingOrchestrationJson ? 0.7 : 1,
+                      }}
+                    >
+                      <Copy size={14} aria-hidden="true" />
+                      {copyingOrchestrationJson ? 'Copying…' : 'Copy this run as JSON'}
                     </button>
                     <button
                       type="button"
