@@ -72,6 +72,7 @@ describe('single Agent orchestration JSON export helper', () => {
         JSON.stringify({
           id: 'orch/id 1',
           status: 'complete',
+          created_at: '2026-08-29T09:30:00+00:00',
           task_count: 1,
           task_ids: ['task-1'],
           synthesis: 'Combined result',
@@ -117,6 +118,7 @@ describe('single Agent orchestration JSON export helper', () => {
       {
         id: 'orch-2',
         status: 'complete',
+        created_at: null,
         task_count: 0,
         task_ids: [],
         synthesis: '',
@@ -129,6 +131,7 @@ describe('single Agent orchestration JSON export helper', () => {
       {
         id: 'orch-1',
         status: 'running',
+        created_at: null,
         task_count: 0,
         task_ids: [],
         synthesis: '',
@@ -141,6 +144,7 @@ describe('single Agent orchestration JSON export helper', () => {
       {
         id: 'orch-1',
         status: 'complete',
+        created_at: null,
         task_count: 2,
         task_ids: ['task-1'],
         synthesis: '',
@@ -153,6 +157,7 @@ describe('single Agent orchestration JSON export helper', () => {
       {
         id: 'orch-1',
         status: 'complete',
+        created_at: null,
         task_count: 0,
         task_ids: [],
         synthesis: null,

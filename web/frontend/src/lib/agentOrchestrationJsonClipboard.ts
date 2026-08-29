@@ -1,4 +1,5 @@
 import { copyJsonToClipboard } from './clipboard';
+import { isAgentOrchestrationJsonExport } from './agentOrchestrationJson';
 
 function readBlobText(blob: Blob): Promise<string> {
   if (typeof blob.text === 'function') return blob.text();
@@ -16,13 +17,16 @@ function readBlobText(blob: Blob): Promise<string> {
  * plain-text clipboard representations. Keep the adapter total so a browser
  * clipboard refusal never escapes into the page event handler.
  */
-export async function copyAgentOrchestrationJson(blob: Blob): Promise<boolean> {
+export async function copyAgentOrchestrationJson(
+  blob: Blob,
+  expectedId: string,
+): Promise<boolean> {
   try {
     const text = await readBlobText(blob);
     if (!text.trim()) return false;
 
     const payload: unknown = JSON.parse(text);
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+    if (!isAgentOrchestrationJsonExport(payload, expectedId)) return false;
 
     return await copyJsonToClipboard(text);
   } catch {

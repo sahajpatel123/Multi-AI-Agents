@@ -2349,7 +2349,7 @@ export function AgentPage() {
     setCopyingOrchestrationJson(true);
     try {
       const blob = await exportOrchestrationJson(oid);
-      const ok = await copyAgentOrchestrationJson(blob);
+      const ok = await copyAgentOrchestrationJson(blob, oid);
       if (ok) {
         setToastMessage('Orchestration JSON copied.');
       } else {

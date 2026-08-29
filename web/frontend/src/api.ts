@@ -19,6 +19,7 @@ import {
   MemorySummarySort,
 } from './types';
 import type { ImportedChat } from './lib/arenaChatsImport';
+import { isAgentOrchestrationJsonExport } from './lib/agentOrchestrationJson';
 
 export const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(
   /\/$/,
@@ -3135,33 +3136,7 @@ export async function exportOrchestrationJson(orchId: string): Promise<Blob> {
   }
   try {
     const payload: unknown = JSON.parse(text);
-    const expectedId = orchId.trim();
-    const record = payload as Record<string, unknown>;
-    const taskCount = record?.task_count;
-    const taskIds = record?.task_ids;
-    const synthesisBullets = record?.synthesis_bullets;
-    const conflicts = record?.conflicts;
-    if (
-      !payload ||
-      typeof payload !== 'object' ||
-      Array.isArray(payload) ||
-      !expectedId ||
-      record.id !== expectedId ||
-      record.status !== 'complete' ||
-      typeof taskCount !== 'number' ||
-      !Number.isInteger(taskCount) ||
-      taskCount < 0 ||
-      !Array.isArray(taskIds) ||
-      !taskIds.every((taskId) => typeof taskId === 'string' && taskId.length > 0) ||
-      taskIds.length !== taskCount ||
-      typeof record.synthesis !== 'string' ||
-      !Array.isArray(synthesisBullets) ||
-      !synthesisBullets.every((bullet) => typeof bullet === 'string') ||
-      !Array.isArray(conflicts) ||
-      !conflicts.every(
-        (conflict) => Boolean(conflict) && typeof conflict === 'object' && !Array.isArray(conflict),
-      )
-    ) {
+    if (!isAgentOrchestrationJsonExport(payload, orchId)) {
       throw new Error('invalid orchestration payload');
     }
   } catch {
