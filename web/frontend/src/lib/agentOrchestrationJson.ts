@@ -9,19 +9,24 @@ export type AgentOrchestrationJsonExport = {
   conflicts: Record<string, unknown>[];
 };
 
-/**
- * Validate the single-orchestration JSON contract before the payload is
- * downloaded or copied. Requiring the requested ID prevents a stale or
- * mismatched successful response from being presented as the active run.
- */
-export function isAgentOrchestrationJsonExport(
-  payload: unknown,
-  expectedId: string,
-): payload is AgentOrchestrationJsonExport {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+export type AgentOrchestrationHistoryJsonExport = Omit<
+  AgentOrchestrationJsonExport,
+  'status'
+> & {
+  status: 'running' | 'complete' | 'failed' | 'cancelled';
+};
 
-  const normalizedExpectedId = expectedId.trim();
-  if (!normalizedExpectedId) return false;
+const ORCHESTRATION_HISTORY_STATUSES = new Set([
+  'running',
+  'complete',
+  'failed',
+  'cancelled',
+]);
+
+function isAgentOrchestrationJsonRecord(
+  payload: unknown,
+): payload is AgentOrchestrationHistoryJsonExport {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
 
   const record = payload as Record<string, unknown>;
   const createdAt = record.created_at;
@@ -31,8 +36,10 @@ export function isAgentOrchestrationJsonExport(
   const conflicts = record.conflicts;
 
   return (
-    record.id === normalizedExpectedId &&
-    record.status === 'complete' &&
+    typeof record.id === 'string' &&
+    record.id.trim().length > 0 &&
+    typeof record.status === 'string' &&
+    ORCHESTRATION_HISTORY_STATUSES.has(record.status) &&
     (createdAt === null || typeof createdAt === 'string') &&
     typeof taskCount === 'number' &&
     Number.isInteger(taskCount) &&
@@ -48,4 +55,29 @@ export function isAgentOrchestrationJsonExport(
       (conflict) => Boolean(conflict) && typeof conflict === 'object' && !Array.isArray(conflict),
     )
   );
+}
+
+/**
+ * Validate the single-orchestration JSON contract before the payload is
+ * downloaded or copied. Requiring the requested ID prevents a stale or
+ * mismatched successful response from being presented as the active run.
+ */
+export function isAgentOrchestrationJsonExport(
+  payload: unknown,
+  expectedId: string,
+): payload is AgentOrchestrationJsonExport {
+  const normalizedExpectedId = expectedId.trim();
+  if (!normalizedExpectedId) return false;
+  return (
+    isAgentOrchestrationJsonRecord(payload) &&
+    payload.id === normalizedExpectedId &&
+    payload.status === 'complete'
+  );
+}
+
+/** Validate every row before an orchestration-history payload reaches the clipboard. */
+export function isAgentOrchestrationHistoryJsonExport(
+  payload: unknown,
+): payload is AgentOrchestrationHistoryJsonExport[] {
+  return Array.isArray(payload) && payload.every(isAgentOrchestrationJsonRecord);
 }

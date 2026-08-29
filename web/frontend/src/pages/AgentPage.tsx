@@ -151,6 +151,7 @@ import {
 } from '../lib/charBudget';
 import { copyCsvToClipboard, copyHtmlToClipboard, copyToClipboard } from '../lib/clipboard';
 import { copyAgentOrchestrationJson } from '../lib/agentOrchestrationJsonClipboard';
+import { copyAgentOrchestrationHistoryJson } from '../lib/agentOrchestrationHistoryJsonClipboard';
 import { copyAgentOrchestrationMarkdown } from '../lib/agentOrchestrationMarkdownClipboard';
 import {
   downloadBlobFile,
@@ -1119,6 +1120,9 @@ export function AgentPage() {
   const [copyingOrchestrationJson, setCopyingOrchestrationJson] = useState(false);
   const [exportingOrchestrationMarkdown, setExportingOrchestrationMarkdown] = useState(false);
   const [exportingOrchestrationHistory, setExportingOrchestrationHistory] = useState(false);
+  const [copyingOrchestrationHistoryJson, setCopyingOrchestrationHistoryJson] = useState(false);
+  const copyOrchestrationHistoryJsonInFlightRef = useRef(false);
+  const copyOrchestrationHistoryJsonRunIdRef = useRef(0);
   const [copyOrchestrationHistoryStatus, setCopyOrchestrationHistoryStatus] = useState<
     'idle' | 'copying' | 'copied' | 'failed'
   >('idle');
@@ -1126,7 +1130,9 @@ export function AgentPage() {
   const copyOrchestrationHistoryInFlightRef = useRef(false);
   const copyOrchestrationHistoryRunIdRef = useRef(0);
   const orchestrationHistoryBusy =
-    exportingOrchestrationHistory || copyOrchestrationHistoryStatus === 'copying';
+    exportingOrchestrationHistory ||
+    copyingOrchestrationHistoryJson ||
+    copyOrchestrationHistoryStatus === 'copying';
   /** Guards Shift+L / toolbar clicks so a report download can never double-fire. */
   const exportMdInFlightRef = useRef(false);
   const exportReportRunIdRef = useRef(0);
@@ -2422,6 +2428,36 @@ export function AgentPage() {
       );
     } finally {
       setExportingOrchestrationHistory(false);
+    }
+  }, [orchestrationHistoryBusy]);
+
+  const handleCopyOrchestrationHistoryJson = useCallback(async () => {
+    if (orchestrationHistoryBusy || copyOrchestrationHistoryJsonInFlightRef.current) return;
+    const runId = ++copyOrchestrationHistoryJsonRunIdRef.current;
+    copyOrchestrationHistoryJsonInFlightRef.current = true;
+    setCopyingOrchestrationHistoryJson(true);
+    try {
+      const blob = await exportAgentOrchestrationsJson();
+      if (copyOrchestrationHistoryJsonRunIdRef.current !== runId) return;
+      const ok = await copyAgentOrchestrationHistoryJson(blob);
+      if (copyOrchestrationHistoryJsonRunIdRef.current !== runId) return;
+      if (ok) {
+        setToastMessage('Orchestration history JSON copied.');
+      } else {
+        setError('Could not copy orchestration history JSON — try the JSON download instead.');
+      }
+    } catch (e) {
+      if (copyOrchestrationHistoryJsonRunIdRef.current !== runId) return;
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not copy orchestration history JSON — try the JSON download instead.',
+      );
+    } finally {
+      if (copyOrchestrationHistoryJsonRunIdRef.current === runId) {
+        copyOrchestrationHistoryJsonInFlightRef.current = false;
+        setCopyingOrchestrationHistoryJson(false);
+      }
     }
   }, [orchestrationHistoryBusy]);
 
@@ -3733,6 +3769,8 @@ export function AgentPage() {
       exportCsvInFlightRef.current = false;
       copyOrchestrationHistoryRunIdRef.current += 1;
       copyOrchestrationHistoryInFlightRef.current = false;
+      copyOrchestrationHistoryJsonRunIdRef.current += 1;
+      copyOrchestrationHistoryJsonInFlightRef.current = false;
       if (copyOrchestrationHistoryTimerRef.current != null) {
         window.clearTimeout(copyOrchestrationHistoryTimerRef.current);
         copyOrchestrationHistoryTimerRef.current = null;
@@ -10773,6 +10811,35 @@ export function AgentPage() {
                       {exportingOrchestrationHistory
                         ? 'Exporting…'
                         : 'Export history as Markdown'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={orchestrationHistoryBusy}
+                      onClick={() => void handleCopyOrchestrationHistoryJson()}
+                      aria-busy={copyingOrchestrationHistoryJson}
+                      aria-label={
+                        copyingOrchestrationHistoryJson
+                          ? 'Copying orchestration history as JSON'
+                          : 'Copy orchestration history as JSON'
+                      }
+                      title="Copy orchestration history as JSON"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 7,
+                        padding: '9px 18px',
+                        border: '0.5px solid #35382F',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: orchestrationHistoryBusy ? 'default' : 'pointer',
+                        opacity: orchestrationHistoryBusy ? 0.7 : 1,
+                      }}
+                    >
+                      <Copy size={14} aria-hidden="true" />
+                      {copyingOrchestrationHistoryJson ? 'Copying…' : 'Copy history as JSON'}
                     </button>
                     <button
                       type="button"
