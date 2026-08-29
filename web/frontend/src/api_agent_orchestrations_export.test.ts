@@ -258,13 +258,24 @@ describe('Agent orchestration history CSV export frontend API helper', () => {
 });
 
 describe('Agent orchestration history JSON export frontend API helper', () => {
+  const validItem = {
+    id: 'orch-1',
+    status: 'complete',
+    created_at: '2026-08-29T09:30:00+00:00',
+    task_count: 1,
+    task_ids: ['task-1'],
+    synthesis: 'Combined result',
+    synthesis_bullets: ['Supported point'],
+    conflicts: [],
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('fetches structured orchestration history and returns a non-empty blob', async () => {
+  it('fetches validated orchestration history and returns a non-empty blob', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
-      new Response('[{"id":"orch-1","status":"complete"}]', {
+      new Response(JSON.stringify([validItem]), {
         status: 200,
         headers: { 'content-type': 'application/json; charset=utf-8' },
       }),
@@ -293,7 +304,7 @@ describe('Agent orchestration history JSON export frontend API helper', () => {
     );
   });
 
-  it('rejects empty or malformed successful responses', async () => {
+  it('rejects empty, malformed, or structurally invalid successful responses', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response('', { status: 200 }),
     );
@@ -303,6 +314,13 @@ describe('Agent orchestration history JSON export frontend API helper', () => {
 
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response('{"items":[]}', { status: 200 }),
+    );
+    await expect(exportAgentOrchestrationsJson()).rejects.toThrow(
+      'Invalid orchestration history JSON returned by the server',
+    );
+
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify([{ ...validItem, task_count: 2 }]), { status: 200 }),
     );
     await expect(exportAgentOrchestrationsJson()).rejects.toThrow(
       'Invalid orchestration history JSON returned by the server',

@@ -75,7 +75,7 @@ export function isAgentOrchestrationJsonExport(
   );
 }
 
-/** Validate every row before an orchestration-history payload reaches the clipboard. */
+/** Validate every row before an orchestration-history payload reaches a download or clipboard. */
 export function isAgentOrchestrationHistoryJsonExport(
   payload: unknown,
 ): payload is AgentOrchestrationHistoryJsonExport[] {

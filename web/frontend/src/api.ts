@@ -19,7 +19,10 @@ import {
   MemorySummarySort,
 } from './types';
 import type { ImportedChat } from './lib/arenaChatsImport';
-import { isAgentOrchestrationJsonExport } from './lib/agentOrchestrationJson';
+import {
+  isAgentOrchestrationHistoryJsonExport,
+  isAgentOrchestrationJsonExport,
+} from './lib/agentOrchestrationJson';
 
 export const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(
   /\/$/,
@@ -3289,9 +3292,8 @@ export async function exportAgentOrchestrationsJson(
     );
   }
   try {
-    if (!Array.isArray(JSON.parse(text))) {
-      throw new Error('not an array');
-    }
+    const payload: unknown = JSON.parse(text);
+    if (!isAgentOrchestrationHistoryJsonExport(payload)) throw new Error('invalid payload');
   } catch {
     throw new Error(
       withRequestId('Invalid orchestration history JSON returned by the server', response),
