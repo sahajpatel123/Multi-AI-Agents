@@ -27,6 +27,7 @@ import {
   exportAgentTasksJsonl,
   exportAgentOrchestrationsCsv,
   exportAgentOrchestrationsJson,
+  exportAgentOrchestrationsJsonl,
   exportAgentOrchestrationsMarkdown,
   fetchAgentOrchestrationsMarkdownText,
   exportAgentTaskCsv,
@@ -2397,6 +2398,27 @@ export function AgentPage() {
       const ok = downloadBlobFile(
         blob,
         `${withDownloadDate('arena-orchestrations')}.json`,
+      );
+      if (!ok) setError('Could not download orchestration history — try again.');
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not download orchestration history — try again.',
+      );
+    } finally {
+      setExportingOrchestrationHistory(false);
+    }
+  }, [orchestrationHistoryBusy]);
+
+  const handleExportOrchestrationHistoryJsonl = useCallback(async () => {
+    if (orchestrationHistoryBusy) return;
+    setExportingOrchestrationHistory(true);
+    try {
+      const blob = await exportAgentOrchestrationsJsonl();
+      const ok = downloadBlobFile(
+        blob,
+        `${withDownloadDate('arena-orchestrations')}.jsonl`,
       );
       if (!ok) setError('Could not download orchestration history — try again.');
     } catch (e) {
@@ -10785,6 +10807,32 @@ export function AgentPage() {
                       {exportingOrchestrationHistory
                         ? 'Exporting…'
                         : 'Export history as JSON'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={orchestrationHistoryBusy}
+                      onClick={() => void handleExportOrchestrationHistoryJsonl()}
+                      aria-busy={exportingOrchestrationHistory}
+                      aria-label={
+                        exportingOrchestrationHistory
+                          ? 'Exporting orchestration history as JSONL'
+                          : 'Download orchestration history as JSONL'
+                      }
+                      style={{
+                        padding: '9px 18px',
+                        border: '0.5px solid #35382F',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: orchestrationHistoryBusy ? 'default' : 'pointer',
+                        opacity: orchestrationHistoryBusy ? 0.7 : 1,
+                      }}
+                    >
+                      {exportingOrchestrationHistory
+                        ? 'Exporting…'
+                        : 'Export history as JSONL'}
                     </button>
                     <button
                       type="button"

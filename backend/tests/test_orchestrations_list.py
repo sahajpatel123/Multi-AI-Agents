@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from arena.core.datetime_utils import utcnow_naive
 from arena.core.auth import create_access_token
@@ -546,6 +548,74 @@ async def test_export_orchestrations_json_empty_is_valid_array(
     assert res.status_code == 200
     assert res.json() == []
     assert res.text.endswith("\n")
+
+
+@pytest.mark.asyncio
+async def test_export_orchestrations_jsonl_streams_complete_records(
+    app_client, make_user, db_session
+):
+    """JSONL keeps full synthesis data in one independently parseable row per run."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_orchestration(
+        db_session,
+        user.id,
+        "orch-jsonl-1",
+        status="complete",
+        task_ids=["task-1", "task-2"],
+    )
+    _seed_orchestration(
+        db_session,
+        user.id,
+        "orch-jsonl-2",
+        status="failed",
+        task_ids=["task-3"],
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/orchestrations/export.jsonl",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("application/x-ndjson")
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert res.headers["cache-control"] == "no-store, no-cache, must-revalidate, private"
+    assert ".jsonl" in res.headers["content-disposition"]
+    rows = [json.loads(line) for line in res.text.splitlines()]
+    assert {row["id"] for row in rows} == {"orch-jsonl-1", "orch-jsonl-2"}
+    complete = next(row for row in rows if row["id"] == "orch-jsonl-1")
+    assert complete["task_count"] == 2
+    assert complete["task_ids"] == ["task-1", "task-2"]
+    assert complete["synthesis"] == "This is a test synthesis"
+    assert complete["synthesis_bullets"] == ["Point 1", "Point 2"]
+    assert complete["conflicts"] == []
+
+
+@pytest.mark.asyncio
+async def test_export_orchestrations_jsonl_filters_status_and_allows_empty_history(
+    app_client, make_user, db_session
+):
+    user = _make_pro(make_user)
+    db_session.commit()
+    _seed_orchestration(db_session, user.id, "orch-jsonl-running", status="running")
+    db_session.commit()
+
+    filtered = await app_client.get(
+        "/api/agent/orchestrations/export.jsonl?status=complete",
+        headers=_pro_headers(user),
+    )
+    invalid = await app_client.get(
+        "/api/agent/orchestrations/export.jsonl?status=finished",
+        headers=_pro_headers(user),
+    )
+
+    assert filtered.status_code == 200
+    assert filtered.text == ""
+    assert invalid.status_code == 422
+    assert "status" in invalid.text
 
 
 @pytest.mark.asyncio

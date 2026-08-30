@@ -3302,6 +3302,41 @@ export async function exportAgentOrchestrationsJson(
   return response.blob();
 }
 
+/** Download complete orchestration history as one validated JSON object per line. */
+export async function exportAgentOrchestrationsJsonl(
+  status?: AgentOrchestrationStatus,
+): Promise<Blob> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  const response = await apiFetch(`/api/agent/orchestrations/export.jsonl${query}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(
+        getErrorMessage(err, 'Failed to export orchestration history as JSONL'),
+        response,
+      ),
+      response.status,
+      err,
+    );
+  }
+
+  const text = await response.clone().text();
+  if (text.trim()) {
+    try {
+      const rows: unknown[] = text
+        .split(/\r?\n/u)
+        .filter((line) => line.trim())
+        .map((line) => JSON.parse(line) as unknown);
+      if (!isAgentOrchestrationHistoryJsonExport(rows)) throw new Error('invalid payload');
+    } catch {
+      throw new Error(
+        withRequestId('Invalid orchestration history JSONL returned by the server', response),
+      );
+    }
+  }
+  return response.blob();
+}
+
 async function requestAgentOrchestrationsMarkdown(
   status?: AgentOrchestrationStatus,
 ): Promise<Response> {

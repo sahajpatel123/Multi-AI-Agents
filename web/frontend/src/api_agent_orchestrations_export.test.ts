@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   exportAgentOrchestrationsCsv,
   exportAgentOrchestrationsJson,
+  exportAgentOrchestrationsJsonl,
   exportAgentOrchestrationsMarkdown,
   exportOrchestrationJson,
   exportOrchestrationMarkdown,
@@ -341,6 +342,89 @@ describe('Agent orchestration history JSON export frontend API helper', () => {
     await expect(exportAgentOrchestrationsJson()).rejects.toMatchObject({
       status: 429,
       message: 'Too many JSON exports (Request ID: req-orchestration-json)',
+    });
+  });
+});
+
+describe('Agent orchestration history JSONL export frontend API helper', () => {
+  const validItem = {
+    id: 'orch-jsonl-1',
+    status: 'complete',
+    created_at: '2026-08-30T09:30:00+00:00',
+    task_count: 1,
+    task_ids: ['task-1'],
+    synthesis: 'Combined result',
+    synthesis_bullets: ['Supported point'],
+    conflicts: [],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('fetches and validates one JSON object per line', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(`${JSON.stringify(validItem)}\n${JSON.stringify({
+        ...validItem,
+        id: 'orch-jsonl-2',
+        status: 'failed',
+      })}\n`, {
+        status: 200,
+        headers: { 'content-type': 'application/x-ndjson' },
+      }),
+    );
+
+    const blob = await exportAgentOrchestrationsJsonl();
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/orchestrations/export.jsonl',
+      {},
+    );
+    expect(blob.size).toBeGreaterThan(0);
+    expect(blob.type).toBe('application/x-ndjson');
+  });
+
+  it('accepts an empty history and encodes an optional status filter', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('', { status: 200, headers: { 'content-type': 'application/x-ndjson' } }),
+    );
+
+    const blob = await exportAgentOrchestrationsJsonl('cancelled');
+
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/orchestrations/export.jsonl?status=cancelled',
+      {},
+    );
+    expect(blob.size).toBe(0);
+  });
+
+  it('rejects malformed or structurally invalid rows', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response('{not-json}\n', { status: 200 }),
+    );
+    await expect(exportAgentOrchestrationsJsonl()).rejects.toThrow(
+      'Invalid orchestration history JSONL returned by the server',
+    );
+
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(`${JSON.stringify({ ...validItem, task_count: 2 })}\n`, { status: 200 }),
+    );
+    await expect(exportAgentOrchestrationsJsonl()).rejects.toThrow(
+      'Invalid orchestration history JSONL returned by the server',
+    );
+  });
+
+  it('surfaces request IDs when the JSONL export is rate limited', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: { message: 'Too many JSONL exports' } }), {
+        status: 429,
+        headers: { 'x-request-id': 'req-orchestration-jsonl' },
+      }),
+    );
+
+    await expect(exportAgentOrchestrationsJsonl()).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many JSONL exports (Request ID: req-orchestration-jsonl)',
     });
   });
 });

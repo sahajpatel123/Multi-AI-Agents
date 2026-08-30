@@ -2598,6 +2598,66 @@ async def export_orchestrations_json(
     )
 
 
+@router.get("/orchestrations/export.jsonl")
+async def export_orchestrations_jsonl(
+    status: OrchestrationStatus | None = Query(
+        None,
+        description="Filter by status: 'running', 'complete', 'failed', or 'cancelled'",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Stream orchestration history as newline-delimited JSON.
+
+    Each line uses the complete structured history contract from the JSON
+    export. Iterating the query in batches keeps the server's memory bounded
+    while making long histories directly consumable by data pipelines and
+    command-line tools.
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_jsonl",
+        limit=30,
+        window_seconds=60,
+        message="Too many JSONL exports. Please wait.",
+    )
+
+    query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
+    if status:
+        query = query.filter(Orchestration.status == status)
+    orchestrations = query.order_by(Orchestration.created_at.desc()).yield_per(100)
+
+    def _serialize():
+        for orch in orchestrations:
+            task_ids = list(orch.task_ids or [])
+            bullets = _json_column_value(orch.synthesis_bullets)
+            conflicts = _json_column_value(orch.conflicts)
+            item = {
+                "id": orch.id,
+                "status": orch.status,
+                "created_at": orch.created_at.isoformat() if orch.created_at else None,
+                "task_count": len(task_ids),
+                "task_ids": task_ids,
+                "synthesis": orch.synthesis or "",
+                "synthesis_bullets": bullets if isinstance(bullets, list) else [],
+                "conflicts": conflicts if isinstance(conflicts, list) else [],
+            }
+            yield (json.dumps(item, ensure_ascii=False, default=str) + "\n").encode("utf-8")
+
+    filename = f"arena-orchestrations-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.jsonl"
+    return StreamingResponse(
+        _serialize(),
+        media_type="application/x-ndjson",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
+    )
+
+
 @router.get("/orchestrations/export.md")
 async def export_orchestrations_markdown(
     status: OrchestrationStatus | None = Query(
