@@ -619,6 +619,40 @@ async def test_export_orchestrations_jsonl_filters_status_and_allows_empty_histo
 
 
 @pytest.mark.asyncio
+async def test_export_orchestrations_jsonl_matches_json_record_contract(
+    app_client, make_user, db_session
+):
+    """The streaming encoding must not drift from the canonical JSON records."""
+    user = _make_pro(make_user)
+    orch = _seed_orchestration(
+        db_session,
+        user.id,
+        "orch-jsonl-parity",
+        status="complete",
+        task_ids=["task-a", "task-b"],
+    )
+    orch.synthesis = "A Unicode synthesis: café ☕"
+    orch.conflicts = [
+        {"task_a": 1, "task_b": 2, "conflict": "Different assumptions"}
+    ]
+    db_session.commit()
+
+    json_response = await app_client.get(
+        "/api/agent/orchestrations/export.json",
+        headers=_pro_headers(user),
+    )
+    jsonl_response = await app_client.get(
+        "/api/agent/orchestrations/export.jsonl",
+        headers=_pro_headers(user),
+    )
+
+    assert json_response.status_code == 200
+    assert jsonl_response.status_code == 200
+    assert jsonl_response.text.endswith("\n")
+    assert [json.loads(line) for line in jsonl_response.text.splitlines()] == json_response.json()
+
+
+@pytest.mark.asyncio
 async def test_export_orchestrations_markdown_includes_synthesis_details(
     app_client, make_user, db_session
 ):

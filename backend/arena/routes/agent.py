@@ -162,6 +162,28 @@ def _json_column_value(value) -> list | dict | None:
     return None
 
 
+def _orchestration_history_export_item(orch: Orchestration) -> dict[str, Any]:
+    """Shape one orchestration for every structured history export.
+
+    JSON and JSONL are two encodings of the same public record contract. Keep
+    the normalization in one place so adding or repairing a field cannot make
+    the downloadable formats silently diverge.
+    """
+    task_ids = list(orch.task_ids or [])
+    bullets = _json_column_value(orch.synthesis_bullets)
+    conflicts = _json_column_value(orch.conflicts)
+    return {
+        "id": orch.id,
+        "status": orch.status,
+        "created_at": orch.created_at.isoformat() if orch.created_at else None,
+        "task_count": len(task_ids),
+        "task_ids": task_ids,
+        "synthesis": orch.synthesis or "",
+        "synthesis_bullets": bullets if isinstance(bullets, list) else [],
+        "conflicts": conflicts if isinstance(conflicts, list) else [],
+    }
+
+
 def _pipeline_contradictions_from_row(row: AgentTaskRow) -> list:
     parsed = _json_column_value(row.contradictions)
     return parsed if isinstance(parsed, list) else []
@@ -2567,23 +2589,7 @@ async def export_orchestrations_json(
         query = query.filter(Orchestration.status == status)
 
     orchestrations = query.order_by(Orchestration.created_at.desc()).all()
-    items = []
-    for orch in orchestrations:
-        task_ids = list(orch.task_ids or [])
-        bullets = _json_column_value(orch.synthesis_bullets)
-        conflicts = _json_column_value(orch.conflicts)
-        items.append(
-            {
-                "id": orch.id,
-                "status": orch.status,
-                "created_at": orch.created_at.isoformat() if orch.created_at else None,
-                "task_count": len(task_ids),
-                "task_ids": task_ids,
-                "synthesis": orch.synthesis or "",
-                "synthesis_bullets": bullets if isinstance(bullets, list) else [],
-                "conflicts": conflicts if isinstance(conflicts, list) else [],
-            }
-        )
+    items = [_orchestration_history_export_item(orch) for orch in orchestrations]
 
     filename = f"arena-orchestrations-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
     headers = {
@@ -2631,19 +2637,7 @@ async def export_orchestrations_jsonl(
 
     def _serialize():
         for orch in orchestrations:
-            task_ids = list(orch.task_ids or [])
-            bullets = _json_column_value(orch.synthesis_bullets)
-            conflicts = _json_column_value(orch.conflicts)
-            item = {
-                "id": orch.id,
-                "status": orch.status,
-                "created_at": orch.created_at.isoformat() if orch.created_at else None,
-                "task_count": len(task_ids),
-                "task_ids": task_ids,
-                "synthesis": orch.synthesis or "",
-                "synthesis_bullets": bullets if isinstance(bullets, list) else [],
-                "conflicts": conflicts if isinstance(conflicts, list) else [],
-            }
+            item = _orchestration_history_export_item(orch)
             yield (json.dumps(item, ensure_ascii=False, default=str) + "\n").encode("utf-8")
 
     filename = f"arena-orchestrations-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.jsonl"
