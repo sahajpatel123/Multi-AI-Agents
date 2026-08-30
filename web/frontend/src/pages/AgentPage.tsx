@@ -153,6 +153,7 @@ import {
 import { copyCsvToClipboard, copyHtmlToClipboard, copyToClipboard } from '../lib/clipboard';
 import { copyAgentOrchestrationJson } from '../lib/agentOrchestrationJsonClipboard';
 import { copyAgentOrchestrationHistoryJson } from '../lib/agentOrchestrationHistoryJsonClipboard';
+import { copyAgentOrchestrationHistoryJsonl } from '../lib/agentOrchestrationHistoryJsonlClipboard';
 import { copyAgentOrchestrationMarkdown } from '../lib/agentOrchestrationMarkdownClipboard';
 import {
   downloadBlobFile,
@@ -1124,6 +1125,12 @@ export function AgentPage() {
   const [copyingOrchestrationHistoryJson, setCopyingOrchestrationHistoryJson] = useState(false);
   const copyOrchestrationHistoryJsonInFlightRef = useRef(false);
   const copyOrchestrationHistoryJsonRunIdRef = useRef(0);
+  const [copyOrchestrationHistoryJsonlStatus, setCopyOrchestrationHistoryJsonlStatus] = useState<
+    'idle' | 'copying' | 'copied' | 'failed'
+  >('idle');
+  const copyOrchestrationHistoryJsonlTimerRef = useRef<number | null>(null);
+  const copyOrchestrationHistoryJsonlInFlightRef = useRef(false);
+  const copyOrchestrationHistoryJsonlRunIdRef = useRef(0);
   const [copyOrchestrationHistoryStatus, setCopyOrchestrationHistoryStatus] = useState<
     'idle' | 'copying' | 'copied' | 'failed'
   >('idle');
@@ -1133,6 +1140,7 @@ export function AgentPage() {
   const orchestrationHistoryBusy =
     exportingOrchestrationHistory ||
     copyingOrchestrationHistoryJson ||
+    copyOrchestrationHistoryJsonlStatus === 'copying' ||
     copyOrchestrationHistoryStatus === 'copying';
   /** Guards Shift+L / toolbar clicks so a report download can never double-fire. */
   const exportMdInFlightRef = useRef(false);
@@ -2483,6 +2491,51 @@ export function AgentPage() {
     }
   }, [orchestrationHistoryBusy]);
 
+  const handleCopyOrchestrationHistoryJsonl = useCallback(async () => {
+    if (orchestrationHistoryBusy || copyOrchestrationHistoryJsonlInFlightRef.current) return;
+    const runId = ++copyOrchestrationHistoryJsonlRunIdRef.current;
+    copyOrchestrationHistoryJsonlInFlightRef.current = true;
+    if (copyOrchestrationHistoryJsonlTimerRef.current != null) {
+      window.clearTimeout(copyOrchestrationHistoryJsonlTimerRef.current);
+      copyOrchestrationHistoryJsonlTimerRef.current = null;
+    }
+    setCopyOrchestrationHistoryJsonlStatus('copying');
+    try {
+      const blob = await exportAgentOrchestrationsJsonl();
+      if (copyOrchestrationHistoryJsonlRunIdRef.current !== runId) return;
+      const ok = await copyAgentOrchestrationHistoryJsonl(blob);
+      if (copyOrchestrationHistoryJsonlRunIdRef.current !== runId) return;
+      setCopyOrchestrationHistoryJsonlStatus(ok ? 'copied' : 'failed');
+      if (!ok) {
+        setError('Could not copy orchestration history JSONL — try the JSONL download instead.');
+      }
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyOrchestrationHistoryJsonlTimerRef.current = window.setTimeout(() => {
+        if (copyOrchestrationHistoryJsonlRunIdRef.current !== runId) return;
+        setCopyOrchestrationHistoryJsonlStatus('idle');
+        copyOrchestrationHistoryJsonlTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (e) {
+      if (copyOrchestrationHistoryJsonlRunIdRef.current !== runId) return;
+      setCopyOrchestrationHistoryJsonlStatus('failed');
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not copy orchestration history JSONL — try the JSONL download instead.',
+      );
+      const hold = motionDuration(2800);
+      copyOrchestrationHistoryJsonlTimerRef.current = window.setTimeout(() => {
+        if (copyOrchestrationHistoryJsonlRunIdRef.current !== runId) return;
+        setCopyOrchestrationHistoryJsonlStatus('idle');
+        copyOrchestrationHistoryJsonlTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } finally {
+      if (copyOrchestrationHistoryJsonlRunIdRef.current === runId) {
+        copyOrchestrationHistoryJsonlInFlightRef.current = false;
+      }
+    }
+  }, [orchestrationHistoryBusy]);
+
   const handleCopyOrchestrationHistoryMarkdown = useCallback(async () => {
     if (orchestrationHistoryBusy || copyOrchestrationHistoryInFlightRef.current) return;
     const runId = ++copyOrchestrationHistoryRunIdRef.current;
@@ -3793,6 +3846,12 @@ export function AgentPage() {
       copyOrchestrationHistoryInFlightRef.current = false;
       copyOrchestrationHistoryJsonRunIdRef.current += 1;
       copyOrchestrationHistoryJsonInFlightRef.current = false;
+      copyOrchestrationHistoryJsonlRunIdRef.current += 1;
+      copyOrchestrationHistoryJsonlInFlightRef.current = false;
+      if (copyOrchestrationHistoryJsonlTimerRef.current != null) {
+        window.clearTimeout(copyOrchestrationHistoryJsonlTimerRef.current);
+        copyOrchestrationHistoryJsonlTimerRef.current = null;
+      }
       if (copyOrchestrationHistoryTimerRef.current != null) {
         window.clearTimeout(copyOrchestrationHistoryTimerRef.current);
         copyOrchestrationHistoryTimerRef.current = null;
@@ -10833,6 +10892,45 @@ export function AgentPage() {
                       {exportingOrchestrationHistory
                         ? 'Exporting…'
                         : 'Export history as JSONL'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={orchestrationHistoryBusy}
+                      onClick={() => void handleCopyOrchestrationHistoryJsonl()}
+                      aria-busy={copyOrchestrationHistoryJsonlStatus === 'copying'}
+                      aria-label={
+                        copyOrchestrationHistoryJsonlStatus === 'copying'
+                          ? 'Copying orchestration history as JSONL'
+                          : copyOrchestrationHistoryJsonlStatus === 'copied'
+                            ? 'Orchestration history JSONL copied'
+                            : copyOrchestrationHistoryJsonlStatus === 'failed'
+                              ? 'Orchestration history JSONL copy failed'
+                              : 'Copy orchestration history as JSONL'
+                      }
+                      title="Copy orchestration history as JSONL"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 7,
+                        padding: '9px 18px',
+                        border: '0.5px solid #35382F',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'var(--vp-font-sans)',
+                        cursor: orchestrationHistoryBusy ? 'default' : 'pointer',
+                        opacity: orchestrationHistoryBusy ? 0.7 : 1,
+                      }}
+                    >
+                      <Copy size={14} aria-hidden="true" />
+                      {copyOrchestrationHistoryJsonlStatus === 'copying'
+                        ? 'Copying…'
+                        : copyOrchestrationHistoryJsonlStatus === 'copied'
+                          ? 'Copied JSONL'
+                          : copyOrchestrationHistoryJsonlStatus === 'failed'
+                            ? 'Copy failed'
+                            : 'Copy history as JSONL'}
                     </button>
                     <button
                       type="button"
