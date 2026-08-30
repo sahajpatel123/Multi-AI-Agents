@@ -414,6 +414,19 @@ describe('Agent orchestration history JSONL export frontend API helper', () => {
     );
   });
 
+  it('rejects blank JSONL records instead of validating a rewritten payload', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(`${JSON.stringify(validItem)}\n\n`, {
+        status: 200,
+        headers: { 'content-type': 'application/x-ndjson' },
+      }),
+    );
+
+    await expect(exportAgentOrchestrationsJsonl()).rejects.toThrow(
+      'Invalid orchestration history JSONL returned by the server',
+    );
+  });
+
   it('surfaces request IDs when the JSONL export is rate limited', async () => {
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: { message: 'Too many JSONL exports' } }), {

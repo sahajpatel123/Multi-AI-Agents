@@ -21,6 +21,7 @@ import {
 import type { ImportedChat } from './lib/arenaChatsImport';
 import {
   isAgentOrchestrationHistoryJsonExport,
+  isAgentOrchestrationHistoryJsonlExport,
   isAgentOrchestrationJsonExport,
 } from './lib/agentOrchestrationJson';
 
@@ -3321,18 +3322,10 @@ export async function exportAgentOrchestrationsJsonl(
   }
 
   const text = await response.clone().text();
-  if (text.trim()) {
-    try {
-      const rows: unknown[] = text
-        .split(/\r?\n/u)
-        .filter((line) => line.trim())
-        .map((line) => JSON.parse(line) as unknown);
-      if (!isAgentOrchestrationHistoryJsonExport(rows)) throw new Error('invalid payload');
-    } catch {
-      throw new Error(
-        withRequestId('Invalid orchestration history JSONL returned by the server', response),
-      );
-    }
+  if (!isAgentOrchestrationHistoryJsonlExport(text, true)) {
+    throw new Error(
+      withRequestId('Invalid orchestration history JSONL returned by the server', response),
+    );
   }
   return response.blob();
 }

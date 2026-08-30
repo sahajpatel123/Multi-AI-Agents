@@ -44,6 +44,8 @@ describe('copyAgentOrchestrationHistoryJsonl', () => {
     ['an array line', `${JSON.stringify([validItem])}\n`],
     ['an unsupported status', `${JSON.stringify({ ...validItem, status: 'queued' })}\n`],
     ['an inconsistent task count', `${JSON.stringify({ ...validItem, task_count: 2 })}\n`],
+    ['an interior blank line', `${JSON.stringify(validItem)}\n\n${JSON.stringify(validItem)}\n`],
+    ['more than one trailing line break', `${JSON.stringify(validItem)}\n\n`],
   ])('refuses %s without touching the clipboard', async (_label, text) => {
     await expect(copyAgentOrchestrationHistoryJsonl(new Blob([text]))).resolves.toBe(false);
     expect(copyJsonlToClipboard).not.toHaveBeenCalled();

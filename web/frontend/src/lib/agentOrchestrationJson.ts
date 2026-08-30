@@ -81,3 +81,25 @@ export function isAgentOrchestrationHistoryJsonExport(
 ): payload is AgentOrchestrationHistoryJsonExport[] {
   return Array.isArray(payload) && payload.every(isAgentOrchestrationJsonRecord);
 }
+
+/**
+ * Validate newline-delimited orchestration history without normalizing it.
+ * A single final line break is valid JSONL framing; blank records are not.
+ */
+export function isAgentOrchestrationHistoryJsonlExport(
+  text: string,
+  allowEmpty = false,
+): boolean {
+  if (text.length === 0) return allowEmpty;
+
+  const lines = text.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  if (lines.length === 0 || lines.some((line) => !line.trim())) return false;
+
+  try {
+    const rows = lines.map((line) => JSON.parse(line) as unknown);
+    return isAgentOrchestrationHistoryJsonExport(rows);
+  } catch {
+    return false;
+  }
+}

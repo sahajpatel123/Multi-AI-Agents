@@ -1,5 +1,5 @@
 import { copyJsonlToClipboard } from './clipboard';
-import { isAgentOrchestrationHistoryJsonExport } from './agentOrchestrationJson';
+import { isAgentOrchestrationHistoryJsonlExport } from './agentOrchestrationJson';
 
 async function readBlobText(blob: Blob): Promise<string> {
   if (typeof blob.text === 'function') return blob.text();
@@ -20,13 +20,7 @@ async function readBlobText(blob: Blob): Promise<string> {
 export async function copyAgentOrchestrationHistoryJsonl(blob: Blob): Promise<boolean> {
   try {
     const text = await readBlobText(blob);
-    if (!text.trim()) return false;
-
-    const rows: unknown[] = text
-      .split(/\r?\n/u)
-      .filter((line) => line.trim())
-      .map((line) => JSON.parse(line) as unknown);
-    if (!isAgentOrchestrationHistoryJsonExport(rows)) return false;
+    if (!isAgentOrchestrationHistoryJsonlExport(text)) return false;
 
     return await copyJsonlToClipboard(text);
   } catch {
