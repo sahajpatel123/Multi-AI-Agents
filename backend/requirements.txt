@@ -31,7 +31,7 @@ tenacity==8.2.3
 
 # Database
 sqlalchemy==2.0.52
-alembic==1.13.3
+alembic==1.19.1
 psycopg[binary]==3.3.4
 
 # Auth - migrated to PyJWT to drop python-jose's transitive ecdsa dependency
