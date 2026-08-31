@@ -10,7 +10,7 @@ email-validator==2.3.0
 # temperature/top_p/top_k from message-method signatures; our call sites
 # pass temperature via the documented extra_body escape hatch instead
 # (llm_caller.py, discuss.py). Wire payload is unchanged.
-anthropic==1.0.0
+anthropic==1.2.0
 
 # OpenAI (for Grok API) — 1.x passes the deprecated proxies= kwarg to
 # httpx.AsyncClient, removed in httpx 0.28; only the 2.x line is compatible
