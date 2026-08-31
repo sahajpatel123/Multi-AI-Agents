@@ -75,7 +75,7 @@ weasyprint==69.0
 openpyxl==3.1.5
 
 # Dev
-pytest==9.0.3
+pytest==9.1.1
 # 1.3.0+ is the first line that allows pytest 9 (requires pytest<10,>=8.2).
 # 0.24.0 conflicts with pytest 9 — see CI run history for the ResolutionImpossible error.
 pytest-asyncio==1.4.0
