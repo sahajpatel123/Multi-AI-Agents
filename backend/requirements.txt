@@ -63,7 +63,7 @@ cryptography==50.0.0
 python-magic==0.4.27
 
 # Payments
-razorpay==1.4.2
+razorpay==2.0.1
 
 # Tools
 ddgs==9.0.0
