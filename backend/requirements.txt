@@ -69,7 +69,7 @@ razorpay==2.0.1
 ddgs==9.16.0
 
 # PDF reports (optional — export falls back to HTML if import fails)
-weasyprint==69.0
+weasyprint==70.0
 
 # Excel export support
 openpyxl==3.1.5
