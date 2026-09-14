@@ -24,7 +24,7 @@ openai==3.3.1
 # shortcuts; this codebase only uses transport=ASGITransport(app=...),
 # which is the documented replacement (mcp_runtime.py, tests/conftest.py).
 httpx==0.28.1
-anyio==4.14.2
+anyio==4.15.1
 
 # Reliability — exponential-backoff retry for transient LLM API errors
 tenacity==8.2.3
